@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
-import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
+import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimNamedPlayer, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
 /** Skin tones measured from real headshots, per photo URL, for the whole session (null = couldn't read it). */
 const photoSkinCache = new Map<string, string | null>();
@@ -31,7 +31,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b16o';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b16q';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -95,8 +95,8 @@ export function LiveSim3D({
   homeTeam: TeamLike | null;
   awayTeam: TeamLike | null;
   /** Rosters in depth-chart order: starters' jersey numbers and skin tones go on the 3D players */
-  homePlayers?: SimPlayerLike[];
-  awayPlayers?: SimPlayerLike[];
+  homePlayers?: SimNamedPlayer[];
+  awayPlayers?: SimNamedPlayer[];
   onActiveChange: (active: boolean) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -186,12 +186,13 @@ export function LiveSim3D({
     if (!enabled || !event || disabled || !ready || failed) return;
     if (lastIdRef.current === event.id) return;
     lastIdRef.current = event.id;
-    const play = toSimPlay(event);
+    const play = toSimPlay(event, { home: homePlayers ?? [], away: awayPlayers ?? [], photoSkins });
     if (!play) return;   // nothing to picture (kickoff, fumble, XP, penalty…): the 2D field carries it
     activeIdRef.current = play.id;
     lastPlayPreRef.current = JSON.stringify({ possession: play.possession, ...play.pre });
     post(play);
     setActiveBoth(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rosters/skins only label the play; a change must not re-send it
   }, [enabled, event, disabled, ready, failed, post, setActiveBoth]);
 
   // Bail out if playback gets disabled mid-play (skip to end / max speed) or the mode is switched off

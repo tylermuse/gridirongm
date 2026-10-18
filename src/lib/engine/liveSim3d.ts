@@ -28,6 +28,8 @@ export interface SimPlayMessage {
   possession: 'home' | 'away';
   pre: { fieldPos: number; down: number; toGo: number; quarter: number; clock: number; homeScore: number; awayScore: number };
   res: SimPlayResult;
+  /** who has the ball / makes the sack or pick, by number + skin (see whoMadeThePlay) */
+  who?: SimWho;
 }
 
 /** Pre-snap situation for the idle sim (no play running): it re-forms at this spot with this scorebug. */
@@ -108,7 +110,10 @@ function pointsScored(e: PlayEvent): number {
   return 0;
 }
 
-export function toSimPlay(e: PlayEvent): SimPlayMessage | null {
+export function toSimPlay(
+  e: PlayEvent,
+  rosters?: { home: SimNamedPlayer[]; away: SimNamedPlayer[]; photoSkins?: Record<string, string> },
+): SimPlayMessage | null {
   const res = toSimResult(e);
   if (!res) return null;
   const pts = pointsScored(e);
@@ -126,6 +131,7 @@ export function toSimPlay(e: PlayEvent): SimPlayMessage | null {
       awayScore: e.awayScore - (e.possession === 'away' ? pts : 0),
     },
     res,
+    ...(rosters ? { who: whoMadeThePlay(e, e.possession === 'home' ? rosters.home : rosters.away, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins) } : {}),
   };
 }
 
@@ -242,4 +248,45 @@ function simKit(
     return { id: t.abbreviation, name: t.name, jersey: p, num: light ? '#1a1a1a' : '#ffffff', pants: light ? s : '#e6e8ec', helmet: p, stripe: s };
   }
   return { id: t.abbreviation, name: t.name, jersey: '#f4f1ea', num: light ? s : p, pants: '#f4f1ea', helmet: light ? s : p, stripe: light ? p : s };
+}
+
+/** The man who has the ball on the play (runner / target) and, for a sack or a
+ *  pick, the defender who makes it — found by name in the play-by-play line
+ *  ("J. Hurts completes to D. Smith for 11 yards."), so the 3D player making
+ *  the play wears his number and skin. */
+export interface SimWho { ball?: SimMan & { pos: string }; def?: SimMan & { pos: string } }
+export interface SimNamedPlayer extends SimPlayerLike { firstName: string; lastName: string }
+
+function namesIn(desc: string, roster: SimNamedPlayer[]): { p: SimNamedPlayer; at: number }[] {
+  const out: { p: SimNamedPlayer; at: number }[] = [];
+  for (const p of roster) {
+    if (!p.firstName || !p.lastName) continue;
+    const tag = `${p.firstName[0]}. ${p.lastName}`;
+    const at = desc.indexOf(tag);
+    if (at < 0) continue;
+    const next = desc[at + tag.length];
+    if (next && /[A-Za-z]/.test(next)) continue;            // "J. Smith" inside "J. Smithson"
+    if (!out.some(o => o.at === at)) out.push({ p, at });   // two men with the same initial + name: depth chart order wins
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
+export function whoMadeThePlay(
+  e: PlayEvent, offense: SimNamedPlayer[], defense: SimNamedPlayer[], photoSkins?: Record<string, string>,
+): SimWho | undefined {
+  const man = (p: SimNamedPlayer) => {
+    const n = Number(p.jerseyNumber);
+    return Number.isInteger(n) && n >= 0 && n <= 99 ? { n, s: skinToneFor(p, photoSkins), pos: p.position } : undefined;
+  };
+  const who: SimWho = {};
+  if (e.type === 'sack' || e.type === 'interception') {
+    const d = namesIn(e.description, defense)[0]; if (d) who.def = man(d.p);
+  }
+  if (e.type !== 'sack' && e.type !== 'interception') {
+    const o = namesIn(e.description, offense);
+    // the passer is named first on a throw; the man with the ball is the last non-QB named (or the QB himself on a keeper)
+    const ball = [...o].reverse().find(x => x.p.position !== 'QB') ?? (o.length === 1 ? o[0] : undefined);
+    if (ball) who.ball = man(ball.p);
+  }
+  return who.ball || who.def ? who : undefined;
 }

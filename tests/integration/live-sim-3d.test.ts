@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSimResult, toSimPlay, toSimTeam, clockSeconds, toSimLineup, skinToneFor } from '@/lib/engine/liveSim3d';
+import { toSimResult, toSimPlay, toSimTeam, clockSeconds, toSimLineup, skinToneFor, whoMadeThePlay } from '@/lib/engine/liveSim3d';
 import portraitSkin from '@/lib/portraits/portraitSkin.json';
 import { portraitFileFor } from '@/lib/portraits/portraitPool';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
@@ -102,5 +102,23 @@ describe('reconcileJerseys keeps real numbers', () => {
     expect(by.starter).toBe(4);
     expect(by.backup).not.toBe(4);
     expect(by.dup).not.toBe(4);
+  });
+});
+
+describe('liveSim3d who made the play', () => {
+  const P = (firstName: string, lastName: string, position: string, jerseyNumber: number) => ({ id: lastName, firstName, lastName, position, jerseyNumber });
+  const phi = [P('Jalen', 'Hurts', 'QB', 1), P('Saquon', 'Barkley', 'RB', 26), P('DeVonta', 'Smith', 'WR', 6), P('Dallas', 'Goedert', 'TE', 88)];
+  const dal = [P('Micah', 'Parsons', 'DL', 11), P('Trevon', 'Diggs', 'CB', 7), P('Ryan', 'Smith', 'DL', 99)];
+  const ev = (type: string, description: string) => ({ type, description } as unknown as Parameters<typeof whoMadeThePlay>[0]);
+  it('runner, target, QB keeper, sacker and picker by name', () => {
+    expect(whoMadeThePlay(ev('run', 'S. Barkley runs for 4 yards.'), phi, dal)?.ball?.n).toBe(26);
+    expect(whoMadeThePlay(ev('pass_complete', 'J. Hurts completes to D. Goedert for 11 yards.'), phi, dal)?.ball).toMatchObject({ n: 88, pos: 'TE' });
+    expect(whoMadeThePlay(ev('run', 'J. Hurts QB scrambles for 7.'), phi, dal)?.ball?.n).toBe(1);
+    expect(whoMadeThePlay(ev('sack', '💥 M. Parsons DL gets home — J. Hurts QB sacked for 7 yards!'), phi, dal)?.def?.n).toBe(11);
+    expect(whoMadeThePlay(ev('interception', 'INTERCEPTED! T. Diggs picks off J. Hurts.'), phi, dal)?.def?.n).toBe(7);
+  });
+  it('same last name on the other team is not confused; no names → nothing', () => {
+    expect(whoMadeThePlay(ev('pass_complete', 'J. Hurts completes to D. Smith for 9 yards.'), phi, dal)?.ball?.n).toBe(6);
+    expect(whoMadeThePlay(ev('run', 'The running back runs for 2 yards.'), phi, dal)).toBeUndefined();
   });
 });

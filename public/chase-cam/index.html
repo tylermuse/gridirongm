@@ -158,10 +158,36 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16o'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16q'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
-const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
+const EMB_TEAMS = [null,null];
+let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
+/* The page names who has the ball (m.who.ball) and, on a sack or a pick, the defender (m.who.def). Pick the body that will make
+   the play here — the sim's receiver choice is forced to match — and wear his number + skin on it for this play. */
+function planWho(m){
+  const r=m.res, w=m.who||{}, out=[]; const L=(team(G.off)||{}).lineup||{};
+  const num=(k,i)=>{ const v=L[k]; const e=Array.isArray(v)? v[i||0] : v; return e && e.n; };
+  const b=w.ball;
+  if(b && r.kind==='run'){ if(b.pos==='QB'){ r.style='scramble'; out.push({side:'o',key:'qb',i:0,man:b}); } else out.push({side:'o',key:'rb',i:0,man:b}); }
+  const pass = r.kind==='complete' || r.kind==='incomplete' || r.kind==='int';
+  if(b && pass){
+    const deep = r.depth==='deep', scn = r.style==='screen';
+    const cands = deep? [['wr',0,'wrR'],['wr',1,'wrL']] : scn? [['rb',0,'rb']] : [['wr',2,'slot'],['te',0,'te'],['wr',0,'wrR'],['wr',1,'wrL']];
+    let c = cands.find(([k,i])=>num(k,i)===b.n);
+    if(!c && !deep && !scn && b.pos==='TE') c = cands.find(x=>x[2]==='te');
+    if(!c && !deep && !scn && (b.pos==='RB' || b.pos==='FB')) c = cands.find(x=>x[2]==='slot');
+    if(!c){ const wr = cands.filter(x=>x[2]!=='te'); c = wr[Math.floor(Math.random()*wr.length)]; }
+    out.push({side:'o',key:c[0],i:c[1],man:b}); r.recKey=c[2];
+  }
+  if(w.def && r.kind==='sack') out.push({side:'d',key:'dl',i:0,man:w.def});
+  if(w.def && r.kind==='int' && r.recKey && r.recKey!=='rb'){
+    const k = r.depth==='deep'? (r.recKey==='wrR'? ['s',0] : ['s',1]) : ({wrL:['cb',1], wrR:['cb',0], te:['lb',0], slot:['s',1]})[r.recKey];
+    if(k) out.push({side:'d',key:k[0],i:k[1],man:w.def});
+  }
+  return out;
+}   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
+window.__onField = () => ({ o: (O.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), d: (D.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), car: play && play.carrier ? [play.carrier.teamId, play.carrier.num, play.carrier.skinTone] : null, tk: play && play.tackler ? [play.tackler.teamId, play.tackler.num] : null, kind: play && play.res ? play.res.kind : null, running });   /* QA: who the sim put on the field */
 window.__setTeams = (h,a) => { EMB_TEAMS[0]=h; EMB_TEAMS[1]=a; if(!G.busy) setupFormation(); };   /* QA: what bsgm:setup does */
 
 // ---------- Three setup ----------
@@ -686,9 +712,11 @@ function setupFormation(kind){
   const to = team(G.off), td = team(1-G.off);
   const z0 = G.fieldPos - 50; placeChain(z0);
   /* in-game the page sends each side's starters (depth chart order) as {n: jersey number, s: skin tone}; slot key + index picks the man */
-  const who=(t,key,i)=>{ const L=t.lineup, v=L && L[key]; const e=Array.isArray(v)? v[i||0] : v; return e && e.n!=null? e : null; };
+  const who=(t,key,i)=>{ const side = t===to? 'o' : 'd';
+    const ov = PLAY_OVR.find(o=>o.side===side && o.key===key && (o.i||0)===(i||0)); if(ov) return ov.man;   /* this play's ball carrier / target / sacker / picker */
+    const L=t.lineup, v=L && L[key]; const e=Array.isArray(v)? v[i||0] : v; return e && e.n!=null? e : null; };
   const add=(t,n,big,x,z,face,opts,key,i)=>{ const e=key? who(t,key,i) : null; const o={...(opts||{})}; if(e){ n=+e.n; if(e.s) o.skin=e.s; }
-    const a=makePlayer(t,n,big,o); a.x=x; a.z=z; a.face=face; a.num=n; actors.push(a); return a; };
+    const a=makePlayer(t,n,big,o); a.x=x; a.z=z; a.face=face; a.num=n; a.skinTone=o.skin||null; a.teamId=t.id; actors.push(a); return a; };
   const rbKey = kind==='fg'? 'k' : kind==='punt'? 'p' : 'rb';   /* the kicker / punter stands in the back's spot on special teams */
   O = { ol:[-5.1,-2.55,0,2.55,5.1].map((x,i)=>add(to,[72,66,55,61,78][i],true,x,z0-.75,0,null,'ol',i)),
         te: add(to,87,false,6.2,z0-1,0,{profile:'power'},'te'), wrL: add(to,11,false,-20,z0-.9,0,null,'wr',1), slot: add(to,15,false,-11.5,z0-1.1,0,null,'wr',2),
@@ -1007,13 +1035,13 @@ function choreograph(res){
     O.rb.behav = P([snap,1.6,z0-6.6],[snap+.55,2.6,z0-5.2],[snap+.95,3.4,z0-5],[snap+1.9,9.5,z0-2.5],[snap+3.6,17,z0+5.5]);   // check, then release to the flat
     let rec, catchX, Yc, routeKeys;
     let Y = res.yards||0; td = res.kind==='complete' && Y>=toGoal; if(td) Y = toGoal;
-    if(deep){ rec = Math.random()<.5 ? O.wrL : O.wrR; Yc = res.kind==='complete'? Math.max(12, Math.min(Y, Y-R(1,6), 24+R(0,4))) : R(18,27); if(td) Yc=Math.min(Yc, toGoal+R(0,6));
+    if(deep){ rec = res.recKey==='wrL'? O.wrL : res.recKey==='wrR'? O.wrR : Math.random()<.5 ? O.wrL : O.wrR; Yc = res.kind==='complete'? Math.max(12, Math.min(Y, Y-R(1,6), 24+R(0,4))) : R(18,27); if(td) Yc=Math.min(Yc, toGoal+R(0,6));
       Yc = Math.min(Yc, toGoal + 7.5);   // catch point stays inside the end zone
       catchX = rec===O.wrL ? -17.5 : 17.5; }
     else if(scn){ // screen: the back slips out behind the rush and takes a soft throw 2 yd behind the line, blockers out in front
       rec = O.rb; const side = Math.random()<.5? -1 : 1; Yc = -2.4; catchX = side*9.5; res.screenSide = side; }
     else { const pick = Math.random();
-      rec = pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
+      rec = O[res.recKey] && res.recKey!=='rb'? O[res.recKey] : pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
       catchX = rec===O.slot? -4.5 : rec===O.te? 5 : rec===O.wrR? 22.5 : -22.5; }
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc; const [hx,,hz] = [0,0,dropZ+.2];
     const flight = Math.max(.45, Math.min(1.7, Math.hypot(catchX-hx, cz-hz)/(deep?21:19)));
@@ -1973,7 +2001,7 @@ function embedStart(){
   const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id;
     applyPre(m);
     if(G.fieldPos >= 99 && (m.res.kind==='run' || m.res.kind==='complete') && m.res.yards >= 1) m.res.yards = 99;   /* at the 1: any gain is a score */
-    m.res.lock = true; renderBug(); setupFormation((m.res.kind==='fg' || m.res.kind==='punt')? m.res.kind : null); runPlay(m.res); };
+    m.res.lock = true; renderBug(); PLAY_OVR = planWho(m); setupFormation((m.res.kind==='fg' || m.res.kind==='punt')? m.res.kind : null); runPlay(m.res); PLAY_OVR = []; };
   window.addEventListener('message', ev=>{ const m=ev.data; if(!m || typeof m!=='object') return;
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }
