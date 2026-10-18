@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
 import { toSimPlay, toSimTeam, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
-const SIM_BUILD = 'b16j';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b16k';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
