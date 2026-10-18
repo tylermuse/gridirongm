@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16f'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16g'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -1039,16 +1039,32 @@ function choreograph(res){
     // captured catches: a contested ball is the jump-catch-and-roll (he comes down with it and is down by contact); a deep uncontested ball is the in-stride leap
     // an open receiver hit in stride just catches it (procedural hands, ball at the chest) — the leap is only for a ball a defender is also going for
     const capCatch = res.kind==='complete' && contested;
-    if(capCatch){ rec.mocapAct = {clip:'football_jumpcatch', t0:tCatch-.65, start:0, end:2.7, yScale:.72}; flightSeg.flight.y1 = 2.75; }   /* the capture's leap is ~1.2 m; scaled to a believable .85 */
+    const upended = capCatch && rollCatch && (window.__mxUpend ?? true) && Math.random() < (window.__upendP ?? .5);   /* Mixamo 'Football Catch': the high catch, the hit, flipped onto his back */
+    if(upended){ rec.mocapAct = {clip:'mx_catch_tackled', t0:tCatch-.6, start:.9, end:3.6, yScale:.6}; flightSeg.flight.y1 = 2.15; }
+    else if(capCatch){ rec.mocapAct = {clip:'football_jumpcatch', t0:tCatch-.65, start:0, end:2.7, yScale:.72}; flightSeg.flight.y1 = 2.75; }   /* the capture's leap is ~1.2 m; scaled to a believable .85 */
 
     if(rollCatch){
       // jump catch and roll: the receiver's path ends a stride short of the spot and the capture carries him through it; he is down by contact where he lands
       const r0=routeKeys[0]; const ux=catchX-r0[1], uz=(cz-2.3)-r0[2], L=Math.hypot(ux,uz)||1;   /* straight to a point a stride short of the spot; the capture's own run carries him through it */
-      rec.behav = P([r0[0],r0[1],r0[2]],[tCatch-.65, catchX, cz-2.3],[tCatch+3, catchX+ux/L*.01, cz-2.3+uz/L*.01]);
-      ballPlan.push({t0:tCatch, t1:1e9, held:rec}); carrier = rec; endPos=[catchX, cz+1]; tEnd = tCatch+1.15; tackler=null;
+      if(upended){ rec.behav = P([r0[0],r0[1],r0[2]],[tCatch-.6, catchX-.3, cz],[tCatch+4, catchX-.3+ux/L*.01, cz+uz/L*.01]); rec.faceLock={angle:Math.atan2(ux,uz), until:tCatch+4}; }   /* this capture leaps from a standstill: the route ends under the ball */
+      else rec.behav = P([r0[0],r0[1],r0[2]],[tCatch-.65, catchX, cz-2.3],[tCatch+3, catchX+ux/L*.01, cz-2.3+uz/L*.01]);
+      ballPlan.push({t0:tCatch, t1:1e9, held:rec}); carrier = rec; endPos=[catchX, cz+(upended? 1.6 : 1)]; tEnd = tCatch+(upended? 1.5 : 1.15); tackler=null;
       if(!td && !res.lock) res.yards = clamp(Math.round(Yc+1), 1, toGoal-1); else if(td) endPos=[catchX, Math.max(cz+1, z0+toGoal+.5)];
-      cover.catchT = tCatch; cover.jumpT = tCatch; ev(tCatch-.6, ()=>{ cover.behav = P([playT, cover.x, cover.z], [tCatch, catchX + side*1.0, cz - .9]); });
+      if(upended){ // the hit that flips him: the DB comes through his legs from behind at the top of the leap and dives on past
+        ev(tCatch-.6, ()=>{ cover.behav = P([playT, cover.x, cover.z], [tCatch+.15, catchX + side*.5, cz - .6]); cover.faceLock={angle:Math.atan2(ux,uz), until:tCatch+3}; });
+        ev(tCatch+.15, ()=>{ cover.down=playT; cover.fallDir=1; cover.behav=null; cover.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side:side}; sndThump(1,.5); }); }
+      else { cover.catchT = tCatch; cover.jumpT = tCatch; ev(tCatch-.6, ()=>{ cover.behav = P([playT, cover.x, cover.z], [tCatch, catchX + side*1.0, cz - .9]); }); }
       ev(tCatch+1.0, ()=>{ D.all.forEach(d=>{ if(d!==cover) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
+    } else if(res.kind==='complete' && !scn && !deep && !td && Math.abs(catchX)>=20 && (Y-Yc)<=1.5 && (window.__mxDive ?? true) && Math.random() < (window.__diveP ?? .7)){
+      // out route at the boundary, tackled on the spot: the laid-out sideline catch ('Receiver Catch on boundary line') — he dives the last 2.8 m along the break and is down where he lands
+      const stem = routeKeys[routeKeys.length-2]; const th = Math.atan2(catchX-stem[1], cz-stem[2]);
+      const sx = catchX - Math.sin(th)*1.65, sz = cz - Math.cos(th)*1.65;   /* the capture reaches up for the ball .7 s in, 1.65 m along the dive, then lays out */
+      rec.behav = P(...routeKeys.slice(0,-1).map(k=>[...k]), [tCatch-.7, sx, sz], [tCatch+4, sx, sz]); rec.faceLock = {angle:th, until:tCatch+4};
+      rec.mocapAct = {clip:'mx_receiver_catch', t0:tCatch-.7, start:0, end:3.3};
+      flightSeg.flight.x1 = catchX; flightSeg.flight.z1 = cz; flightSeg.flight.y1 = 2.0;
+      ballPlan.push({t0:tCatch, t1:1e9, held:rec}); carrier = rec; endPos=[sx+Math.sin(th)*2.95, sz+Math.cos(th)*2.95]; tEnd = tCatch+1.0; tackler=null;
+      cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], [tCatch+.9, catchX + side*.8, cz+.6]);   /* the DB plays off, then closes on the man on the ground */
+      ev(tCatch+.8, ()=>{ D.all.forEach(d=>{ if(d!==cover) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
     } else if(res.kind==='complete'){
       const zEnd = td? 52.5 : z0+Y; const dzRun = zEnd-cz;   // run after the catch: upfield, never sideways — on an out the lean inside is at most ~20°, and a catch at the sticks is a quick tackle
       const endX = Math.max(-22.5, Math.min(22.5, catchX + (dzRun<1.5? R(-.3,.3) : scn? res.screenSide*clamp(R(1.5,4.5), 0, dzRun*.4) : (catchX>14? -Math.min(R(.5,2.5), dzRun*.35) : catchX<-14? Math.min(R(.5,2.5), dzRun*.35) : clamp(R(-3,3), -dzRun*.4, dzRun*.4)))));
@@ -1076,8 +1092,13 @@ function choreograph(res){
       const restX = ballPlan[ballPlan.length-1].flight.x1, restZ = ballPlan[ballPlan.length-1].flight.z1;
       ballPlan.push({t0:tCatch+.55, t1:1e9, rest:[restX,restZ]});
       rec.behav = P(...routeKeys, [tCatch+.8, catchX+(catchX<0?-1:1)*.6, cz+2.2]);
-      cover.catchT = tCatch; cover.jumpT = tCatch;
-      ev(tCatch+.12, ()=>{ cover.swat=playT; }); ev(tCatch+.7, ()=>{ rec.dejected=playT; });
+      if(window.__mxSwat ?? true){ // captured breakup ('Defender: jumping and swatting'): he is placed so the swat hand meets the ball at the top of the leap
+        const ax=.94, az=-.28, d=Math.hypot(ax,az), phi=Math.atan2(ax,az);   /* swat hand at the apex, m from the hips at the start of the leap, clip-local */
+        ev(tCatch-.3, ()=>{ const th=Math.atan2(bx-cover.x, bz-cover.z); cover.x = bx - d*Math.sin(th); cover.z = bz - d*Math.cos(th); const face=th-phi;
+          cover.face=face; cover.faceLock={angle:face, until:tCatch+.9}; cover.behav=P([playT,cover.x,cover.z],[tCatch+1.2,cover.x,cover.z]); cover.jumpT=null; cover.catchT=null;
+          cover.mocapAct={clip:'mx_defender_swat', t0:tCatch-.3, start:0, end:1.0, yScale:(window.__swatY ?? .85)}; }); }
+      else { cover.catchT = tCatch; cover.jumpT = tCatch; ev(tCatch+.12, ()=>{ cover.swat=playT; }); }
+      ev(tCatch+.7, ()=>{ rec.dejected=playT; });
       tEnd = tCatch+1.0; carrier=null; endPos=[restX,restZ];
     } else { // interception
       const picker = deep? (rec===O.wrR ? D.sR : D.sL) : cover; picker.catchT = tCatch; picker.jumpT = tCatch;
