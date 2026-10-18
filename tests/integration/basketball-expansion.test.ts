@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { getHeadCoach, getDevCoach } from '@/../apps/bs-basketball/src/lib/coaching/coaches';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
 import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import {
@@ -265,7 +266,11 @@ for (const n of [31, 32] as const) {
         expect(t.playerIds.length).toBeGreaterThanOrEqual(13);
         expect(t.playerIds.length).toBeLessThanOrEqual(15);
         for (const pid of t.playerIds) expect(nextSeason.players[pid]?.rosterSlot?.teamId).toBe(id);
-        expect(t.coachIds.length).toBe(1);
+        // Staffed like every team: a contracted head coach + a dev coach.
+        const hc = getHeadCoach(nextSeason, id);
+        expect(hc).toBeTruthy();
+        expect(hc!.contract).toBeTruthy();
+        expect(getDevCoach(nextSeason, id)).toBeTruthy();
         const picks = getTeamPicks(nextSeason, id);
         expect(picks.filter(p => p.originalTeamId === id).length).toBeGreaterThanOrEqual(6); // 3 yrs × 2 rds
       }

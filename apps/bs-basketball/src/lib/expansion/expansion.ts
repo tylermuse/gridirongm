@@ -47,6 +47,7 @@ import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import type { BasketballConference, BasketballDivision } from '../data/teams';
 import { makeBasketballTeam } from '../league/createLeague';
 import { generateHeadCoach } from '../coaching/coaches';
+import { ensureCoachingStaff } from '../coaching/carousel';
 import { marketContract, hasContractForSeason } from '../league/contracts';
 import { getDraft } from '../draft';
 import { appendTransaction } from '../transactions';
@@ -378,7 +379,9 @@ export function startExpansion(
     ],
   });
 
-  let next: LeagueState = { ...league, teams, coaches, competitions };
+  // Staff the new franchises like every other team: contracted head coach +
+  // player-development coach (idempotent for the existing 30).
+  let next: LeagueState = ensureCoachingStaff({ ...league, teams, coaches, competitions });
 
   // Optional takeover: the user becomes GM of an expansion team. Their old
   // team turns AI (auto-protected); pending re-sign decisions for it lapse.
