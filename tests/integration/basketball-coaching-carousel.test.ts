@@ -235,15 +235,20 @@ describe('player-development coach', () => {
     expect(devCoachMultiplier(null, 21)).toBe(1);
   });
 
-  function withDevRating(l: League, teamId: string, rating: number): League {
-    const pdc = getDevCoach(l, teamId)!;
-    return { ...l, coaches: { ...l.coaches, [pdc.id]: { ...pdc, ratings: { ...pdc.ratings, development: rating } } } } as League;
+  // Applied league-wide and summed over every team's under-25s: one team's few
+  // young players gave integer OVR sums too small to separate ×0.85 from ×1.0.
+  function withDevRating(l: League, _teamId: string, rating: number): League {
+    const coaches = { ...l.coaches };
+    for (const t of l.teams) {
+      const pdc = getDevCoach(l, t.id);
+      if (pdc) coaches[pdc.id] = { ...pdc, ratings: { ...pdc.ratings, development: rating } };
+    }
+    return { ...l, coaches } as League;
   }
 
-  function youngGrowth(before: League, after: League, teamId: string): number {
-    const team = before.teams.find(t => t.id === teamId)!;
+  function youngGrowth(before: League, after: League, _teamId: string): number {
     let sum = 0;
-    for (const id of team.playerIds) {
+    for (const id of before.teams.flatMap(t => t.playerIds)) {
       const p0 = before.players[id] as BasketballPlayer;
       const p1 = after.players[id] as BasketballPlayer | undefined;
       if (!p1 || p0.age >= 25) continue;
