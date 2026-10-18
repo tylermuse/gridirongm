@@ -13,6 +13,8 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { CloudSavesPanel } from '@/components/settings/CloudSavesPanel';
 import { LeagueRulesPanel } from '@/components/settings/LeagueRulesPanel';
 import { Section } from '@/components/settings/Section';
+import { Field, ColorField } from '@/components/settings/FranchiseFields';
+import { expansionWindow, getExpansion } from '@/lib/expansion';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -125,6 +127,9 @@ export default function SettingsPage() {
 
       {/* Franchise relocation / rebrand (God Mode) */}
       {league && godOn && <RelocatePanel />}
+
+      {/* League expansion (offseason, after the draft) — no God Mode needed */}
+      {league && <ExpansionPanel />}
     </main>
   );
 }
@@ -256,7 +261,7 @@ function RelocatePanel() {
   }
 
   return (
-    <Section title="Relocate / rebrand a franchise" desc="Rename, re-city, and recolor any team. (Full league expansion to 31–32 teams is deferred — it requires a schedule-generator rewrite.)">
+    <Section title="Relocate / rebrand a franchise" desc="Rename, re-city, and recolor any team. To add teams, use League Expansion below.">
       <select value={teamId} onChange={e => choose(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border bg-[var(--surface-2)] text-sm mb-3" style={{ borderColor: 'var(--border)' }}>
         <option value="">Select a team…</option>
         {teams.map(t => <option key={t.id} value={t.id}>{t.city} {t.name}</option>)}
@@ -280,21 +285,30 @@ function RelocatePanel() {
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ExpansionPanel() {
+  const league = useLeagueStore(s => s.league);
+  if (!league) return null;
+  const win = expansionWindow(league);
+  const exp = getExpansion(league);
+  const inProgress = !!exp && exp.stage !== 'done';
   return (
-    <label className="block">
-      <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
-      <input value={value} onChange={e => onChange(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border bg-[var(--surface-2)] text-sm" style={{ borderColor: 'var(--border)' }} />
-    </label>
-  );
-}
-
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="flex items-center gap-2">
-      <input type="color" value={value} onChange={e => onChange(e.target.value)} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--border)' }} />
-      <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
-    </label>
+    <Section
+      title="League Expansion"
+      desc={`Grow the league from ${league.teams.length} to up to 32 teams: create franchises, realign the conferences, run a protection list and an expansion draft. Irreversible.`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          href="/expansion"
+          className="text-sm font-bold rounded-lg px-4 py-2"
+          style={inProgress || win.open
+            ? { background: 'var(--accent)', color: '#fff' }
+            : { background: 'var(--surface-2)', color: 'var(--text-sec)' }}
+        >
+          {inProgress ? 'Resume expansion →' : 'Open expansion →'}
+        </Link>
+        <span className="text-xs text-[var(--text-sec)]">{inProgress ? 'An expansion is in progress.' : win.reason}</span>
+      </div>
+    </Section>
   );
 }
 

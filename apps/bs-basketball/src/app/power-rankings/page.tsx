@@ -11,7 +11,7 @@ import { powerBreakdown, rankByGroup, GROUP_LABEL, type GroupKey, type TeamBreak
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * /power-rankings — all 30 teams ranked by a derived power score.
+ * /power-rankings — every team (30-32) ranked by a derived power score.
  *
  * Score formula lives in `@/lib/stats/powerScore` so the /stats Power tab and
  * this rich-card view always show the same numbers. Each card carries

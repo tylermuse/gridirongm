@@ -19,6 +19,7 @@ const FILTERS: { key: TransactionKind | 'all'; label: string }[] = [
   { key: 'draft', label: 'Draft' },
   { key: 'pick', label: 'Picks' },
   { key: 'coaching', label: 'Coaching' },
+  { key: 'expansion', label: 'Expansion' },
 ];
 
 const ICON: Record<TransactionKind, string> = {
@@ -28,6 +29,7 @@ const ICON: Record<TransactionKind, string> = {
   draft: '🎟️',
   pick: '🔀',
   coaching: '📋',
+  expansion: '🏗️',
 };
 
 export default function TransactionsPage() {

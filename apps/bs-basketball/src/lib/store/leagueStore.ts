@@ -88,11 +88,21 @@ import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, createPlayer 
 import { revealFaIntel } from '../freeAgency/intel';
 import { forceUserGameResult } from '../godMode/forceGame';
 import { relocateTeam as relocateTeamLib, type FranchiseEdit } from '../godMode/relocate';
+import {
+  startExpansion as startExpansionLib,
+  setUserProtection,
+  beginExpansionDraft as beginExpansionDraftLib,
+  makeExpansionPick,
+  autoExpansionUntilUser,
+  finishExpansion as finishExpansionLib,
+  type ExpansionTeamConfig,
+  type RealignmentPlan,
+} from '../expansion';
 import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gmSync';
 import { scoutProspect as scoutProspectState, scoutMany as scoutManyState, toggleWatchlist as toggleWatchlistState } from '../scouting';
 import type { ScoutLevel } from '../draft/types';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
-import type { TeamId, BaseCoach } from '@bs/core/adapter';
+import type { TeamId, BaseCoach, PlayerId } from '@bs/core/adapter';
 import type { BasketballLineup, BasketballPlayer, BasketballTeam, BasketballGamePlan } from '@bs/sport-basketball';
 
 interface LeagueStore {
@@ -292,6 +302,41 @@ interface LeagueStore {
   /** R2-1: batch-release N players in one pass — pair to extendPlayersBulk for
    *  the "Let All Walk" action. Returns the count released. */
   releasePlayersBulk: (playerIds: string[]) => Promise<number>;
+
+  /** Expansion (offseason, after the draft): create 1-2 franchises with the
+   *  accepted realignment; optionally take over one of them. */
+  startExpansion: (configs: ExpansionTeamConfig[], plan: RealignmentPlan, takeOverIndex: number | null) => Promise<boolean>;
+  /** Submit the user team's protected list (≤ 8). */
+  protectPlayers: (playerIds: string[]) => Promise<boolean>;
+  /** Lock protections and open the expansion draft. */
+  beginExpansionDraft: () => Promise<boolean>;
+  /** User's pick for their (taken-over) expansion team. */
+  expansionPick: (playerId: string) => Promise<boolean>;
+  /** Sim expansion picks until the user is on the clock (or `all` to the end). */
+  simExpansionDraft: (all?: boolean) => Promise<boolean>;
+  /** Fill new rosters to the minimum and close the expansion. */
+  finishExpansion: () => Promise<boolean>;
+}
+
+/** Shared wrapper for the pure expansion transitions: apply, persist, report. */
+async function applyLeague(
+  get: () => LeagueStore,
+  set: (p: Partial<LeagueStore>) => void,
+  label: string,
+  fn: (league: BasketballLeagueState) => BasketballLeagueState,
+): Promise<boolean> {
+  const current = get().league;
+  if (!current) { set({ error: 'No league loaded.' }); return false; }
+  try {
+    const league = fn(current);
+    await saveLeague(league);
+    set({ league, error: null });
+    return true;
+  } catch (err) {
+    console.error(`[bs-hoops] ${label} failed:`, err);
+    set({ error: err instanceof Error ? err.message : String(err) });
+    return false;
+  }
 }
 
 /** One-line summary for the sim toast: games simmed + the user team's most
@@ -665,6 +710,19 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] forceUserGame failed:', err); }
     return true;
   },
+
+  startExpansion: (configs, plan, takeOverIndex) =>
+    applyLeague(get, set, 'startExpansion', l => startExpansionLib(l, configs, plan, { takeOverIndex })),
+  protectPlayers: (playerIds) =>
+    applyLeague(get, set, 'protectPlayers', l => setUserProtection(l, playerIds as PlayerId[])),
+  beginExpansionDraft: () =>
+    applyLeague(get, set, 'beginExpansionDraft', l => autoExpansionUntilUser(beginExpansionDraftLib(l), l.userTeamId)),
+  expansionPick: (playerId) =>
+    applyLeague(get, set, 'expansionPick', l => autoExpansionUntilUser(makeExpansionPick(l, playerId as PlayerId), l.userTeamId)),
+  simExpansionDraft: (all) =>
+    applyLeague(get, set, 'simExpansionDraft', l => autoExpansionUntilUser(l, all ? null : l.userTeamId)),
+  finishExpansion: () =>
+    applyLeague(get, set, 'finishExpansion', l => finishExpansionLib(l)),
 
   async relocateTeam(teamId, edit) {
     const current = get().league;

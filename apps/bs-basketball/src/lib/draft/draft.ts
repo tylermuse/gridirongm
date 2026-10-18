@@ -13,6 +13,7 @@
 
 import {
   generateBasketballDraftOrder,
+  lotterySizeFor,
   aiBasketballDraftPick,
   rookieScaleContract,
   basketballSalaryCap,
@@ -76,8 +77,9 @@ export function currentSlot(draft: DraftState): DraftPickSlot | null {
 
 /**
  * Build the draft order from the just-finished season: non-playoff teams enter
- * the weighted lottery (picks 1-14), the rest fall by reverse standings, then a
- * full reverse-standings round 2. `poolIds` are the prospects to be drafted.
+ * the weighted lottery (picks 1-14 in a 30-team league; 1-15 / 1-16 at 31 / 32
+ * teams), the rest fall by reverse standings, then a full reverse-standings
+ * round 2. Each round has one pick per team. `poolIds` are the prospects.
  */
 export function setupDraft(league: LeagueState, season: number, poolIds: PlayerId[]): DraftState {
   const bracket = getBracket(league);
@@ -93,19 +95,23 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
     madePlayoffs: playoffTeams.has(t.id),
   }));
 
-  const order = generateBasketballDraftOrder(standings, { rngSeed: `draft-${season}` });
+  // Lottery board = every team outside the 16-team first round: 14 at 30 teams
+  // (unchanged), 15 at 31, 16 at 32. The odds table is sized to the board.
+  const perRound = league.teams.length;
+  const lotterySize = lotterySizeFor(perRound - 16);
+  const order = generateBasketballDraftOrder(standings, { rngSeed: `draft-${season}`, lotteryBoardSize: lotterySize });
   const picks: DraftPickSlot[] = order.map((originalTeamId, i) => {
-    const round = i < 30 ? 1 : 2;
+    const round = i < perRound ? 1 : 2;
     // Traded picks convey here: the slot is earned by the original team's
     // record but made by whoever currently owns that pick.
     const teamId = currentOwner(league, season, round, originalTeamId);
     return {
       overall: i + 1,
       round,
-      pickInRound: (i % 30) + 1,
+      pickInRound: (i % perRound) + 1,
       teamId,
       originalTeamId,
-      isLottery: i < 14,
+      isLottery: i < lotterySize,
       prospectId: null,
     };
   });
@@ -118,7 +124,7 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
     .slice()
     .sort((a, b) => (b.losses - a.losses) || (a.wins - b.wins))
     .filter(s => !s.madePlayoffs)
-    .slice(0, 14)
+    .slice(0, lotterySize)
     .map(s => s.teamId);
 
   return {
@@ -186,6 +192,7 @@ export function makeDraftPick(league: LeagueState, prospectId: PlayerId): League
   const contract = rookieScaleContract(slot.overall, {
     signedSeason: draft.season,
     capForSeason: basketballSalaryCap(draft.season),
+    teamsPerRound: Math.max(30, Math.min(32, Math.ceil(draft.picks.length / 2))),
   });
 
   const players = { ...league.players };
@@ -261,8 +268,9 @@ export function autoPickCurrent(league: LeagueState): LeagueState {
 /** Auto-pick until the user's team is on the clock or the draft ends. */
 export function autoPickUntilUser(league: LeagueState, userTeamId: TeamId | null): LeagueState {
   let l = league;
-  // Hard cap at 60 iterations — the draft is finite.
-  for (let i = 0; i < 60; i++) {
+  // Hard cap at the board length — the draft is finite.
+  const maxPicks = getDraft(league)?.picks.length ?? 64;
+  for (let i = 0; i < maxPicks; i++) {
     const draft = getDraft(l);
     const slot = draft ? currentSlot(draft) : null;
     if (!slot) break;

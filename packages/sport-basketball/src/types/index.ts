@@ -208,7 +208,7 @@ export interface BasketballPlayerData {
   /** How the player joined his current team (drives the roster "Acquired"
    *  column). Stamped at the draft / trade / free-agency / initial-roster
    *  join points; absent on old saves (the UI infers from draft fields). */
-  acquiredVia?: 'draft' | 'free-agency' | 'trade' | 'initial';
+  acquiredVia?: 'draft' | 'free-agency' | 'trade' | 'initial' | 'expansion';
   acquiredSeason?: number;
   /** Overall pick # / round / class year, set when acquired via the draft. */
   draftPick?: number;

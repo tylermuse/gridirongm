@@ -55,7 +55,8 @@ import { getLeagueRules } from '../rules/leagueRules';
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
 const MIN_LEGAL_ROSTER = 13;
-const DRAFT_CLASS_SIZE = 60;
+/** Prospects per draft class: two rounds × team count (60 in a 30-team league). */
+const draftClassSize = (teamCount: number): number => teamCount * 2;
 
 /** Minimum players to keep at each position when waiving roster overflow. Stops
  *  the OVR-only cut from stripping a team of every center (low-OVR role players
@@ -257,7 +258,7 @@ export function enterOffseason(input: LeagueState): LeagueState {
   }
 
   // Generate the draft class — the pool, not auto-assigned.
-  const draftClass = generateBasketballDraftClass(nextSeason, DRAFT_CLASS_SIZE);
+  const draftClass = generateBasketballDraftClass(nextSeason, draftClassSize(league.teams.length));
   const poolIds: PlayerId[] = [];
   for (const p of draftClass) {
     players[p.id] = p;
@@ -359,6 +360,12 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const season = draft.season;
   // League Rules: the roster ceiling every team is trimmed to (stock 15).
   const TARGET_ROSTER = getLeagueRules(league).maxRoster;
+  // An expansion (lib/expansion) runs between the draft and this rollover; it
+  // must be finished (or never started) before the year rolls.
+  const exp = (league.sportData as { expansion?: { stage?: string } } | undefined)?.expansion;
+  if (exp && exp.stage !== 'done') {
+    throw new Error('Finish the expansion draft before starting the season.');
+  }
 
   const players = { ...league.players } as Record<string, BasketballPlayer>;
   // Trim by *keep value*, not raw current overall — rookies enter deliberately
@@ -566,6 +573,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const sportData = { ...(league.sportData as LeagueSportData) };
   delete sportData.draft;
   delete sportData.playoffs;
+  delete sportData.expansion; // completed expansion (history kept in expansionHistory)
   delete sportData.pendingResign; // re-sign decisions resolved for this offseason
   delete sportData.injuries; // everyone starts the new season healthy
   sportData.freeAgentLastTeam = freeAgentLastTeam;
@@ -597,7 +605,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
 
 export function advanceToNextSeason(league: LeagueState): LeagueState {
   const offseason = enterOffseason(league);
-  // userTeamId null → never matches a pick → auto-pick all 60.
+  // userTeamId null → never matches a pick → auto-pick the whole board.
   const drafted = autoPickUntilUser(offseason, null);
   return startNextSeason(drafted);
 }
