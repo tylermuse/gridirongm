@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { LegalPage, COMPANY, CONTACT_EMAIL, SITE } from '@/components/legal/LegalPage';
 
 export const metadata: Metadata = {
-  title: 'About BS Hoops',
+  title: 'About',
   description:
     'BS Hoops is a free browser-based basketball GM game: draft, trade, sign free agents, and simulate seasons possession by possession. No download, no account required.',
   alternates: { canonical: `${SITE}/about` },

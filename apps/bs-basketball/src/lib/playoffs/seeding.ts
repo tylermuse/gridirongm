@@ -3,7 +3,8 @@
  *
  * Teams are seeded 1-8 within each conference by regular-season record. Ties
  * break by, in order:
- *   1. Win percentage (raw wins, since every team plays 82)
+ *   1. Win percentage (equals raw wins at season's end, but mid-season teams
+ *      have played different numbers of games, so the projection must use %)
  *   2. Head-to-head record between the tied teams
  *   3. Division record (only decisive among same-division teams)
  *   4. Conference record
@@ -116,7 +117,9 @@ export function seedConferences(league: LeagueState): {
   const pct = (w: number, l: number) => (w + l > 0 ? w / (w + l) : 0);
 
   function compare(a: SeedMetric, b: SeedMetric): number {
-    if (b.wins !== a.wins) return b.wins - a.wins;
+    const aPct = pct(a.wins, a.losses);
+    const bPct = pct(b.wins, b.losses);
+    if (bPct !== aPct) return bPct - aPct;
     // Head-to-head: more wins against the other team ranks higher.
     const aH2H = a.vsWins[b.teamId] ?? 0;
     const bH2H = b.vsWins[a.teamId] ?? 0;

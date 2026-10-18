@@ -469,7 +469,7 @@ function SeedingNote({ grouping }: { grouping: Grouping }) {
       </p>
       <p className="mt-1">
         <span className="font-semibold text-[var(--foreground)]">Tiebreakers</span> (regular-season games only), in order:
-        wins → head-to-head record → division win % → conference win % → point differential.
+        win % → head-to-head record → division win % → conference win % → point differential.
         Ties are resolved pairwise, not as a multi-team mini-standings.
       </p>
     </div>
