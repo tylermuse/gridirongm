@@ -92,7 +92,7 @@ export const blogPosts: BlogPost[] = [
 <tr><td>First month</td><td>Sim by week; watch two games; adjust the game plan.</td></tr>
 <tr><td>Day ~100</td><td>Decide buyer or seller; shop expiring contracts.</td></tr>
 <tr><td>Day 115</td><td>Trade deadline — last chance to move salary until summer.</td></tr>
-<tr><td>Offseason</td><td>Scout the draft (8 scouts), re-sign Bird-rights players, shop the late FA window.</td></tr>
+<tr><td>Offseason</td><td>Scout the draft (30-point budget), re-sign Bird-rights players, shop the late FA window.</td></tr>
 </tbody>
 </table>
 <p>That is the whole loop. Everything else in BS Hoops — pick protections, apron management, development curves — is a refinement of these seven steps.</p>
@@ -412,7 +412,7 @@ export const blogPosts: BlogPost[] = [
     title: 'Drafting in the Lottery Era: Odds, Scouting and Rookie Contracts in BS Hoops',
     seoTitle: 'Basketball GM Draft Guide — Lottery Odds, Scouting & Rookie Scale',
     metaDescription:
-      'How the BS Hoops draft works: 14-team lottery odds, how far the worst team can fall, the 8-scout system and projection grades, boom/bust development, and rookie-scale contract values.',
+      'How the BS Hoops draft works: 14-team lottery odds, how far the worst team can fall, the 30-point tiered scouting system and projection grades, boom/bust development, and rookie-scale contract values.',
     keywords: ['basketball gm draft strategy', 'nba lottery odds game', 'basketball gm scouting', 'rookie scale contract'],
     publishDate: '2026-11-02',
     category: 'draft',
@@ -448,23 +448,31 @@ export const blogPosts: BlogPost[] = [
 <h2>Rookie-scale contracts</h2>
 <p>First-round picks sign four-year deals. Years one and two are guaranteed; years three and four are team options. The first-year salary is a fixed share of the cap by slot — 5.5% at #1, falling to about 1.2% at #30 — and rises about 7% per year. On the 2026-27 cap of $165.0M that is about $9.1M for the #1 pick, rising to about $11.1M in year four. Even a solid starter is usually worth several times that, which is why rookie deals carry a large surplus premium in trade value. Second-round picks sign two-year minimum deals.</p>
 
-<h2>Scouting: eight scouts, noisy grades</h2>
-<p>Before you scout a prospect, you see a <em>perceived</em> potential: his true ceiling plus deterministic noise with a standard deviation of about 5.5 points. It is converted into a grade:</p>
+<h2>Scouting: a 30-point budget and three levels</h2>
+<p>Before you scout a prospect, you see a <em>perceived</em> potential: his true ceiling plus deterministic noise with a standard deviation of about 5.5 points, shown as a range about ±12 points wide. It is converted into a grade:</p>
 <ul>
 <li><strong>A</strong> — star upside (perceived 85+)</li>
 <li><strong>B</strong> — future starter (78-84)</li>
 <li><strong>C</strong> — rotation (70-77)</li>
 <li><strong>D</strong> — fringe (below 70)</li>
 </ul>
-<p>You get <strong>eight scouts per draft</strong>. Spending one reveals that prospect's true potential. A 5.5-point standard deviation means a prospect shown as an 84 could genuinely be anywhere from about 73 to 95 — a C-level rotation player or a franchise cornerstone. That is where busts and steals come from.</p>
+<p>A 5.5-point standard deviation means a prospect shown as an 84 could genuinely be anywhere from the low 70s to the mid 90s — a rotation player or a franchise cornerstone. That is where busts and steals come from, and it is what your scouting budget is for. Each draft you get <strong>30 scouting points</strong>, spent in three levels (upgrading only costs the difference):</p>
+<ul>
+<li><strong>Quick look (1 point)</strong> — narrows the potential range to about ±8 and adds rough letter grades for shooting, finishing, playmaking, defense and athleticism.</li>
+<li><strong>Workout (3 points)</strong> — narrows the range to about ±4, sharpens those grades, and adds combine-style measurables (height, wingspan, reach, verticals, agility, sprint) plus strengths and question marks.</li>
+<li><strong>Full evaluation (6 points)</strong> — the exact ceiling, an archetype and comparison, and a verdict: <em>Gem</em>, <em>As advertised</em> or <em>Bust risk</em>.</li>
+</ul>
+<p>Thirty points buys four full evaluations plus six quick looks, so you cannot fully vet everyone. Ranges only ever narrow and always contain the true ceiling, so even a quick look is honest information.</p>
 
-<h3>Where to spend your scouts</h3>
+<h3>Where to spend your points</h3>
 <ol>
-<li><strong>Prospects near your pick who sit near a grade boundary.</strong> If you pick at #7 and three players graded B+ are in range, scout all three.</li>
+<li><strong>Quick-look the whole range around your pick.</strong> At 1 point each, a sweep of the ten players likely to be there when you pick tells you which grades are soft.</li>
+<li><strong>Full-evaluate the finalists.</strong> If you pick at #7 and three players graded B+ survive the sweep, spend 6 on each — the verdict is the tiebreaker.</li>
 <li><strong>Players you are considering reaching for.</strong> Confirm the ceiling before you take someone ten spots early.</li>
 <li><strong>Not the consensus top two.</strong> If you hold #1, you are taking one of them anyway. In the real-roster league, the top of each class is anchored to a consensus big board, so the AI drafts the obvious names in order.</li>
-<li><strong>Keep one or two for a trade-up.</strong> If you trade into the top ten on draft night, you want to know who you are buying.</li>
+<li><strong>Keep a few points for a trade-up.</strong> If you trade into the top ten on draft night, you want to know who you are buying.</li>
 </ol>
+<p>The draft room's <strong>Mock Draft</strong> tab projects every pick using the same logic the AI teams use when they are on the clock, so it shows who is realistically left at your slot — scout those players, not the ones who will be gone.</p>
 
 <h2>The hidden trait: boom, normal or bust</h2>
 <p>Every player carries a hidden development trait that is fixed for his whole career in your save. It multiplies how much he grows each offseason:</p>
@@ -473,7 +481,7 @@ export const blogPosts: BlogPost[] = [
 <li>About 70% are <strong>normal</strong>: 80-120%.</li>
 <li>About 15% are <strong>booms</strong>: 125-170%, often blowing past their listed potential.</li>
 </ul>
-<p>Scouting reveals the ceiling, not the trait. You can find out which kind of player you drafted only by watching his ratings move after his first offseason or two. That is why a 3-for-3 draft strategy (three first-rounders in one class) is far more reliable than betting everything on one pick.</p>
+<p>A full evaluation is the only way to read the trait before draft night: the <em>Gem</em> verdict flags a boom trait (or a ceiling well above his public grade), and <em>Bust risk</em> flags a bust trait (or a ceiling well below it). Everyone you did not fully evaluate is a coin flip you find out about only by watching his ratings move after his first offseason or two. That is why multiple first-rounders in one class are far more reliable than betting everything on one pick.</p>
 
 <h2>Draft-night tactics</h2>
 <ul>
