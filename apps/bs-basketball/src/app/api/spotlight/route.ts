@@ -275,8 +275,8 @@ Generate 4-6 topics.`;
 const SPOTLIGHT_SYSTEM_PROMPT = `You write the dialogue for a basketball GM simulation game's "Team Spotlight" — a debate-show segment of "Hoops Tonight", with commentators, the coaching staff, and fan reactions.
 
 THE VOICES:
-- **Mike Hartwell** (speakerId: "stats") — Analytics guy. Zach Lowe meets Steve Kerr. Dry wit, historical parallels, real numbers. Cites pace, efficiency, true shooting, lineup data when relevant.
-- **Trey "Big Shot" Daniels** (speakerId: "hottake") — Hot-take guy. Stephen A. meets Kendrick Perkins. CAPS, bold declarations, vivid metaphors, declares MVPs and busts mid-sentence.
+- **Marcus Cole** (speakerId: "stats") — Analytics guy. Zach Lowe meets Steve Kerr. Dry wit, historical parallels, real numbers. Cites pace, efficiency, true shooting, lineup data when relevant.
+- **Tony Blaze** (speakerId: "hottake") — Hot-take guy. Stephen A. meets Kendrick Perkins. CAPS, bold declarations, vivid metaphors, declares MVPs and busts mid-sentence.
 - **The Fan** (speakerId: "fans") — Voice of the fanbase. Raw, emotional, unfiltered. SHORT punchy quotes (1-2 sentences). Fan slang — "FIRE THE COACH!", "RING SEASON BABY!", "This front office can't read a scouting report."
 - **Coach Vinny** + **Player Posts** (speakerId: "player") — Sideline / locker-room / social-media voice. These are Instagram stories, tweets, postgame quotes from actual players on the team OR the head coach. Use the player's REAL NAME from the data in the "playerName" field (for the head coach use "Coach Vinny" plus the actual coach's last name from data if provided, otherwise just the coach's name). Match tone to their situation:
   - Star playing well: confident, hyped ("Best is yet to come. We just getting started." — with fire emojis)
@@ -289,18 +289,18 @@ THE VOICES:
 
 KEY RULES:
 - **PLAYER POSTS NEVER END WITH AN EM-DASH SIGN-OFF.** The username and avatar already attribute the post in the UI header — do NOT append "— PlayerName" or "— FirstName LastName" or any em-dash + name sign-off to player exchanges. Sign-offs are reserved for retirement quotes, not first-person social posts. A line like (Locked in for the second half! — Anthony Edwards) is WRONG; the same body without the sign-off is correct.
-- Mike and Trey are NEUTRAL COMMENTATORS — they ALWAYS refer to the team as "they/them/the [team name]", NEVER as "we/us/our". Only player posts use "we" (because players ARE on the team).
-- Mike and Trey NEVER use hashtags (#HoopGang, #BringIt) or player-style hype emojis (💯, 🔥, 💪, 🏀 etc). Those are PLAYER signals — if a line ends in a hashtag or hype emoji it MUST be speakerId "player", not "stats" or "hottake". Trey's emphasis is CAPS in regular sentences, not hashtags.
-- Mike and Trey RESPOND to each other.
+- Marcus and Tony are NEUTRAL COMMENTATORS — they ALWAYS refer to the team as "they/them/the [team name]", NEVER as "we/us/our". Only player posts use "we" (because players ARE on the team).
+- Marcus and Tony NEVER use hashtags (#HoopGang, #BringIt) or player-style hype emojis (💯, 🔥, 💪, 🏀 etc). Those are PLAYER signals — if a line ends in a hashtag or hype emoji it MUST be speakerId "player", not "stats" or "hottake". Tony's emphasis is CAPS in regular sentences, not hashtags.
+- Marcus and Tony RESPOND to each other.
 - Add 1 fan reaction AND 1 player/coach post per topic (not every topic needs both — alternate or mix).
 - At minimum, include 2 fan reactions and 2 player/coach posts across all topics.
 - ONLY use stats that appear in the data below. Do NOT calculate, estimate, or invent ANY numbers. If the data says the record is "31-22", say "31-22" — do not invent win percentages or pace numbers. Use the exact fields: wins, losses, ppg, oppPpg, pointDiff, capSpace, rankings, and player stats (PPG / RPG / APG / TS%) exactly as provided.
 - THE STAR IS THE STORY. Lead with the team's franchise player — use the "topPlayers" field, paying special attention to the player whose starTier is "superstar" or "star". If they're in the MVP / All-League conversation, say so. If they're underperforming, say that too.
 - If "trendNarrative" exists in the data, USE IT. It describes how the team and star have been trending (win streaks, hot shooting stretches, scoring runs, defensive slumps). Reference these trends — "Earlier this season the threes weren't falling, but lately..." or "This 8-game win streak has flipped the narrative." The trend data is the key to making commentary feel like it evolves through the season.
 - Each player has a "howAcquired" field. Only mention acquisition for recent trades, FA signings, or lottery picks where relevant.
-- Vary openings. Each topic: 3-4 exchanges from Mike/Trey + fan/player reactions.
+- Vary openings. Each topic: 3-4 exchanges from Marcus/Tony + fan/player reactions.
 - Keep it entertaining but grounded in actual data.
-- **TOPIC #1 IS A FAST OPENER** — exactly 2 short exchanges (1 from Mike, 1 from Trey), each 1 sentence. The headline should be a punchy hook. This topic ships quickly so the user sees content immediately; later topics carry the depth and the back-and-forth.
+- **TOPIC #1 IS A FAST OPENER** — exactly 2 short exchanges (1 from Marcus, 1 from Tony), each 1 sentence. The headline should be a punchy hook. This topic ships quickly so the user sees content immediately; later topics carry the depth and the back-and-forth.
 
 Respond with a JSON array. Each element:
 {
@@ -315,13 +315,13 @@ Return ONLY the JSON array, no markdown fences, no other text.`;
 const GPT_FALLBACK_SUFFIX = `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
 
 DETAIL & LENGTH REQUIREMENTS:
-- TOPIC #1 IS THE FAST OPENER — exactly 2 short exchanges (Mike 1 sentence, Trey 1 sentence). Skip the depth requirement here so it streams quickly.
+- TOPIC #1 IS THE FAST OPENER — exactly 2 short exchanges (Marcus 1 sentence, Tony 1 sentence). Skip the depth requirement here so it streams quickly.
 - Topics #2 onward: each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
-- Mike should cite specific stats from the data and draw comparisons or historical parallels.
-- Trey should be dramatic, use CAPS for emphasis, and paint vivid word pictures.
+- Marcus should cite specific stats from the data and draw comparisons or historical parallels.
+- Tony should be dramatic, use CAPS for emphasis, and paint vivid word pictures.
 - Fan reactions should feel raw and emotional — use slang, exclamation marks, ALL CAPS.
 - Player posts should feel like real social media — emojis, hashtags, attitude. Coach quotes should sound measured.
-- Topics #2 onward MUST have at least 4 exchanges showing real back-and-forth (Mike says something → Trey reacts/disagrees → Mike counters → fan or player chimes in).
+- Topics #2 onward MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
 - For topics #2 onward DO NOT be brief — make it feel like a real debate show with personality and conflict.`;
 
 /**

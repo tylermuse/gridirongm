@@ -24,7 +24,7 @@ export interface PodcastTopic {
   exchanges: PodcastExchange[];
 }
 
-export type PodcastSpeaker = 'mike' | 'trey';
+export type PodcastSpeaker = 'marcus' | 'tony';
 
 export interface PodcastScriptLine {
   speaker: PodcastSpeaker;
@@ -34,10 +34,10 @@ export interface PodcastScriptLine {
 }
 
 const TRANSITIONS: { speaker: PodcastSpeaker; text: string }[] = [
-  { speaker: 'mike', text: `Alright, let's move on. Next topic.` },
-  { speaker: 'mike', text: `OK, shifting gears here.` },
-  { speaker: 'mike', text: `Let's keep it moving, Trey.` },
-  { speaker: 'trey', text: `Next one. Let's go.` },
+  { speaker: 'marcus', text: `Alright, let's move on. Next topic.` },
+  { speaker: 'marcus', text: `OK, shifting gears here.` },
+  { speaker: 'marcus', text: `Let's keep it moving, Tony.` },
+  { speaker: 'tony', text: `Next one. Let's go.` },
 ];
 
 /** Build the spoken two-host script. Only the analyst ("stats") and hot-take
@@ -49,23 +49,23 @@ export function buildPodcastScript(topics: PodcastTopic[], teamName: string): Po
   const outroIndex = topics.length;
 
   lines.push({
-    speaker: 'mike',
+    speaker: 'marcus',
     topicIndex: -1,
-    text: `Welcome back to Hoops Tonight. I'm Mike Hartwell alongside Trey "Big Shot" Daniels, and today we're breaking down the ${teamName}. Let's get into it.`,
+    text: `Welcome back to Hoops Tonight. I'm Marcus Cole alongside Tony Blaze, and today we're breaking down the ${teamName}. Let's get into it.`,
   });
-  lines.push({ speaker: 'trey', topicIndex: -1, text: `Let's GO! I've got a LOT to say about this team. Let's not waste any time.` });
+  lines.push({ speaker: 'tony', topicIndex: -1, text: `Let's GO! I've got a LOT to say about this team. Let's not waste any time.` });
 
   for (let i = 0; i < topics.length; i++) {
     const debate = topics[i].exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
     if (debate.length === 0) continue;
     if (i > 0) lines.push({ ...TRANSITIONS[i % TRANSITIONS.length], topicIndex: i });
     for (const ex of debate) {
-      lines.push({ speaker: ex.speakerId === 'stats' ? 'mike' : 'trey', text: ex.text, topicIndex: i });
+      lines.push({ speaker: ex.speakerId === 'stats' ? 'marcus' : 'tony', text: ex.text, topicIndex: i });
     }
   }
 
-  lines.push({ speaker: 'mike', topicIndex: outroIndex, text: `And that's the show. Thanks for tuning in to Hoops Tonight. We'll see you next time.` });
-  lines.push({ speaker: 'trey', topicIndex: outroIndex, text: `Stay loud, stay passionate, and keep grinding. This is Trey Daniels — we're out!` });
+  lines.push({ speaker: 'marcus', topicIndex: outroIndex, text: `And that's the show. Thanks for tuning in to Hoops Tonight. We'll see you next time.` });
+  lines.push({ speaker: 'tony', topicIndex: outroIndex, text: `Stay loud, stay passionate, and keep grinding. This is Tony Blaze — we're out!` });
 
   return lines;
 }

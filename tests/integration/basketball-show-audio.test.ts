@@ -29,7 +29,7 @@ const episode: SpotlightEpisode = {
       id: 'a', category: 'Your Team', headline: 'Dallas win four straight',
       exchanges: [
         { voice: 'analyst', line: 'Net rating is +9 over the stretch.' },
-        { voice: 'take', line: 'RING SEASON, Mike!' },
+        { voice: 'take', line: 'RING SEASON, Marcus!' },
         { voice: 'fan', line: 'LETS GOOO' },
       ],
     },
@@ -60,7 +60,7 @@ describe('hoops show audio — request body', () => {
       headline: 'Dallas win four straight', icon: 'Your Team',
       exchanges: [
         { speakerId: 'stats', text: 'Net rating is +9 over the stretch.' },
-        { speakerId: 'hottake', text: 'RING SEASON, Mike!' },
+        { speakerId: 'hottake', text: 'RING SEASON, Marcus!' },
         { speakerId: 'fans', text: 'LETS GOOO' },
       ],
     });
@@ -75,11 +75,11 @@ describe('hoops show audio — request body', () => {
     const a = JSON.stringify(buildShowAudioRequest(ep, 'X'));
     const b = JSON.stringify(buildShowAudioRequest(buildSpotlight(league)!, 'X'));
     expect(a).toBe(b);
-    // Hosts in the script match the route's ElevenLabs voices (Mike / Trey).
-    expect(SPOTLIGHT_HOSTS.analyst.name).toBe('Mike Hartwell');
-    expect(SPOTLIGHT_HOSTS.take.name).toContain('Trey');
+    // Hosts in the script match the route's ElevenLabs voices (Marcus / Tony).
+    expect(SPOTLIGHT_HOSTS.analyst.name).toBe('Marcus Cole');
+    expect(SPOTLIGHT_HOSTS.take.name).toContain('Tony');
     const allLines = [...ep.intro, ...ep.outro, ...ep.stories.flatMap(s => s.exchanges)].map(e => e.line).join(' ');
-    expect(allLines).not.toMatch(/\b(Marcus|Jax)\b/);
+    expect(allLines).not.toMatch(/\b(Mike|Trey|Hartwell|Daniels)\b/);
   });
 });
 
@@ -88,11 +88,11 @@ describe('hoops show audio — script + chapters', () => {
   const lines = scriptFor(body);
 
   it('voices only analyst/take lines, wrapped in cold open + sign-off', () => {
-    expect(lines.map(l => l.speaker)).toEqual(['mike', 'trey', 'mike', 'trey', 'mike', 'trey', 'mike', 'mike', 'trey']);
+    expect(lines.map(l => l.speaker)).toEqual(['marcus', 'tony', 'marcus', 'tony', 'marcus', 'tony', 'marcus', 'marcus', 'tony']);
     expect(lines.some(l => l.text === 'LETS GOOO' || l.text.includes('Grateful'))).toBe(false);
     expect(lines[0].text).toContain('Dallas Mavericks');
     // Topic 2 (index 2) gets a transition from the rotation (2 % 4 → "Let's keep it moving").
-    expect(lines[4]).toMatchObject({ speaker: 'mike', topicIndex: 2, text: "Let's keep it moving, Trey." });
+    expect(lines[4]).toMatchObject({ speaker: 'marcus', topicIndex: 2, text: "Let's keep it moving, Tony." });
     // Same builder the route uses.
     expect(buildPodcastScript(body.topics, body.teamName)).toEqual(lines);
   });
