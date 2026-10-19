@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16t'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16u'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1201,6 +1201,21 @@ function choreograph(res){
       ev(Math.min(tCatch+.15, tEnd-.7), ()=>{ if(tackler) tackler.behav = plan.chase? chaseB(picker, playT, tEnd-.42, tackler) : P([playT, tackler.x, tackler.z], ...plan.path.slice(2).filter(k=>k[0]>playT+.05));
         O.all.forEach((o,i)=>{ o.engage=null; o.faceLock=null; if(o!==tackler) o.behav = F(picker, tCatch+.3+(i%4)*.1, (O.ol.includes(o)? 5.2 : 6.2)+(i%3)*.3, [R(-1.5,1.5),0], 1.4); });
         D.dl.forEach((d,i)=>{ d.engage=null; d.faceLock=null; d.behav = F(picker, tCatch+.4+i*.1, 5.4, [(i-1.5)*2.2, -2.5], 1.2); }); });
+      /* Escort (reference: DAL pick return at GB on SNF): the nearest DBs/backers turn into blockers — they run with him a couple of
+         yards in front and to the side, and each one squares up the first chaser that gets close; the pair lock up and stagger off the lane */
+      if(ret >= 6 && (window.__escort ?? true)) ev(tCatch+.35, ()=>{ if(picker.down!=null) return;
+        const esc = [...D.lb, D.cbL, D.cbR, D.sL, D.sR].filter(d=>d!==picker && d.down==null).sort((a,b)=>Math.hypot(a.x-picker.x,a.z-picker.z)-Math.hypot(b.x-picker.x,b.z-picker.z)).slice(0,3);
+        const taken = new Set([tackler]);
+        esc.forEach((d,i)=>{ const side = i===1? 1 : i===2? -1 : (picker.x>0? -1 : 1);
+          d.engage=null; d.faceLock=null; d.behav = F(picker, playT+.05*i, 7.1, [side*2.6, -3.0-i*.7], 1.6);
+          const tryBlock = ()=>{ if(d.down!=null || d.engage || !play || play.whistled) return;
+            const foe = O.all.filter(o=>!taken.has(o) && o.down==null && !o.engage && o!==O.qb).map(o=>({o, dd:Math.hypot(o.x-d.x,o.z-d.z), dc:Math.hypot(o.x-picker.x,o.z-picker.z)})).filter(x=>x.dd<2.4 && x.dc<6).sort((a,b)=>a.dd-b.dd)[0];
+            if(!foe){ if(playT < tEnd-.3) events.push({t:playT+.15, fn:tryBlock, done:false}); return; }
+            const o=foe.o; taken.add(o);
+            const pr = {bx:(o.x+d.x)/2, bz:(o.z+d.z)/2, dv:(o.z>d.z? .9 : -.9), dur:.9, seed:R(0,3), start:playT};
+            d.behav={type:'line', pr, side:(o.z>d.z? -1 : 1), x0:d.x, z0:d.z, dx:0}; o.behav={type:'line', pr, side:(o.z>d.z? 1 : -1), x0:o.x, z0:o.z, dx:0};
+            d.engage=o; o.engage=d; sndThump(.3,.25); };
+          events.push({t:playT+.5+i*.2, fn:tryBlock, done:false}); }); });
     }
   }
 
@@ -1864,6 +1879,7 @@ const FORCED = {
   incomplete:()=>({kind:'incomplete', depth:Math.random()<.5?'short':'deep'}),
   sack:()=>({kind:'sack', yards:-Math.round(R(4,9)), depth:'short'}),
   int:()=>({kind:'int', depth:Math.random()<.5?'short':'deep'}),
+  intret:()=>({kind:'int', depth:'short', ret:35}),
 };
 
 // ---------- Flow ----------
