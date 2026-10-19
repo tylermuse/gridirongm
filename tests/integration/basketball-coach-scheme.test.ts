@@ -21,8 +21,10 @@ function side(id: string): BasketballGameSide {
 function ctx(s: string) {
   return { gameId: `g-${s}` as never, season: 2026, date: '2026-01-01', competitionId: 'primary' as never, isPlayoff: false, rngSeed: s };
 }
-function threes(box: Record<string, { threePointsAttempted?: number }>) {
-  return Object.values(box).reduce((a, b) => a + (b.threePointsAttempted ?? 0), 0);
+/** Threes attempted by one side only (the scheme under test) — summing both
+ *  teams diluted the effect with the unchanged opponent's attempts. */
+function threes(box: Record<string, { threePointsAttempted?: number }>, ids: readonly string[]) {
+  return ids.reduce((a, id) => a + (box[id]?.threePointsAttempted ?? 0), 0);
 }
 
 describe('coach scheme biases the sim', () => {
@@ -30,8 +32,9 @@ describe('coach scheme biases the sim', () => {
     let fiveOut = 0, triangle = 0;
     for (let i = 0; i < 15; i++) {
       const A = side('A'), B = side('B');
-      fiveOut += threes(simBasketballGame({ ...A, schemeEffect: resolveBasketballSchemeEffect('five_out') }, B, ctx(`s${i}`)).boxScores as never);
-      triangle += threes(simBasketballGame({ ...A, schemeEffect: resolveBasketballSchemeEffect('triangle') }, B, ctx(`s${i}`)).boxScores as never);
+      const ids = A.players.map(p => p.id);
+      fiveOut += threes(simBasketballGame({ ...A, schemeEffect: resolveBasketballSchemeEffect('five_out') }, B, ctx(`s${i}`)).boxScores as never, ids);
+      triangle += threes(simBasketballGame({ ...A, schemeEffect: resolveBasketballSchemeEffect('triangle') }, B, ctx(`s${i}`)).boxScores as never, ids);
     }
     expect(fiveOut).toBeGreaterThan(triangle * 1.1);
   });

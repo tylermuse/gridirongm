@@ -362,7 +362,9 @@ export function simBasketballGame(
       offLineup.makeAdj = gameEnv + scoreEffect(
         offenseIsHome ? homeScore : awayScore, offenseIsHome ? awayScore : homeScore,
         quarter, secondsRemaining, settings.quarterLengthSeconds,
-      );
+      ) + (quarter >= settings.numQuarters
+        ? clutchEffect((offenseIsHome ? homeScore : awayScore) - (offenseIsHome ? awayScore : homeScore), secondsRemaining)
+        : 0);
 
       // End-game decisions (final quarter only): fouls, clock, last shot.
       const plan = endgamePlan(
@@ -371,6 +373,7 @@ export function simBasketballGame(
       );
       if (plan.kind === 'hurry' || plan.kind === 'heave') offLineup.forceThree = plan.forceThree;
       if (plan.kind === 'heave') offLineup.makeAdj = HEAVE_MAKE_ADJ;
+      if (plan.kind === 'lastShot') offLineup.makeAdj = (offLineup.makeAdj ?? 0) + LAST_SHOT_MAKE_ADJ;
 
       // Sim a possession
       const result = plan.kind === 'foul'
@@ -473,7 +476,9 @@ export function simBasketballGame(
       const defUnit = offenseIsHome ? awayUnit : homeUnit;
       const offLineup = buildActiveLineup(offense, offUnit, offenseById);
       const defLineup = buildActiveLineup(defense, defUnit, defenseById);
-      offLineup.makeAdj = gameEnv;
+      offLineup.makeAdj = gameEnv + clutchEffect(
+        (offenseIsHome ? homeScore : awayScore) - (offenseIsHome ? awayScore : homeScore), secondsRemaining,
+      );
 
       const plan = endgamePlan(
         (offenseIsHome ? homeScore : awayScore) - (offenseIsHome ? awayScore : homeScore),
@@ -481,6 +486,7 @@ export function simBasketballGame(
       );
       if (plan.kind === 'hurry' || plan.kind === 'heave') offLineup.forceThree = plan.forceThree;
       if (plan.kind === 'heave') offLineup.makeAdj = HEAVE_MAKE_ADJ;
+      if (plan.kind === 'lastShot') offLineup.makeAdj = (offLineup.makeAdj ?? 0) + LAST_SHOT_MAKE_ADJ;
       const result = plan.kind === 'foul'
         ? simIntentionalFoul(offLineup, defLineup, rng)
         : simPossession(offLineup, defLineup, rng);
@@ -604,6 +610,29 @@ export function simBasketballGame(
 /** Width of the shared per-game shooting environment (sum of 3 uniforms →
  *  roughly normal, SD ≈ GAME_ENV_SPREAD / 2). */
 const GAME_ENV_SPREAD = 0.05;
+
+/**
+ * Clutch convergence: in the last CLUTCH_WINDOW seconds of the final period,
+ * a CLOSE game tightens — the trailing offense plays with urgency and gets
+ * better looks, the leading offense plays not to lose. Only applies within
+ * CLUTCH_MAX_LEAD, so blowouts are unaffected (the score effect covers those).
+ * This is what makes real close games cluster at the end (NBA ~6% overtime)
+ * without compressing the overall margin distribution.
+ */
+const CLUTCH_WINDOW = 360;
+const CLUTCH_MAX_LEAD = 10;
+const CLUTCH_PER_POINT = 0.016;
+const CLUTCH_CAP = 0.11;
+export function clutchEffect(offenseLead: number, secondsLeft: number): number {
+  if (secondsLeft > CLUTCH_WINDOW || offenseLead === 0 || Math.abs(offenseLead) > CLUTCH_MAX_LEAD) return 0;
+  const adj = -offenseLead * CLUTCH_PER_POINT;
+  return Math.max(-CLUTCH_CAP, Math.min(CLUTCH_CAP, adj));
+}
+
+/** Tie game, holding for the last shot: a late-clock isolation into a set,
+ *  switching defense — real game-winning attempts convert ~1/3, well below a
+ *  normal possession. */
+const LAST_SHOT_MAKE_ADJ = -0.3;
 
 /** Make-rate multiplier delta for a rushed last-second shot (≈ −70%). */
 const HEAVE_MAKE_ADJ = -0.7;

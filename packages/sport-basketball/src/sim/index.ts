@@ -50,3 +50,4 @@ export { PLAY_LOG_FIELDS } from './game';
 
 export { endgamePlan } from './endgame';
 export type { EndgamePlan } from './endgame';
+export { clutchEffect } from './game';

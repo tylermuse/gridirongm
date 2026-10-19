@@ -3,6 +3,10 @@ import crypto from 'crypto';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
 import { consumePodcastCredit, getServiceClient } from '@bs/core/podcast';
+import { buildPodcastScript, normalizeTtsText, type PodcastTopic } from '@/lib/show/podcastScript';
+
+// ~20 sequential TTS calls on a cache miss — give generation headroom.
+export const maxDuration = 120;
 
 // ── Voice Config ──────────────────────────────────────────────────────
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -35,90 +39,6 @@ function contentHash(data: unknown): string {
   return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
 }
 
-// ── Text Normalization for TTS ────────────────────────────────────────
-// TTS engines read text literally — expand abbreviations and symbols so
-// the voices say "rebounds" instead of "R E B", "$55 million" instead of
-// "$55M", etc.
-function normalizeTtsText(text: string): string {
-  let t = text;
-
-  // Money: "$55M" → "55 million dollars", "$4.2M" → "4.2 million dollars"
-  t = t.replace(/\$(\d+(?:\.\d+)?)\s*[Mm]/g, '$1 million dollars');
-  // Money: "$500K" → "500 thousand dollars"
-  t = t.replace(/\$(\d+(?:\.\d+)?)\s*[Kk]/g, '$1 thousand dollars');
-  // Money: standalone "$55" — catch remaining dollar signs
-  t = t.replace(/\$(\d)/g, '$1 dollar');
-
-  // Basketball box-score stats — word boundaries to avoid partial replacements
-  t = t.replace(/\bPPG\b/gi, 'points per game');
-  t = t.replace(/\bRPG\b/gi, 'rebounds per game');
-  t = t.replace(/\bAPG\b/gi, 'assists per game');
-  t = t.replace(/\bSPG\b/gi, 'steals per game');
-  t = t.replace(/\bBPG\b/gi, 'blocks per game');
-  t = t.replace(/\bMPG\b/gi, 'minutes per game');
-
-  // Shot type abbreviations
-  t = t.replace(/\b3PT\b/gi, 'three-point');
-  t = t.replace(/\b3-PT\b/gi, 'three-point');
-  t = t.replace(/\b3P%\b/gi, 'three-point percentage');
-  t = t.replace(/\b3PA\b/gi, 'three-point attempts');
-  t = t.replace(/\b3PM\b/gi, 'three-pointers made');
-  t = t.replace(/\bFG%\b/gi, 'field goal percentage');
-  t = t.replace(/\bFGA\b/gi, 'field goal attempts');
-  t = t.replace(/\bFGM\b/gi, 'field goals made');
-  t = t.replace(/\bFT%\b/gi, 'free throw percentage');
-  t = t.replace(/\bFTA\b/gi, 'free throw attempts');
-  t = t.replace(/\bFTM\b/gi, 'free throws made');
-  t = t.replace(/\bTS%\b/gi, 'true shooting percentage');
-  t = t.replace(/\beFG%\b/gi, 'effective field goal percentage');
-
-  // Rebounds split-out (plural and singular)
-  t = t.replace(/\bOREB\b/gi, 'offensive rebounds');
-  t = t.replace(/\bDREB\b/gi, 'defensive rebounds');
-  t = t.replace(/\bREB\b/gi, 'rebounds');
-  t = t.replace(/\bAST\b/gi, 'assists');
-  t = t.replace(/\bSTL\b/gi, 'steals');
-  t = t.replace(/\bBLK\b/gi, 'blocks');
-  t = t.replace(/\bTOV\b/gi, 'turnovers');
-  t = t.replace(/\bPF\b/g, 'personal fouls');
-
-  // Basketball position abbreviations
-  t = t.replace(/\bPG\b/g, 'point guard');
-  t = t.replace(/\bPGs\b/g, 'point guards');
-  t = t.replace(/\bSG\b/g, 'shooting guard');
-  t = t.replace(/\bSGs\b/g, 'shooting guards');
-  t = t.replace(/\bSF\b/g, 'small forward');
-  t = t.replace(/\bSFs\b/g, 'small forwards');
-  // PF can collide with "personal foul" above — handled there first.
-  t = t.replace(/\bC\b(?=\s|$)/g, 'center');
-
-  // Awards / acronyms read as letters
-  t = t.replace(/\bMVP\b/g, 'M V P');
-  t = t.replace(/\bDPOY\b/g, 'D P O Y');
-  t = t.replace(/\bROY\b/g, 'R O Y');
-  t = t.replace(/\bMIP\b/g, 'M I P');
-  t = t.replace(/\bCOY\b/g, 'C O Y');
-  t = t.replace(/\b6MOY\b/g, 'sixth man of the year');
-  t = t.replace(/\bAll-League\b/gi, 'All League');
-  t = t.replace(/\bAll-NBA\b/gi, 'All N B A');
-  t = t.replace(/\bAll-Star\b/gi, 'All Star');
-
-  // Org-level abbreviations
-  t = t.replace(/\bFA\b/g, 'free agency');
-  t = t.replace(/\bFAs\b/g, 'free agents');
-  t = t.replace(/\bGM\b/g, 'general manager');
-  t = t.replace(/\bGMs\b/g, 'general managers');
-  t = t.replace(/\bOVR\b/gi, 'overall');
-
-  // Negative point differential: "-13" at start or after space
-  t = t.replace(/(?<=\s|^)-(\d+)/g, 'negative $1');
-
-  // Ensure "vs" reads as "versus"
-  t = t.replace(/\bvs\.?\b/gi, 'versus');
-
-  return t;
-}
-
 // ── TTS Helper ────────────────────────────────────────────────────────
 async function generateSpeech(text: string, voiceId: string): Promise<Buffer> {
   const res = await fetch(`${ELEVENLABS_BASE}/text-to-speech/${voiceId}`, {
@@ -139,7 +59,8 @@ async function generateSpeech(text: string, voiceId: string): Promise<Buffer> {
     // Propagate quota/auth errors so the client can show "credits exhausted"
     if (res.status === 401 || res.status === 402 || res.status === 429) {
       const error = new Error(`ElevenLabs quota exceeded (${res.status}): ${err}`);
-      (error as Error & { status: number }).status = 402;
+      (error as Error & { status: number; code: string }).status = 402;
+      (error as Error & { code: string }).code = 'tts_quota';
       throw error;
     }
     throw new Error(`ElevenLabs TTS failed (${res.status}): ${err}`);
@@ -148,84 +69,31 @@ async function generateSpeech(text: string, voiceId: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-// ── Script Builder ────────────────────────────────────────────────────
-interface Exchange {
-  speakerId: 'stats' | 'hottake' | 'fans' | 'player';
-  text: string;
-  playerName?: string;
+function audioResponse(buffer: Buffer, lineBytes: number[] | null): NextResponse {
+  const headers: Record<string, string> = {
+    'Content-Type': 'audio/mpeg',
+    'Content-Length': String(buffer.length),
+    'Cache-Control': 'public, max-age=604800',
+  };
+  if (lineBytes?.length) headers['X-Line-Bytes'] = lineBytes.join(',');
+  return new NextResponse(new Uint8Array(buffer), { headers });
 }
 
-interface Topic {
-  headline: string;
-  icon: string;
-  exchanges: Exchange[];
-}
-
-interface ScriptLine {
-  speaker: 'mike' | 'trey';
-  text: string;
-}
-
-function buildPodcastScript(topics: Topic[], teamName: string): ScriptLine[] {
-  const lines: ScriptLine[] = [];
-
-  lines.push({
-    speaker: 'mike',
-    text: `Welcome back to Hoops Tonight. I'm Mike Hartwell alongside Trey "Big Shot" Daniels, and today we're breaking down the ${teamName}. Let's get into it.`,
-  });
-  lines.push({
-    speaker: 'trey',
-    text: `Let's GO! I've got a LOT to say about this team. Let's not waste any time.`,
-  });
-
-  for (let i = 0; i < topics.length; i++) {
-    const topic = topics[i];
-    const debateExchanges = topic.exchanges.filter(
-      e => e.speakerId === 'stats' || e.speakerId === 'hottake'
-    );
-    if (debateExchanges.length === 0) continue;
-
-    if (i > 0) {
-      const transitions = [
-        { speaker: 'mike' as const, text: `Alright, let's move on. Next topic.` },
-        { speaker: 'mike' as const, text: `OK, shifting gears here.` },
-        { speaker: 'mike' as const, text: `Let's keep it moving, Trey.` },
-        { speaker: 'trey' as const, text: `Next one. Let's go.` },
-      ];
-      lines.push(transitions[i % transitions.length]);
-    }
-
-    for (const exchange of debateExchanges) {
-      lines.push({
-        speaker: exchange.speakerId === 'stats' ? 'mike' : 'trey',
-        text: exchange.text,
-      });
-    }
-  }
-
-  lines.push({
-    speaker: 'mike',
-    text: `And that's the show. Thanks for tuning in to Hoops Tonight. We'll see you next time.`,
-  });
-  lines.push({
-    speaker: 'trey',
-    text: `Stay loud, stay passionate, and keep grinding. This is Trey Daniels — we're out!`,
-  });
-
-  return lines;
-}
+// Script builder + TTS normalization live in lib/show/podcastScript so the
+// client player's synced transcript is built from the exact same lines.
 
 // ── Main Handler ──────────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
     if (!ELEVENLABS_API_KEY) {
+      // 503 + code so the client can fall back to the browser voice quietly.
       return NextResponse.json(
-        { error: 'ELEVENLABS_API_KEY not configured' },
-        { status: 500 }
+        { error: 'ELEVENLABS_API_KEY not configured', code: 'not_configured' },
+        { status: 503 }
       );
     }
 
-    const { topics, teamName } = await request.json();
+    const { topics, teamName } = (await request.json()) as { topics?: PodcastTopic[]; teamName?: string };
     if (!topics || !Array.isArray(topics) || !teamName) {
       return NextResponse.json(
         { error: 'topics (array) and teamName (string) required' },
@@ -253,13 +121,14 @@ export async function POST(request: Request) {
         .download(`${hash}.mp3`);
       if (data) {
         const buffer = Buffer.from(await data.arrayBuffer());
-        return new NextResponse(buffer, {
-          headers: {
-            'Content-Type': 'audio/mpeg',
-            'Content-Length': String(buffer.length),
-            'Cache-Control': 'public, max-age=604800',
-          },
-        });
+        // Per-line clip sizes live in a small sidecar; older entries lack it
+        // and the client falls back to estimating line offsets.
+        let lineBytes: number[] | null = null;
+        const { data: meta } = await sb.storage.from(STORAGE_BUCKET).download(`${hash}.json`);
+        if (meta) {
+          try { lineBytes = (JSON.parse(await meta.text()) as { lineBytes?: number[] }).lineBytes ?? null; } catch { /* ignore */ }
+        }
+        return audioResponse(buffer, lineBytes);
       }
     }
 
@@ -286,10 +155,13 @@ export async function POST(request: Request) {
       audioBuffers.push(clip);
     }
 
-    // Concatenate MP3 buffers (MP3 is frame-based — direct concat works)
+    // Concatenate MP3 buffers (MP3 is frame-based — direct concat works).
+    // CBR 128kbps, so each clip's byte length is proportional to its duration
+    // — the client uses these to sync the transcript line by line.
     const finalBuffer = Buffer.concat(audioBuffers);
+    const lineBytes = audioBuffers.map(b => b.length);
 
-    // Cache to Supabase Storage
+    // Cache to Supabase Storage (mp3 + per-line sidecar)
     if (sb) {
       await sb.storage
         .from(STORAGE_BUCKET)
@@ -297,20 +169,21 @@ export async function POST(request: Request) {
           contentType: 'audio/mpeg',
           upsert: true,
         });
+      await sb.storage
+        .from(STORAGE_BUCKET)
+        .upload(`${hash}.json`, JSON.stringify({ lineBytes }), {
+          contentType: 'application/json',
+          upsert: true,
+        });
     }
 
-    return new NextResponse(finalBuffer, {
-      headers: {
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': String(finalBuffer.length),
-        'Cache-Control': 'public, max-age=604800',
-      },
-    });
+    return audioResponse(finalBuffer, lineBytes);
   } catch (err) {
     console.error('Spotlight Audio API error:', err);
     const status = (err as Error & { status?: number }).status ?? 500;
+    const code = (err as Error & { code?: string }).code;
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { error: err instanceof Error ? err.message : 'Unknown error', ...(code ? { code } : {}) },
       { status }
     );
   }
