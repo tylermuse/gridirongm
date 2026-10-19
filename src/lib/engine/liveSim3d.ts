@@ -77,13 +77,15 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
       if (KNEEL_RE.test(e.description) || NON_PLAY_RE.test(e.description)) return null;
       return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}) };
     case 'pass_complete':
-      return { kind: 'complete', depth: y >= 20 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
+      return { kind: 'complete', depth: y >= 20 && !SCREEN_RE.test(e.description) ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'pass_incomplete':
-      return { kind: 'incomplete', depth: /deep|bomb|downfield|long/i.test(e.description) ? 'deep' : 'short' };
+      return { kind: 'incomplete', depth: /deep|bomb|downfield|long/i.test(e.description) ? 'deep' : 'short', ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'touchdown':
       return RUSH_TD_RE.test(e.description)
         ? { kind: 'run', yards: td(y) }
-        : { kind: 'complete', depth: Math.max(y, toGoal) >= 20 ? 'deep' : 'short', yards: td(y) };
+        : SCREEN_RE.test(e.description)
+          ? { kind: 'complete', depth: 'short', yards: td(y), style: 'screen' as const }   // a screen that scores is still a screen (goal line)
+          : { kind: 'complete', depth: Math.max(y, toGoal) >= 20 ? 'deep' : 'short', yards: td(y) };   // a screen that scores is still a screen (goal line)
     case 'sack':
       return { kind: 'sack', yards: y };
     case 'interception':

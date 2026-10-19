@@ -1141,7 +1141,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (!broadcastOn) return;
     if (isPlaying) broadcast.resume(); else broadcast.pause();
   }, [isPlaying, broadcastOn]); // eslint-disable-line react-hooks/exhaustive-deps
-  const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
+  // While the 3D sim is still running a play, its line isn't news yet: keep it out of the feed and the bug until the snap is over
+  const simHoldId = sim3dOn && sim3dActive ? (revealedEvents[revealedEvents.length - 1]?.id ?? null) : null;
+  const displayEvents = useMemo(() => [...revealedEvents].reverse().filter(e => e.id !== simHoldId), [revealedEvents, simHoldId]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
   // Current on-field skill lineup w/ energy + auto-subs, from the revealed event.
   const fatigueLineup = useMemo(
@@ -1948,12 +1950,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           lastPlayDescription={(() => {
             // Show the most recent non-separator play description.
             // Check currentEvent first, then fall back to the last engine event.
-            if (currentEvent && !isSeparator(currentEvent.type)) return addPlayTypeIcon(currentEvent);
+            if (currentEvent && !isSeparator(currentEvent.type) && currentEvent.id !== simHoldId) return addPlayTypeIcon(currentEvent);
             // When paused for Live Coach, currentEvent might be a separator/old event.
             // Search backwards through revealed events for the most recent play.
             for (let i = revealedCount - 1; i >= 0; i--) {
               const ev = allEvents[i];
-              if (ev && !isSeparator(ev.type)) return addPlayTypeIcon(ev);
+              if (ev && !isSeparator(ev.type) && ev.id !== simHoldId) return addPlayTypeIcon(ev);
             }
             return null;
           })()}
@@ -2017,7 +2019,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           />
 
           {/* Post-play outcome chip */}
-          {outcomeChip && (
+          {outcomeChip && !(sim3dOn && !pregameOpen) && (   /* the 3D sim calls the result itself, after the play — the chip would announce it at the snap */
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 animate-bounce-in">
               <div className={`${outcomeChip.color} text-white font-black text-sm px-4 py-1.5 rounded-full shadow-lg`}>
                 {outcomeChip.text}
@@ -2430,7 +2432,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               )}
 
               {/* Turnover alert banner */}
-              {currentEvent && isTurnover(currentEvent.type) && (
+              {currentEvent && isTurnover(currentEvent.type) && currentEvent.id !== simHoldId && (
                 <div className="bg-red-600 text-white rounded-lg px-5 py-3 flex items-center gap-3 animate-pulse shadow-lg shadow-red-200">
                   <span className="text-2xl">🚨</span>
                   <div className="flex-1">

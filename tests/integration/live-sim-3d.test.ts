@@ -158,3 +158,15 @@ describe('fumble after a run', () => {
     expect(toSimPlay(run, { home, away }, null)!.res.fumble).toBeUndefined();
   });
 });
+
+describe('screens keep their style', () => {
+  const base = { id: 9, quarter: 2, timeStr: '5:00', possession: 'home', fieldPos: 97, down: 1, yardsToGo: 3, homeScore: 0, awayScore: 0 };
+  it('a screen that scores at the goal line, and an incomplete screen, are still screens', () => {
+    const td = { ...base, type: 'touchdown', isScoring: true, yardsGained: 3, description: '🛡️ Screen — D. Prescott completes to J. Williams for 3 yards. TOUCHDOWN!' } as unknown as Parameters<typeof toSimResult>[0];
+    expect(toSimResult(td)).toMatchObject({ kind: 'complete', style: 'screen', depth: 'short' });
+    const inc = { ...base, type: 'pass_incomplete', isScoring: false, yardsGained: 0, description: '🛡️ Screen — D. Prescott throws incomplete to J. Williams.' } as unknown as Parameters<typeof toSimResult>[0];
+    expect(toSimResult(inc)).toMatchObject({ kind: 'incomplete', style: 'screen' });
+    const long = { ...base, fieldPos: 30, type: 'pass_complete', isScoring: false, yardsGained: 24, description: '🛡️ Screen — D. Prescott completes to J. Williams for 24 yards.' } as unknown as Parameters<typeof toSimResult>[0];
+    expect(toSimResult(long)).toMatchObject({ style: 'screen', depth: 'short' });
+  });
+});

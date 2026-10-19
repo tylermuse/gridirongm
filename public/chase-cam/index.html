@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16s'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16t'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -515,7 +515,7 @@ function makePlayer(t, number, big, opts={}){
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
   /* a tone measured off a headshot is a studio-lit cheek; under the stadium light the same albedo reads ~20% lighter on the model
      (Dak Prescott's #c07d63 rendered peach), so measured tones are taken down to match the photo by eye */
-  const skin = opts.skin ? '#'+[1,3,5].map(i=>Math.round(parseInt(opts.skin.slice(i,i+2),16)*(window.__skinK ?? .8)).toString(16).padStart(2,'0')).join('') : SKIN[(number*3+1)%SKIN.length];   /* in-game: the player's own tone, read from his headshot */
+  const skin = opts.skin ? '#'+[1,3,5].map(i=>Math.round(parseInt(opts.skin.slice(i,i+2),16)*(window.__skinK ?? .65)).toString(16).padStart(2,'0')).join('') : SKIN[(number*3+1)%SKIN.length];   /* in-game: the player's own tone, read from his headshot */
   // per-player kit: deterministic from number + team so a man looks the same every play — size, visor, gloves, towel
   const hsh = ((number*2654435761) ^ (t.id.charCodeAt(0)*97 + t.id.charCodeAt(1)*31)) >>> 0;
   const kit = opts.ref? {} : { size: 1 + ((((hsh>>>7)%9)-4)*.009), visor: !big && (hsh%100)<35, gloves: big? ((hsh>>>3)%100)<30 : ((hsh>>>3)%100)<65, gloveCol: ((hsh>>>11)%3)===0? t.jersey : '#f1f1f1', towel: !big && ((hsh>>>5)%100)<30 };
@@ -859,7 +859,7 @@ function choreograph(res){
   let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, tHole=0, tackleAtFn=null, play_oob=false;
   const climbed = new Set();   /* backers picked up by a climbing blocker on a run: they don't join the pursuit until they shed */
 
-  const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = res.kind==='complete' && res.style==='screen';
+  const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = (res.kind==='complete' || res.kind==='incomplete') && res.style==='screen';   /* an incomplete screen is still thrown to the back in the flat */
   const runBlock = isRun;   /* a QB scramble is blocked like a run: he takes the snap and goes straight at the line, slides to the gap, then upfield */
   // eyes downfield: linemen never turn around, DL stay square while engaged, DBs backpedal before turning to run
   O.ol.forEach(a=>a.faceLock={angle:0, until:99});
@@ -1254,7 +1254,20 @@ function choreograph(res){
         tackler.mocapFall={clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true, hold:(window.__mxTacklerHold ?? .40), glue:{to:carrier, bone:'Spine', along:0}};
         play.tEnd = Math.max(play.tEnd, playT+1.6); play.whistleT = Math.max(play.whistleT ?? 0, playT+1.6); }
       else { const f=tackler.face, lx=(tackler.x-carrier.x)*Math.cos(f)-(tackler.z-carrier.z)*Math.sin(f); tackler.mocapFall = {clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side: Math.abs(lx)<.15? (Math.random()<.5?-1:1) : Math.sign(lx)}; }
-      if(res.fumble && !play.fumbled) fumbleOut(); };
+      if(res.fumble && !play.fumbled) fumbleOut();
+      else if(!td && (window.__gang ?? true)) gangOn();   /* NFL runs end in a pile: the next men there finish him */ };
+    /* Gang tackle (reference: DAL @ GB runs on SNF): the first man makes contact, one or two more arrive within half a second and
+       dive into the pile from other sides — three or four on a stuffed run, where the linemen are right there too. */
+    const gangOn = ()=>{ const stuffed = res.kind==='run' && (res.yards||0) <= 1;
+      const cx0 = carrier.x, cz0 = carrier.z;
+      const cands = D.all.filter(d=>d!==tackler && d.down==null && !d.truck && (stuffed || !D.dl.includes(d)))
+        .map(d=>({d, dist:Math.hypot(d.x-cx0, d.z-cz0)})).filter(o=>o.dist < (stuffed? 4.2 : 5.0)).sort((a,b)=>a.dist-b.dist)
+        .slice(0, stuffed? 3 : 2);
+      cands.forEach(({d,dist},i)=>{ const t = playT + .16 + i*.2 + Math.max(0, dist-1.6)/7.5; const ang = Math.atan2(cx0-d.x, cz0-d.z);
+        d.engage=null; d.wrap=null; d.faceLock=null; d.whiff=true;
+        d.behav = P([playT, d.x, d.z], [t, cx0-Math.sin(ang)*1.15, cz0-Math.cos(ang)*1.15]);
+        ev(t, ()=>{ if(d.down!=null) return; d.face=Math.atan2(cx0-d.x, cz0-d.z); d.down=playT; d.fallDir=1; d.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side: i%2? 1 : -1}; sndThump(.35,.3); }); });
+      if(cands.length){ const last = playT + .16 + (cands.length-1)*.2 + 1.1; play.tEnd = Math.max(play.tEnd, last); play.whistleT = Math.max(play.whistleT ?? 0, last); } };
     /* Fumble (the game's run is followed by a lost fumble): as he's wrapped up the ball is punched out, squirts a couple of yards
        and takes two hops — a football never rolls true — then the middle backer runs it down and falls on it, two more men
        dive on top from other sides and everyone near converges on the pile. Reference: a real strip-and-recover clip. */
