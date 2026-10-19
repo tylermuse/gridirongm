@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16v'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16w'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -721,7 +721,7 @@ function setupFormation(kind){
     const L=t.lineup, v=L && L[key]; const e=Array.isArray(v)? v[i||0] : v; return e && e.n!=null? e : null; };
   const add=(t,n,big,x,z,face,opts,key,i)=>{ const e=key? who(t,key,i) : null; const o={...(opts||{})}; if(e){ n=+e.n; if(e.s) o.skin=e.s; }
     const a=makePlayer(t,n,big,o); a.x=x; a.z=z; a.face=face; a.num=n; a.skinTone=o.skin||null; a.teamId=t.id; actors.push(a); return a; };
-  const rbKey = kind==='fg'? 'k' : kind==='punt'? 'p' : 'rb';   /* the kicker / punter stands in the back's spot on special teams */
+  const rbKey = (kind==='fg' || kind==='kickoff')? 'k' : kind==='punt'? 'p' : 'rb';   /* the kicker / punter stands in the back's spot on special teams */
   O = { ol:[-5.1,-2.55,0,2.55,5.1].map((x,i)=>add(to,[72,66,55,61,78][i],true,x,z0-.75,0,null,'ol',i)),
         te: add(to,87,false,6.2,z0-1,0,{profile:'power'},'te'), wrL: add(to,11,false,-20,z0-.9,0,null,'wr',1), slot: add(to,15,false,-11.5,z0-1.1,0,null,'wr',2),
         wrR: add(to,84,false,19.5,z0-.9,0,null,'wr',0), qb: add(to,7,false,0,z0-5,0,{profile:'qb'},'qb'), rb: add(to,28,false,1.6,z0-6.6,0,{profile:'power'},rbKey) };
@@ -754,6 +754,15 @@ function setupFormation(kind){
       D.sR.x=R(-3,3); D.sR.z=Math.min(z0+42, 56);                          // returner
       [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>{ a.face=Math.PI; a.stance='two'; });
     }
+  }
+  if(kind==='kickoff'){ // 2024 kickoff: kicker alone at the tee, the other ten lined up at the receiving 40, nine blockers in the setup zone (their 30-35), two deep
+    const zc = z0+25, zr = Math.min(z0+31, 40);
+    const cov = [O.wrL, O.ol[0], O.ol[1], O.slot, O.qb, O.te, O.ol[2], O.ol[3], O.ol[4], O.wrR], xs = [-22,-17.5,-13,-8.5,-4,4,8.5,13,17.5,22];
+    cov.forEach((a,i)=>{ a.x=xs[i]; a.z=zc; a.face=0; a.stance='two'; });
+    { const d0=clipHips('football_kick',0), d1=clipHips('football_kick',1.1); const sc=O.rb.model.scale.x*.01;   /* his mark: the captured approach plants at the tee */
+      if(d0&&d1){ O.rb.x = .35 - (d1[0]-d0[0])*sc; O.rb.z = z0 - (d1[2]-d0[2])*sc; } else { O.rb.x=-2.8; O.rb.z=z0-4; } O.rb.face=0; O.rb.stance=''; }
+    [...D.dl, ...D.lb, D.cbL, D.cbR].forEach((a,i)=>{ a.x=-20+i*5; a.z=zr+(i%2? 3.2 : 0); a.face=Math.PI; a.stance='two'; });
+    D.sL.x=-5; D.sL.z=Math.min(z0+58, 46); D.sR.x=5; D.sR.z=Math.min(z0+59, 47); [D.sL,D.sR].forEach(a=>{ a.face=Math.PI; a.stance='two'; });
   }
   actors.forEach(a=>{ a.behav=null; a.fall=0; a.mocapFall=null; a.mocapAct=null; a.mocapActive=false; a.truck=null; a.truckT=null; a.knock=null; a.behind=null; a.whiff=false; a.celebAt=null; a.kickT=null; a.puntHold=false; if(kind!=='fg') a.hold=false; place(a); });
   if((window.__mxStance ?? true) && BOT && BOT.animations.some(c=>c.name==='mx_stance')){ // second level: the captured pre-snap stance (hands on knees, weight forward) held until the snap, then released into the clip blend
@@ -898,7 +907,46 @@ function choreograph(res){
     ? P([snap,a.x,a.z],[snap+.45,a.x+Math.sign(res.gap ?? 1)*1.6,a.z-.4],[snap+.95,a.x+Math.sign(res.gap ?? 1)*3.2+(i-1)*.8,a.z-1.6])   // read, scrape to the play-side gap, fill
     : P([snap,a.x,a.z],[snap+1.3,a.x*1.3,a.z+4.5],[snap+2.2,a.x*1.3+(i-1)*2.2,a.z+5.5],[snap+3.4,a.x*1.1,a.z+6.5]); });
 
-  if(res.kind==='fg' || res.kind==='punt'){
+  if(res.kind==='kickoff'){
+    /* Kickoff (reference: GB kickoff vs DAL on SNF, 2024 format): kick off the tee, ~3.9 s of hang into the landing zone, nobody moves
+       until it comes down; the returner fields it and follows his wall up the middle; the setup-zone blockers turn and square up the
+       first cover man who reaches them; the coverage converges and the pile forms where the game says the return ended. */
+    actors.forEach(a=>{ a.behav=null; a.engage=null; a.faceLock=null; });
+    const K=O.rb, tKick=snap+1.0, tee=[.35, z0];
+    ballPlan = [{t0:-1, t1:tKick, rest:tee}];
+    K.behav = P([0,K.x,K.z],[tKick+1.2,K.x,K.z]); K.faceLock={angle:0, until:99}; K.kickT=tKick; K.mocapAct={clip:'football_kick', t0:tKick-1.05, start:0, end:2.1}; ev(tKick, ()=>sndThump(.8,.9));
+    const ret = Math.random()<.5? D.sL : D.sR, mate = ret===D.sL? D.sR : D.sL, tb = !!res.touchback;
+    const xr = clamp(ret.x + R(-3,3), -12, 12), zr = tb? 54 : clamp(ret.z + R(-2,1.5), 38, 48), tCatch = tKick + 3.9;
+    ballPlan.push({t0:tKick, t1:tCatch, flight:{x0:tee[0],y0:.25,z0:tee[1], x1:xr,y1: tb? .16 : 1.45, z1:zr, h:20}});
+    const cov = O.all.filter(a=>a!==K), blk = [...D.dl, ...D.lb, D.cbL, D.cbR];
+    actors.forEach(a=>{ if(a!==K) a.behav = P([snap,a.x,a.z],[tCatch-.3,a.x,a.z]); });
+    actors.forEach(a=>{ a.faceLock = {angle: cov.includes(a)||a===K? 0 : Math.PI, until: tCatch-.2}; });
+    if(tb){ ballPlan.push({t0:tCatch, t1:1e9, rest:[xr,zr]}); ret.behav = P([snap,ret.x,ret.z],[tCatch-.4, xr*.6, Math.min(zr-3, 48)]);   /* in the end zone: he lets it go */
+      cov.forEach((a,i)=>{ ev(tCatch-.2, ()=>{ a.behav = P([playT,a.x,a.z],[playT+1.6,a.x*.9,a.z+6]); }); });
+      tEnd = tCatch+1.4; carrier=null; tackler=null; endPos=[xr,zr]; }
+    else {
+      const N = clamp(res.ret ?? 25, 1, 99); td = !!res.td; const zEnd = td? -52.5 : 50 - N, endX = clamp(xr + R(-6,6), -22, 22);
+      tEnd = tCatch + .6 + Math.abs(zr-zEnd)/(td? 7.8 : 7.0);
+      ret.catchT = tCatch; ret.faceLock={angle:Math.PI, until:tCatch+.1}; ret.mocapAct = {clip:'football_puntcatch', t0:tCatch-1.6, start:0, end:2.3};
+      const rk = [[snap,ret.x,ret.z],[tCatch-1.7,xr,zr],[tCatch+.55,xr,zr],[tCatch+.9,xr,zr-.8],[tCatch+.9+(tEnd-tCatch-.9)*.45, xr+(endX-xr)*.3 + R(-2,2), zr+(zEnd-zr)*.45],[tEnd,endX,zEnd]];
+      ret.behav = P(...rk); ballPlan.push({t0:tCatch, t1:1e9, held:ret});
+      carrier = ret; endPos=[endX,zEnd]; res.kickEndZ = zEnd;
+      mate.behav = P([snap,mate.x,mate.z],[tCatch, mate.x, mate.z-1],[tCatch+1.2, xr+(mate.x<xr?-2.5:2.5), zr-4.5],[tEnd-.3, endX+(mate.x<xr?-3:3), zEnd+2.5]);   /* the up-back leads him */
+      if(!td){ tackler = cov.reduce((b,a)=> Math.abs(a.x-endX) < Math.abs(b.x-endX)? a : b); tackleT = tEnd;
+        tackler.behav = P([snap,tackler.x,tackler.z],[tCatch-.2,tackler.x,tackler.z],[tEnd,endX,zEnd+.9]); }
+      cov.forEach((a,i)=>{ if(a===tackler) return; ev(tCatch-.2, ()=>{ if(!a.engage) a.behav = F(ret, playT+.05*(i%4), 6.8+(i%3)*.3, [a.x*.15, 0], 1.2); }); });
+      const taken = new Set([tackler]);
+      blk.forEach((d,i)=>{ ev(tCatch-.3, ()=>{ d.faceLock=null; d.behav = F(ret, playT, 5.8, [clamp(d.x*.35,-7,7), -4-(i%3)*1.6], 1.5); });
+        const tryBlock = ()=>{ if(d.down!=null || d.engage || !play || play.whistled) return;
+          const foe = cov.filter(o=>!taken.has(o) && o.down==null && !o.engage).map(o=>({o, dd:Math.hypot(o.x-d.x,o.z-d.z)})).filter(x=>x.dd<2.4).sort((a,b)=>a.dd-b.dd)[0];
+          if(!foe){ if(playT < tEnd-.3) events.push({t:playT+.15, fn:tryBlock, done:false}); return; }
+          const o=foe.o; taken.add(o);
+          const pr = {bx:(o.x+d.x)/2, bz:(o.z+d.z)/2, dv:-.6, dur:1.0, seed:R(0,3), start:playT};
+          d.behav={type:'line', pr, side:1, x0:d.x, z0:d.z, dx:0}; o.behav={type:'line', pr, side:-1, x0:o.x, z0:o.z, dx:0};
+          d.engage=o; o.engage=d; sndThump(.3,.25); };
+        events.push({t:tCatch+.35+i*.08, fn:tryBlock, done:false}); });
+    }
+  } else if(res.kind==='fg' || res.kind==='punt'){
     // ---- special teams: throw away the scrimmage choreography set up above and script the kick ----
     actors.forEach(a=>{ a.behav=null; a.engage=null; a.faceLock=null; });
     const lineO = [O.wrL, ...O.ol, O.te, ...(res.kind==='punt'? [O.slot] : [])], lineD=[...D.dl, ...D.lb];
@@ -1292,7 +1340,8 @@ function choreograph(res){
        dive into the pile from other sides — three or four on a stuffed run, where the linemen are right there too. */
     const gangOn = ()=>{ const stuffed = res.kind==='run' && (res.yards||0) <= 1;
       const cx0 = carrier.x, cz0 = carrier.z;
-      const cands = D.all.filter(d=>d!==tackler && d.down==null && !d.truck && (stuffed || !D.dl.includes(d)))
+      const foes = D.all.includes(carrier)? O.all : D.all, big = D.all.includes(carrier)? O.ol : D.dl;
+      const cands = foes.filter(d=>d!==tackler && d.down==null && !d.truck && !d.engage && (stuffed || !big.includes(d)))
         .map(d=>({d, dist:Math.hypot(d.x-cx0, d.z-cz0)})).filter(o=>o.dist < (stuffed? 4.2 : 5.0)).sort((a,b)=>a.dist-b.dist)
         .slice(0, stuffed? 3 : 2);
       cands.forEach(({d,dist},i)=>{ const t = playT + .16 + i*.2 + Math.max(0, dist-1.6)/7.5; const ang = Math.atan2(cx0-d.x, cz0-d.z);
@@ -1891,6 +1940,7 @@ const FORCED = {
   breakaway:()=>({kind:'run', yards:Math.round(R(22,48)), gap:Math.random()<.5?-7:7}),
   complete:()=>({kind:'complete', depth:'short', yards:Math.round(R(6,14))}),
   oob:()=>({kind:'run', style:'scramble', yards:Math.round(R(7,12)), oob:true}),
+  kickoff:()=>({kind:'kickoff', ret:Math.round(R(20,35))}), touchback:()=>({kind:'kickoff', touchback:true}),
   fumble:()=>({kind:'run', yards:Math.round(R(3,7)), fumble:true}),
   bomb:()=>({kind:'complete', depth:'deep', yards:Math.round(R(24,45))}),
   incomplete:()=>({kind:'incomplete', depth:Math.random()<.5?'short':'deep'}),
@@ -2004,7 +2054,7 @@ function blowWhistle(){ // ball over the plane when the play is dead = touchdown
 }
 function runPlay(res){
   if(G.busy) return; setBusy(true); $('banner').hidden=true; sndInit(); sndCrowd(.26, .8);
-  const wantKind = (res.kind==='fg' || res.kind==='punt') ? res.kind : null;
+  const wantKind = (res.kind==='fg' || res.kind==='punt' || res.kind==='kickoff') ? res.kind : null;
   if((G.formKind||null) !== wantKind) setupFormation(wantKind);
   D.dl.forEach(d=>{ d.body.position.x = 0; }); preSnap=false; choreograph(res); playT=0; running=true;
 }
@@ -2015,6 +2065,10 @@ function finishPlay(){
     if(r.good){ text='Field goal is GOOD'; cls='good'; G.score[G.off]+=3; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is good`); G.off=1-G.off; G.fieldPos=25; }
     else { text='No good!'; cls='big'; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is no good`); G.off=1-G.off; G.fieldPos=Math.max(20, 100-G.fieldPos+7); }
     G.down=1; G.toGo=Math.min(10,100-G.fieldPos); newDrive=true;
+  } else if(r.kind==='kickoff'){
+    if(play.td){ text='Kick return TOUCHDOWN!'; cls='big'; G.score[1-G.off]+=EMBED?6:7; log(`${team(1-G.off).id}: kickoff returned for a TOUCHDOWN`); G.fieldPos=35; }   /* they kick next */
+    else { const N = r.touchback? 25 : clamp(Math.round(r.ret ?? 25),1,99); text = r.touchback? 'Touchback' : `Returned to the ${N}`; log(`${team(1-G.off).id}: kickoff ${r.touchback? 'touchback' : 'returned to the '+N}`); G.off=1-G.off; G.fieldPos=N; }
+    G.down=1; G.toGo=10; newDrive=true;
   } else if(r.kind==='punt'){
     const newFP = Math.max(1, Math.min(99, Math.round(50 - r.puntEndZ)));
     text='Punt'; log(`${t.id}: punt, returned to the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
@@ -2106,7 +2160,7 @@ function embedStart(){
   const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id; window.__curPlayId=m.id;
     applyPre(m);
     if(G.fieldPos >= 99 && (m.res.kind==='run' || m.res.kind==='complete') && m.res.yards >= 1) m.res.yards = 99;   /* at the 1: any gain is a score */
-    m.res.lock = true; renderBug(); PLAY_OVR = planWho(m); setupFormation((m.res.kind==='fg' || m.res.kind==='punt')? m.res.kind : null); runPlay(m.res); PLAY_OVR = []; };
+    m.res.lock = true; renderBug(); PLAY_OVR = planWho(m); setupFormation((m.res.kind==='fg' || m.res.kind==='punt' || m.res.kind==='kickoff')? m.res.kind : null); runPlay(m.res); PLAY_OVR = []; };
   window.addEventListener('message', ev=>{ const m=ev.data; if(!m || typeof m!=='object') return;
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }

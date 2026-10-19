@@ -37,7 +37,7 @@ describe('liveSim3d.toSimResult', () => {
     expect(toSimResult(ev({ type: 'field_goal_good' }))).toEqual({ kind: 'fg', good: true });
     expect(toSimResult(ev({ type: 'field_goal_miss' }))).toEqual({ kind: 'fg', good: false });
     expect(toSimResult(ev({ type: 'punt' }))).toEqual({ kind: 'punt' });
-    expect(toSimResult(ev({ type: 'kickoff' }))).toBeNull();
+    expect(toSimResult(ev({ type: 'kickoff', description: 'Onside kick attempt — receiving team recovers.' }))).toBeNull();   // normal kickoffs are pictured now (see 'kickoffs')
     expect(toSimResult(ev({ type: 'fumble' }))).toBeNull();
     expect(toSimResult(ev({ type: 'run', description: 'takes a knee' }))).toBeNull();
     expect(toSimResult(ev({ type: 'punt', description: 'FAKE PUNT!' }))).toBeNull();
@@ -168,5 +168,17 @@ describe('screens keep their style', () => {
     expect(toSimResult(inc)).toMatchObject({ kind: 'incomplete', style: 'screen' });
     const long = { ...base, fieldPos: 30, type: 'pass_complete', isScoring: false, yardsGained: 24, description: '🛡️ Screen — D. Prescott completes to J. Williams for 24 yards.' } as unknown as Parameters<typeof toSimResult>[0];
     expect(toSimResult(long)).toMatchObject({ style: 'screen', depth: 'short' });
+  });
+});
+
+describe('kickoffs', () => {
+  const base = { id: 3, quarter: 1, timeStr: '15:00', possession: 'away', fieldPos: 30, down: 1, yardsToGo: 10, homeScore: 0, awayScore: 0, yardsGained: 0, isScoring: false };
+  const ev = (description: string, extra = {}) => ({ ...base, type: 'kickoff', description, ...extra }) as unknown as Parameters<typeof toSimPlay>[0];
+  it('return, fielded, touchback, return TD, onside', () => {
+    expect(toSimPlay(ev('Kicking team lines up — kickoff. Returned to the 31.'))).toMatchObject({ possession: 'away', pre: { fieldPos: 35 }, res: { kind: 'kickoff', ret: 31 } });
+    expect(toSimResult(ev('Kickoff fielded at the 25.'))).toEqual({ kind: 'kickoff', ret: 25 });
+    expect(toSimResult(ev('Touchback.'))).toEqual({ kind: 'kickoff', touchback: true });
+    expect(toSimResult(ev('Kick return TOUCHDOWN! Taken all the way back!', { isScoring: true, yardsGained: 100 }))).toEqual({ kind: 'kickoff', td: true });
+    expect(toSimResult(ev('ONSIDE KICK — RECOVERED by the kicking team!'))).toBeNull();
   });
 });

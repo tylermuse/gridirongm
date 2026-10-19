@@ -14,7 +14,7 @@ import { portraitFileFor } from '@/lib/portraits/portraitPool';
 import portraitSkin from '@/lib/portraits/portraitSkin.json';
 
 export interface SimPlayResult {
-  kind: 'run' | 'complete' | 'incomplete' | 'sack' | 'int' | 'fg' | 'punt';
+  kind: 'run' | 'complete' | 'incomplete' | 'sack' | 'int' | 'fg' | 'punt' | 'kickoff';
   yards?: number;
   depth?: 'short' | 'deep';
   good?: boolean;
@@ -22,6 +22,10 @@ export interface SimPlayResult {
   style?: 'scramble' | 'screen';
   /** the run ends in a lost fumble (the engine logs it as the next event): stripped at the tackle, the defense falls on it */
   fumble?: boolean;
+  /** kickoff: the receiving team's yard line where the return ended / a touchback / a return touchdown */
+  ret?: number;
+  touchback?: boolean;
+  td?: boolean;
 }
 
 export interface SimPlayMessage {
@@ -96,6 +100,14 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
       return { kind: 'fg', good: false };
     case 'punt':
       return { kind: 'punt' };
+    case 'kickoff': {
+      // onside kicks have no choreography yet: the 2D field shows them
+      if (/onside/i.test(e.description)) return null;
+      if (e.isScoring || /return touchdown/i.test(e.description)) return { kind: 'kickoff', td: true };
+      if (/touchback/i.test(e.description)) return { kind: 'kickoff', touchback: true };
+      const m = /(?:returned|fielded)\s+(?:to|at)\s+the\s+(\d{1,2})/i.exec(e.description);
+      return { kind: 'kickoff', ret: m ? parseInt(m[1], 10) : 25 };
+    }
     case 'extra_point':
       // an XP is a 33-yard kick from the 15; the result of a two-point try is already pictured by the play itself
       if (TWO_POINT_RE.test(e.description)) return null;
@@ -108,6 +120,7 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
 /** Points this event put on the board, so the sim can show the pre-snap score. */
 function pointsScored(e: PlayEvent): number {
   if (e.type === 'field_goal_good') return 3;
+  if (e.type === 'kickoff' || e.type === 'punt') return 0;   // a return TD is credited to the other team after the event is logged
   if (e.type === 'extra_point') return /GOOD/.test(e.description) && !/no good/i.test(e.description) ? 1 : 0;
   if (TWO_POINT_RE.test(e.description) && e.isScoring) return 2;
   if (e.type === 'touchdown' || e.isScoring) return 6;   // the XP is its own event
@@ -131,7 +144,7 @@ export function toSimPlay(
     id: e.id,
     possession: e.possession,
     pre: {
-      fieldPos: e.type === 'extra_point' ? 85 : e.fieldPos,
+      fieldPos: e.type === 'extra_point' ? 85 : e.type === 'kickoff' ? 35 : e.fieldPos,   // kickoffs are from the kicking team's 35
       down: e.down,
       toGo: e.yardsToGo,
       quarter: e.quarter,
