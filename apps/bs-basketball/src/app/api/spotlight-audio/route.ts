@@ -12,12 +12,11 @@ export const maxDuration = 120;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_BASE = 'https://api.elevenlabs.io/v1';
 
-// Voice IDs reused from football — Mike Hartwell takes the analytical voice
-// slot (was Marcus Cole), Trey "Big Shot" Daniels takes the hot-take voice
-// slot (was Tony Blaze). Same speakers, basketball framing.
+// Same hosts and voice IDs as BS Football's show — Marcus Cole (analyst) and
+// Tony Blaze (hot takes) — with basketball framing.
 const VOICES = {
-  mike: 'NKI4WPSf2OjKR4G4fadW',  // Mike Hartwell — measured, analytical
-  trey: 'aGw6gMq5DRXPll7WVlNn',  // Trey "Big Shot" Daniels — energetic, passionate
+  marcus: 'NKI4WPSf2OjKR4G4fadW',  // Marcus Cole — measured, analytical
+  tony: 'aGw6gMq5DRXPll7WVlNn',  // Tony Blaze — energetic, passionate
 };
 
 const MODEL_ID = 'eleven_multilingual_v2';

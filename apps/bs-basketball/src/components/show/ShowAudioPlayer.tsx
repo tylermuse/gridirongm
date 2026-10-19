@@ -20,8 +20,8 @@ const SPEEDS = [1, 1.25, 1.5] as const;
 const BROWSER_CHARS_PER_SEC = 15;
 
 const HOST: Record<PodcastSpeaker, { name: string; avatar: string; voice: 'analyst' | 'take'; color: string; tint: string }> = {
-  mike: { name: SPOTLIGHT_HOSTS.analyst.name, avatar: SPOTLIGHT_HOSTS.analyst.avatar, voice: 'analyst', color: '#2563eb', tint: '#dbeafe' },
-  trey: { name: SPOTLIGHT_HOSTS.take.name, avatar: SPOTLIGHT_HOSTS.take.avatar, voice: 'take', color: '#dc2626', tint: '#fee2e2' },
+  marcus: { name: SPOTLIGHT_HOSTS.analyst.name, avatar: SPOTLIGHT_HOSTS.analyst.avatar, voice: 'analyst', color: '#2563eb', tint: '#dbeafe' },
+  tony: { name: SPOTLIGHT_HOSTS.take.name, avatar: SPOTLIGHT_HOSTS.take.avatar, voice: 'take', color: '#dc2626', tint: '#fee2e2' },
 };
 
 function formatReset(iso: string | null): string | null {
