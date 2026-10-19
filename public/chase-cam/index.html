@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16r'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16s'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -472,6 +472,7 @@ function teamMaterial(src, part, t, skin){
   else if(t.id==='REF' && part==='shoe'){ U.uMode.value = 3; m.color.set('#1d1f23'); }
   else if(modelChoice==='fp27'){ // white uniform with navy trim: white -> colour A, navy -> colour B, gold trim keeps its baked colour
     const AB = { torso:[t.jersey, t.num], pants:[t.pants, t.stripe], shoe:[null,null] }[part]||[null,null];
+    if(part==='torso' && m.normalMap && (window.__shirtNormal ?? false)===false){ m.normalMap = null; }   /* the shirt's normal map carries the source model's embossed "27": on a white jersey it read as a ghost number behind the real one */
     if(AB[0]){ U.uA.value.copy(C(AB[0])); U.uB.value.copy(C(AB[1])); U.uRefW.value.setScalar(lin(.93)); U.uRef.value.setScalar(lin(.16)); U.uMode.value = 2; } else U.uMode.value = 3;
     if(part==='torso' || part==='pants'){ m.roughnessMap=null; m.roughness=.9; if(m.normalMap) m.normalScale.setScalar(.4); m.envMapIntensity=.3; } }   /* cloth: the baked roughness map + full-strength normal map sparkle into white specks at distance (specular aliasing the bloom then amplifies) */
   else { const r=KEYREF[part]; U.uRef.value.fromArray(r[0].map(lin)); U.uRefW.value.fromArray(r[1].map(lin));
@@ -512,7 +513,9 @@ function attach(bone, mesh, pos, rootScale){ // add a world-sized mesh to a bone
   const holder = new THREE.Group(); const s = 100/rootScale; holder.scale.setScalar(s); holder.position.copy(pos); bone.add(holder); holder.add(mesh); return holder; }
 function makePlayer(t, number, big, opts={}){
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  const skin = opts.skin || SKIN[(number*3+1)%SKIN.length];   /* in-game: the player's own tone, read from his headshot */
+  /* a tone measured off a headshot is a studio-lit cheek; under the stadium light the same albedo reads ~20% lighter on the model
+     (Dak Prescott's #c07d63 rendered peach), so measured tones are taken down to match the photo by eye */
+  const skin = opts.skin ? '#'+[1,3,5].map(i=>Math.round(parseInt(opts.skin.slice(i,i+2),16)*(window.__skinK ?? .8)).toString(16).padStart(2,'0')).join('') : SKIN[(number*3+1)%SKIN.length];   /* in-game: the player's own tone, read from his headshot */
   // per-player kit: deterministic from number + team so a man looks the same every play — size, visor, gloves, towel
   const hsh = ((number*2654435761) ^ (t.id.charCodeAt(0)*97 + t.id.charCodeAt(1)*31)) >>> 0;
   const kit = opts.ref? {} : { size: 1 + ((((hsh>>>7)%9)-4)*.009), visor: !big && (hsh%100)<35, gloves: big? ((hsh>>>3)%100)<30 : ((hsh>>>3)%100)<65, gloveCol: ((hsh>>>11)%3)===0? t.jersey : '#f1f1f1', towel: !big && ((hsh>>>5)%100)<30 };
