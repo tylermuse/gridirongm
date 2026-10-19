@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16x'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16y'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -545,11 +545,11 @@ function makePlayer(t, number, big, opts={}){
       for(let i=0;i<pos.count;i++){ if(si[i*4]===hi) top=Math.max(top, pos.getY(i)); } });
     const capY = top>-1e8? (top-headY)*100-8.7 : 13.5;
     const capMat=new THREE.MeshLambertMaterial({color:opts.cap||'#f4f4f4'}); const cap=new THREE.Group();
-    const crown=new THREE.Mesh(new THREE.SphereGeometry(.124,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.85,1.04); cap.add(crown);
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(.124,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.85,1.04); cap.add(crown); cap.scale.setScalar(window.__capS??1.15);
     const band=new THREE.Mesh(new THREE.CylinderGeometry(.124,.12,.04,20,1,true), capMat); band.position.y=-.018; cap.add(band);
-    const brim=new THREE.Mesh(new THREE.SphereGeometry(.11,20,6,0,Math.PI*2,Math.PI*.44,Math.PI*.12), capMat); brim.scale.set(1.02,.35,1.05); brim.position.set(0,-.025,.06); cap.add(brim);
+    const brim=new THREE.Mesh(new THREE.SphereGeometry(.13,20,6,Math.PI/2-1.15,2.3,Math.PI*.44,Math.PI*.12), capMat); brim.scale.set(1.0,.35,1.05); brim.position.set(0,-.03,.03);   /* front arc only: a full ring reads as a bowler's rim */ cap.add(brim);
     cap.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.material.side=THREE.DoubleSide; } });
-    attach(bones.Head, cap, new THREE.Vector3(0,capY,.5), sc); }
+    attach(bones.Head, cap, new THREE.Vector3(0,capY-(window.__capDown??-.2),(window.__capFwd??2.0)), sc); cap.rotation.x=(window.__capTilt??0); }   /* seated forward and down on the brow (it sat on the back of the head and read as a backwards cap) */
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
   if(!opts.ref){
@@ -800,6 +800,7 @@ const handPos = a => [a.x + Math.sin(a.face)*.3, 1.7, a.z + Math.cos(a.face)*.3]
 // ---------- Tackle planning ----------
 // Pick the defender who can physically get to the ball carrier. If nobody can reach the spot at a
 // realistic top speed, the carrier slows down (gets caught) instead of a defender teleporting.
+const _sunD=new THREE.Vector3(), _sunR=new THREE.Vector3(), _sunU=new THREE.Vector3(), _sunC=new THREE.Vector3(), _UPY=new THREE.Vector3(0,1,0);
 const MAX_SPRINT = 7.6;   // yards per second (~4.4 forty)
 function planTackle(keys, fixedIdx, cands, depth=0, maxZ=52){
   const [tE, ex, ez] = keys[keys.length-1];
@@ -1226,6 +1227,15 @@ function choreograph(res){
         cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], [tEnd-.12, endX - sg*1.05, zEnd + .35], [tEnd+.8, endX - sg*.6, zEnd + .9]);   /* drives on him and shoves him out */
         ev(tEnd-.1, ()=>{ rec.behav = {type:'coast', vx:(rec.vx||0)*.8, vz:(rec.vz||0)*.8, t0:playT}; sndThump(.35,.3); });
         tackler = null; }
+      else if(!td && deep && !contested && dzRun > .8){
+        /* deep ball caught in stride (reference: receiver slowing after the catch looked wrong): he keeps his sprint after the catch and the
+           safety, who broke on the throw from the deep middle, comes over at an angle and runs him down at the spot */
+        const sf = rec===O.wrR? D.sR : D.sL, sg = Math.sign(catchX)||1, T = Math.hypot(endX-catchX, zEnd-cz)/7.2;
+        const mx = endX - sg*.9, mz = zEnd + .7, D0 = clamp(6.8*(T-.42), 1.2, 14), ux=-sg*.75, uz=.66;
+        const px = clamp(mx + ux*D0, -24, 24), pz = Math.min(mz + uz*D0, 58);
+        sf.behav = P([snap, sf.x, sf.z], [snap+.6, sf.x, sf.z+.6], [tCatch, px, pz], [tCatch + T - .42, mx, mz]);
+        tackler = sf; tEnd = tackleT = tCatch + T;
+      }
       else if(!td){
         const cands = [{a:cover, t:tCatch+.1, x:catchX+side*(contested?1.0: deep? 1.3 : 1.6), z:contested? cz-(deep?1.3:.9) : deep? cz-3.2 : cz+(window.__offDepth??3.2)}, {a:D.sR, t:tCatch+.1, x:D.sR.x-2, z:D.sR.z+3}, {a:D.lb[1], t:tCatch+.1, x:0, z:z0+9}];
         const plan = planTackle(recKeys, recKeys.length-2, cands, 0, z0+toGoal-.8);
@@ -1913,7 +1923,12 @@ function frame(now){
   const k = 1-Math.pow(inFlight ? .08 : longK>0? .0004 : .02, dtReal); // glide through a pass, keep up with a sprinting ball carrier
   camPos.lerp(wantPos, k); camLook.lerp(wantLook, k);
   camera.position.copy(camPos); camera.lookAt(camLook);
-  sun.position.set(camLook.x+sunOff[0], sunOff[1], camLook.z+sunOff[2]); sun.target.position.copy(camLook);
+  { /* shadow box follows the camera, snapped to whole shadow-map texels in the light's view: a sub-texel slide re-rasterises every shadow each frame,
+       which flickers on a man lying on top of another (the pile 'blink') */
+    const d=_sunD.set(-sunOff[0],-sunOff[1],-sunOff[2]).normalize(), r=_sunR.crossVectors(d,_UPY).normalize(), u=_sunU.crossVectors(r,d), T=60/2048;
+    const a=camLook.dot(r), b=camLook.dot(u), sa=Math.round(a/T)*T-a, sb=Math.round(b/T)*T-b;
+    _sunC.copy(camLook).addScaledVector(r,sa).addScaledVector(u,sb);
+    sun.position.set(_sunC.x+sunOff[0], _sunC.y+sunOff[1], _sunC.z+sunOff[2]); sun.target.position.copy(_sunC); }
   const _p1 = performance.now();
   if(POST.on) POST.composer.render(); else renderer.render(scene, camera);
   const _p2 = performance.now(); const _k=.08; PERF.sim+= (_p1-_p0-PERF.sim)*_k; PERF.render+=(_p2-_p1-PERF.render)*_k; PERF.frame+=(_p2-_p0-PERF.frame)*_k; PERF.fps+=((1/Math.max(dtRaw,1e-3))-PERF.fps)*_k; PERF.n++;
