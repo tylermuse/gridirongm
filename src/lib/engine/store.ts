@@ -352,7 +352,7 @@ function sortRosterByDepthChart(
 // ---------------------------------------------------------------------------
 
 function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | undefined {
-  const totalPicks = state.teams.length * 7;
+  const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
@@ -5127,7 +5127,7 @@ export const useGameStore = create<GameStore>()(
 
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const overallPick = totalPicks - state.draftOrder.length + 1;
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
@@ -5267,7 +5267,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
@@ -5368,7 +5368,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {

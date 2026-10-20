@@ -1118,6 +1118,7 @@ export default function DraftPage() {
     players,
     freeAgents,
     draftOrder,
+    draftPickOrder,
     draftResults,
     userTeamId,
     teams,
@@ -1231,7 +1232,7 @@ export default function DraftPage() {
 
   const totalRounds = 7;
   const picksPerRound = teams.length;
-  const totalPicks = picksPerRound * totalRounds;
+  const totalPicks = draftPickOrder?.length || picksPerRound * totalRounds;
   const currentPickTeamId = draftOrder[0];
   const isUserPick = currentPickTeamId === userTeamId;
   const prospectCount = freeAgents.filter(id => {
