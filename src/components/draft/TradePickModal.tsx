@@ -66,6 +66,7 @@ export function TradePickModal({
     draftOrder,
     executeTrade,
     currentDraftYear,
+    draftPickOrder,
   } = useGameStore();
   const draftYear = currentDraftYear ?? season;
 
@@ -99,19 +100,19 @@ export function TradePickModal({
     let total = 0;
     for (const pickId of selectedMyPicks) {
       const pick = myAvailablePicks.find(p => p.id === pickId);
-      if (pick) total += pickTradeValue(pick, teams);
+      if (pick) total += pickTradeValue(pick, teams, draftPickOrder);
     }
     return total;
-  }, [selectedMyPicks, myAvailablePicks, teams]);
+  }, [selectedMyPicks, myAvailablePicks, teams, draftPickOrder]);
 
   const theirValue = useMemo(() => {
     let total = 0;
     for (const pickId of selectedTheirPicks) {
       const pick = theirAvailablePicks.find(p => p.id === pickId);
-      if (pick) total += pickTradeValue(pick, teams);
+      if (pick) total += pickTradeValue(pick, teams, draftPickOrder);
     }
     return total;
-  }, [selectedTheirPicks, theirAvailablePicks, teams]);
+  }, [selectedTheirPicks, theirAvailablePicks, teams, draftPickOrder]);
 
   // Other teams for dropdown (exclude user team)
   const otherTeams = useMemo(() => {
@@ -249,7 +250,7 @@ export function TradePickModal({
                           const checked = selectedMyPicks.has(pk.id);
                           const overall = estimatePickOverall(pk, teams);
                           const origTeam = teams.find(t => t.id === pk.originalTeamId);
-                          const value = pickTradeValue(pk, teams);
+                          const value = pickTradeValue(pk, teams, draftPickOrder);
                           return (
                             <label
                               key={pk.id}
@@ -296,7 +297,7 @@ export function TradePickModal({
                           const checked = selectedTheirPicks.has(pk.id);
                           const overall = estimatePickOverall(pk, teams);
                           const origTeam = teams.find(t => t.id === pk.originalTeamId);
-                          const value = pickTradeValue(pk, teams);
+                          const value = pickTradeValue(pk, teams, draftPickOrder);
                           return (
                             <label
                               key={pk.id}
