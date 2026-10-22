@@ -36,7 +36,12 @@ describe('liveSim3d.toSimResult', () => {
   it('maps special teams and skips what the sim cannot picture', () => {
     expect(toSimResult(ev({ type: 'field_goal_good' }))).toEqual({ kind: 'fg', good: true });
     expect(toSimResult(ev({ type: 'field_goal_miss' }))).toEqual({ kind: 'fg', good: false });
-    expect(toSimResult(ev({ type: 'punt' }))).toEqual({ kind: 'punt' });
+    // playByPlay logs net yards only: fielded and downed at the net spot (30 + 45 → receiving 25)
+    expect(toSimResult(ev({ type: 'punt', yardsGained: 45, description: 'Punt — 45 yards net.' }))).toEqual({ kind: 'punt', catchAt: 25, endAt: 25 });
+    // Live Coach names the catch and return spots: the sim must use them, not invent its own
+    expect(toSimResult(ev({ type: 'punt', fieldPos: 54, yardsGained: 41, description: '🥾 Punt — 41 yards, BAL fields at their own 5, returns to the 9.' }))).toEqual({ kind: 'punt', catchAt: 5, endAt: 9 });
+    expect(toSimResult(ev({ type: 'punt', yardsGained: 40, description: '🥾 Punt — 40 yards, BAL fields at their own 30, fair catch.' }))).toEqual({ kind: 'punt', catchAt: 30, endAt: 30 });
+    expect(toSimResult(ev({ type: 'punt', description: 'Muffed punt! The kicking team recovers!' }))).toBeNull();
     expect(toSimResult(ev({ type: 'kickoff', description: 'Onside kick attempt — receiving team recovers.' }))).toBeNull();   // normal kickoffs are pictured now (see 'kickoffs')
     expect(toSimResult(ev({ type: 'fumble' }))).toBeNull();
     expect(toSimResult(ev({ type: 'run', description: 'takes a knee' }))).toBeNull();

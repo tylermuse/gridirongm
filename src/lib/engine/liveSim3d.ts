@@ -24,6 +24,9 @@ export interface SimPlayResult {
   fumble?: boolean;
   /** kickoff: the receiving team's yard line where the return ended / a touchback / a return touchdown */
   ret?: number;
+  /** punt: the receiving team's yard line where the returner fields it, and where he's brought down (= catchAt on a fair catch) */
+  catchAt?: number;
+  endAt?: number;
   touchback?: boolean;
   td?: boolean;
 }
@@ -98,8 +101,17 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
       return { kind: 'fg', good: true };
     case 'field_goal_miss':
       return { kind: 'fg', good: false };
-    case 'punt':
-      return { kind: 'punt' };
+    case 'punt': {
+      // muffs / return TDs have no choreography yet: the 2D field shows them
+      if (/muff|touchdown/i.test(e.description)) return null;
+      // Live Coach: "fields at their own 5, returns to the 9" / ", fair catch". playByPlay only logs net yards.
+      const f = /fields at their own (\d{1,2})/i.exec(e.description);
+      const r = /returns to the (\d{1,2})/i.exec(e.description);
+      const net = Math.max(1, Math.min(99, 100 - e.fieldPos - (e.yardsGained ?? 0)));
+      const catchAt = f ? parseInt(f[1], 10) : net;
+      const endAt = r ? parseInt(r[1], 10) : f ? catchAt : net;
+      return { kind: 'punt', catchAt, endAt: Math.max(catchAt, endAt) };
+    }
     case 'kickoff': {
       // onside kicks have no choreography yet: the 2D field shows them
       if (/onside/i.test(e.description)) return null;

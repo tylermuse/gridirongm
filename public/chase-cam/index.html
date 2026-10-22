@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16z'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17a'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -998,10 +998,11 @@ function choreograph(res){
       else Pn.behav = P([0,Pn.x,Pn.z],[snap+.85,Pn.x,Pn.z],[snap+1.45,.25,Pn.z+1.0],[tPunt,.5,Pn.z+2.2],[tPunt+.5,.6,Pn.z+3.2]);
       Pn.kickT = tPunt; res.puntT = tPunt; ev(tPunt, ()=>sndThump(.8,.9));
       PP.faceLock={angle:0, until:99}; PP.behav = P([snap,PP.x,PP.z],[snap+.4,PP.x-.6,PP.z-.8],[tPunt+.6,PP.x-1.2,PP.z-1.4]);
-      const xr = clamp(ret.x + R(-4,4), -14, 14), zr = ret.z - R(0,3), hang = 4.0, tCatch = tPunt+hang;
+      /* the engine's spots (receiving team's yard line N sits at z = 50-N): he fields it where the play-by-play says and is brought down there */
+      const xr = clamp(ret.x + R(-4,4), -14, 14), zr = res.catchAt!=null ? 50 - clamp(res.catchAt,1,99) : ret.z - R(0,3), hang = 4.0, tCatch = tPunt+hang;
       ballPlan.push({t0:tPunt, t1:tCatch, flight:{x0:kx,y0:.38,z0:kz, x1:xr,y1:1.45,z1:zr, h:15}});
       ret.catchT = tCatch; ret.faceLock={angle:Math.PI, until:tCatch+.1}; ret.mocapAct = {clip:'football_puntcatch', t0:tCatch-1.6, start:0, end:2.3};
-      const retY = res.ret ?? Math.round(R(2,10)), zEnd = zr - retY, endX = clamp(xr + R(-2.5,2.5), -22, 22);
+      const retY = res.catchAt!=null ? Math.max(0, (res.endAt ?? res.catchAt) - res.catchAt) : (res.ret ?? Math.round(R(2,10))), zEnd = zr - retY, endX = clamp(xr + R(-2.5,2.5), -22, 22);
       tEnd = tCatch + .35 + retY/6.6;
       ret.behav = P([snap, ret.x, ret.z], [tCatch-1.7, xr, zr], [tCatch+.65, xr, zr], [tCatch+.95, xr, zr-.6], [tEnd, endX, zEnd]);   /* set under it, field it, then go */
       carrier = ret; tackleT = tEnd; endPos=[endX,zEnd]; res.puntEndZ = zEnd;

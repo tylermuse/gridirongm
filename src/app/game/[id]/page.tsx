@@ -2034,6 +2034,96 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           </p>
         )}
 
+        {/* ================================================================
+            CALL THE PLAY — mobile only, directly under the field / 3D sim so
+            the call and its result are on one screen (no scroll between them).
+            Desktop shows it in the sticky sidebar on the right (below).
+        ================================================================ */}
+        {liveEngineRef.current && liveCoachPaused && (() => {
+          const es = liveEngineRef.current!.getState();
+          const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
+          const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
+          const fp = es.fieldPos;
+          const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+          return (
+            <div className="lg:hidden">
+              <PlayCallMenu
+                state={{
+                  quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
+                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+                  homeScore: es.homeScore,
+                  awayScore: es.awayScore,
+                  homeAbbr: homeAbbr2,
+                  awayAbbr: awayAbbr2,
+                  down: es.down,
+                  yardsToGo: es.yardsToGo,
+                  fieldPos: es.fieldPos,
+                  fieldDescription,
+                }}
+                isFourthDown={es.down === 4}
+                awaitingXpChoice={es.awaitingXpChoice}
+                awaitingTwoPointCall={!!es.awaitingTwoPointCall}
+                awaitingKickoffChoice={es.awaitingKickoffChoice}
+                timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
+                pendingRunoff={es.pendingRunoff ?? 0}
+                onPlayCall={(playCall) => {
+                  trackPlayCall(playCall);
+                  setOutcomeChip(null);
+                  if (liveEngineRef.current) {
+                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
+                    if (newEvents.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
+                      setRevealedCount(prev => prev + 1);
+                      setAnimationComplete(false);
+                      const lastEv = newEvents[newEvents.length - 1];
+                      const isBig = lastEv && (
+                        lastEv.type === 'interception' || lastEv.type === 'fumble' ||
+                        lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
+                        lastEv.isScoring || lastEv.type === 'field_goal_good' ||
+                        lastEv.type === 'field_goal_miss'
+                      );
+                      if (isBig) {
+                        pendingAutoPlayRef.current = true;
+                        const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
+                        setTimeout(() => {
+                          pendingAutoPlayRef.current = false;
+                          setAutoRunTick(t => t + 1);
+                        }, extraMs);
+                      }
+                    }
+                  }
+                  setLiveCoachPaused(false);
+                  setIsPlaying(true);
+                }}
+                onAutoSimRest={() => {
+                  lcTelemetryRef.current.endedBy = 'auto_sim';
+                  trackLiveCoach('live_coach_auto_sim');
+                  if (liveEngineRef.current) {
+                    const allRest: PlayEvent[] = [];
+                    let safety = 0;
+                    while (!liveEngineRef.current.isFinished() && safety < 500) {
+                      const evs = liveEngineRef.current.runOnePlay();
+                      allRest.push(...evs);
+                      safety++;
+                    }
+                    if (allRest.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...allRest]);
+                    }
+                  }
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+                onToggleOff={() => {
+                  lcTelemetryRef.current.endedBy = 'off';
+                  trackLiveCoach('live_coach_off', { source: 'menu' });
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+              />
+            </div>
+          );
+        })()}
+
         {/* Drive summary ribbon — uses the same live* vars as the scorebug
             so it always matches (including engine state during Live Coach) */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-4 py-1.5 text-xs text-[var(--text-sec)] flex items-center justify-between">
@@ -2255,94 +2345,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           <div className="text-xs text-red-500 px-1">Broadcast error: {broadcast.error}</div>
         )}
 
-        {/* ================================================================
-            CALL THE PLAY — mobile only, between controls and tabs.
-            Desktop shows it in the sticky sidebar on the right (below).
-        ================================================================ */}
-        {liveEngineRef.current && liveCoachPaused && (() => {
-          const es = liveEngineRef.current!.getState();
-          const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
-          const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
-          const fp = es.fieldPos;
-          const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
-          return (
-            <div className="lg:hidden">
-              <PlayCallMenu
-                state={{
-                  quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
-                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
-                  homeScore: es.homeScore,
-                  awayScore: es.awayScore,
-                  homeAbbr: homeAbbr2,
-                  awayAbbr: awayAbbr2,
-                  down: es.down,
-                  yardsToGo: es.yardsToGo,
-                  fieldPos: es.fieldPos,
-                  fieldDescription,
-                }}
-                isFourthDown={es.down === 4}
-                awaitingXpChoice={es.awaitingXpChoice}
-                awaitingTwoPointCall={!!es.awaitingTwoPointCall}
-                awaitingKickoffChoice={es.awaitingKickoffChoice}
-                timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
-                pendingRunoff={es.pendingRunoff ?? 0}
-                onPlayCall={(playCall) => {
-                  trackPlayCall(playCall);
-                  setOutcomeChip(null);
-                  if (liveEngineRef.current) {
-                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
-                    if (newEvents.length > 0) {
-                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
-                      setRevealedCount(prev => prev + 1);
-                      setAnimationComplete(false);
-                      const lastEv = newEvents[newEvents.length - 1];
-                      const isBig = lastEv && (
-                        lastEv.type === 'interception' || lastEv.type === 'fumble' ||
-                        lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
-                        lastEv.isScoring || lastEv.type === 'field_goal_good' ||
-                        lastEv.type === 'field_goal_miss'
-                      );
-                      if (isBig) {
-                        pendingAutoPlayRef.current = true;
-                        const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
-                        setTimeout(() => {
-                          pendingAutoPlayRef.current = false;
-                          setAutoRunTick(t => t + 1);
-                        }, extraMs);
-                      }
-                    }
-                  }
-                  setLiveCoachPaused(false);
-                  setIsPlaying(true);
-                }}
-                onAutoSimRest={() => {
-                  lcTelemetryRef.current.endedBy = 'auto_sim';
-                  trackLiveCoach('live_coach_auto_sim');
-                  if (liveEngineRef.current) {
-                    const allRest: PlayEvent[] = [];
-                    let safety = 0;
-                    while (!liveEngineRef.current.isFinished() && safety < 500) {
-                      const evs = liveEngineRef.current.runOnePlay();
-                      allRest.push(...evs);
-                      safety++;
-                    }
-                    if (allRest.length > 0) {
-                      setLiveExtraEvents(prev => [...prev, ...allRest]);
-                    }
-                  }
-                  setLiveCoachOn(false);
-                  setLiveCoachPaused(false);
-                }}
-                onToggleOff={() => {
-                  lcTelemetryRef.current.endedBy = 'off';
-                  trackLiveCoach('live_coach_off', { source: 'menu' });
-                  setLiveCoachOn(false);
-                  setLiveCoachPaused(false);
-                }}
-              />
-            </div>
-          );
-        })()}
 
         {/* ================================================================
             WIN PROBABILITY — desktop only. Mobile copy lives after tabs.
