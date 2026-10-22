@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17c'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17d'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -979,7 +979,8 @@ function choreograph(res){
       tEnd = tKick+(good? 3.2 : 4.4); carrier=null; tackler=null; endPos=[xEnd,zLand]; res.good=good; res.refT = tKick+1.72;
       ev(tKick+1.1, ()=>{ // the kick is in the air: everyone turns to watch it
         actors.forEach(a=>{ if(a!==K && a!==H) a.faceLock={angle:0, until:99}; }); });
-      ev(tKick+1.75, ()=>{ (O.refs||[]).forEach(r=>{ r.signal = good? 'good' : 'no'; r.t0 = playT; }); });
+      ev(tKick+1.75, ()=>{ (O.refs||[]).forEach(r=>{ r.signal = good? 'good' : 'no'; r.t0 = playT; });
+        banner(res.xp? (good? 'Extra point GOOD' : 'Extra point NO GOOD') : (good? 'Field goal GOOD' : 'Field goal NO GOOD'), good? 'good' : 'big'); });   /* call it with the signal: the end-of-play banner only had ~.7 s on screen in the game before the next situation cleared it */
       ev(tKick+2.0, ()=>{ if(good){ K.celebrate=playT; K.celebStyle='hop'; H.celebrate=playT; H.celebStyle='point'; H.hold=false;
           [O.slot,O.wrR,O.te].forEach((o,i)=>{ o.behav = F(K, playT+.1*i, 5.0, [R(-1.5,1.5),-1], 1.5); o.celebAt = playT+.9+.2*i; o.celebStyle='flexes'; }); }
         else { K.dejected=playT; H.hold=false; D.cbL.celebrate=playT; D.cbL.celebStyle='hop'; D.sL.celebrate=playT; D.sL.celebStyle='point'; } });
@@ -1936,7 +1937,8 @@ function frame(now){
     const zk=G.fieldPos-50-6.8, seg=running? ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1) : null, inAir = !!(seg && seg.flight && seg.flight.h > 3), landed = !!(seg && seg.rest);
     wantPos.set(-6.5, 3.4, zk-7.5);
     if(inAir || landed) wantLook.set(ball.position.x*.6, clamp(ball.position.y*.5+1, 1, 5.5), clamp(ball.position.z, zk+8, 61)); else wantLook.set(.3, 1.0, zk+8);
-    if(running && play.res.refT!=null && playT >= play.res.refT){ wantPos.set(0, 1.6, 56.2); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } } }   /* broadcast cut to the officials under the uprights for the signal */
+    if(running && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±3.9) fit the frame: at 6.2 m a square phone frame only spans ±2.8 m, so neither signal was on screen */
+      const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(6.2, 5.4/hw); wantPos.set(0, 1.6 + (back-6.2)*.12, 62.4-back); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } } }   /* broadcast cut to the officials under the uprights for the signal */
   if(window.__camOverride){ const o=window.__camOverride; wantPos.set(o[0],o[1],o[2]+G.fieldPos-50); wantLook.set(o[3],o[4],o[5]+G.fieldPos-50); }
   if(window.__camFollow){ const f=window.__camFollow, a=f.actor(); const sx=Math.cos(a.face), sz=-Math.sin(a.face), fx=Math.sin(a.face), fz=Math.cos(a.face); wantPos.set(a.x+sx*f.side+fx*f.fwd, f.h, a.z+sz*f.side+fz*f.fwd); wantLook.set(a.x, f.ly, a.z); camPos.copy(wantPos); camLook.copy(wantLook); }
   const inFlight = running && !!(ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1)||{}).flight;
