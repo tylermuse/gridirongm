@@ -18,7 +18,7 @@ import { computeShowStatLine, ordinal, rankTone, statsMentioned, type ShowStat, 
 import { topicTeam } from '@/lib/spotlight/showVisuals';
 import { focusForLine, measurableIn, type Focus } from '@/lib/spotlight/showFocus';
 import { planShots } from '@/lib/spotlight/showShots';
-import { clipLevel, levelGain, speechDb } from '@/lib/spotlight/loudness';
+import { clipLevel, levelGain, speechDb, snapLineCuts } from '@/lib/spotlight/loudness';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { GameTopic } from '@/lib/spotlight/showGame';
 import { conferenceRace, divisionTable, upcomingSchedule } from '@/lib/spotlight/showStandings';
@@ -88,6 +88,8 @@ function captionOf(seg: TimedShowSegment, t: number): string {
   return wideLineAt(seg.phraseId.slice('wide:'.length), t + Math.max(0, seg.speech.start - LEAD_PAD))?.text ?? seg.text;
 }
 const TAIL_PAD = 0.12;
+/** Room after the last line of a voiced block, whose audio stops dead on its last word. */
+const BLOCK_TAIL = 0.35;
 
 /** Where the speech is inside a decoded TTS line (s): first/last 10ms
  *  window within 32 dB of the loudest one. */
@@ -192,7 +194,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const panelKey = useRef('');
   const topicStart = useRef(0);
   const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const spansRef = useRef<Map<number, { start: number; end: number }>>(new Map());
+  const spansRef = useRef<Map<number, { start: number; end: number; tail: number }>>(new Map());
   /** Speech loudness (dBFS) of each generated line, for leveling. */
   const levelsRef = useRef<Map<number, number | null>>(new Map());
 
@@ -488,13 +490,16 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     }
     waitingFor.current = null;
     setBuffering(false);
-    const span = spansRef.current.get(i) ?? { start: 0, end: buf.duration };
+    const span = spansRef.current.get(i) ?? { start: 0, end: buf.duration, tail: TAIL_PAD };
     const from = Math.max(0, span.start - LEAD_PAD);
-    const to = Math.min(buf.duration, span.end + TAIL_PAD);
+    const to = Math.min(buf.duration, span.end + span.tail);
     const src = ctx.createBufferSource();
     src.buffer = buf;
     const lg = ctx.createGain();
-    lg.gain.value = levelGain(levelsRef.current.get(i));
+    const g = levelGain(levelsRef.current.get(i));
+    lg.gain.setValueAtTime(g, ctx.currentTime + Math.max(0, to - from - 0.04));
+    lg.gain.linearRampToValueAtTime(0, ctx.currentTime + (to - from)); // no click where the audio stops dead
+    lg.gain.setValueAtTime(g, ctx.currentTime);
     src.connect(lg).connect(out(ctx));
     src.onended = advance;
     srcRef.current = src;
@@ -514,17 +519,22 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     const bytes = Uint8Array.from(atob(msg.audio), c => c.charCodeAt(0));
     const block = await ctx.decodeAudioData(bytes.buffer);
     const sr = block.sampleRate;
-    for (const l of msg.lines) {
-      const from = Math.max(0, Math.floor((l.start - 0.03) * sr));
-      const to = Math.min(block.length, Math.ceil((l.start + l.duration + 0.08) * sr));
-      if (to <= from) continue;
-      const line = ctx.createBuffer(block.numberOfChannels, to - from, sr);
+    // The server's cuts can land mid-word: move each to the pause between
+    // the lines. The block's audio ends right where its last word does, so
+    // that line gets a little room before the next segment.
+    const cuts = snapLineCuts(block, msg.lines.map(l => ({ start: l.start, end: l.start + l.duration })));
+    msg.lines.forEach((l, k) => {
+      const last = k === msg.lines.length - 1;
+      const from = Math.max(0, Math.floor((cuts[k].start - 0.03) * sr));
+      const to = Math.min(block.length, Math.ceil((cuts[k].end + 0.08) * sr));
+      if (to <= from) return;
+      const line = ctx.createBuffer(block.numberOfChannels, to - from + (last ? Math.round(BLOCK_TAIL * sr) : 0), sr);
       for (let c = 0; c < block.numberOfChannels; c++) line.copyToChannel(block.getChannelData(c).subarray(from, to), c);
       buffersRef.current.set(l.seg, line);
-      const span = speechSpan(line);
+      const span = { ...speechSpan(line), tail: last ? BLOCK_TAIL : TAIL_PAD };
       spansRef.current.set(l.seg, span);
       levelsRef.current.set(l.seg, speechDb(line, span.start, span.end));
-    }
+    });
     setAudioVersion(v => v + 1);
     resumeWaiting();
   }
