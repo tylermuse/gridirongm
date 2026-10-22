@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17a'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17b'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1029,15 +1029,22 @@ function choreograph(res){
     tEnd = tHole + Math.max(.35, Math.abs(Y+.6)/ (Y>12? 8.2:7));
     /* Out of bounds: a scramble (and some outside runs) bends to the sideline and he steps out at the end of the run instead of
        taking the hit — the chaser runs him to the boundary and pulls up (reference: QB scramble up the sideline for the first down) */
-    const oob = !td && !res.fumble && Y>=3 && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
+    /* only a gain long enough to look like "beat the edge, turn up the sideline": a 3-6 yd sideline run had him sprint ~24 yds sideways for a couple of yards (Tyler: wide open, never turned upfield). Short scrambles get tackled instead. */
+    const oob = !td && !res.fumble && Y>=7 && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
     const oobSide = Math.sign(gapX) || (Math.random()<.5? -1 : 1);
     if(oob){ endX = oobSide*28.2; tEnd = tHole + Math.max(.6, Math.hypot(endX-gapX, Y+.6)/6.9); res.oob = true; }
     carrier = C;
     const keys = scr
       ? [[qbRecv,0,z0-4.7],[snap+.95,gapX*.3,z0-2.3],[tHole,gapX,z0-.6]]                      // straight downhill from the snap, a slide to the gap at the line, then upfield
       : [[0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.6]];
-    if(Y>4) keys.push([tHole+(tEnd-tHole)*.45, gapX+(endX-gapX)*.3 + R(-1.2,1.2), z0+Y*.45]);
-    keys.push([tEnd, endX, zEnd]);
+    if(oob){ /* gets outside the contain, squares his shoulders and runs UP the sideline, then steps out at the spot - not a straight diagonal to the boundary */
+      const pts = [[oobSide*R(17,20), z0+Math.min(3, Y*.3)], [oobSide*25.3, z0+Y*.85], [endX, zEnd]]; let t=tHole, px=gapX, pz=z0-.6;
+      pts.forEach(([x,z],i)=>{ t += Math.max(.25, Math.hypot(x-px, z-pz)/(i===0? 6.4 : 7.3)); keys.push([t, x, z]); px=x; pz=z; });
+      tEnd = t;
+    } else {
+      if(Y>4) keys.push([tHole+(tEnd-tHole)*.45, gapX+(endX-gapX)*.3 + R(-1.2,1.2), z0+Y*.45]);
+      keys.push([tEnd, endX, zEnd]);
+    }
     C.behav = P(...keys);
     if(scr){ O.rb.behav = P([snap,1.6,z0-6.6],[snap+.6,gapX*.5,z0-3.4],[tHole+.15,gapX+Math.sign(gapX)*.9,z0+.9],[tHole+1.0,gapX+Math.sign(gapX)*1.6,z0+3.5]);   /* lead blocker through the gap */
       O.qb.faceLock = {angle:0, until:snap+.9}; ballPlan.push({t0:qbRecv, t1:1e9, held:O.qb}); }
