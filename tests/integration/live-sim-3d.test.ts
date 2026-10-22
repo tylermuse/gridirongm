@@ -36,6 +36,9 @@ describe('liveSim3d.toSimResult', () => {
   it('maps special teams and skips what the sim cannot picture', () => {
     expect(toSimResult(ev({ type: 'field_goal_good' }))).toEqual({ kind: 'fg', good: true });
     expect(toSimResult(ev({ type: 'field_goal_miss' }))).toEqual({ kind: 'fg', good: false });
+    // the try after a TD is an extra point (1 pt, labelled as such), not a field goal
+    expect(toSimResult(ev({ type: 'extra_point', description: 'Extra point is GOOD.' }))).toEqual({ kind: 'fg', xp: true, good: true });
+    expect(toSimResult(ev({ type: 'extra_point', description: 'Extra point is no good.' }))).toEqual({ kind: 'fg', xp: true, good: false });
     // playByPlay logs net yards only: fielded and downed at the net spot (30 + 45 → receiving 25)
     expect(toSimResult(ev({ type: 'punt', yardsGained: 45, description: 'Punt — 45 yards net.' }))).toEqual({ kind: 'punt', catchAt: 25, endAt: 25 });
     // Live Coach names the catch and return spots: the sim must use them, not invent its own

@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17b'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17c'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1220,7 +1220,14 @@ function choreograph(res){
       rec.mocapAct = {clip:'mx_receiver_catch', t0:tCatch-.7, start:0, end:3.3};
       flightSeg.flight.x1 = catchX; flightSeg.flight.z1 = cz; flightSeg.flight.y1 = 2.0;
       ballPlan.push({t0:tCatch, t1:1e9, held:rec}); carrier = rec; endPos=[sx+Math.sin(th)*2.95, sz+Math.cos(th)*2.95]; tEnd = tCatch+1.0; tackler=null;
-      cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], [tCatch+.9, catchX + side*.8, cz+.6]);   /* the DB plays off, then closes on the man on the ground */
+      /* NFL, not college: going to the ground untouched isn't down. Landed out of bounds = over; in bounds, the DB has to get there and touch him (hand on his back) before the whistle */
+      const inb = Math.abs(endPos[0]) < 26.3, sgX = Math.sign(catchX)||1, tTouch = tCatch+1.15;
+      const tx = endPos[0] - sgX*.75, tz = endPos[1] + .45;
+      cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], inb? [tTouch, tx, tz] : [tCatch+.9, catchX + side*.8, cz+.6]);   /* the DB plays off, then closes on the man on the ground */
+      if(inb){ tEnd = tTouch + .35;
+        ev(tTouch-.05, ()=>{ cover.faceLock = {angle:Math.atan2(endPos[0]-cover.x, endPos[1]-cover.z), until:tEnd+2}; cover.behav = {type:'coast', vx:0, vz:0, t0:playT}; cover.hold=true; sndThump(.25,.3); });   /* drops to a knee beside him and touches him down */
+        ev(tEnd+1.3, ()=>{ cover.hold=false; });
+      }
       ev(tCatch+.8, ()=>{ D.all.forEach(d=>{ if(d!==cover) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
     } else if(res.kind==='complete'){
       const zEnd = td? 52.5 : z0+Y; const dzRun = zEnd-cz;
@@ -2110,7 +2117,11 @@ function runPlay(res){
 function finishPlay(){
   const r = play.res, t=team(G.off); let text, cls='', newDrive=false;
   if(!EMBED){ const tick = Math.round(R(24,40)); G.clock -= tick; if(G.clock<=0){ G.quarter = G.quarter<4? G.quarter+1 : 1; G.clock = 900; } }   /* in-game the engine owns the clock (bsgm:state); a local tick only drifts the bug away from the scoreboard */
-  if(r.kind==='fg'){
+  if(r.kind==='fg' && r.xp){   /* the try after a touchdown: 1 point, not a 3-point field goal (the bug jumped +3, then the page's real score pulled it back) */
+    if(r.good){ text='Extra point is GOOD'; cls='good'; G.score[G.off]+=1; log(`${t.id}: extra point is good`); }
+    else { text='Extra point no good'; cls='big'; log(`${t.id}: extra point is no good`); }
+    G.fieldPos=35; G.down=1; G.toGo=10; newDrive=true;
+  } else if(r.kind==='fg'){
     if(r.good){ text='Field goal is GOOD'; cls='good'; G.score[G.off]+=3; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is good`); G.off=1-G.off; G.fieldPos=25; }
     else { text='No good!'; cls='big'; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is no good`); G.off=1-G.off; G.fieldPos=Math.max(20, 100-G.fieldPos+7); }
     G.down=1; G.toGo=Math.min(10,100-G.fieldPos); newDrive=true;
@@ -2154,7 +2165,7 @@ function finishPlay(){
     if(play.td) sndRoar(.9,.4,2.5,4,'roar'); else if(big) sndRoar(.6,.35,1.2,3,'cheer'); else if(r.kind==='int') sndRoar(.5,.3,.9,2.5,'groan'); else if(r.kind==='sack') sndRoar(.45,.3,.9,2.5,'cheer'); else if(Math.random()<.5) sndRoar(.15,.3,.4,1.5,'cheer');
     sndCrowd(.18, 3);
     const num = play.carrier? ' by number '+(play.carrier.number||'') : '';
-    const words = play.td? (r.kind==='int'? `Pick six! Touchdown, ${team(1-G.off).name}!` : `Touchdown, ${t.name}!`) : r.kind==='fg'? (r.good? `The kick is good.` : `The kick is no good.`) : r.kind==='int'? `Pass intercepted by ${team(G.off).name}.` : r.kind==='sack'? `Quarterback sacked.` : r.kind==='incomplete'? `Pass incomplete.` : r.kind==='punt'? `Punt.` : text.replace('·',',').replace('−','minus ').replace('+','gain of ');
+    const words = play.td? (r.kind==='int'? `Pick six! Touchdown, ${team(1-G.off).name}!` : `Touchdown, ${t.name}!`) : r.kind==='fg'? (r.xp? (r.good? `The extra point is good.` : `The extra point is no good.`) : r.good? `The kick is good.` : `The kick is no good.`) : r.kind==='int'? `Pass intercepted by ${team(G.off).name}.` : r.kind==='sack'? `Quarterback sacked.` : r.kind==='incomplete'? `Pass incomplete.` : r.kind==='punt'? `Punt.` : text.replace('·',',').replace('−','minus ').replace('+','gain of ');
     setTimeout(()=>sndSay(words), 500); }
   setTimeout(()=>{ setupFormation(); setBusy(false); renderBug(); }, EMBED? 700 : 1500/G.speed + 300);
   function advance(y){
