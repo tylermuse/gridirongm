@@ -37,6 +37,10 @@ header p{margin:0;color:var(--muted);font-size:13px;max-width:60ch}
 .bug .tm.has .pos{visibility:visible}
 .bug .info{display:flex;flex-direction:column;justify-content:center;padding:4px 12px;background:rgba(255,255,255,.08);font-size:15px;line-height:1.15;font-weight:600;letter-spacing:.04em}
 .bug .info b{font-size:17px;color:#ffd23f}
+/* phone-width embed: the bug was a third of the frame — scale it down to a corner chip; the page above already shows the score and the LIVE tag */
+@media (max-width:640px){ .bug{left:6px;top:6px;border-radius:4px} .bug .tm{font-size:11px;gap:4px;padding:3px 6px} .bug .sw{width:3px;margin:-3px 0 -3px -6px}
+  .bug .sc{font-size:13px} .bug .pos{width:5px;height:5px} .bug .info{font-size:9.5px;padding:2px 6px;letter-spacing:.02em} .bug .info b{font-size:10.5px}
+  body.embed .hint{display:none} .banner{font-size:15px!important;padding:5px 12px;bottom:44px} }
 .banner{position:absolute;left:50%;bottom:16px;transform:translate(-50%,0);font-family:var(--display);font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#fff;background:rgba(14,20,16,.86);padding:8px 18px;border-radius:6px;font-size:clamp(18px,3vw,28px);white-space:nowrap;transition:opacity .25s,transform .25s}
 .banner.big{background:#c8361d}
 .banner.good{background:#1d6b3a}
@@ -158,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16y'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16z'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1908,9 +1912,10 @@ function frame(now){
   let cB=cp?THREE.MathUtils.lerp(cp.overview?overviewBack(cp):cp.back,cp.backLong??cp.back,longK):0;
   let cA=cp?THREE.MathUtils.lerp(cp.ahead,cp.aheadLong??cp.ahead,longK):0;
   if(cp && focus){cH=THREE.MathUtils.lerp(cH,3.8,camZoom);cB=THREE.MathUtils.lerp(cB,10.5,camZoom);cA=1.5;}
+  const NW = window.__narrow||0; if(cp && NW){ cH *= 1 + (window.__narrowH ?? .9)*NW; cB *= 1 + (window.__narrowB ?? .35)*NW; }
   const trackK=cp?.overview?longK:1;
   const trackZ=THREE.MathUtils.lerp(G.fieldPos-50,targetZ,trackK);
-  const wantPos=cp?new THREE.Vector3(bx*(cp.xf+longK*(.9-cp.xf))*trackK,cH,trackZ-cB):new THREE.Vector3(bx*.55,running?7.6:7.2,targetZ-13.5);
+  const wantPos=cp?new THREE.Vector3(bx*(cp.xf+longK*(.9-cp.xf))*trackK,cH,trackZ-cB):new THREE.Vector3(bx*.55,(running?7.6:7.2)*(1+.35*NW),targetZ-13.5*(1+.2*NW));
   const wantLook=cp?new THREE.Vector3(bx*(cp.lxf+longK*(.9-cp.lxf))*trackK,cp.ly,trackZ+cA):new THREE.Vector3(bx*.75,0,targetZ+7);
   if(cp && ((running && play && play.res.kind==='fg') || (!running && G.formKind==='fg'))){ // field goal: a fixed low angle behind and beside the kicker; the look follows the ball up to the uprights
     const zk=G.fieldPos-50-6.8, seg=running? ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1) : null, inAir = !!(seg && seg.flight && seg.flight.h > 3), landed = !!(seg && seg.rest);
@@ -1935,7 +1940,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
-function resize(){ const w=stage.clientWidth, h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.fov = w/h<1? 62:48; camera.updateProjectionMatrix(); const pr=renderer.getPixelRatio(); POST.composer.setSize(w*pr,h*pr); POST.bloom.setSize(w*pr,h*pr); }
+function resize(){ const w=stage.clientWidth, h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; window.__narrow = clamp((1.78 - w/h)/.8, 0, 1); camera.fov = 48 + window.__narrow*(window.__narrowFov ?? 10);   /* narrow frames (the phone embed is square): a little more lens, and the camera climbs and backs off (in the camera update) so the play still fits side to side without filling the frame with stands */ camera.updateProjectionMatrix(); const pr=renderer.getPixelRatio(); POST.composer.setSize(w*pr,h*pr); POST.bloom.setSize(w*pr,h*pr); }
 // ---------- post-processing: MSAA render target -> soft bloom (boards, lights, highlights) -> vignette/grade -> tone map + sRGB ----------
 const POST = { on: new URLSearchParams(location.search).get('fx')!=='0' };   /* ?fx=0 skips the post chain (bloom/grade) for weak GPUs */
 { const size=renderer.getSize(new THREE.Vector2()).multiplyScalar(renderer.getPixelRatio());
@@ -2204,7 +2209,7 @@ function embedStart(){
     else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); $('banner').hidden=true; renderBug(); setupFormation(null); snapCamera(); } }   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
     else if(m.type==='bsgm:hello'){ post({type:'bsgm:ready'}); }   /* the page asks again after a (re)mount: a ready sent before its listener was up is lost */
     else if(m.type==='bsgm:skip'){ pending=null; if(G.busy){ G.speed = 12; } }   /* fast-forward to the end; the done message still fires, the page has already hidden us */
-    else if(m.type==='bsgm:view'){ if(m.cam && CAMS[m.cam]){ window.__camProfile = CAMS[m.cam]; if(!running) snapCamera(); } if(m.lighting==='day' || m.lighting==='night') setLighting(m.lighting); }   /* camera angle + day/night from the game's controls */
+    else if(m.type==='bsgm:view'){ if(m.cam && (m.cam in CAMS)){ window.__camProfile = CAMS[m.cam]; if(!running) snapCamera(); } if(m.lighting==='day' || m.lighting==='night') setLighting(m.lighting); }   /* camera angle + day/night from the game's controls */
     else if(m.type==='bsgm:crowd'){ if(m.level!=null) sndCrowd(m.level, 1); } });
   // the play is over when the sim re-sets the formation (setBusy(false) after the post-play beat)
   const _setBusy = setBusy; window.__onIdle = ()=>{ if(current!=null){ const id=current; current=null; G.speed = 1.5; post({type:'bsgm:done', id}); } runNext(); };

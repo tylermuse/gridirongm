@@ -1972,7 +1972,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
         {/* Animated field + outcome chip overlay. While the 3D sim is on (desktop) the box is 16:9 so the
             sim gets a real broadcast frame instead of the field's wide, short box. */}
-        <div className={`relative ${sim3dOn && !pregameOpen ? 'md:aspect-video' : ''}`}>
+        <div className={`relative ${sim3dOn && !pregameOpen ? 'aspect-square sm:aspect-[4/3] md:aspect-video' : ''}`}>   {/* phones get a square frame: the field's short box left the 3D sim a letterbox strip */}
           <AnimatedField
             event={engineSnapshot ? {
               id: -1,

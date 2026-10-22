@@ -31,7 +31,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b16y';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b16z';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -237,7 +237,16 @@ export function LiveSim3D({
         </div>
       )}
       {ready && !failed && (
-        <div className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-black/55 p-1 text-[11px] font-bold text-white">
+        /* phones: one small chip that cycles the camera, plus the day/night icon — the full pill row covered a third of the frame */
+        <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/55 p-0.5 text-[10px] font-bold text-white sm:hidden">
+          <button type="button" onClick={() => { const i = CAM_LABELS.findIndex(([c]) => c === view.cam); setView({ cam: CAM_LABELS[(i + 1) % CAM_LABELS.length][0] }); }}
+            className="rounded-full bg-white px-2 py-0.5 text-black">🎥 {(CAM_LABELS.find(([c]) => c === view.cam) ?? CAM_LABELS[0])[1]}</button>
+          <button type="button" onClick={() => setView({ lighting: view.lighting === 'day' ? 'night' : 'day' })} title="Day / night"
+            className="rounded-full px-1.5 py-0.5">{view.lighting === 'day' ? '☀️' : '🌙'}</button>
+        </div>
+      )}
+      {ready && !failed && (
+        <div className="absolute bottom-3 left-3 hidden items-center gap-1 rounded-full bg-black/55 p-1 text-[11px] font-bold text-white sm:flex">
           {CAM_LABELS.map(([c, label]) => (
             <button key={c} type="button" onClick={() => setView({ cam: c })} aria-pressed={view.cam === c}
               className={`rounded-full px-2 py-0.5 ${view.cam === c ? 'bg-white text-black' : 'hover:bg-white/20'}`}>{label}</button>
@@ -252,7 +261,7 @@ export function LiveSim3D({
           type="button"
           title="Full screen"
           onClick={() => { const el = boxRef.current; if (!el) return; if (document.fullscreenElement) void document.exitFullscreen(); else void el.requestFullscreen?.(); }}
-          className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold text-white shadow hover:bg-black/75"
+          className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-xs font-bold text-white shadow hover:bg-black/75 sm:right-3 sm:top-3 sm:px-2.5 sm:py-1"
         >
           ⛶
         </button>
@@ -261,7 +270,7 @@ export function LiveSim3D({
         <button
           type="button"
           onClick={() => { post({ type: 'bsgm:skip' }); activeIdRef.current = null; setActiveBoth(false); }}
-          className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-black shadow"
+          className="absolute bottom-2 right-2 rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-bold text-black shadow sm:bottom-3 sm:right-3 sm:px-3 sm:py-1 sm:text-xs"
         >
           Skip ▸
         </button>
