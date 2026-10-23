@@ -825,7 +825,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // until this becomes true.
   const [animationComplete, setAnimationComplete] = useState(true);
   // 3D live sim: while a play is animating in the sim the page holds its advance (same idea as the broadcast gate)
-  const [sim3dOn, setSim3dOn] = useSim3DMode();
+  const [sim3dPref, setSim3dOn] = useSim3DMode();   // the browser's saved choice; sim3dOn (below) also requires Premium
   const [sim3dActive, setSim3dActive] = useState(false);
 
   // Combined event stream — use pre-computed events up to the pivot,
@@ -1063,6 +1063,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const { tier: subTier, isAdmin: subIsAdmin, isFoundingMember } = useSubscription();
   const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || subTier === 'premium' || subIsAdmin || isFoundingMember;
   const isPremium = subTier === 'premium' || subIsAdmin || isFoundingMember;
+  // 3D live sim is a Premium feature (founders + admins included): free users keep the 2D field and see an upgrade button instead of the toggle.
+  const sim3dOn = sim3dPref && isPremium;
 
   // Pregame Show: Marcus + Tony break down the matchup before kickoff. Opens
   // automatically for the user's own games and holds the auto-start until the
@@ -2224,7 +2226,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               width on desktop. Hidden when empty. */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border)] empty:hidden">
           {/* 3D live sim toggle — plays every snap in the three.js chase-cam sim */}
-          {!isFinished && (
+          {!isFinished && !isPremium && (
+            <Link
+              href="/pricing"
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]"
+              title="Watch every play in 3D — a Premium feature"
+            >
+              🎥 3D Sim <span className="ml-1 rounded bg-amber-400 px-1 text-[10px] font-bold text-black">✨ Premium</span>
+            </Link>
+          )}
+          {!isFinished && isPremium && (
             <button
               onClick={() => setSim3dOn(!sim3dOn)}
               className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
