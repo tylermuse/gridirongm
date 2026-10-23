@@ -2500,6 +2500,28 @@ export function splitScoreByQuarter(seedStr: string, home: number, away: number)
   return { home: dist(home), away: dist(away) };
 }
 
+/** Per-quarter cumulative splits from the sim's actual scoring-play log
+ *  (index 0..3 = end of Q1..Q4; OT folds into index 3 so it equals the final).
+ *  Falls back to the synthetic `splitScoreByQuarter` only when the log is
+ *  missing or doesn't reconcile with the final score. Using the real plays
+ *  keeps halftime numbers to what actually happened in the sim instead of a
+ *  random re-decomposition (which over-produced safeties: halftime 2s/4s/5s). */
+export function splitsFromResult(r: Pick<GameResult, 'id' | 'homeTeamId' | 'awayTeamId' | 'homeScore' | 'awayScore' | 'scoringPlays'>): { home: number[]; away: number[] } {
+  const plays = r.scoringPlays ?? [];
+  if (plays.length > 0 || (r.homeScore === 0 && r.awayScore === 0)) {
+    const home = [0, 0, 0, 0];
+    const away = [0, 0, 0, 0];
+    for (const p of plays) {
+      const q = Math.min(4, Math.max(1, p.quarter)) - 1;
+      if (p.teamId === r.homeTeamId) home[q] += p.points;
+      else if (p.teamId === r.awayTeamId) away[q] += p.points;
+    }
+    for (let i = 1; i < 4; i++) { home[i] += home[i - 1]; away[i] += away[i - 1]; }
+    if (home[3] === r.homeScore && away[3] === r.awayScore) return { home, away };
+  }
+  return splitScoreByQuarter(r.id, r.homeScore, r.awayScore);
+}
+
 /** Return the stashed pre-sim result for a game if the live scoreboard covers
  *  the current week, else undefined. Keeps simulateOneWeek and its test in
  *  lockstep on the reuse rule. */
@@ -10152,7 +10174,7 @@ export const useGameStore = create<GameStore>()(
         for (const game of weekGames) {
           const r = simulateScheduledGame(state, resortedTeams, game);
           results[game.id] = { ...r, played: true };
-          splits[game.id] = splitScoreByQuarter(game.id, r.homeScore, r.awayScore);
+          splits[game.id] = splitsFromResult({ ...r, id: game.id });
         }
         set({ liveScoreboard: { week: state.week, results, splits } });
       },
