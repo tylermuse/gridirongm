@@ -1195,9 +1195,9 @@ export const seoPages: SEOPage[] = [
     metaDescription:
       "Front Office Football is a deep, paid Windows text sim. BS Football is a free browser GM game with modern design and mobile support. Here is how they compare.",
     keywords: [
-      "bs football vs front office football",,
-      "front office football alternative",,
-      "fof9 vs bs football",,
+      "bs football vs front office football",
+      "front office football alternative",
+      "fof9 vs bs football",
       "free front office football",
     ],
     schema: 'FAQ',
@@ -1287,9 +1287,9 @@ export const seoPages: SEOPage[] = [
     metaDescription:
       "Retro Bowl is an arcade football game with a light GM layer. BS Football is a free, deep football GM simulator. Compare gameplay, management depth, and platforms.",
     keywords: [
-      "bs football vs retro bowl",,
-      "retro bowl vs football gm",,
-      "retro bowl with more management",,
+      "bs football vs retro bowl",
+      "retro bowl vs football gm",
+      "retro bowl with more management",
       "games like retro bowl gm",
     ],
     schema: 'FAQ',
@@ -1369,9 +1369,9 @@ export const seoPages: SEOPage[] = [
     metaDescription:
       "Loved Retro Bowl? Here are seven football games to try next, from deeper GM simulators to mobile management games, with prices and platforms for each.",
     keywords: [
-      "games like retro bowl",,
-      "retro bowl alternatives",,
-      "football games like retro bowl",,
+      "games like retro bowl",
+      "retro bowl alternatives",
+      "football games like retro bowl",
       "retro bowl but more management",
     ],
     schema: 'Article',
@@ -1456,9 +1456,9 @@ export const seoPages: SEOPage[] = [
     metaDescription:
       "The best NFL mock draft simulators for the 2026-27 cycle, what each does well, which are free, and what to use if you want to live with your picks.",
     keywords: [
-      "best nfl mock draft simulator",,
-      "free mock draft simulator",,
-      "nfl draft simulator 2026",,
+      "best nfl mock draft simulator",
+      "free mock draft simulator",
+      "nfl draft simulator 2026",
       "mock draft simulator with trades",
     ],
     schema: 'Article',
@@ -1533,9 +1533,9 @@ export const seoPages: SEOPage[] = [
     metaDescription:
       "The best football general manager games to play on your phone in 2026, from free browser sims with no download to paid App Store favorites.",
     keywords: [
-      "football gm game mobile",,
-      "best football manager game iphone",,
-      "football gm app",,
+      "football gm game mobile",
+      "best football manager game iphone",
+      "football gm app",
       "nfl gm game for phone",
     ],
     schema: 'Article',
