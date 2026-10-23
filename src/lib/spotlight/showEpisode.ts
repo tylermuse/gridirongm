@@ -16,7 +16,7 @@ import { writeConversation, WRITER_MODEL } from './showWriter';
 import { buildShowScript, type ShowSegment, type ShowTopicInput, type TimedShowSegment } from './showScript';
 import type { ShowStatLine } from './teamStats';
 import type { EpisodeMoment } from './showMoment';
-import { planTheme, themeFor, verdictTopicNotes, VERDICT_HEADLINE, type ThemePlan } from './showThemes';
+import { planTheme, themeFor, verdictTopicNotes, verdictHeadline, type ThemePlan } from './showThemes';
 
 export const CACHE_BUCKET = 'spotlight-audio';
 /** Bump when the episode format or the composer changes. */
@@ -57,7 +57,7 @@ export function writerTopics(e: EpisodeInput, plan: ThemePlan | null): ShowTopic
   const memo = themedTopics.get(e);
   if (memo) return memo;
   const out = [...e.topics, {
-    headline: VERDICT_HEADLINE, icon: '⚖️', isVerdict: true as const,
+    headline: verdictHeadline(plan.id), icon: '⚖️', isVerdict: true as const,
     exchanges: notes.map((text, k) => ({ speakerId: k % 2 ? 'hottake' : 'stats', text })),
   }];
   themedTopics.set(e, out);

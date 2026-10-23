@@ -67,18 +67,30 @@ one face per render, so each host is rendered on his own crop of the studio
 two-shot and both are composited back over the still:
 
 1. Add the back-and-forth to `wide/scripts.json` (`[["marcus","…"],["tony","…"]]`).
-2. Voice it: `python3 dlg.py <key>.json <key>.mp3` (ElevenLabs v3 dialogue; also
-   writes `<key>.mp3.spans.json`, each line's time span). Then give it a lead-in —
-   HeyGen's lips start late when speech begins at 0s:
-   `ffmpeg -i <key>.mp3 -af "adelay=600|600,apad=pad_dur=0.4" <key>_p.mp3` and shift
-   the spans by 0.6s; use the padded files from here on, with `speech.start: 0.35`
-   in wideClips.json.
+2. Voice it: `python3 dlg.py <key>.json <key>.mp3` (ElevenLabs v3 dialogue). It
+   writes `<key>.mp3` with a 0.6 s lead-in (HeyGen's lips start late when speech
+   begins at 0 s; use `speech.start: 0.35` in wideClips.json) and
+   `<key>.mp3.spans.json`, each line's time span. ElevenLabs' own per-line
+   timestamps tile the audio and often land mid-word, so `snap_spans.py` moves
+   each cut to the pause between the lines (the player does the same for
+   generated lines, `snapLineCuts` in loudness.ts).
 3. `python3 split_tracks.py <key>` → `<key>.marcus.mp3` / `<key>.tony.mp3`
    (the other host's turns silenced).
-4. Render each track in HeyGen Avatar 4 (Expressive) on its crop:
-   `crop_marcus.png` / `crop_tony.png` (600×600 crops of `medium.png`, the
-   1920×1080 two-shot; kept in show-assets/wide2) → `<key>.marcus.mp4` /
-   `<key>.tony.mp4`.
-5. `python3 compose_wide.py <key>` → `<key>.mp4`; copy to `public/show/wide/`,
-   add it to `src/lib/spotlight/wideClips.json` (lines + spans), and re-run
+4. Decide the shots: in `shots.json`, one letter per line — `p` the hosts face
+   each other, `c` they face the camera (rules and welcomes to camera, jabs
+   and reactions to each other; banter stays face to face). Then
+   `python3 plan_shots.py` writes `plan.json` (the segments of each clip) and,
+   for every camera segment, an audio slice per host in `seg/` (0.6 s lead-in).
+5. Render in HeyGen Avatar 4 (Expressive, 1080p):
+   - the whole clip per host on the facing-each-other crops
+     `crop_marcus.png` / `crop_tony.png` → `<key>.marcus.mp4` / `<key>.tony.mp4`;
+   - every camera segment per host on the facing-camera crops
+     `crop_marcus_cam.png` / `crop_tony_cam.png` (cut from `medium_cam.png`,
+     the same still with both hosts turned to the lens) →
+     `<key>__<n>.marcus.cam.mp4` / `<key>__<n>.tony.cam.mp4`.
+   All crops and stills live in show-assets/wide2.
+6. `python3 compose_shots.py <key>` → `<key>.mp4`: the segments are cut at the
+   pauses between lines, and every render is delayed 0.16 s (HeyGen's lips
+   run ahead of the voice by about that). Copy to `public/show/wide/`, add it
+   to `src/lib/spotlight/wideClips.json` (lines, spans, shots), and re-run
    `measure_levels.py`.
