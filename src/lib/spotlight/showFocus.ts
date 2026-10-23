@@ -25,13 +25,19 @@ export type Focus =
    *  the line is about (the next opponent, a rival). */
   | { kind: 'team'; mentioned: string[]; teamId?: string }
   | { kind: 'standings'; scope: 'conference' | 'division' }
+  /** Upcoming games ("three of the next four on the road") → the schedule board. */
+  | { kind: 'schedule' }
   /** The game's flow (every score on a timeline), with one score called
    *  out — or none, when the line is about the game as a whole. */
   | { kind: 'moment'; play: number | null; quarter?: number }
   | { kind: 'none' };
 
 /** Playoff-race / standings talk → the standings board. */
-const STANDINGS = /\bplayoff (picture|race|spot|hunt|chances|line|push)|\bwild ?card|\bseeds?\b|\bseeding\b|\bgames? (back|out)\b|\bhalf (a )?game\b|\b(and a half|a half) back\b|\bstandings\b|\bin the hunt\b|\bclinch|\bdivision (lead|race|title|crown)|\bwin the division\b|\bthe division\b/i;
+const STANDINGS = /\bplayoff (picture|race|spot|hunt|chances|line|push)|\bwild ?card|\bseeds?\b|\bseeding\b|\bgames? (back|out)\b|\bhalf (a )?game\b|\b(and a half|a half) back\b|\bstandings\b|\bin the hunt\b|\bclinch|\bdivision (lead|race|title|crown)\b|\bwin the division\b|\bthe division\b/i;
+/** Talk about what's coming up → the schedule board. */
+const SCHEDULE = /\bschedule\b|\bnext (game|week|one|two|three|four|five|few|couple)\b|\b(next|coming|last|final) \w+ (games?|weeks?)\b|\bon the road\b|\broad (trip|games?|stretch|swing)\b|\bhome ?(stand|stretch|games?)\b|\brest of the (way|season|schedule)\b|\bupcoming\b|\b(games?|weeks?) (left|remaining|to go)\b|\bto play\b|\bstretch run\b|\bbye week\b/i;
+const scheduleOf = (text: string): Focus | null => (SCHEDULE.test(text) ? { kind: 'schedule' } : null);
+
 const standingsOf = (text: string): Focus | null =>
   STANDINGS.test(text) ? { kind: 'standings', scope: /\bdivision\b/i.test(text) ? 'division' : 'conference' } : null;
 
@@ -311,7 +317,7 @@ function focusOf(text: string, c: FocusContext): Focus | null {
     if (flow && !mentioned.some(k => k !== 'pts')) return null;
     return { kind: 'team', mentioned };
   }
-  const race = standingsOf(text);
+  const race = standingsOf(text) ?? scheduleOf(text);
   if (race) return race;
   // A line about another team (the next opponent, a rival): their numbers.
   if (others.length) return { kind: 'team', teamId: others[0].id, mentioned: statsMentioned(text) };
@@ -364,13 +370,13 @@ export function focusForLine(text: string, c: FocusContext): Focus {
   if (prev?.kind === 'player') return playerFocus(prev.player, text, c.players, c.topic);
   if (prev?.kind === 'unit') return { ...prev, mentioned: unitMentioned(text, prev.tiles) };
   if (prev?.kind === 'team') return { kind: 'team', mentioned: [], ...(prev.teamId ? { teamId: prev.teamId } : {}) };
-  if (prev?.kind === 'standings') return prev;
+  if (prev?.kind === 'standings' || prev?.kind === 'schedule') return prev;
   if (prev?.kind === 'moment') return prev;
   // The headline sets the subject ("QB Watch", "Trenches trouble").
   if (c.topic?.headline) {
     const f = focusOf(c.topic.headline, c);
     if (f && f.kind !== 'team') return f.kind === 'player' ? playerFocus(f.player, text, c.players, c.topic) : f;
-    const race = standingsOf(c.topic.headline);
+    const race = standingsOf(c.topic.headline) ?? scheduleOf(c.topic.headline);
     if (race) return race;
   }
   if (flow) return { kind: 'moment', play: null };

@@ -181,3 +181,13 @@ html, body {
    * misleading gradient when there's nothing off-screen. */
   .overflow-x-auto::after { display: none; }
 }
+
+
+/* Themed range slider (League Rules): light track + orange thumb in both
+   themes — the browser default unfilled track renders near-black. */
+.bs-range { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); outline: none; }
+.bs-range:focus-visible { box-shadow: 0 0 0 3px var(--accent-glow); }
+.bs-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); cursor: pointer; }
+.bs-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); cursor: pointer; }
+.bs-range::-moz-range-track { height: 6px; border-radius: 999px; background: var(--surface-2); }
+.bs-range::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--accent); }

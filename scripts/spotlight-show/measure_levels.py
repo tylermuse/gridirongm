@@ -31,6 +31,12 @@ def main(wt):
     for f in sorted(os.listdir(show)):
         if f.endswith('.mp4'):
             jobs.append(('/show/' + f, None, None))
+    # Two-shots (theme openers, banter): both hosts in one clip.
+    wide = os.path.join(show, 'wide')
+    if os.path.isdir(wide):
+        for f in sorted(os.listdir(wide)):
+            if f.endswith('.mp4'):
+                jobs.append(('/show/wide/' + f, None, None))
     with ThreadPoolExecutor(6) as ex:
         vals = list(ex.map(lambda j: rms_db(os.path.join(wt, 'public' + j[0]), j[1], j[2]), jobs))
     out = {j[0]: v for j, v in zip(jobs, vals) if v is not None}

@@ -12,6 +12,8 @@ export {
   generateBasketballDraftOrder,
   basketballPickValue,
   lotteryTopPickOddsPct,
+  lotteryOddsTable,
+  lotterySizeFor,
 } from './draftOrder';
 export type {
   StandingsEntry,

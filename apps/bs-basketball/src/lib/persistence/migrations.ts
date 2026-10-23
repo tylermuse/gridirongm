@@ -14,15 +14,19 @@
 import type { BasketballLeagueState } from './db';
 import type { BasketballPlayer } from '@bs/sport-basketball';
 import { consensus2026Rank, consensus2026Value } from '../data/draft2026';
+import { ensureCoachingStaff } from '../coaching/carousel';
 
 /** Bump this when the persisted shape changes; register the migration below. */
-export const CURRENT_SAVE_VERSION = 1;
+export const CURRENT_SAVE_VERSION = 2;
 
 type Migration = (state: BasketballLeagueState) => BasketballLeagueState;
 
 /** Keyed by the version a save is migrating FROM. */
 const MIGRATIONS: Record<number, Migration> = {
-  // 1: (s) => ({ ...s, /* shape changes for v1 → v2 */ }),
+  // v1 → v2: coach contracts + a player-development coach per team. Old saves
+  // had one head coach with `contract: null`; give him a deterministic deal and
+  // add a dev coach. (ensureCoachingStaff is idempotent and seeded by league id.)
+  1: (s) => ensureCoachingStaff(s),
 };
 
 /** Step a parsed save up to CURRENT_SAVE_VERSION. Idempotent for current saves. */

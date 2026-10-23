@@ -37,3 +37,55 @@ export function speechDb(buf: { sampleRate: number; getChannelData(c: number): F
   }
   return n ? 10 * Math.log10(sum / n) : null;
 }
+
+/**
+ * ElevenLabs' per-line timestamps tile a dialogue's audio with no gaps, and
+ * the cut between two lines often lands mid-word. Move each cut to the pause
+ * the hosts actually leave between lines: the nearest stretch of near-silence
+ * (at least 50 ms under -38 dB of the block's peak) within `reach` seconds.
+ * A cut with no pause near it stays put. The first line starts where it did;
+ * the last runs to the end of the block.
+ */
+export function snapLineCuts(
+  buf: { sampleRate: number; duration: number; getChannelData(c: number): Float32Array },
+  lines: { start: number; end: number }[],
+  reach = 0.7,
+): { start: number; end: number }[] {
+  if (lines.length === 0) return [];
+  const x = buf.getChannelData(0);
+  const hop = Math.max(1, Math.round(buf.sampleRate / 100)); // 10ms
+  const n = Math.floor(x.length / hop);
+  const rms = new Float32Array(n);
+  let max = 0;
+  for (let k = 0; k < n; k++) {
+    let acc = 0;
+    for (let j = k * hop; j < (k + 1) * hop; j++) acc += x[j] * x[j];
+    rms[k] = Math.sqrt(acc / hop);
+    if (rms[k] > max) max = rms[k];
+  }
+  const thr = max * 0.0126; // -38 dB
+  const MIN_RUN = 5; // 50ms
+  const toSec = (k: number) => (k * hop) / buf.sampleRate;
+  const cuts = lines.map(l => l.start);
+  for (let i = 1; i < lines.length; i++) {
+    const t = lines[i].start;
+    const lo = Math.max(0, Math.floor((t - reach) / hop * buf.sampleRate));
+    const hi = Math.min(n, Math.ceil((t + reach) / hop * buf.sampleRate));
+    let best: { at: number; dist: number } | null = null;
+    let run = -1;
+    for (let k = lo; k <= hi; k++) {
+      const quiet = k < hi && rms[k] < thr;
+      if (quiet && run < 0) run = k;
+      if (!quiet && run >= 0) {
+        if (k - run >= MIN_RUN) {
+          const a = toSec(run), b = toSec(k);
+          const dist = t < a ? a - t : t > b ? t - b : 0;
+          if (!best || dist < best.dist) best = { at: (a + b) / 2, dist };
+        }
+        run = -1;
+      }
+    }
+    if (best) cuts[i] = best.at;
+  }
+  return lines.map((l, i) => ({ start: cuts[i], end: i + 1 < lines.length ? cuts[i + 1] : Math.max(l.end, buf.duration) }));
+}

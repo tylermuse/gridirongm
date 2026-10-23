@@ -127,7 +127,8 @@ export function getProtection(
 /** "top-2 protected", "lottery protected", or "unprotected". */
 export function protectionText(topN: number, numTeams = 30): string {
   if (topN <= 0) return 'unprotected';
-  if (topN >= 14 && topN < numTeams) return 'lottery protected';
+  // Lottery = picks outside the 16-team first round (14 at 30 teams, 16 at 32).
+  if (topN >= Math.max(14, numTeams - 16) && topN < numTeams) return 'lottery protected';
   return `top-${topN} protected`;
 }
 
@@ -136,7 +137,8 @@ export function protectionShort(league: LeagueState, pick: BaseDraftPick): strin
   const prot = getProtection(league, pick.season, pick.round, pick.originalTeamId);
   if (!prot) return '';
   const n = prot.topN;
-  return n >= 14 && n < (league.teams.length || 30) ? ' (lottery prot)' : ` (top-${n} prot)`;
+  const numTeams = league.teams.length || 30;
+  return n >= Math.max(14, numTeams - 16) && n < numTeams ? ' (lottery prot)' : ` (top-${n} prot)`;
 }
 
 /** The seasons whose drafts are currently tradeable: the next N after this one,
@@ -477,7 +479,7 @@ export interface PickConveyance {
   round: number;
   originalTeamId: TeamId;
   creditorTeamId: TeamId;
-  /** Where the original team's pick actually landed (1..30 within the round). */
+  /** Where the original team's pick actually landed (1..N within the round). */
   pickInRound: number;
   topN: number;
   result: 'conveyed' | 'rolled' | 'expired-void' | 'expired-second';
@@ -571,7 +573,7 @@ export function describeConveyance(
 ): { summary: string; detail: string; teamIds: TeamId[] } {
   const orig = abbrOf(league, c.originalTeamId);
   const cred = abbrOf(league, c.creditorTeamId);
-  const pickStr = `${c.season} R${c.round} (#${c.round === 1 ? c.pickInRound : c.pickInRound + 30})`;
+  const pickStr = `${c.season} R${c.round} (#${c.round === 1 ? c.pickInRound : c.pickInRound + (league.teams.length || 30)})`;
   const prot = protectionText(c.topN, league.teams.length || 30);
   switch (c.result) {
     case 'conveyed':

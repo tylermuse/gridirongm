@@ -18,14 +18,15 @@ import { computeShowStatLine, ordinal, rankTone, statsMentioned, type ShowStat, 
 import { topicTeam } from '@/lib/spotlight/showVisuals';
 import { focusForLine, measurableIn, type Focus } from '@/lib/spotlight/showFocus';
 import { planShots } from '@/lib/spotlight/showShots';
-import { clipLevel, levelGain, speechDb } from '@/lib/spotlight/loudness';
+import { clipLevel, levelGain, speechDb, snapLineCuts } from '@/lib/spotlight/loudness';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { GameTopic } from '@/lib/spotlight/showGame';
-import { conferenceRace, divisionTable } from '@/lib/spotlight/showStandings';
-import type { Player, Team } from '@/types';
+import { conferenceRace, divisionTable, upcomingSchedule } from '@/lib/spotlight/showStandings';
+import type { GameResult, Player, Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
-import { ShowCaption, ShowGraphic, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
+import { ShowCaption, ShowGraphic, ThemeCard, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
+import { wideLineAt, type Calls, type ShowThemeId, type Verdict } from '@/lib/spotlight/showThemes';
 
 /** Over-the-shoulder listening loops (studio screens frozen, so the
  *  footage on them doesn't run backward on the loop). */
@@ -51,6 +52,9 @@ interface SpotlightShowPlayerProps {
   team?: Team;
   teams?: Team[];
   players?: Player[];
+  /** The season's schedule, for the "road ahead" graphic. */
+  schedule?: GameResult[];
+  season?: number;
   /** Render as the big broadcast poster (dashboard) instead of a small button. */
   poster?: { episodeLabel: string; ready: boolean };
   /** Where the season is ({phase, narrative}); validated server-side. */
@@ -76,7 +80,16 @@ interface BlockMsg { index: number; audio: string; lines: { seg: number; start: 
 // padding (clips ~0.35s in / ~0.6s out); trimming it to this keeps the
 // conversation moving instead of stalling at every cut.
 const LEAD_PAD = 0.05;
+
+/** Caption for a segment `t` seconds in: a two-shot captions the line being
+ *  said (both hosts talk in one clip), anything else its whole text. */
+function captionOf(seg: TimedShowSegment, t: number): string {
+  if (seg.kind !== 'phrase' || !seg.wide) return seg.text;
+  return wideLineAt(seg.phraseId.slice('wide:'.length), t + Math.max(0, seg.speech.start - LEAD_PAD))?.text ?? seg.text;
+}
 const TAIL_PAD = 0.12;
+/** Room after the last line of a voiced block, whose audio stops dead on its last word. */
+const BLOCK_TAIL = 0.35;
 
 /** Where the speech is inside a decoded TTS line (s): first/last 10ms
  *  window within 32 dB of the loudest one. */
@@ -110,7 +123,7 @@ function toneClass(st: ShowStat) {
   return t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-red-600' : 'text-slate-500';
 }
 
-export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [], poster, moment }: SpotlightShowPlayerProps) {
+export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [], schedule = [], season, poster, moment }: SpotlightShowPlayerProps) {
   const sub = useSubscription();
   const access = listenState({
     loading: sub.loading,
@@ -181,7 +194,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const panelKey = useRef('');
   const topicStart = useRef(0);
   const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const spansRef = useRef<Map<number, { start: number; end: number }>>(new Map());
+  const spansRef = useRef<Map<number, { start: number; end: number; tail: number }>>(new Map());
   /** Speech loudness (dBFS) of each generated line, for leveling. */
   const levelsRef = useRef<Map<number, number | null>>(new Map());
 
@@ -427,7 +440,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         enterGraphic(`graphic:${seg.voiceover.topicIdx}`, true);
       }
       if (seg.kind === 'phrase') {
-        if (!prev || prev.speaker !== seg.speaker || prev.kind === 'tts') showLowerThird();
+        if (!seg.wide && (!prev || prev.speaker !== seg.speaker || prev.kind === 'tts')) showLowerThird();
         const buf = seg.slot ? ordinalBufs.current.get(`${seg.speaker}/${seg.slot.rank}`) : undefined;
         if (ctx && g && seg.slot && buf) {
           // Replace the placeholder rank: duck the clip, play the real one.
@@ -477,13 +490,16 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     }
     waitingFor.current = null;
     setBuffering(false);
-    const span = spansRef.current.get(i) ?? { start: 0, end: buf.duration };
+    const span = spansRef.current.get(i) ?? { start: 0, end: buf.duration, tail: TAIL_PAD };
     const from = Math.max(0, span.start - LEAD_PAD);
-    const to = Math.min(buf.duration, span.end + TAIL_PAD);
+    const to = Math.min(buf.duration, span.end + span.tail);
     const src = ctx.createBufferSource();
     src.buffer = buf;
     const lg = ctx.createGain();
-    lg.gain.value = levelGain(levelsRef.current.get(i));
+    const g = levelGain(levelsRef.current.get(i));
+    lg.gain.setValueAtTime(g, ctx.currentTime + Math.max(0, to - from - 0.04));
+    lg.gain.linearRampToValueAtTime(0, ctx.currentTime + (to - from)); // no click where the audio stops dead
+    lg.gain.setValueAtTime(g, ctx.currentTime);
     src.connect(lg).connect(out(ctx));
     src.onended = advance;
     srcRef.current = src;
@@ -503,17 +519,22 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     const bytes = Uint8Array.from(atob(msg.audio), c => c.charCodeAt(0));
     const block = await ctx.decodeAudioData(bytes.buffer);
     const sr = block.sampleRate;
-    for (const l of msg.lines) {
-      const from = Math.max(0, Math.floor((l.start - 0.03) * sr));
-      const to = Math.min(block.length, Math.ceil((l.start + l.duration + 0.08) * sr));
-      if (to <= from) continue;
-      const line = ctx.createBuffer(block.numberOfChannels, to - from, sr);
+    // The server's cuts can land mid-word: move each to the pause between
+    // the lines. The block's audio ends right where its last word does, so
+    // that line gets a little room before the next segment.
+    const cuts = snapLineCuts(block, msg.lines.map(l => ({ start: l.start, end: l.start + l.duration })));
+    msg.lines.forEach((l, k) => {
+      const last = k === msg.lines.length - 1;
+      const from = Math.max(0, Math.floor((cuts[k].start - 0.03) * sr));
+      const to = Math.min(block.length, Math.ceil((cuts[k].end + 0.08) * sr));
+      if (to <= from) return;
+      const line = ctx.createBuffer(block.numberOfChannels, to - from + (last ? Math.round(BLOCK_TAIL * sr) : 0), sr);
       for (let c = 0; c < block.numberOfChannels; c++) line.copyToChannel(block.getChannelData(c).subarray(from, to), c);
       buffersRef.current.set(l.seg, line);
-      const span = speechSpan(line);
+      const span = { ...speechSpan(line), tail: last ? BLOCK_TAIL : TAIL_PAD };
       spansRef.current.set(l.seg, span);
       levelsRef.current.set(l.seg, speechDb(line, span.start, span.end));
-    }
+    });
     setAudioVersion(v => v + 1);
     resumeWaiting();
   }
@@ -851,7 +872,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const tts = seg?.kind === 'tts' ? seg : null;
   // What the graphic layer shows: the current voiceover (a line, or a topic
   // transition wiping in), else the last one — kept mounted to dissolve.
-  type Gfx = { visual: 'title' | 'graphic'; headline: string; icon: string; speaker: Host; text: string; topicIdx: number };
+  type Gfx = { visual: 'title' | 'graphic'; headline: string; icon: string; speaker: Host; text: string; topicIdx: number; theme?: ShowThemeId; calls?: Calls; verdict?: Verdict };
   const gfxOf = (x: TimedShowSegment | undefined): Gfx | null =>
     !x ? null
       : x.kind === 'tts' ? x
@@ -902,7 +923,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         : focusTeam ? `${focusTeam.abbreviation} · League ranks`
           : gfxTopic?.gameTeam ? gfxTopic.gameLabel
             : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
-  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'moment' ? [] : focus.mentioned;
+  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'schedule' || focus.kind === 'moment' ? [] : focus.mentioned;
   // Game breakdown: the scores on a timeline, the one being discussed called out.
   const flowData = focus?.kind === 'moment' ? gfxTopic?.gameFlow ?? null : null;
   const flow = flowData && focus?.kind === 'moment' ? (() => {
@@ -927,6 +948,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     right: { abbreviation: cmpData.right.abbreviation, art: teamOf(cmpData.right.teamId) ? logoOf(teamOf(cmpData.right.teamId)!) : null },
     rows: cmpData.rows,
   } : null;
+  const sched = focus?.kind === 'schedule' && team && teams.length && season != null
+    ? (() => {
+      const b = upcomingSchedule(team, teams, schedule, season);
+      return b ? { ...b, rows: b.rows.map(r => { const t = teams.find(x => x.id === r.teamId)!; return { ...r, art: logoOf(t) }; }) } : null;
+    })()
+    : null;
   const board = focus?.kind === 'standings' && team && teams.length
     ? (() => {
       const b = focus.scope === 'division' ? divisionTable(team, teams) : conferenceRace(team, teams);
@@ -1003,6 +1030,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 stats={stats}
                 tiles={tiles}
                 board={board}
+                sched={sched}
                 compare={compare}
                 flow={flow}
                 tilesLabel={tilesLabel}
@@ -1027,6 +1055,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                   detail: [linePlayer.position, teams.find(t => t.id === linePlayer.teamId)?.abbreviation].filter(Boolean).join(' · '),
                 }}
                 playerMs={onGfx ? clock - playerStart.current : 60_000}
+                theme={gfx.theme}
+                calls={gfx.calls}
+                verdict={gfx.verdict}
               />
             </div>
           )}
@@ -1059,6 +1090,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
             />
           ))}
 
+          {/* Theme opener: the theme's title card over the two-shot */}
+          {seg?.kind === 'phrase' && seg.themeCard && phase !== 'ended' && (
+            <ThemeCard key={seg.phraseId} theme={seg.themeCard} ms={Math.max(0, clock - segStart.current)} />
+          )}
+
           {/* Stat bug over on-camera stat reactions */}
           {phraseStat && (
             <div
@@ -1088,7 +1124,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           )}
 
           {/* Captions (topic graphics carry the line as a pull quote instead) */}
-          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic' && !ots) && !vo && <ShowCaption text={seg.text} />}
+          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic' && !ots) && !vo && <ShowCaption text={captionOf(seg, (clock - segStart.current) / 1000)} />}
 
           {/* Waiting on a line's voices (rare: they stream in during the open) */}
           {buffering && phase === 'playing' && (
@@ -1180,6 +1216,7 @@ function lookOf(f: Focus): string {
     case 'unit': return `unit:${f.unit}`;
     case 'team': return `team:${f.teamId ?? ''}`;
     case 'standings': return `standings:${f.scope}`;
+    case 'schedule': return 'schedule';
     case 'moment': return `moment:${f.play ?? ''}`;
     default: return 'none';
   }

@@ -2,7 +2,7 @@
  * Team leaders + league-rank context (spec 2.3 + 2.0).
  *
  * Per-category team leaders (with an Age·OVR·POT meta line) and the league rank
- * of a team's headline stats (PPG, Opp PPG, differential) among all 30 teams.
+ * of a team's headline stats (PPG, Opp PPG, differential) among all teams.
  * Pure derivation from box scores + records; nothing persisted.
  */
 

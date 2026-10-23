@@ -17,8 +17,9 @@ import { lastSeasonStatLine } from '@/lib/stats/statLine';
 import { ratingColor } from '@/lib/ui/ratingColor';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
+import { openTalk, currentAsk } from '@/lib/roster/negotiation';
 import { keepValueOf } from '@/lib/season/advanceSeason';
-import { MAX_ROSTER } from '@/lib/freeAgency';
+import { getMaxRoster } from '@/lib/freeAgency';
 import { getDraft } from '@/lib/draft';
 import { resignProjection, hasSalaryForSeason, salaryForSeason } from '@/lib/roster/resignProjection';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
@@ -101,7 +102,8 @@ export default function ReSignPage() {
   const active = candidates.filter(p => !hasSalaryForSeason(p, nextSeason));
   const resigned = candidates.filter(p => hasSalaryForSeason(p, nextSeason));
 
-  const over = roster.length - MAX_ROSTER;
+  const maxRoster = getMaxRoster(league);
+  const over = roster.length - maxRoster;
 
   // R2-1: walk is gated by ConfirmModal for 78+ OVR vets, immediate otherwise.
   async function performLetWalk(p: BasketballPlayer) {
@@ -116,10 +118,9 @@ export default function ReSignPage() {
   // The old loop visibly stalled the page through a class of 8+ expiring deals.
   async function performResignAll() {
     setConfirmResignAll(false);
-    const signings = active.map(p => {
-      const m = extensionMarket(p, season);
-      return { playerId: p.id, offer: { years: m.desiredYears, salaryPerYear: m.marketSalary } };
-    });
+    // Each player at his CURRENT ask from negotiation (his full price if he
+    // ended talks) — the bulk version of "Offer what he wants".
+    const signings = active.map(p => ({ playerId: p.id, offer: currentAsk(openTalk(league!, p)) }));
     await store.extendPlayersBulk(signings);
   }
   async function performLetAllWalk() {
@@ -213,8 +214,14 @@ export default function ReSignPage() {
         active.length > 0 && (
           <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
             {active.map(p => {
-              const ask = extensionMarket(p, season);
-              const stance = willingness(p, userTeam, season);
+              const talk = openTalk(league, p);
+              const asked = currentAsk(talk);
+              const ask = { marketSalary: asked.salaryPerYear, desiredYears: asked.years };
+              const stance = talk.status === 'ended'
+                ? { label: 'Ended talks', bg: 'color-mix(in srgb,#dc2626 14%,transparent)', fg: '#dc2626' }
+                : talk.rounds.length > 0
+                  ? { label: `Talking · ${talk.patienceLeft}/${talk.profile.patience} patience`, bg: 'color-mix(in srgb,#3b82f6 14%,transparent)', fg: '#2563eb' }
+                  : willingness(p, userTeam, season);
               return (
                 <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-t first:border-t-0" style={{ borderColor: 'var(--border)' }}>
                   <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} photoUrl={p.sportData.photoUrl} size="sm" />
@@ -242,7 +249,7 @@ export default function ReSignPage() {
                   </div>
                   {/* Stacked on mobile (narrower, more room for the name), side-by-side on desktop. */}
                   <div className="flex flex-col sm:flex-row gap-1.5 shrink-0">
-                    <button onClick={() => setExtendId(p.id)} disabled={store.loading} className="text-sm font-bold rounded-lg px-3 py-1.5 disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>Re-sign</button>
+                    <button onClick={() => setExtendId(p.id)} disabled={store.loading} className="text-sm font-bold rounded-lg px-3 py-1.5 disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>{openTalk(league, p).rounds.length ? 'Negotiate' : 'Re-sign'}</button>
                     <button onClick={() => void letWalk(p)} disabled={store.loading} className="text-sm font-semibold rounded-lg px-2.5 py-1.5 border disabled:opacity-40" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Let Walk</button>
                   </div>
                 </div>
@@ -280,8 +287,8 @@ export default function ReSignPage() {
         <header className="flex flex-wrap items-baseline gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
           <h2 className="text-sm font-black uppercase tracking-tight">Finalize Roster</h2>
           {over > 0
-            ? <span className="text-xs font-bold" style={{ color: '#dc2626' }}>Trim {over} — {roster.length}/{MAX_ROSTER}</span>
-            : <span className="text-xs font-bold" style={{ color: '#10b981' }}>At the limit — {roster.length}/{MAX_ROSTER} ✓</span>}
+            ? <span className="text-xs font-bold" style={{ color: '#dc2626' }}>Trim {over} — {roster.length}/{maxRoster}</span>
+            : <span className="text-xs font-bold" style={{ color: '#10b981' }}>At the limit — {roster.length}/{maxRoster} ✓</span>}
         </header>
         {over > 0 && (
           <div className="px-2 py-1">
@@ -322,7 +329,7 @@ export default function ReSignPage() {
         body={
           <>
             All <b>{active.length}</b> expiring players will be re-signed at their
-            market ask. You can still walk individuals afterward.
+            current ask (no haggling). You can still walk individuals afterward.
           </>
         }
         confirmLabel={`Re-sign ${active.length}`}

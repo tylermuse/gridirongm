@@ -10,7 +10,6 @@
  * Props: playerId (null = closed), onClose.
  */
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -20,6 +19,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from './Modal';
 import { isGodMode } from '@/lib/godMode/godMode';
+import { GodModePlayerEditor } from '@/components/godMode/GodModePlayerEditor';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
 import { ratingHex, ratingTier } from '@/lib/ui/ratingColor';
@@ -233,7 +233,13 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             ))}
           </section>
 
-          {isGodMode(league) && <GodModeEditor key={player.id} player={player} />}
+          {/* Keyed on id + a state fingerprint so a saved edit re-seeds the form. */}
+          {isGodMode(league) && (
+            <GodModePlayerEditor
+              key={`${player.id}|${player.ratings.overall}|${player.age}|${player.sportData.position}|${player.contract?.years.length ?? 0}|${player.contract?.years[0]?.baseSalary ?? 0}`}
+              player={player}
+            />
+          )}
 
           <div className="mt-5 text-center">
             <Link
@@ -248,50 +254,6 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         </>
       )}
     </Modal>
-  );
-}
-
-/** God-Mode editor: stepper controls for overall, age, and potential. */
-function GodModeEditor({ player }: { player: BasketballPlayer }) {
-  const godEditPlayer = useLeagueStore(s => s.godEditPlayer);
-  // Keyed by player id at the call site, so a fresh mount re-seeds from props.
-  const [ovr, setOvr] = useState(player.ratings.overall);
-  const [age, setAge] = useState(player.age);
-  const [pot, setPot] = useState(player.development.potential);
-
-  const dirty = ovr !== player.ratings.overall || age !== player.age || pot !== player.development.potential;
-
-  return (
-    <section className="mt-5 rounded-lg border p-4" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
-      <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--accent)' }}>🛠️ God Mode</h3>
-      <div className="grid grid-cols-3 gap-3">
-        <Stepper label="Overall" value={ovr} min={40} max={99} onChange={setOvr} />
-        <Stepper label="Age" value={age} min={18} max={44} onChange={setAge} />
-        <Stepper label="Potential" value={Math.max(pot, ovr)} min={ovr} max={99} onChange={setPot} />
-      </div>
-      <button
-        disabled={!dirty}
-        onClick={() => void godEditPlayer(player.id, { setOverall: ovr, age, potential: Math.max(pot, ovr) })}
-        className="mt-3 w-full text-sm font-bold rounded-lg py-2 disabled:opacity-40"
-        style={{ background: 'var(--accent)', color: '#fff' }}
-      >
-        {dirty ? 'Apply changes' : 'No changes'}
-      </button>
-    </section>
-  );
-}
-
-function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
-  const clamp = (n: number) => Math.max(min, Math.min(max, n));
-  return (
-    <div className="rounded-lg p-2 text-center" style={{ background: 'var(--surface-2)' }}>
-      <div className="text-[10px] uppercase tracking-wide opacity-60 mb-1">{label}</div>
-      <div className="flex items-center justify-center gap-2">
-        <button onClick={() => onChange(clamp(value - 1))} className="w-6 h-6 rounded font-bold" style={{ background: 'var(--surface)' }}>−</button>
-        <span className="w-8 text-lg font-black tabular-nums">{value}</span>
-        <button onClick={() => onChange(clamp(value + 1))} className="w-6 h-6 rounded font-bold" style={{ background: 'var(--surface)' }}>+</button>
-      </div>
-    </div>
   );
 }
 

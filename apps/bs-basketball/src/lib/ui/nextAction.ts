@@ -10,7 +10,7 @@
 import { getDraft } from '../draft';
 import { getBracket } from '../playoffs';
 import { isSeasonUnderway } from '../freeAgency';
-import { TRADE_DEADLINE_DAY } from '../sim/simRange';
+import { getTradeDeadlineDay, getMaxRoster } from '../rules/leagueRules';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
@@ -82,7 +82,7 @@ export function nextAction(league: LeagueState): NextAction {
     if (league.userTeamId) {
       const expiring = userExpiringCount(league, draft.season);
       const rosterN = league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0;
-      const overLimit = rosterN > 15;
+      const overLimit = rosterN > getMaxRoster(league);
       const skipKey: ActionKey = draft.inaugural ? 'finishInaugural' : 'startNextSeason';
 
       // Still re-signing, or an illegal roster → stay on the Re-sign step.
@@ -156,7 +156,7 @@ export function nextAction(league: LeagueState): NextAction {
     primary: 'simDay',
     secondary: [
       { label: 'Sim Week', key: 'simWeek' },
-      ...(league.currentTick <= TRADE_DEADLINE_DAY
+      ...(league.currentTick <= getTradeDeadlineDay(league)
         ? [{ label: 'Sim to Trade Deadline', key: 'simDeadline' as ActionKey }]
         : []),
       { label: 'Sim Rest of Season', key: 'simSeason' },

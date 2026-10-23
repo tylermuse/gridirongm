@@ -59,3 +59,26 @@ unless passed `--ordinals` — the in-context ordinals from
 Wide conversation loops (`public/show/wide/`): Veo 3.1 Lite, 8s, start frame =
 end frame = the wide two-shot, audio off; TV screens frozen with
 `show-assets/wide/freeze_wide.py`.
+
+## Two-shots (show themes, banter) — `wide/`
+
+Both hosts in one shot, each lip-synced only on his own lines. HeyGen animates
+one face per render, so each host is rendered on his own crop of the studio
+two-shot and both are composited back over the still:
+
+1. Add the back-and-forth to `wide/scripts.json` (`[["marcus","…"],["tony","…"]]`).
+2. Voice it: `python3 dlg.py <key>.json <key>.mp3` (ElevenLabs v3 dialogue; also
+   writes `<key>.mp3.spans.json`, each line's time span). Then give it a lead-in —
+   HeyGen's lips start late when speech begins at 0s:
+   `ffmpeg -i <key>.mp3 -af "adelay=600|600,apad=pad_dur=0.4" <key>_p.mp3` and shift
+   the spans by 0.6s; use the padded files from here on, with `speech.start: 0.35`
+   in wideClips.json.
+3. `python3 split_tracks.py <key>` → `<key>.marcus.mp3` / `<key>.tony.mp3`
+   (the other host's turns silenced).
+4. Render each track in HeyGen Avatar 4 (Expressive) on its crop:
+   `crop_marcus.png` / `crop_tony.png` (600×600 crops of `medium.png`, the
+   1920×1080 two-shot; kept in show-assets/wide2) → `<key>.marcus.mp4` /
+   `<key>.tony.mp4`.
+5. `python3 compose_wide.py <key>` → `<key>.mp4`; copy to `public/show/wide/`,
+   add it to `src/lib/spotlight/wideClips.json` (lines + spans), and re-run
+   `measure_levels.py`.

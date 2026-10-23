@@ -33,6 +33,15 @@ export const DISCONTENT_MOOD = 40;
 /** Consecutive weeks of sustained discontent before a formal request is filed. */
 export const REQUEST_WEEKS = 3;
 
+/** AI-team players must be at least this OVR to formally file a request. */
+export const NOTABLE_MIN_OVR = 70;
+/** AI-team players must also rank in the top `NOTABLE_STARTER_SHARE` of the
+ *  league's starter slots at their position (e.g. top-16 QBs, top-80 OL). */
+export const NOTABLE_STARTER_SHARE = 0.5;
+/** Max NEW league-wide (non-user-team) filings per simmed week — highest OVR
+ *  first; the rest stay `unhappy` and get another shot next week. */
+export const MAX_NEW_FILINGS_PER_WEEK = 2;
+
 /** Approx. starter slots per position — mirrors the weekly mood recompute in
  *  store.ts so "benched" here means the same thing it does there. */
 const STARTER_SLOTS: Record<string, number> = {
@@ -69,6 +78,9 @@ export interface RefreshInput {
   season: number;
   /** Week-of-season just completed — stamps the escalation clock. */
   week: number;
+  /** The user's team. Its players can always request (a locker-room signal
+   *  the user manages); everyone else must be a notable player league-wide. */
+  userTeamId?: string;
 }
 
 export interface RefreshResult {
@@ -82,14 +94,16 @@ export interface RefreshResult {
  * objects only where a request changed, plus any rumors seeded by newly-filed
  * requests. Reads the already-recomputed `player.mood`.
  */
-export function refreshTradeRequests({ players, teams, season, week }: RefreshInput): RefreshResult {
+export function refreshTradeRequests({ players, teams, season, week, userTeamId }: RefreshInput): RefreshResult {
   const teamById = new Map(teams.map(t => [t.id, t]));
   const rumors: TradeRumor[] = [];
+  const notable = notablePlayerIds(players, teams.length);
 
-  const nextPlayers = players.map(p => {
-    if (!p.teamId || p.retired) return p;
+  // Pass 1: compute each player's next request state.
+  const draft = players.map(p => {
+    if (!p.teamId || p.retired) return { p, changed: false as const };
     const team = teamById.get(p.teamId);
-    if (!team) return p;
+    if (!team) return { p, changed: false as const };
 
     const mood = p.mood ?? 70;
     const discontent = mood < DISCONTENT_MOOD;
@@ -114,6 +128,27 @@ export function refreshTradeRequests({ players, teams, season, week }: RefreshIn
       // Already filed — keep it, just refresh the human-readable reason.
       nextReq = { ...existing, reason: deriveReason(p, team) };
     }
+
+    // League-wide, only players who matter can escalate. Depth-chart filler
+    // on AI teams never files (no rumor, no news) — the feed is for names.
+    const eligible = team.id === userTeamId || notable.has(p.id);
+    if (!eligible) nextReq = undefined;
+
+    return { p, team, existing, nextReq, changed: true as const };
+  });
+
+  // Cap brand-new AI-team filings per week to the highest-OVR candidates.
+  const newFilers = draft
+    .filter(d => d.changed && d.team.id !== userTeamId && isFiled(d.nextReq) && !isFiled(d.existing))
+    .sort((a, b) => b.p.ratings.overall - a.p.ratings.overall || a.p.id.localeCompare(b.p.id));
+  const deferred = new Set(newFilers.slice(MAX_NEW_FILINGS_PER_WEEK).map(d => d.p.id));
+
+  // Pass 2: apply, seed rumors.
+  const nextPlayers = draft.map(d => {
+    if (!d.changed) return d.p;
+    const { p, team, existing } = d;
+    // Deferred filers stay on the `unhappy` clock and retry next week.
+    const nextReq = deferred.has(p.id) && existing ? { ...existing, reason: d.nextReq!.reason } : d.nextReq;
 
     const wasFiled = isFiled(existing);
     const nowFiled = isFiled(nextReq);
@@ -142,7 +177,34 @@ export function refreshTradeRequests({ players, teams, season, week }: RefreshIn
     return { ...p, tradeRequest: nextReq };
   });
 
+  // Highest-OVR requests first so the feed leads with the biggest names.
+  rumors.sort((a, b) => ovrOf(players, b.playerIds[0]) - ovrOf(players, a.playerIds[0]));
   return { players: nextPlayers, rumors };
+}
+
+function ovrOf(players: Player[], id: string): number {
+  return players.find(p => p.id === id)?.ratings.overall ?? 0;
+}
+
+/** Players good enough that a trade request is league news: OVR floor plus a
+ *  top-half-of-league-starters rank at their position. */
+export function notablePlayerIds(players: Player[], teamCount: number): Set<string> {
+  const byPos = new Map<string, Player[]>();
+  for (const p of players) {
+    if (!p.teamId || p.retired) continue;
+    const list = byPos.get(p.position) ?? [];
+    list.push(p);
+    byPos.set(p.position, list);
+  }
+  const out = new Set<string>();
+  for (const [pos, list] of byPos) {
+    const cutoff = Math.max(1, Math.round(teamCount * (STARTER_SLOTS[pos] ?? 1) * NOTABLE_STARTER_SHARE));
+    list
+      .sort((a, b) => b.ratings.overall - a.ratings.overall || a.id.localeCompare(b.id))
+      .slice(0, cutoff)
+      .forEach(p => { if (p.ratings.overall >= NOTABLE_MIN_OVR) out.add(p.id); });
+  }
+  return out;
 }
 
 function sameRequest(a: TradeRequest | undefined, b: TradeRequest | undefined): boolean {
