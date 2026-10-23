@@ -35,6 +35,8 @@ export interface LiveEngineState {
   awaitingXpChoice: boolean;
   /** When true, the engine is waiting for a kickoff choice (regular vs onside) */
   awaitingKickoffChoice: boolean;
+  /** When true, the user chose to go for two and the engine is waiting for the play call (ball at the 3) */
+  awaitingTwoPointCall?: boolean;
   /** Timeouts remaining per team per half */
   homeTimeouts: number;
   awayTimeouts: number;
@@ -212,6 +214,7 @@ export function createLiveCoachEngine(
     ...initialState,
     awaitingXpChoice: initialState.awaitingXpChoice ?? false,
     awaitingKickoffChoice: initialState.awaitingKickoffChoice ?? false,
+    awaitingTwoPointCall: initialState.awaitingTwoPointCall ?? false,
     homeTimeouts: initialState.homeTimeouts ?? 3,
     awayTimeouts: initialState.awayTimeouts ?? 3,
     pendingRunoff: initialState.pendingRunoff ?? 0,
@@ -558,6 +561,13 @@ export function createLiveCoachEngine(
   }
 
   function handleTouchdown(events: PlayEvent[], isUserTd = false) {
+    if (twoPointTry) { twoPointTry = false; twoPointResolved = true;
+      addScore(2);
+      const qbName = nameOrFallback(offKey().qb, 'the QB');
+      events.push(makeEvent('extra_point', `Two-point conversion is GOOD! ${qbName} and the offense punch it in.`, 0, false));
+      doKickoffEvents(events);
+      return;
+    }
     addScore(6);
     if (isUserTd) {
       // User scored — set flag so the engine pauses for XP/2PT choice
@@ -584,19 +594,34 @@ export function createLiveCoachEngine(
     doKickoffEvents(events);
   }
 
-  function runTwoPointConversion(events: PlayEvent[]) {
-    const ok = offKey();
-    const success = Math.random() < 0.48; // NFL average ~48%
-    if (success) {
-      addScore(2);
-      const qbName = nameOrFallback(ok.qb, 'the QB');
-      events.push(makeEvent('extra_point', `Two-point conversion is GOOD! ${qbName} finds the end zone!`, 0, false));
-    } else {
-      const qbName = nameOrFallback(ok.qb, 'the QB');
-      events.push(makeEvent('extra_point', `Two-point conversion FAILS. ${qbName} comes up short.`, 0, false));
-    }
+  /** Two-point try as a real snap: the user picks a play (run / pass / scramble / screen) from the 3-yard line and the
+   *  play engine decides it — a touchdown is +2, anything else is a failed try. The 3D sim animates it like any play. */
+  let twoPointTry = false;
+  let twoPointResolved = false;
+  function beginTwoPointTry() {
     state.awaitingXpChoice = false;
-    doKickoffEvents(events);
+    state.awaitingTwoPointCall = true;
+    state.fieldPos = 97; state.down = 1; state.yardsToGo = 3;
+  }
+  function runTwoPointPlay(events: PlayEvent[], userCall: PlayCallType | undefined) {
+    state.awaitingTwoPointCall = false;
+    twoPointTry = true; twoPointResolved = false;
+    const call: PlayCallType = (userCall && ['run', 'pass_short', 'pass_deep', 'qb_run', 'screen'].includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
+    const prefix = '2-PT — ' + ({ run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot', qb_run: '⚡ QB Scramble', screen: '🛡️ Screen' } as Record<string, string>)[call];
+    const clockBefore = state.timeSecs;
+    if (call === 'run') runRunPlay(events, undefined, prefix);
+    else if (call === 'qb_run') runRunPlay(events, 'qb', prefix);
+    else if (call === 'pass_deep') runPassPlay(events, 'deep', prefix);
+    else if (call === 'screen') runPassPlay(events, 'screen', prefix);
+    else runPassPlay(events, 'short', prefix);
+    state.timeSecs = clockBefore; state.pendingRunoff = 0;   // a try is untimed
+    if (!twoPointResolved) {
+      twoPointTry = false;
+      const qbName = nameOrFallback(offKey().qb, 'the QB');
+      events.push(makeEvent('extra_point', `Two-point conversion FAILS. ${qbName} and the offense come up short.`, 0, false));
+      doKickoffEvents(events);
+    }
+    twoPointResolved = false;
   }
 
   /** Charge `side` a timeout (defaults to the offense). Returns false when
@@ -725,8 +750,8 @@ export function createLiveCoachEngine(
         runExtraPoint(events);
         return events;
       } else if (userCall === 'two_point' as PlayCallType) {
-        runTwoPointConversion(events);
-        return events;
+        beginTwoPointTry();
+        return events;   // the engine now waits for the play call
       } else if (!userCall) {
         // AI auto-picks XP
         runExtraPoint(events);
@@ -734,6 +759,12 @@ export function createLiveCoachEngine(
       }
       // If user sent a different call while awaiting XP, default to XP
       runExtraPoint(events);
+      return events;
+    }
+
+    // Two-point try: the next call is the play itself
+    if (state.awaitingTwoPointCall) {
+      runTwoPointPlay(events, userCall);
       return events;
     }
 
