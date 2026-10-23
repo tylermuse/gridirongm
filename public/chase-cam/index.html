@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17h'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17i'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -764,7 +764,8 @@ function setupFormation(kind){
     const cov = [O.wrL, O.ol[0], O.ol[1], O.slot, O.qb, O.te, O.ol[2], O.ol[3], O.ol[4], O.wrR], xs = [-22,-17.5,-13,-8.5,-4,4,8.5,13,17.5,22];
     cov.forEach((a,i)=>{ a.x=xs[i]; a.z=zc; a.face=0; a.stance='two'; });
     { const d0=clipHips('football_kick',0), d1=clipHips('football_kick',1.1); const sc=O.rb.model.scale.x*.01;   /* his mark: the captured approach plants at the tee */
-      if(d0&&d1){ O.rb.x = .35 - (d1[0]-d0[0])*sc; O.rb.z = z0 - (d1[2]-d0[2])*sc; } else { O.rb.x=-2.8; O.rb.z=z0-4; } O.rb.face=0; O.rb.stance=''; }
+      if(d0&&d1){ O.rb.x = .35 - (d1[0]-d0[0])*sc; O.rb.z = z0 - (d1[2]-d0[2])*sc; } else { O.rb.x=-2.8; O.rb.z=z0-4; } O.rb.face=0; O.rb.stance='';
+      O.rb.koMark=[O.rb.x, O.rb.z]; O.rb.x -= 2.4; O.rb.z -= 6.5; }   /* a kickoff man starts 7-8 yds back and off to the side (Tyler's SNF clip), not on a place-kicker's two-step mark */
     [...D.dl, ...D.lb, D.cbL, D.cbR].forEach((a,i)=>{ a.x=-20+i*5; a.z=zr+(i%2? 3.2 : 0); a.face=Math.PI; a.stance='two'; });
     D.sL.x=-5; D.sL.z=Math.min(z0+58, 46); D.sR.x=5; D.sR.z=Math.min(z0+59, 47); [D.sL,D.sR].forEach(a=>{ a.face=Math.PI; a.stance='two'; });
   }
@@ -917,11 +918,12 @@ function choreograph(res){
        until it comes down; the returner fields it and follows his wall up the middle; the setup-zone blockers turn and square up the
        first cover man who reaches them; the coverage converges and the pile forms where the game says the return ended. */
     actors.forEach(a=>{ a.behav=null; a.engage=null; a.faceLock=null; });
-    const K=O.rb, tKick=snap+1.0, tee=[.35, z0];
+    const K=O.rb, tKick=snap+2.35, tee=[.35, z0], mk=K.koMark||[K.x,K.z];
     ballPlan = [{t0:-1, t1:tKick, rest:tee}];
-    K.behav = P([0,K.x,K.z],[tKick+1.2,K.x,K.z]); K.faceLock={angle:0, until:99}; K.kickT=tKick; K.mocapAct={clip:'football_kick', t0:tKick-1.05, start:0, end:2.1}; ev(tKick, ()=>sndThump(.8,.9));
+    /* run-up: raise the hand, then a ~7 m build-up to his mark that hands over to the captured two-step + swing */
+    K.behav = P([0,K.x,K.z],[snap+.35,K.x,K.z],[tKick-1.05,mk[0],mk[1]],[tKick+1.2,mk[0],mk[1]]); res.koT = tKick; K.faceLock={angle:0, until:99}; K.kickT=tKick; K.mocapAct={clip:'football_kick', t0:tKick-1.05, start:0, end:2.1}; ev(tKick, ()=>sndThump(.8,.9));
     const ret = Math.random()<.5? D.sL : D.sR, mate = ret===D.sL? D.sR : D.sL, tb = !!res.touchback;
-    const xr = clamp(ret.x + R(-3,3), -12, 12), zr = tb? 54 : clamp(ret.z + R(-2,1.5), 38, 48), tCatch = tKick + 3.9;
+    const xr = clamp(ret.x + R(-3,3), -12, 12), zr = tb? 54 : clamp(ret.z + R(-2,1.5), 38, 48), tCatch = tKick + 3.9; res.koCatch = tCatch; res.koLand = [xr, zr];
     ballPlan.push({t0:tKick, t1:tCatch, flight:{x0:tee[0],y0:.25,z0:tee[1], x1:xr,y1: tb? .16 : 1.45, z1:zr, h:20}});
     const cov = O.all.filter(a=>a!==K), blk = [...D.dl, ...D.lb, D.cbL, D.cbR];
     actors.forEach(a=>{ if(a!==K) a.behav = P([snap,a.x,a.z],[tCatch-.3,a.x,a.z]); });
@@ -1951,6 +1953,13 @@ function frame(now){
   /* the result shot cuts to the officials under the uprights on EVERY camera: High (cp = null) skipped the whole kick block above, so it never showed the signal */
   if(running && play && play.res.kind==='fg' && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±3.9) fit the frame: at 6.2 m a square phone frame only spans ±2.8 m, so neither signal was on screen */
       const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(6.2, 5.4/hw); wantPos.set(0, 1.6 + (back-6.2)*.12, 62.4-back); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } }   /* broadcast cut to the officials under the uprights for the signal */
+  { const koRun = running && play && play.res.kind==='kickoff', koIdle = !running && G.formKind==='kickoff';
+    if(koRun || koIdle){ /* kickoff, as SNF shoots it (Tyler's DAL @ GB clip): low behind the kicker with the whole field in front of him, then the
+         high wide shot as the ball hangs, then high and in front of the returner with the coverage running at the lens */
+      const z0k = G.fieldPos-50, r = koRun? play.res : {}, tK = r.koT ?? 99, tC = r.koCatch ?? 99, land = r.koLand || [0, z0k+55];
+      if(koIdle || playT < tK+.35){ wantPos.set(-3.2, 2.5, z0k-14.5); wantLook.set(0, 2.2, z0k+42); }
+      else if(playT < tC+.2){ const u = smooth01((playT-tK-.35)/1.6); wantPos.set(THREE.MathUtils.lerp(-3.2, land[0]*.3, u), THREE.MathUtils.lerp(2.5, 15, u), THREE.MathUtils.lerp(z0k-14.5, land[1]-30, u)); wantLook.set(land[0]*.6, 1.2, THREE.MathUtils.lerp(z0k+42, land[1]-3, u)); }
+      else { const c = (play.carrier||{x:land[0], z:land[1]}); wantPos.set(c.x*.4, 11, c.z-19); wantLook.set(c.x*.8, 1.0, c.z+1.5); } } }
   if(window.__camOverride){ const o=window.__camOverride; wantPos.set(o[0],o[1],o[2]+G.fieldPos-50); wantLook.set(o[3],o[4],o[5]+G.fieldPos-50); }
   if(window.__camFollow){ const f=window.__camFollow, a=f.actor(); const sx=Math.cos(a.face), sz=-Math.sin(a.face), fx=Math.sin(a.face), fz=Math.cos(a.face); wantPos.set(a.x+sx*f.side+fx*f.fwd, f.h, a.z+sz*f.side+fz*f.fwd); wantLook.set(a.x, f.ly, a.z); camPos.copy(wantPos); camLook.copy(wantLook); }
   const inFlight = running && !!(ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1)||{}).flight;
