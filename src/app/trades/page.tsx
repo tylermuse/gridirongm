@@ -1,5 +1,6 @@
 'use client';
 
+import { NOTABLE_MIN_OVR } from '@/lib/engine/tradeRequests';
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
@@ -1300,7 +1301,16 @@ function TradesPage() {
               // recency order so the panel still reads chronologically.
               const reversedRumors = [...(tradeRumors ?? [])].reverse();
               const spotlight = reversedRumors.filter(r => r.type !== 'trade_request');
-              const requests = reversedRumors.filter(r => r.type === 'trade_request');
+              // Requests lead with the biggest names: rank by the player's
+              // current OVR (not recency) and drop sub-notable AI-team filler
+              // that older saves may already have filed. User-team requests
+              // always show — that's a locker-room issue the user manages.
+              const reqOvr = (r: typeof reversedRumors[number]) =>
+                players.find(p => p.id === r.playerIds[0])?.ratings.overall ?? 0;
+              const requests = reversedRumors
+                .filter(r => r.type === 'trade_request')
+                .filter(r => r.teamId === userTeamId || reqOvr(r) >= NOTABLE_MIN_OVR)
+                .sort((a, b) => reqOvr(b) - reqOvr(a));
               const MAX_VISIBLE = 6;
               const spotlightCount = Math.min(spotlight.length, Math.max(3, MAX_VISIBLE - requests.length));
               const pickedIds = new Set([

@@ -946,6 +946,7 @@ function TeamSpotlightSection({
 
 function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string; playerId?: string }[] }; season: number; phase: string; teams: { id: string; abbreviation: string }[] }) {
   const [showFuture, setShowFuture] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   // Ground-truth the draft year from the actual pick data rather than the
   // season counter. In BS Mode offseason-start the `season` value can already
   // be the next year before the draft runs, which made the card show
@@ -970,11 +971,30 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
     return `Rd ${pk.round}${isOwn ? '' : ` (via ${orig?.abbreviation ?? '?'})`}`;
   };
 
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="w-full flex items-center justify-between px-4 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-sec)] hover:bg-[var(--surface-2)]"
+      >
+        <span>
+          <span className="font-semibold text-[var(--text)]">Draft Capital</span>
+          {' · '}{currentPicks.length} pick{currentPicks.length === 1 ? '' : 's'} in {nextDraftYear}
+          {futurePicks.length > 0 ? ` · ${futurePicks.length} future` : ''}
+        </span>
+        <span>Show ▸</span>
+      </button>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Draft Capital</CardTitle>
-        <span className="text-xs text-[var(--text-sec)]">{nextDraftYear} Draft</span>
+        <span className="flex items-center gap-3 text-xs text-[var(--text-sec)]">
+          {nextDraftYear} Draft
+          <button onClick={() => setExpanded(false)} className="text-blue-600 hover:underline">Hide</button>
+        </span>
       </CardHeader>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {currentPicks.map(pk => (
@@ -1465,12 +1485,6 @@ function Dashboard() {
             unfiltered league view. */}
         {!isSpectator && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Draft capital — mounted here so it's visible on the dashboard
-              year-round, including the offseason draft-prep window. The card
-              self-hides when the team has no unplayed picks, and grounds the
-              draft year in actual pick data (fixes the BS-Mode "2028 in a 2027
-              season" display). Was shipped in PR #431 but never mounted. */}
-          <DraftCapitalCard team={userTeam} season={season} phase={phase} teams={teams} />
           {/* Conference standings with GB */}
           <Card>
             <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>
@@ -1721,6 +1735,13 @@ function Dashboard() {
             )}
           </Card>
         </div>
+
+        {/* Draft capital — low-prominence, collapsed-by-default strip below
+            the main card rows. Self-hides when the team has no unplayed picks;
+            draft year is grounded in actual pick data (BS-Mode fix). */}
+        {!isSpectator && (
+          <DraftCapitalCard team={userTeam} season={season} phase={phase} teams={teams} />
+        )}
 
         {/* Team Spotlight — generates dialogue framed around the user's
             team. Spectator leagues skip; the news feed already covers

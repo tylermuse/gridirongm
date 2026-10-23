@@ -2724,6 +2724,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     teams: newTeams,
     season: state.season,
     week: state.week,
+    userTeamId: state.userTeamId,
   });
 
   // Trade rumors
