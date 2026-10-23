@@ -202,6 +202,8 @@ interface FetchOptions {
    *  the render site is the only place that knows the bracket is stable, so
    *  it tells us explicitly. */
   nextOpponentId?: string | null;
+  /** The league's trade deadline day (League Rules); stock 115. */
+  tradeDeadlineDay?: number;
 }
 
 function teamRecord(t: BasketballTeam): { w: number; l: number } {
@@ -468,7 +470,7 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
   }
 
   if (narrative === 'tradeDeadline') {
-    teamData.tradeDeadlineDay = 115;
+    teamData.tradeDeadlineDay = opts.tradeDeadlineDay ?? 115;
     const seasonTrades = (opts.transactions ?? [])
       .filter(tx => tx.kind === 'trade' && tx.season === season && tx.teamIds.includes(team.id))
       .map(tx => tx.summary);

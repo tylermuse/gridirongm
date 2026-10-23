@@ -52,6 +52,13 @@ const TONE_STYLE: Record<OwnerMessage['tone'], { ring: string; tint: string; pil
   },
 };
 
+const GRADE_STYLE: Record<OwnerMessage['objectiveGrades'][number]['grade'], { label: string; color: string }> = {
+  met: { label: 'Met', color: '#059669' },
+  partial: { label: 'Partial', color: '#d97706' },
+  missed: { label: 'Missed', color: '#dc2626' },
+  pending: { label: 'Pending', color: '#64748b' },
+};
+
 export function OwnerMessageCard({ message }: { message: OwnerMessage }) {
   const t = TONE_STYLE[message.tone];
   return (
@@ -85,6 +92,28 @@ export function OwnerMessageCard({ message }: { message: OwnerMessage }) {
         </span>
         {message.directive}
       </div>
+      {message.objectiveGrades.length > 0 && (
+        <div className="mt-4 rounded-lg border px-4 py-3 bg-[var(--surface)]" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Objectives graded</span>
+            <span className="text-xs font-bold tabular-nums" style={{ color: message.objectiveDelta >= 0 ? '#059669' : '#dc2626' }}>
+              {message.objectiveDelta >= 0 ? '+' : ''}{message.objectiveDelta} owner approval
+            </span>
+          </div>
+          <ul className="space-y-1.5">
+            {message.objectiveGrades.map(g => {
+              const m = GRADE_STYLE[g.grade];
+              return (
+                <li key={g.id} className="flex items-center gap-2 text-sm">
+                  <span className="text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0" style={{ background: `color-mix(in srgb, ${m.color} 14%, transparent)`, color: m.color }}>{m.label}</span>
+                  <span className="flex-1 min-w-0 truncate">{g.description}</span>
+                  <span className="text-xs text-[var(--text-sec)] tabular-nums shrink-0">{g.detail}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

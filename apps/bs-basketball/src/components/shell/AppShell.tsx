@@ -7,6 +7,7 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Sidebar } from './Sidebar';
+import { LegalLinks } from '@/components/legal/LegalPage';
 import { SimToast } from '@/components/ui/Toast';
 import { WhatsNew } from '@/components/ui/WhatsNew';
 import { GameSounds } from '@/components/ui/GameSounds';
@@ -54,6 +55,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
         <main className="flex-1 bs-animate-fade">{children}</main>
+        <footer className="px-4 pb-5 flex flex-col items-center">
+          <LegalLinks className="justify-center" />
+          <p className="text-[10px] text-[var(--text-sec)] mt-1.5 opacity-70">BS Hoops is a parody — not affiliated with the NBA.</p>
+        </footer>
         <ErrorBanner />
       </div>
     );
@@ -217,17 +222,47 @@ function TopBar({
         </div>
 
         {/* Controls (right) */}
-        <div className="ml-auto flex items-center gap-1.5 md:gap-2 flex-wrap justify-end">
+        <div className="ml-auto flex items-center gap-1.5 md:gap-2 flex-nowrap justify-end">
           {!hidePrimary && (
-            <Button size="sm" disabled={store.loading} onClick={() => void run(action.primary)} className="active:scale-95">
+            <Button size="sm" disabled={store.loading} onClick={() => void run(action.primary)} className="active:scale-95 whitespace-nowrap">
               {store.loading ? 'Working…' : action.label}
             </Button>
           )}
-          {secondary.map(s => (
-            <Button key={s.key} size="sm" variant="secondary" disabled={store.loading} onClick={() => void run(s.key)} className="hidden sm:inline-flex active:scale-95">
-              {s.label}
-            </Button>
-          ))}
+          {/* Secondary actions: inline from sm up. (The wrapper does the hiding —
+              putting `hidden` on Button lost to its base `inline-flex`, so on
+              phones these wrapped onto a second line over the status bar.) */}
+          {secondary.length > 0 && (
+            <div className="hidden sm:flex items-center gap-1.5 md:gap-2">
+              {secondary.map(s => (
+                <Button key={s.key} size="sm" variant="secondary" disabled={store.loading} onClick={() => void run(s.key)} className="active:scale-95 whitespace-nowrap">
+                  {s.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          {/* Phones: the same actions behind a compact menu. */}
+          {secondary.length > 0 && (
+            <details className="sm:hidden relative group">
+              <summary
+                aria-label="More sim options"
+                className="list-none cursor-pointer select-none rounded-lg px-2.5 h-8 inline-flex items-center text-sm font-bold border border-[var(--border)] bg-[var(--surface-2)]"
+              >
+                ⋯
+              </summary>
+              <div className="absolute right-0 mt-1.5 w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg p-1.5 z-40">
+                {secondary.map(s => (
+                  <button
+                    key={s.key}
+                    disabled={store.loading}
+                    onClick={e => { (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); void run(s.key); }}
+                    className="w-full text-left rounded-lg px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-2)] disabled:opacity-50"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
           {userTeam && (
             <Link href={`/team/${userTeam.id}`} className="ml-1" title={`${userTeam.city} ${userTeam.name}`}>
               <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />

@@ -12,6 +12,8 @@
 import type { BaseGameResult, BaseLeagueState, PlayerId } from '@bs/core/adapter';
 import type { BasketballPlayer, BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
+import { getLeagueRules } from '../rules/leagueRules';
+
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
 
@@ -138,7 +140,10 @@ export function rollGameInjuries(
   day: number,
   season: number,
   playThrough: PlayThroughMap = {},
+  tuning: InjuryTuning = {},
 ): InjuryMap {
+  const rateMult = tuning.rateMult ?? 1;
+  if (rateMult <= 0) return injuries; // League Rules: injuries switched off
   let result = injuries;
   for (const [pid, box] of Object.entries(game.boxScores)) {
     if (result[pid]) continue; // already hurt
@@ -146,15 +151,23 @@ export function rollGameInjuries(
     if (minutes <= 0) continue;
     const rng = makeRng(`injury-${game.id}-${pid}-${season}`);
     const risk = isPlayingThrough(playThrough, pid, day) ? PLAY_THROUGH_RISK : 1;
-    const chance = BASE_INJURY_RATE * Math.min(1.4, minutes / 36) * risk;
+    const chance = BASE_INJURY_RATE * Math.min(1.4, minutes / 36) * risk * rateMult;
     if (rng.random() >= chance) continue;
     if (result === injuries) result = { ...injuries }; // copy-on-write
-    result[pid] = makeInjury(pid as PlayerId, day, rng);
+    result[pid] = makeInjury(pid as PlayerId, day, rng, tuning.durationMult ?? 1);
   }
   return result;
 }
 
-function makeInjury(playerId: PlayerId, day: number, rng: Rng): InjuryRecord {
+/** League-rule scaling for injury rolls. Both default to 1 (stock behavior). */
+export interface InjuryTuning {
+  /** Multiplier on the per-game injury chance (0 = no new injuries). */
+  rateMult?: number;
+  /** Multiplier on days missed (season-ending injuries stay season-ending). */
+  durationMult?: number;
+}
+
+function makeInjury(playerId: PlayerId, day: number, rng: Rng, durationMult = 1): InjuryRecord {
   const bodyPart = BODY_PARTS[rng.int(BODY_PARTS.length)];
   const roll = rng.random();
   let severity: InjurySeverity;
@@ -163,6 +176,9 @@ function makeInjury(playerId: PlayerId, day: number, rng: Rng): InjuryRecord {
   else if (roll < 0.89) { severity = 'minor'; returnDay = day + 7 + rng.int(8); }
   else if (roll < 0.98) { severity = 'major'; returnDay = day + 21 + rng.int(25); }
   else { severity = 'season_ending'; returnDay = OUT_FOR_SEASON; }
+  if (durationMult !== 1 && severity !== 'season_ending') {
+    returnDay = day + Math.max(1, Math.round((returnDay - day) * durationMult));
+  }
   return { playerId, bodyPart, severity, occurredDay: day, returnDay };
 }
 
@@ -174,9 +190,11 @@ export function applyInjuryRolls(
   season: number,
 ): LeagueState {
   const playThrough = getPlayThrough(league);
+  const rules = getLeagueRules(league);
+  const tuning: InjuryTuning = { rateMult: rules.injuryRateMult, durationMult: rules.injuryDurationMult };
   let injuries = getInjuries(clearHealed(league, day));
   for (const g of playedGames) {
-    injuries = rollGameInjuries(injuries, g, day, season, playThrough);
+    injuries = rollGameInjuries(injuries, g, day, season, playThrough, tuning);
   }
   // Drop play-through flags whose elevated-risk window has expired.
   const sd = league.sportData as LeagueSportData;

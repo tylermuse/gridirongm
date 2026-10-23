@@ -4,13 +4,16 @@ export {
   currentSlot,
   setupDraft,
   recommendedProspectId,
+  aiChooseProspect,
   makeDraftPick,
   autoPickCurrent,
   autoPickUntilUser,
   revealLottery,
 } from './draft';
-export { SCOUTS_PER_DRAFT } from './types';
-export type { DraftState, DraftPickSlot, DraftTradeRecord } from './types';
+export { SCOUTS_PER_DRAFT, SCOUT_POINTS_PER_DRAFT } from './types';
+export type { DraftState, DraftPickSlot, DraftTradeRecord, ScoutLevel } from './types';
+export { buildMockDraft } from './mockDraft';
+export type { MockPick } from './mockDraft';
 export { buildLotteryReveal, buildLotteryBoard } from './lotteryReveal';
 export type { LotteryRevealCard, LotteryMovement } from './lotteryReveal';
 export { buildBigBoard, buildDraftRecap, buildTeamDraftGrades } from './recap';

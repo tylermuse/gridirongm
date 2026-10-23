@@ -10,11 +10,15 @@ import { simNextDay } from './runSimDay';
 import { getBracket } from '../playoffs';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+import { getTradeDeadlineDay } from '../rules/leagueRules';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-/** Trade deadline, ~67% through the 170-day regular season (≈ NBA game 55). */
+/** DEFAULT trade deadline, ~67% through the 170-day regular season (≈ NBA game
+ *  55). A league can move it (League Rules) — read the live value with
+ *  `getTradeDeadlineDay(league)`; this constant is only the stock default. */
 export const TRADE_DEADLINE_DAY = 115;
+export { getTradeDeadlineDay };
 
 export interface SimRangeResult {
   league: LeagueState;
@@ -60,8 +64,9 @@ export function tradeWindowClosed(league: LeagueState): { closed: boolean; reaso
     return { closed: true, reason: 'Trades are frozen during the playoffs.' };
   }
   const inRegularSeason = isFinite(earliestScheduledDay(league));
-  if (inRegularSeason && league.currentTick > TRADE_DEADLINE_DAY) {
-    return { closed: true, reason: `The trade deadline (Day ${TRADE_DEADLINE_DAY}) has passed.` };
+  const deadline = getTradeDeadlineDay(league);
+  if (inRegularSeason && league.currentTick > deadline) {
+    return { closed: true, reason: `The trade deadline (Day ${deadline}) has passed.` };
   }
   return { closed: false, reason: '' };
 }
