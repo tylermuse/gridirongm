@@ -24,6 +24,8 @@ export interface SimPlayResult {
   fumble?: boolean;
   /** kickoff: the receiving team's yard line where the return ended / a touchback / a return touchdown */
   ret?: number;
+  /** extra point (kind 'fg'): worth 1, called an extra point, no change of possession */
+  xp?: boolean;
   /** punt: the receiving team's yard line where the returner fields it, and where he's brought down (= catchAt on a fair catch) */
   catchAt?: number;
   endAt?: number;
@@ -123,7 +125,7 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
     case 'extra_point':
       // an XP is a 33-yard kick from the 15; the result of a two-point try is already pictured by the play itself
       if (TWO_POINT_RE.test(e.description)) return null;
-      return { kind: 'fg', good: /GOOD/.test(e.description) && !/no good/i.test(e.description) };
+      return { kind: 'fg', xp: true, good: /GOOD/.test(e.description) && !/no good/i.test(e.description) };
     default:
       return null;
   }

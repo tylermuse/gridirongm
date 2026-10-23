@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17a'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17f'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -979,7 +979,8 @@ function choreograph(res){
       tEnd = tKick+(good? 3.2 : 4.4); carrier=null; tackler=null; endPos=[xEnd,zLand]; res.good=good; res.refT = tKick+1.72;
       ev(tKick+1.1, ()=>{ // the kick is in the air: everyone turns to watch it
         actors.forEach(a=>{ if(a!==K && a!==H) a.faceLock={angle:0, until:99}; }); });
-      ev(tKick+1.75, ()=>{ (O.refs||[]).forEach(r=>{ r.signal = good? 'good' : 'no'; r.t0 = playT; }); });
+      ev(tKick+1.75, ()=>{ (O.refs||[]).forEach(r=>{ r.signal = good? 'good' : 'no'; r.t0 = playT; });
+        banner(res.xp? (good? 'Extra point GOOD' : 'Extra point NO GOOD') : (good? 'Field goal GOOD' : 'Field goal NO GOOD'), good? 'good' : 'big'); });   /* call it with the signal: the end-of-play banner only had ~.7 s on screen in the game before the next situation cleared it */
       ev(tKick+2.0, ()=>{ if(good){ K.celebrate=playT; K.celebStyle='hop'; H.celebrate=playT; H.celebStyle='point'; H.hold=false;
           [O.slot,O.wrR,O.te].forEach((o,i)=>{ o.behav = F(K, playT+.1*i, 5.0, [R(-1.5,1.5),-1], 1.5); o.celebAt = playT+.9+.2*i; o.celebStyle='flexes'; }); }
         else { K.dejected=playT; H.hold=false; D.cbL.celebrate=playT; D.cbL.celebStyle='hop'; D.sL.celebrate=playT; D.sL.celebStyle='point'; } });
@@ -1029,15 +1030,23 @@ function choreograph(res){
     tEnd = tHole + Math.max(.35, Math.abs(Y+.6)/ (Y>12? 8.2:7));
     /* Out of bounds: a scramble (and some outside runs) bends to the sideline and he steps out at the end of the run instead of
        taking the hit — the chaser runs him to the boundary and pulls up (reference: QB scramble up the sideline for the first down) */
-    const oob = !td && !res.fumble && Y>=3 && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
+    /* only a gain long enough to look like "beat the edge, turn up the sideline": a 3-6 yd sideline run had him sprint ~24 yds sideways for a couple of yards (Tyler: wide open, never turned upfield). Only long gains (scramble 15+, outside run 10+) end out of bounds; shorter ones get tackled. */
+    const oob = !td && !res.fumble && Y>=(scr? 15 : 10) && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
     const oobSide = Math.sign(gapX) || (Math.random()<.5? -1 : 1);
     if(oob){ endX = oobSide*28.2; tEnd = tHole + Math.max(.6, Math.hypot(endX-gapX, Y+.6)/6.9); res.oob = true; }
     carrier = C;
     const keys = scr
       ? [[qbRecv,0,z0-4.7],[snap+.95,gapX*.3,z0-2.3],[tHole,gapX,z0-.6]]                      // straight downhill from the snap, a slide to the gap at the line, then upfield
       : [[0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.6]];
-    if(Y>4) keys.push([tHole+(tEnd-tHole)*.45, gapX+(endX-gapX)*.3 + R(-1.2,1.2), z0+Y*.45]);
-    keys.push([tEnd, endX, zEnd]);
+    if(oob){ /* gets outside the contain, squares his shoulders and runs UP the sideline, then steps out at the spot - not a straight diagonal to the boundary */
+      /* measured on b17d: the QB was still 22 yds wide for 6 yds gained - so break contain just outside the tackle box, run UPFIELD first, and only drift to the boundary over the back half */
+      const pts = [[oobSide*Math.max(Math.abs(gapX), 9), z0+1], [oobSide*15, z0+Y*.55], [oobSide*24.3, z0+Y*.92], [endX, zEnd]]; let t=tHole, px=gapX, pz=z0-.6;
+      pts.forEach(([x,z],i)=>{ t += Math.max(.25, Math.hypot(x-px, z-pz)/(i===0? 6.4 : 7.3)); keys.push([t, x, z]); px=x; pz=z; });
+      tEnd = t;
+    } else {
+      if(Y>4) keys.push([tHole+(tEnd-tHole)*.45, gapX+(endX-gapX)*.3 + R(-1.2,1.2), z0+Y*.45]);
+      keys.push([tEnd, endX, zEnd]);
+    }
     C.behav = P(...keys);
     if(scr){ O.rb.behav = P([snap,1.6,z0-6.6],[snap+.6,gapX*.5,z0-3.4],[tHole+.15,gapX+Math.sign(gapX)*.9,z0+.9],[tHole+1.0,gapX+Math.sign(gapX)*1.6,z0+3.5]);   /* lead blocker through the gap */
       O.qb.faceLock = {angle:0, until:snap+.9}; ballPlan.push({t0:qbRecv, t1:1e9, held:O.qb}); }
@@ -1213,7 +1222,14 @@ function choreograph(res){
       rec.mocapAct = {clip:'mx_receiver_catch', t0:tCatch-.7, start:0, end:3.3};
       flightSeg.flight.x1 = catchX; flightSeg.flight.z1 = cz; flightSeg.flight.y1 = 2.0;
       ballPlan.push({t0:tCatch, t1:1e9, held:rec}); carrier = rec; endPos=[sx+Math.sin(th)*2.95, sz+Math.cos(th)*2.95]; tEnd = tCatch+1.0; tackler=null;
-      cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], [tCatch+.9, catchX + side*.8, cz+.6]);   /* the DB plays off, then closes on the man on the ground */
+      /* NFL, not college: going to the ground untouched isn't down. Landed out of bounds = over; in bounds, the DB has to get there and touch him (hand on his back) before the whistle */
+      const inb = Math.abs(endPos[0]) < 26.3, sgX = Math.sign(catchX)||1, tTouch = tCatch+1.15;
+      const tx = endPos[0] - sgX*.75, tz = endPos[1] + .45;
+      cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], inb? [tTouch, tx, tz] : [tCatch+.9, catchX + side*.8, cz+.6]);   /* the DB plays off, then closes on the man on the ground */
+      if(inb){ tEnd = tTouch + .35;
+        ev(tTouch-.05, ()=>{ cover.faceLock = {angle:Math.atan2(endPos[0]-cover.x, endPos[1]-cover.z), until:tEnd+2}; cover.behav = {type:'coast', vx:0, vz:0, t0:playT}; cover.hold=true; sndThump(.25,.3); });   /* drops to a knee beside him and touches him down */
+        ev(tEnd+1.3, ()=>{ cover.hold=false; });
+      }
       ev(tCatch+.8, ()=>{ D.all.forEach(d=>{ if(d!==cover) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
     } else if(res.kind==='complete'){
       const zEnd = td? 52.5 : z0+Y; const dzRun = zEnd-cz;
@@ -1922,7 +1938,10 @@ function frame(now){
     const zk=G.fieldPos-50-6.8, seg=running? ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1) : null, inAir = !!(seg && seg.flight && seg.flight.h > 3), landed = !!(seg && seg.rest);
     wantPos.set(-6.5, 3.4, zk-7.5);
     if(inAir || landed) wantLook.set(ball.position.x*.6, clamp(ball.position.y*.5+1, 1, 5.5), clamp(ball.position.z, zk+8, 61)); else wantLook.set(.3, 1.0, zk+8);
-    if(running && play.res.refT!=null && playT >= play.res.refT){ wantPos.set(0, 1.6, 56.2); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } } }   /* broadcast cut to the officials under the uprights for the signal */
+  }
+  /* the result shot cuts to the officials under the uprights on EVERY camera: High (cp = null) skipped the whole kick block above, so it never showed the signal */
+  if(running && play && play.res.kind==='fg' && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±3.9) fit the frame: at 6.2 m a square phone frame only spans ±2.8 m, so neither signal was on screen */
+      const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(6.2, 5.4/hw); wantPos.set(0, 1.6 + (back-6.2)*.12, 62.4-back); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } }   /* broadcast cut to the officials under the uprights for the signal */
   if(window.__camOverride){ const o=window.__camOverride; wantPos.set(o[0],o[1],o[2]+G.fieldPos-50); wantLook.set(o[3],o[4],o[5]+G.fieldPos-50); }
   if(window.__camFollow){ const f=window.__camFollow, a=f.actor(); const sx=Math.cos(a.face), sz=-Math.sin(a.face), fx=Math.sin(a.face), fz=Math.cos(a.face); wantPos.set(a.x+sx*f.side+fx*f.fwd, f.h, a.z+sz*f.side+fz*f.fwd); wantLook.set(a.x, f.ly, a.z); camPos.copy(wantPos); camLook.copy(wantLook); }
   const inFlight = running && !!(ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1)||{}).flight;
@@ -2103,7 +2122,11 @@ function runPlay(res){
 function finishPlay(){
   const r = play.res, t=team(G.off); let text, cls='', newDrive=false;
   if(!EMBED){ const tick = Math.round(R(24,40)); G.clock -= tick; if(G.clock<=0){ G.quarter = G.quarter<4? G.quarter+1 : 1; G.clock = 900; } }   /* in-game the engine owns the clock (bsgm:state); a local tick only drifts the bug away from the scoreboard */
-  if(r.kind==='fg'){
+  if(r.kind==='fg' && r.xp){   /* the try after a touchdown: 1 point, not a 3-point field goal (the bug jumped +3, then the page's real score pulled it back) */
+    if(r.good){ text='Extra point is GOOD'; cls='good'; G.score[G.off]+=1; log(`${t.id}: extra point is good`); }
+    else { text='Extra point no good'; cls='big'; log(`${t.id}: extra point is no good`); }
+    G.fieldPos=35; G.down=1; G.toGo=10; newDrive=true;
+  } else if(r.kind==='fg'){
     if(r.good){ text='Field goal is GOOD'; cls='good'; G.score[G.off]+=3; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is good`); G.off=1-G.off; G.fieldPos=25; }
     else { text='No good!'; cls='big'; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is no good`); G.off=1-G.off; G.fieldPos=Math.max(20, 100-G.fieldPos+7); }
     G.down=1; G.toGo=Math.min(10,100-G.fieldPos); newDrive=true;
@@ -2147,7 +2170,7 @@ function finishPlay(){
     if(play.td) sndRoar(.9,.4,2.5,4,'roar'); else if(big) sndRoar(.6,.35,1.2,3,'cheer'); else if(r.kind==='int') sndRoar(.5,.3,.9,2.5,'groan'); else if(r.kind==='sack') sndRoar(.45,.3,.9,2.5,'cheer'); else if(Math.random()<.5) sndRoar(.15,.3,.4,1.5,'cheer');
     sndCrowd(.18, 3);
     const num = play.carrier? ' by number '+(play.carrier.number||'') : '';
-    const words = play.td? (r.kind==='int'? `Pick six! Touchdown, ${team(1-G.off).name}!` : `Touchdown, ${t.name}!`) : r.kind==='fg'? (r.good? `The kick is good.` : `The kick is no good.`) : r.kind==='int'? `Pass intercepted by ${team(G.off).name}.` : r.kind==='sack'? `Quarterback sacked.` : r.kind==='incomplete'? `Pass incomplete.` : r.kind==='punt'? `Punt.` : text.replace('·',',').replace('−','minus ').replace('+','gain of ');
+    const words = play.td? (r.kind==='int'? `Pick six! Touchdown, ${team(1-G.off).name}!` : `Touchdown, ${t.name}!`) : r.kind==='fg'? (r.xp? (r.good? `The extra point is good.` : `The extra point is no good.`) : r.good? `The kick is good.` : `The kick is no good.`) : r.kind==='int'? `Pass intercepted by ${team(G.off).name}.` : r.kind==='sack'? `Quarterback sacked.` : r.kind==='incomplete'? `Pass incomplete.` : r.kind==='punt'? `Punt.` : text.replace('·',',').replace('−','minus ').replace('+','gain of ');
     setTimeout(()=>sndSay(words), 500); }
   setTimeout(()=>{ setupFormation(); setBusy(false); renderBug(); }, EMBED? 700 : 1500/G.speed + 300);
   function advance(y){
