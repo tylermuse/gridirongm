@@ -352,7 +352,7 @@ function sortRosterByDepthChart(
 // ---------------------------------------------------------------------------
 
 function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | undefined {
-  const totalPicks = state.teams.length * 7;
+  const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
@@ -1079,7 +1079,11 @@ export function generateDraftClassPreview(season: number): { season: number; gro
 
 /** Pick value based on estimated overall pick number.
  *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 2200, #20 ≈ 1600, #32 ≈ 1100, #64 ≈ 400. */
-export function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
+export function pickTradeValue(pick: DraftPick, teams?: Team[], draftPickOrder?: string[]): number {
+  if (draftPickOrder && draftPickOrder.length > 0) {
+    const idx = draftPickOrder.indexOf(pick.id);
+    if (idx >= 0) return draftPickPointValue(idx + 1);
+  }
   if (teams && teams.length > 0) {
     const overallPick = estimateOverallPick(pick.round, teams, pick.originalTeamId);
     return draftPickPointValue(overallPick);
@@ -5123,7 +5127,7 @@ export const useGameStore = create<GameStore>()(
 
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const overallPick = totalPicks - state.draftOrder.length + 1;
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
@@ -5263,7 +5267,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
@@ -5364,7 +5368,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
@@ -7208,7 +7212,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? aiValueOf(p) : 0);
         }, 0) + offeredPickIds.reduce((sum, id) => {
           const pick = userTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams, state.draftPickOrder) : 0);
         }, 0);
 
         const receivedValue = receivedPlayerIds.reduce((sum, id) => {
@@ -7216,7 +7220,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? aiValueOf(p) : 0);
         }, 0) + receivedPickIds.reduce((sum, id) => {
           const pick = aiTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams, state.draftPickOrder) : 0);
         }, 0);
 
         // AI accepts if within 5% value (skip for AI-initiated proposals or God Mode force)
