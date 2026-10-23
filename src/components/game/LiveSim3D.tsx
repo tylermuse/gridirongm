@@ -31,7 +31,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b17f';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b17g';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -93,7 +93,7 @@ export function LiveSim3D({
   /** the event after this one, when the page already has it (a lost fumble is logged right after its run) */
   nextEvent?: PlayEvent | null;
   /** Current situation (spot, down, score, clock) for the pre-snap formation between plays — e.g. the two-point try at the 3 while the user picks a play */
-  state: SimStateMessage['pre'] & { possession: 'home' | 'away' } | null;
+  state: SimStateMessage['pre'] & { possession: 'home' | 'away'; form?: 'xp' | 'kickoff' } | null;
   /** e.g. speed === 'max' or the user skipped to the end: never hold the game */
   disabled?: boolean;
   homeTeam: TeamLike | null;
@@ -183,8 +183,8 @@ export function LiveSim3D({
   useEffect(() => {
     if (!enabled || !ready || !state || active) return;
     if (stateKey === lastPlayPreRef.current) return;   // still the situation of the play just shown: the sim already moved on to its result
-    const { possession, ...pre } = state;
-    post({ type: 'bsgm:state', possession, pre } satisfies SimStateMessage);
+    const { possession, form, ...pre } = state;
+    post({ type: 'bsgm:state', possession, pre, ...(form ? { form } : {}) } satisfies SimStateMessage);
   }, [enabled, ready, stateKey, active, post]);   // eslint-disable-line react-hooks/exhaustive-deps -- state is keyed by stateKey
 
   // Game clock → 3D scorebug, always (the page's clock runs during the play; without this the 3D bug sat at the snap time)
