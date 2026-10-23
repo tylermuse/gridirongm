@@ -1144,7 +1144,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (isPlaying) broadcast.resume(); else broadcast.pause();
   }, [isPlaying, broadcastOn]); // eslint-disable-line react-hooks/exhaustive-deps
   // While the 3D sim is still running a play, its line isn't news yet: keep it out of the feed and the bug until the snap is over
-  const simHoldId = sim3dOn && sim3dActive ? (revealedEvents[revealedEvents.length - 1]?.id ?? null) : null;
+  // While the 3D sim plays a snap its text is held back (no spoilers); it shows at the whistle, before the sim's result callout.
+  const [sim3dDeadId, setSim3dDeadId] = useState<number | null>(null);
+  const simLastId = revealedEvents[revealedEvents.length - 1]?.id ?? null;
+  const simHoldId = sim3dOn && sim3dActive && simLastId !== sim3dDeadId ? simLastId : null;
   const displayEvents = useMemo(() => [...revealedEvents].reverse().filter(e => e.id !== simHoldId), [revealedEvents, simHoldId]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
   // Current on-field skill lineup w/ energy + auto-subs, from the revealed event.
@@ -2027,6 +2030,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore,
               ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : {}) }}
             onActiveChange={setSim3dActive}
+            onPlayDead={setSim3dDeadId}
           />
 
           {/* Post-play outcome chip */}
@@ -3063,7 +3067,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
                 >
                   <span className="text-xs sm:text-sm text-[var(--text)]">
-                    ✨ <span className="font-bold">Go Premium</span> for a fully AI-written, game-specific pregame show every week — plus the live audio broadcast.
+                    ✨ <span className="font-bold">Go Premium</span> for a fully AI-written, game-specific pregame show every week — plus the live audio broadcast and every play in the 3D live sim.
                   </span>
                   <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
                 </Link>
@@ -3152,7 +3156,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
                   >
                     <span className="text-xs sm:text-sm text-[var(--text)]">
-                      🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast.
+                      🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast and every play in the 3D live sim.
                     </span>
                     <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
                   </Link>

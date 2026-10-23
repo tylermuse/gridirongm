@@ -31,7 +31,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b17g';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b17h';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -87,6 +87,7 @@ export function LiveSim3D({
   clock,
   state,
   onActiveChange,
+  onPlayDead,
 }: {
   enabled: boolean;
   event: PlayEvent | null;
@@ -104,6 +105,8 @@ export function LiveSim3D({
   /** The clock the page's scorebug shows right now (it runs between plays) — mirrored on the 3D scorebug */
   clock?: { secs: number; quarter: number } | null;
   onActiveChange: (active: boolean) => void;
+  /** the play is dead in 3D (whistle): the page can show its play-by-play line now, before the result callout */
+  onPlayDead?: (eventId: number) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -133,12 +136,13 @@ export function LiveSim3D({
       const m = ev.data as { type?: string; id?: number; message?: string } | null;
       if (!m || typeof m !== 'object') return;
       if (m.type === 'bsgm:ready') { setReady(true); setFailed(null); }
+      else if (m.type === 'bsgm:dead') { if (m.id != null && m.id === activeIdRef.current) onPlayDead?.(m.id); }
       else if (m.type === 'bsgm:done') { if (m.id === activeIdRef.current) { activeIdRef.current = null; setActiveBoth(false); } }
       else if (m.type === 'bsgm:error') { setFailed(m.message || 'failed to load'); setActiveBoth(false); }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [enabled, setActiveBoth]);
+  }, [enabled, setActiveBoth, onPlayDead]);
 
   // Until the sim says ready, ask it every second: its ready message can land before this
   // listener exists (dev double-mount, a cached iframe), and a lost ready meant the sim ran the

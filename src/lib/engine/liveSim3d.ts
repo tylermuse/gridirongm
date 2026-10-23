@@ -277,16 +277,26 @@ export function toSimTeam(
   return players && players.length ? { ...kit, lineup: toSimLineup(players, photoSkins) } : kit;
 }
 
+/** Real NFL clubs whose pants aren't just white / the default, worn home and away. Keyed by abbreviation + nickname so the
+ *  fictional default-league clubs that share an abbreviation (the 'SF Fog') keep their own kit. */
+const TEAM_PANTS: Record<string, string> = {
+  'SF|49ers': '#b3995d',     // gold
+  'DAL|Cowboys': '#8a97a4',  // metallic silver-blue
+  'PIT|Steelers': '#ffb612', // gold
+  'NO|Saints': '#d3bc8d',    // old gold
+};
+
 function simKit(
   t: { abbreviation: string; name: string; primaryColor: string; secondaryColor: string },
   side: 'home' | 'away',
 ): SimTeam {
   const p = t.primaryColor, s = t.secondaryColor;
   const light = luminance(p) > 0.6;
+  const pants = TEAM_PANTS[`${t.abbreviation}|${t.name}`];
   if (side === 'home') {
-    return { id: t.abbreviation, name: t.name, jersey: p, num: light ? '#1a1a1a' : '#ffffff', pants: light ? s : '#e6e8ec', helmet: p, stripe: s };
+    return { id: t.abbreviation, name: t.name, jersey: p, num: light ? '#1a1a1a' : '#ffffff', pants: pants ?? (light ? s : '#e6e8ec'), helmet: p, stripe: s };
   }
-  return { id: t.abbreviation, name: t.name, jersey: '#f4f1ea', num: light ? s : p, pants: '#f4f1ea', helmet: light ? s : p, stripe: light ? p : s };
+  return { id: t.abbreviation, name: t.name, jersey: '#f4f1ea', num: light ? s : p, pants: pants ?? '#f4f1ea', helmet: light ? s : p, stripe: light ? p : s };
 }
 
 /** The man who has the ball on the play (runner / target) and, for a sack or a
