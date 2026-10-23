@@ -130,7 +130,7 @@ function UpgradePromptInner({ dims }: { dims: { width: string; height: string; l
           Enjoying BS Football?
         </div>
         <p className="text-xs text-[var(--text-sec,#6b7280)] truncate">
-          Premium unlocks AI commentary, 3× scouting, and podcasts.
+          Premium unlocks the 3D live sim, AI commentary, 3× scouting, and podcasts.
         </p>
       </div>
       <Link

@@ -190,3 +190,16 @@ describe('kickoffs', () => {
     expect(toSimResult(ev('ONSIDE KICK — RECOVERED by the kicking team!'))).toBeNull();
   });
 });
+
+describe('team pants', () => {
+  it('49ers wear gold and the Cowboys silver, home and away', () => {
+    const sf = { abbreviation: 'SF', name: '49ers', primaryColor: '#aa0000', secondaryColor: '#b3995d' };
+    const dal = { abbreviation: 'DAL', name: 'Cowboys', primaryColor: '#041e42', secondaryColor: '#869397' };
+    expect(toSimTeam(sf, 'home').pants).toBe('#b3995d');
+    expect(toSimTeam(sf, 'away').pants).toBe('#b3995d');
+    expect(toSimTeam(dal, 'home').pants).toBe('#8a97a4');
+    expect(toSimTeam(dal, 'away').pants).toBe('#8a97a4');
+    // the fictional default-league SF club keeps its own kit
+    expect(toSimTeam({ ...sf, name: 'Fog' }, 'away').pants).toBe('#f4f1ea');
+  });
+});

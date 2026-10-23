@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17g'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17h'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -980,7 +980,7 @@ function choreograph(res){
       ev(tKick+1.1, ()=>{ // the kick is in the air: everyone turns to watch it
         actors.forEach(a=>{ if(a!==K && a!==H) a.faceLock={angle:0, until:99}; }); });
       ev(tKick+1.75, ()=>{ (O.refs||[]).forEach(r=>{ r.signal = good? 'good' : 'no'; r.t0 = playT; });
-        banner(res.xp? (good? 'Extra point GOOD' : 'Extra point NO GOOD') : (good? 'Field goal GOOD' : 'Field goal NO GOOD'), good? 'good' : 'big'); });   /* call it with the signal: the end-of-play banner only had ~.7 s on screen in the game before the next situation cleared it */
+        playDead(); banner(res.xp? (good? 'Extra point GOOD' : 'Extra point NO GOOD') : (good? 'Field goal GOOD' : 'Field goal NO GOOD'), good? 'good' : 'big'); });   /* call it with the signal: the end-of-play banner only had ~.7 s on screen in the game before the next situation cleared it */
       ev(tKick+2.0, ()=>{ if(good){ K.celebrate=playT; K.celebStyle='hop'; H.celebrate=playT; H.celebStyle='point'; H.hold=false;
           [O.slot,O.wrR,O.te].forEach((o,i)=>{ o.behav = F(K, playT+.1*i, 5.0, [R(-1.5,1.5),-1], 1.5); o.celebAt = playT+.9+.2*i; o.celebStyle='flexes'; }); }
         else { K.dejected=playT; H.hold=false; D.cbL.celebrate=playT; D.cbL.celebStyle='hop'; D.sL.celebrate=playT; D.sL.celebStyle='point'; } });
@@ -998,6 +998,14 @@ function choreograph(res){
       if(useClip){ Pn.behav = P([0,Pn.x,Pn.z],[tPunt+1.1,Pn.x,Pn.z]); Pn.mocapAct = {clip:'football_kick', t0:tPunt-.93, start:0, end:2.1}; }   /* measured: the foot meets the ball .93 s into the capture */
       else Pn.behav = P([0,Pn.x,Pn.z],[snap+.85,Pn.x,Pn.z],[snap+1.45,.25,Pn.z+1.0],[tPunt,.5,Pn.z+2.2],[tPunt+.5,.6,Pn.z+3.2]);
       Pn.kickT = tPunt; res.puntT = tPunt; ev(tPunt, ()=>sndThump(.8,.9));
+      /* punt rush (Tyler: nobody ever went after the punter). The two edge men (outermost rushers) come hard off the edges, around the end
+         blockers, and get to within a step of the kick point just after the ball is off the foot; the nose drives the center back a couple
+         of yards. The engine never blocks a punt, so they're always a hair late. Everyone else holds the shield up and then peels. */
+      const rushers = [[D.dl[0], -1], [D.lb[2], 1]];
+      rushers.forEach(([a,sg])=>{ a.faceLock=null; a.stance='three';
+        a.behav = P([snap, a.x, a.z], [snap+.55, sg*10.2, z0-.4], [snap+1.55, sg*6.0, z0-7.8], [tPunt+.15, kx+sg*1.9, kz+2.0], [tPunt+.75, kx+sg*1.2, kz+.6]); });
+      [[O.slot,-1],[O.te,1]].forEach(([b,sg])=>{ b.behav = P([snap, b.x, b.z], [snap+.7, sg*8.4, z0-2.0], [snap+1.6, sg*8.0, z0-4.2]); });   /* end men kick-step out and try to ride the edge rusher wide */
+      { const nose=D.dl[3], c=O.ol[2]; nose.behav = P([snap, nose.x, nose.z], [snap+.4, nose.x, z0+.2], [snap+1.7, nose.x+R(-.3,.3), z0-1.6]); c.behav = P([snap, c.x, c.z], [snap+.4, c.x, z0-1.1], [snap+1.7, c.x, z0-2.7]); }   /* the nose walks the snapper back */
       PP.faceLock={angle:0, until:99}; PP.behav = P([snap,PP.x,PP.z],[snap+.4,PP.x-.6,PP.z-.8],[tPunt+.6,PP.x-1.2,PP.z-1.4]);
       /* the engine's spots (receiving team's yard line N sits at z = 50-N): he fields it where the play-by-play says and is brought down there */
       const xr = clamp(ret.x + R(-4,4), -14, 14), zr = res.catchAt!=null ? 50 - clamp(res.catchAt,1,99) : ret.z - R(0,3), hang = 4.0, tCatch = tPunt+hang;
@@ -1014,7 +1022,8 @@ function choreograph(res){
       other.behav = P([snap, other.x, other.z], [snap+.4, other.x*.9, other.z+2.5], [tCatch, xr-side*5, zr-7], [tCatch+1.2, xr-side*2, zr-1]);
       [D.cbL,D.cbR].forEach((c,i)=>{ const g=gunners[i]; c.behav = P([snap,c.x,c.z],[snap+.5,c.x,c.z-.4],[snap+1.1,c.x*.9,c.z+1.2]); ev(snap+1.1, ()=>{ c.faceLock=null; c.behav = F(g, playT, 7.2, [c.x<0?1.2:-1.2, 1.4], 1.2); }); });
       ev(tPunt+.3, ()=>{ [...lineO, O.slot, PP].forEach((o,i)=>{ o.faceLock=null; o.behav = F(ret, playT+.1*(i%4), 5.4+(i%3)*.4, [R(-4,4), -R(2,6)], 2.0); });
-        Pn.faceLock=null; Pn.behav = F(ret, playT+.6, 4.2, [0,-8], 4); lineD.forEach((d,i)=>{ d.faceLock=null; d.behav = F(gunners[i%2], playT+.2, 5.0, [R(-2,2), -R(1,3)], 1.5); });
+        Pn.faceLock=null; Pn.behav = F(ret, playT+.6, 4.2, [0,-8], 4); lineD.forEach((d,i)=>{ if(d===D.dl[0] || d===D.lb[2]) return; d.faceLock=null; d.behav = F(gunners[i%2], playT+.2, 5.0, [R(-2,2), -R(1,3)], 1.5); });
+        ev(tPunt+.8, ()=>{ [D.dl[0], D.lb[2]].forEach(d=>{ d.faceLock=null; d.behav = F(ret, playT+.4, 4.5, [R(-3,3), -6], 4); }); });   /* the rushers pull up past the punter and trail the play back */
         D.sL.faceLock=null; D.sL.behav = F(ret, playT+.3, 6.0, [R(-3,3), -3], 2.5); });
     }
   } else if(isRun){
@@ -2099,7 +2108,9 @@ function sndThump(force=1, bright=.5){ if(!SND.ctx) return; if(sndPlay(bright>.8
   const src=C.createBufferSource(); src.buffer=b; const f=C.createBiquadFilter(); f.type='lowpass'; f.frequency.value=220+bright*900; const g=C.createGain(); g.gain.value=.55*force; src.connect(f); f.connect(g); g.connect(SND.master); src.start(t);
   const o=C.createOscillator(); o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(45,t+.18); const og=C.createGain(); og.gain.setValueAtTime(.5*force,t); og.gain.exponentialRampToValueAtTime(.001,t+.22); o.connect(og); og.connect(SND.master); o.start(t); o.stop(t+.25); }
 function sndSay(text){ if(!SND.pa || !SND.on || !window.speechSynthesis) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.rate=.95; u.pitch=.85; u.volume=.9; speechSynthesis.speak(u); }catch(e){} }
-function blowWhistle(){ // ball over the plane when the play is dead = touchdown, whatever yardage the sim had planned (the fall can carry it across)
+/* the play is dead: tell the page now (it shows the play-by-play line), the post-play beat + result banner follow */
+function playDead(){ if(play && !play.deadSent){ play.deadSent=true; if(window.__onDead) window.__onDead(); } }
+function blowWhistle(){ playDead(); // ball over the plane when the play is dead = touchdown, whatever yardage the sim had planned (the fall can carry it across)
   if(!play.td && play.carrier && play.carrier.down!=null && play.res && (play.res.kind==='run' || play.res.kind==='complete') && !play.res.lock && play.goalZ!=null && ball.position.z >= play.goalZ-.03){ play.td=true; play.res.yards = Math.round(play.goalZ - (G.fieldPos-50)); }
   // a whistle on every snap gets old fast: blow it for the stoppages a ref actually sells (incompletions, sacks, turnovers, pile-ups near the sticks), not routine tackles
   { const r=play.res||{}, k=r.kind; const sell = k==='incomplete' || k==='sack' || k==='int' || (k==='run'||k==='complete') && Math.random()<(window.__whistleP??.25); if(sell && !play.td) setTimeout(()=>sndWhistle(), 180); }
@@ -2217,7 +2228,7 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
 //      {type:'bsgm:clock', clock, quarter}   (any time: the 3D scorebug clock mirrors the page's)
 //      {type:'bsgm:state', possession, pre:{...}}   (idle only: pre-snap formation + scorebug for the current situation)
 //      {type:'bsgm:skip'}
-// out: {type:'bsgm:ready'} once the model is loaded; {type:'bsgm:done', id} when the play (and its post-play beat) is over; {type:'bsgm:error'}
+// out: {type:'bsgm:ready'} once the model is loaded; {type:'bsgm:dead', id} at the whistle (the page shows the play text); {type:'bsgm:done', id} when the play (and its post-play beat) is over; {type:'bsgm:error'}
 function embedStart(){
   const post = m => { try{ window.parent.postMessage(m, '*'); }catch(e){} };
   let pending=null, current=null; window.__embedQueue = ()=>pending;
@@ -2236,6 +2247,7 @@ function embedStart(){
     else if(m.type==='bsgm:view'){ if(m.cam && (m.cam in CAMS)){ window.__camProfile = CAMS[m.cam]; if(!running) snapCamera(); } if(m.lighting==='day' || m.lighting==='night') setLighting(m.lighting); }   /* camera angle + day/night from the game's controls */
     else if(m.type==='bsgm:crowd'){ if(m.level!=null) sndCrowd(m.level, 1); } });
   // the play is over when the sim re-sets the formation (setBusy(false) after the post-play beat)
+  window.__onDead = ()=>{ if(current!=null) post({type:'bsgm:dead', id:current}); };   /* whistle: the page reveals the play text, before the result callout */
   const _setBusy = setBusy; window.__onIdle = ()=>{ if(current!=null){ const id=current; current=null; G.speed = 1.5; post({type:'bsgm:done', id}); } runNext(); };
   post({type:'bsgm:ready'});
 }
