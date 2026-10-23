@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { EPISODE_PACK } from '@bs/core/billing';
 import Link from 'next/link';
 import { formatRecord, type Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -36,6 +37,23 @@ export function SpotlightShowPoster({
   onRetry: () => void;
 }) {
   const [teaser, setTeaser] = useState<'off' | 'playing' | 'done'>('off');
+  const [buying, setBuying] = useState<'idle' | 'loading' | 'error'>('idle');
+
+  // Out of episodes: buy a pack (Stripe Checkout, one-time).
+  async function buyPack() {
+    if (buying === 'loading') return;
+    setBuying('loading');
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product: 'episode_pack' }),
+      });
+      const data = (await res.json()) as { url?: string };
+      if (!res.ok || !data.url) throw new Error('no checkout url');
+      window.location.href = data.url;
+    } catch {
+      setBuying('error');
+    }
+  }
   const [clip, setClip] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -131,6 +149,21 @@ export function SpotlightShowPoster({
             </>
           )}
         </button>
+      )}
+
+      {/* Out of episodes: buy a pack. Outside the (disabled) play button. */}
+      {teaser === 'off' && exhausted && !gated && EPISODE_PACK.priceId && (
+        <div className="absolute inset-x-0 bottom-[14%] flex flex-col items-center gap-1">
+          <button
+            onClick={e => { e.stopPropagation(); void buyPack(); }}
+            disabled={buying === 'loading'}
+            className="rounded-full bg-purple-600 px-4 py-2 text-sm font-bold text-white shadow-lg hover:bg-purple-700 disabled:opacity-60 transition-colors"
+          >
+            {buying === 'loading' ? 'Opening checkout…' : `Get ${EPISODE_PACK.credits} more episodes · ${EPISODE_PACK.priceLabel}`}
+          </button>
+          {buying === 'error' && <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-red-700">Couldn&apos;t open checkout — try again</span>}
+          <span className="text-[11px] font-semibold text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">They never expire.</span>
+        </div>
       )}
 
       {/* End of the teaser: the ask. */}

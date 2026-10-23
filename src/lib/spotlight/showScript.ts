@@ -20,6 +20,7 @@
 import { PHRASES, topicTagsIn, type Phrase, type PhraseKind, type PhraseTone } from './phrases';
 import { rankTone, statsMentioned, type ShowStatKey, type ShowStatLine } from './teamStats';
 import { hookLine, type EpisodeMoment } from './showMoment';
+import { WIDE_CLIPS, type Calls, type ShowThemeId, type ThemePlan, type Verdict } from './showThemes';
 
 export type Host = 'marcus' | 'tony';
 
@@ -75,6 +76,11 @@ export type ShowSegment =
       stat?: ShowStatKey;
       slot?: { start: number; end: number; rank: number };
       speech: SpeechSpan;
+      /** A two-shot of both hosts (pre-recorded back-and-forth), not a
+       *  single host: never a jump cut, no name lower-third. */
+      wide?: true;
+      /** Show this theme's title card over the shot (the theme opener). */
+      themeCard?: ShowThemeId;
     }
   | {
       kind: 'tts';
@@ -87,6 +93,11 @@ export type ShowSegment =
       icon: string;
       /** The game's nth score this line is about (postgame breakdown). */
       play?: number;
+      /** Themed episode: the theme (for the on-screen bug)… */
+      theme?: ShowThemeId;
+      /** …and, on its lines, the topic's buy/sell calls or the hosts' verdict. */
+      calls?: Calls;
+      verdict?: Verdict;
     };
 
 export interface ShowTopicInput {
@@ -96,7 +107,27 @@ export interface ShowTopicInput {
   depth?: 'deep';
   /** `clipId`: the writer chose a pre-recorded on-camera line (a topical
    *  phrase) for this turn; `text` is that phrase's words. */
-  exchanges: { speakerId: string; text: string; clipId?: string; /** The game's nth score, when the line is about it. */ play?: number }[];
+  exchanges: {
+    speakerId: string; text: string; clipId?: string;
+    /** The game's nth score, when the line is about it. */ play?: number;
+    /** The writer dropped in a pre-recorded two-shot here (WIDE_CLIPS id). */
+    wideId?: string;
+  }[];
+  /** Themed episode: the closing verdict topic (a verdict prompt clip plays first). */
+  isVerdict?: true;
+  /** What the writer committed to: the hosts' verdict / this item's calls. */
+  verdict?: Verdict;
+  calls?: Calls;
+}
+
+/** A pre-recorded two-shot of both hosts as an on-screen segment. */
+export function wideSegment(id: string, extra: { themeCard?: ShowThemeId } = {}): Extract<ShowSegment, { kind: 'phrase' }> | null {
+  const w = WIDE_CLIPS[id];
+  if (!w) return null;
+  return {
+    kind: 'phrase', phraseId: `wide:${id}`, speaker: w.lines[0].host, src: w.src,
+    text: w.lines.map(l => l.text).join(' '), speech: w.speech, wide: true, ...extra,
+  };
 }
 
 // Mirrors the transition rotation in /api/spotlight-audio's buildPodcastScript.
@@ -260,7 +291,7 @@ class PhrasePicker {
   }
 }
 
-const onCamera = (x: ShowSegment) => x.kind === 'phrase' || (x.kind === 'clip' && !x.voiceover);
+const onCamera = (x: ShowSegment) => (x.kind === 'phrase' && !x.wide) || (x.kind === 'clip' && !x.voiceover);
 
 /** Drop any on-camera phrase that would sit next to another on-camera shot
  *  of the same host (a jump cut): a sign-off goes first, else the later
@@ -289,6 +320,8 @@ export interface BuildOptions {
   partial?: boolean;
   /** Where the season is: the cold-open line is built from it. */
   moment?: EpisodeMoment;
+  /** Themed episode: its opener, verdict prompt and sign-off (two-shots). */
+  theme?: ThemePlan | null;
 }
 
 export function buildShowScript(
@@ -315,6 +348,12 @@ export function buildShowScript(
   // back — that's a jump cut).
   const record = written ? null : picker.record('marcus');
   if (record) segs.push(record);
+  const theme = opts.theme ?? null;
+  // A themed episode: both hosts on the two-shot explain the game, under
+  // the theme's title card.
+  const opener = theme ? wideSegment(theme.opener, { themeCard: theme.id }) : null;
+  if (opener) segs.push(opener);
+  let wideUsed = false;
 
   /** An on-camera back-and-forth (~10–14s): `a` takes the stat (long riff,
    *  real rank), `b` replies, `a` gets the last word. */
@@ -347,6 +386,12 @@ export function buildShowScript(
   topics.forEach((topic, i) => {
     const debate = topic.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
     if (debate.length === 0) return;
+    // The verdict: "verdict time" on the two-shot, then each host commits.
+    if (topic.isVerdict && theme?.verdictClip) {
+      const v = wideSegment(theme.verdictClip.id);
+      if (v) segs.push(v);
+    }
+    const themed = theme ? { theme: theme.id, ...(topic.calls ? { calls: topic.calls } : {}), ...(topic.verdict ? { verdict: topic.verdict } : {}) } : {};
     if (i > 0 && !written) {
       segs.push({
         ...clip(TRANSITIONS[i % TRANSITIONS.length]),
@@ -376,6 +421,11 @@ export function buildShowScript(
       }
     };
     debate.forEach(ex => {
+      if (ex.wideId) {
+        const w = wideUsed ? null : wideSegment(ex.wideId);
+        if (w) { segs.push(w); wideUsed = true; lastTopic = { i, topic }; }
+        return;
+      }
       const speaker: Host = ex.speakerId === 'stats' ? 'marcus' : 'tony';
       if (ex.clipId) {
         // Never two shots of the same host back to back (a jump cut): the
@@ -389,6 +439,7 @@ export function buildShowScript(
         kind: 'tts', speaker, text: ex.text, visual: 'graphic',
         topicIdx: i, headline: topic.headline, icon: topic.icon,
         ...(ex.play ? { play: ex.play } : {}),
+        ...themed,
       });
       if (written) return;
       const before = segs.length;
@@ -406,14 +457,19 @@ export function buildShowScript(
   const tail = segs[segs.length - 1];
   // (assigned inside the forEach callback above, which TS can't see)
   const lt = lastTopic as { i: number; topic: ShowTopicInput } | null;
-  if (written && tail?.kind === 'phrase' && tail.speaker === 'marcus' && lt) {
+  if (written && tail?.kind === 'phrase' && !tail.wide && tail.speaker === 'marcus' && lt && !theme) {
     segs[segs.length - 1] = {
       kind: 'tts', speaker: 'marcus', text: tail.text, visual: 'graphic',
       topicIdx: lt.i, headline: lt.topic.headline, icon: lt.topic.icon,
     };
   }
-  segs.push(clip('marcus_outro'));
-  segs.push(clip('tony_outro'));
+  // A themed episode signs off on the two-shot.
+  const signoff = theme ? wideSegment(theme.signoff) : null;
+  if (signoff) segs.push(signoff);
+  else {
+    segs.push(clip('marcus_outro'));
+    segs.push(clip('tony_outro'));
+  }
   return removeJumpCuts(segs);
 }
 
