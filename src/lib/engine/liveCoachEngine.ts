@@ -609,7 +609,7 @@ export function createLiveCoachEngine(
     const call: PlayCallType = (userCall && ['run', 'pass_short', 'pass_deep', 'qb_run', 'screen'].includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
     const prefix = '2-PT — ' + ({ run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot', qb_run: '⚡ QB Scramble', screen: '🛡️ Screen' } as Record<string, string>)[call];
     const clockBefore = state.timeSecs;
-    if (call === 'run') runRunPlay(events, undefined, prefix);
+    if (call === 'run') runRunPlay(events, 'rb', prefix);
     else if (call === 'qb_run') runRunPlay(events, 'qb', prefix);
     else if (call === 'pass_deep') runPassPlay(events, 'deep', prefix);
     else if (call === 'screen') runPassPlay(events, 'screen', prefix);
@@ -946,7 +946,8 @@ export function createLiveCoachEngine(
     const callPrefix = userCall ? (CALL_ICONS[playType] ?? '') : '';
 
     // Execute the play
-    if (playType === 'run') runRunPlay(events, undefined, callPrefix);
+    // a called Run always goes to the back: the 10% QB keeper made 'Run' play out as a QB scramble (that's its own call)
+    if (playType === 'run') runRunPlay(events, userCall === 'run' ? 'rb' : undefined, callPrefix);
     else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix);
     else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix);
     else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix);

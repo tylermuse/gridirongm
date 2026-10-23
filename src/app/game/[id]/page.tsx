@@ -1837,6 +1837,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
   const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
   const liveYtg = engineSnapshot?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
+  // Between a touchdown and its try the spot is still the pre-TD snap (e.g. 1st & 10 at the 23): the 3D sim lined the offense up there.
+  // While the user picks XP / go-for-2, or the CPU's XP is the next event, it should show the kick unit at the 15 instead.
+  const nextEvForSim = engineSnapshot ? null : (allEvents[revealedCount] ?? null);
+  const xpPending = !!engineSnapshot?.awaitingXpChoice
+    || (!!nextEvForSim && nextEvForSim.type === 'extra_point' && !/^2-PT|two-point/i.test(nextEvForSim.description));
+  // Same after the PAT / a field goal: the kickoff is next, so the kicking team lines up at its 35 (onside kicks too)
+  const kickoffPending = !xpPending && (!!engineSnapshot?.awaitingKickoffChoice || (!!nextEvForSim && nextEvForSim.type === 'kickoff'));
+  const kickTeam: 'home' | 'away' = engineSnapshot?.awaitingKickoffChoice ? engineSnapshot.possession : (nextEvForSim?.possession ?? livePoss);
   const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? liveEngineState?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
   const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? liveEngineState?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
 
@@ -2015,8 +2023,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             homePlayers={homePlayers}
             awayPlayers={awayPlayers}
             clock={{ secs: clockSeconds(tickingTime), quarter: liveQuarter }}
-            state={{ possession: livePoss, fieldPos: liveFieldPos, down: liveDown, toGo: liveYtg, quarter: liveQuarter,
-              clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore }}
+            state={{ possession: kickoffPending ? kickTeam : livePoss, fieldPos: xpPending ? 85 : kickoffPending ? 35 : liveFieldPos, down: xpPending || kickoffPending ? 1 : liveDown, toGo: xpPending ? 15 : kickoffPending ? 10 : liveYtg, quarter: liveQuarter,
+              clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore,
+              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : {}) }}
             onActiveChange={setSim3dActive}
           />
 

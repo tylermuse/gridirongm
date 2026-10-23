@@ -47,6 +47,8 @@ export interface SimPlayMessage {
 export interface SimStateMessage {
   type: 'bsgm:state';
   possession: 'home' | 'away';
+  /** 'xp': a touchdown was just scored and the try is next — the sim lines up the kick unit at the 15 */
+  form?: 'xp' | 'kickoff';
   pre: { fieldPos: number; down: number; toGo: number; quarter: number; clock: number; homeScore: number; awayScore: number };
 }
 

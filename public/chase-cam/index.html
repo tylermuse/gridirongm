@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17f'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17g'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -2023,7 +2023,7 @@ function renderBug(){
   const m=Math.floor(G.clock/60), s=String(G.clock%60).padStart(2,'0');
   $('qtr').textContent = `${ord(G.quarter)} · ${m}:${s}`;
   const goal = G.fieldPos + G.toGo >= 100;
-  $('dd').textContent = `${ord(G.down)} & ${goal?'Goal':G.toGo}`; $('spot').textContent = spotText();
+  $('dd').textContent = G.pat? 'PAT' : `${ord(G.down)} & ${goal?'Goal':G.toGo}`; $('spot').textContent = spotText();
   paintBoards();
 }
 function banner(text, cls){ const el=$('banner'); el.textContent=text; el.className='banner'+(cls?' '+cls:''); el.hidden=false; }
@@ -2222,7 +2222,7 @@ function embedStart(){
   const post = m => { try{ window.parent.postMessage(m, '*'); }catch(e){} };
   let pending=null, current=null; window.__embedQueue = ()=>pending;
   const applyPre = m => { G.off = m.possession==='away'? 1 : 0; const pr=m.pre||{}; G.fieldPos = clamp(Math.round(pr.fieldPos ?? 25),1,99); G.down = pr.down ?? 1; G.toGo = pr.toGo ?? 10; G.quarter = pr.quarter ?? 1; G.clock = pr.clock ?? 900; G.score = [pr.homeScore ?? 0, pr.awayScore ?? 0]; };
-  const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id; window.__curPlayId=m.id;
+  const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id; window.__curPlayId=m.id; G.pat = !!(m.res && m.res.xp);
     applyPre(m);
     if(G.fieldPos >= 99 && (m.res.kind==='run' || m.res.kind==='complete') && m.res.yards >= 1) m.res.yards = 99;   /* at the 1: any gain is a score */
     m.res.lock = true; renderBug(); PLAY_OVR = planWho(m); setupFormation((m.res.kind==='fg' || m.res.kind==='punt' || m.res.kind==='kickoff')? m.res.kind : null); runPlay(m.res); PLAY_OVR = []; };
@@ -2230,7 +2230,7 @@ function embedStart(){
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }
     else if(m.type==='bsgm:clock'){ if(m.clock!=null) G.clock = m.clock; if(m.quarter) G.quarter = m.quarter; renderBug(); }   /* the page's game clock, as its scorebug shows it (it runs during the play too): the 3D bug mirrors it */
-    else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); $('banner').hidden=true; renderBug(); setupFormation(null); snapCamera(); } }   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
+    else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); G.pat = m.form==='xp'; $('banner').hidden=true; renderBug(); setupFormation(G.pat? 'fg' : m.form==='kickoff'? 'kickoff' : null); snapCamera(); } }   /* form 'xp' / 'kickoff': the try after a TD (kick unit at the 15) or the kickoff after a score (kicking team at its 35), not the offense at the old spot */   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
     else if(m.type==='bsgm:hello'){ post({type:'bsgm:ready'}); }   /* the page asks again after a (re)mount: a ready sent before its listener was up is lost */
     else if(m.type==='bsgm:skip'){ pending=null; if(G.busy){ G.speed = 12; } }   /* fast-forward to the end; the done message still fires, the page has already hidden us */
     else if(m.type==='bsgm:view'){ if(m.cam && (m.cam in CAMS)){ window.__camProfile = CAMS[m.cam]; if(!running) snapCamera(); } if(m.lighting==='day' || m.lighting==='night') setLighting(m.lighting); }   /* camera angle + day/night from the game's controls */
