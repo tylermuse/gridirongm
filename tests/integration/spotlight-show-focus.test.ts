@@ -166,3 +166,17 @@ describe('focusForLine — the other team', () => {
     expect(g).toMatchObject({ kind: 'player', player: { id: 'mcm' } });
   });
 });
+
+describe('schedule talk shows the road ahead', () => {
+  it('upcoming-games lines → the schedule board, and it sticks for the follow-up', () => {
+    expect(focusForLine('Three of the next four on the road.', ctx)).toEqual({ kind: 'schedule' });
+    expect(focusForLine('The schedule gets harder from here.', ctx)).toEqual({ kind: 'schedule' });
+    // "division leaders" on the schedule are opponents, not the division race.
+    expect(focusForLine('Two of the next four against division leaders.', ctx)).toEqual({ kind: 'schedule' });
+    expect(focusForLine('They lead the division by a game.', ctx)).toEqual({ kind: 'standings', scope: 'division' });
+    expect(focusForLine('Nine games to play.', ctx)).toEqual({ kind: 'schedule' });
+    expect(focusForLine("Split those and they're four and seven.", { ...ctx, earlier: ['Three of the next four on the road.'] })).toEqual({ kind: 'schedule' });
+    // Games back is the standings, not the schedule.
+    expect(focusForLine('Two games out with nine to play.', ctx)).toEqual({ kind: 'standings', scope: 'conference' });
+  });
+});

@@ -33,3 +33,23 @@ export function speakLines(lines: SpeechLine[], onEnd?: () => void): void {
 export function stopSpeech(): void {
   if (isSpeechSupported()) window.speechSynthesis.cancel();
 }
+
+/** Speak ONE line (cancelling anything queued). Used by The Show's
+ *  browser-voice fallback, which sequences lines itself so it can sync the
+ *  transcript, pause/seek by line and change speed mid-episode. Returns a
+ *  cancel function. `onDone` fires once — on end OR error. */
+export function speakLine(line: SpeechLine, opts: { rate?: number; onDone?: () => void } = {}): () => void {
+  if (!isSpeechSupported()) { opts.onDone?.(); return () => {}; }
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  let done = false;
+  const finish = () => { if (done) return; done = true; opts.onDone?.(); };
+  const u = new SpeechSynthesisUtterance(line.text);
+  const base = line.voice === 'take' ? 1.08 : 0.98;
+  u.rate = Math.min(2, base * (opts.rate ?? 1));
+  u.pitch = line.voice === 'take' ? 1.18 : 0.9;
+  u.onend = finish;
+  u.onerror = finish;
+  synth.speak(u);
+  return () => { done = true; u.onend = null; u.onerror = null; synth.cancel(); };
+}

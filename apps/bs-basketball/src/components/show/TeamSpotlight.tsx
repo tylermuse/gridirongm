@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Chip, type ChipTone } from '@/components/ui/Chip';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { PlayerName } from '@/components/modals/PlayerModalProvider';
-import { speakLines, stopSpeech, isSpeechSupported } from '@/lib/ui/speech';
+import { ShowAudioPlayer } from '@/components/show/ShowAudioPlayer';
 import { buildSpotlight, SPOTLIGHT_HOSTS, type SpotlightEpisode, type SpotlightExchange, type SpotlightStory, type StoryCategory } from '@/lib/show/spotlight';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 
@@ -49,10 +49,12 @@ export function TeamSpotlight({ league, compact = false }: { league: BasketballL
   if (!episode) return null;
   // Dashboard embeds the top few storylines (user team first); /show shows all.
   const stories = compact ? episode.stories.slice(0, 3) : episode.stories;
-  return <SpotlightCard episode={episode} stories={stories} compact={compact} league={league} />;
+  const team = league?.userTeamId ? (league.teams as { id: string; city?: string; name?: string }[]).find(t => t.id === league.userTeamId) : undefined;
+  const teamName = team ? `${team.city ?? ''} ${team.name ?? ''}`.trim() : 'league';
+  return <SpotlightCard episode={episode} stories={stories} compact={compact} league={league} teamName={teamName} />;
 }
 
-function SpotlightCard({ episode, stories, compact, league }: { episode: SpotlightEpisode; stories: SpotlightStory[]; compact: boolean; league: BasketballLeagueState | null }) {
+function SpotlightCard({ episode, stories, compact, league, teamName }: { episode: SpotlightEpisode; stories: SpotlightStory[]; compact: boolean; league: BasketballLeagueState | null; teamName: string }) {
   const playerName = (id?: string): string => {
     const p = id ? (league?.players as Record<string, { firstName: string; lastName: string }> | undefined)?.[id] : undefined;
     return p ? `${p.firstName} ${p.lastName}` : 'The Player';
@@ -60,19 +62,11 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
   const router = useRouter();
   const [open, setOpen] = useState<Set<string>>(() => new Set(stories.length ? [stories[0].id] : []));
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
-  const [playing, setPlaying] = useState(false);
+  // Dashboard: the "Listen" pill mounts the player (and starts it). /show: the
+  // player is always shown above the storylines.
+  const [listening, setListening] = useState(false);
   const allOpen = stories.every(s => open.has(s.id));
   const hasAi = stories.some(s => AI_CATEGORIES.has(s.category));
-
-  // Stop any narration when this card unmounts.
-  useEffect(() => () => stopSpeech(), []);
-
-  function toggleListen() {
-    if (playing) { stopSpeech(); setPlaying(false); return; }
-    const lines = stories.flatMap(s => s.exchanges.map(ex => ({ text: ex.line, voice: (ex.voice === 'analyst' ? 'analyst' : 'take') as 'analyst' | 'take' })));
-    setPlaying(true);
-    speakLines(lines, () => setPlaying(false));
-  }
 
   const toggle = (id: string) => setOpen(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const expandAll = () => setOpen(allOpen ? new Set() : new Set(stories.map(s => s.id)));
@@ -89,14 +83,15 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
               ✨ AI
             </span>
           )}
-          {isSpeechSupported() && (
+          {compact && (
             <button
-              onClick={toggleListen}
+              onClick={() => setListening(v => !v)}
               className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-2 py-0.5 hover:opacity-80 transition-opacity"
               style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
-              title={playing ? 'Stop narration' : 'Read this episode aloud'}
+              title={listening ? 'Close the player' : 'Listen to this episode'}
+              aria-expanded={listening}
             >
-              {playing ? '⏹ Stop' : '🎧 Listen'}
+              {listening ? '⏹ Stop' : '🎧 Listen'}
             </button>
           )}
         </div>
@@ -105,6 +100,12 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
           {stories.length > 1 && <button onClick={expandAll} className="ml-2 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>{allOpen ? 'Collapse all' : 'Expand all'}</button>}
         </p>
       </div>
+
+      {(!compact || listening) && (
+        <div className="px-4 sm:px-5 pt-3 pb-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+          <ShowAudioPlayer episode={episode} teamName={teamName} compact={compact} autoStart={compact} onClose={compact ? () => setListening(false) : undefined} />
+        </div>
+      )}
 
       {!compact && episode.intro.length > 0 && (
         <div className="px-4 sm:px-5 pt-4 pb-3 space-y-2.5 border-b" style={{ borderColor: 'var(--border)' }}>

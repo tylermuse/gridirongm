@@ -12,7 +12,7 @@ import { perGame, type BasketballPlayer } from '@bs/sport-basketball';
 import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
-import { computeSeasonAwards } from '../awards';
+import { computeSeasonAwards, computeHonors, type AllLeagueTeam } from '../awards';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -24,6 +24,54 @@ export interface HistoryPlayerRef {
   statline: string;
 }
 
+/** One award winner, denormalized. `id` is a player id (or coach id for COY). */
+export interface HistoryAwardRef {
+  id: string;
+  name: string;
+  teamId: TeamId | null;
+  statline: string;
+}
+
+/** Final regular-season record of one team. */
+export interface HistoryTeamRecord {
+  teamId: TeamId;
+  wins: number;
+  losses: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  conference?: 'Eastern' | 'Western';
+}
+
+/** Compact season totals for one player (regular season), credited to the
+ *  team he finished the season on. Kept on the history entry so the record
+ *  book survives retirement (retirees are deleted from `league.players`). */
+export interface HistoryPlayerLine {
+  id: string;
+  name: string;
+  teamId: TeamId | null;
+  pos: string;
+  age: number;
+  gp: number;
+  pts: number;
+  reb: number;
+  ast: number;
+  stl: number;
+  blk: number;
+  tpm: number;
+}
+
+export interface HistoryRetiree {
+  id: string;
+  name: string;
+  pos: string;
+  teamId: TeamId | null;
+  age: number;
+  overall: number;
+  /** Career totals at retirement. */
+  gp: number;
+  pts: number;
+}
+
 export interface SeasonHistoryEntry {
   season: number;
   champion: TeamId | null;
@@ -31,6 +79,24 @@ export interface SeasonHistoryEntry {
   finalsMvp: HistoryPlayerRef | null;
   mvp: HistoryPlayerRef | null;
   scoringLeader: HistoryPlayerRef | null;
+  // ---- Extended archive (record book). All optional: saves written before
+  // these existed simply lack them and the record book degrades gracefully. ----
+  /** Finals series score, champion's wins first (e.g. 4-2). */
+  finals?: { championWins: number; runnerUpWins: number };
+  /** Every team's final regular-season record. */
+  teamRecords?: HistoryTeamRecord[];
+  /** Furthest playoff round reached per team (1 = First Round … 4 = Finals),
+   *  for teams that made the main 16-team bracket. */
+  playoffRound?: Record<string, number>;
+  /** All season awards (MVP, DPOY, ROY, 6MOY, MIP, COY, Finals MVP). */
+  awards?: Partial<Record<'mvp' | 'dpoy' | 'roy' | 'sixthMan' | 'mip' | 'coy' | 'finalsMvp', HistoryAwardRef>>;
+  allLeague?: AllLeagueTeam[];
+  allDefensive?: AllLeagueTeam[];
+  allRookie?: AllLeagueTeam[];
+  /** Per-player regular-season totals. */
+  playerLines?: HistoryPlayerLine[];
+  /** Players who retired at the end of this season (filled in at rollover). */
+  retired?: HistoryRetiree[];
 }
 
 function nameOf(league: LeagueState, id: PlayerId): string {
@@ -86,6 +152,86 @@ export function buildSeasonHistoryEntry(league: LeagueState): SeasonHistoryEntry
     };
   };
 
+  // ---- Extended archive ----
+  const finalsSeries = bracket?.rounds?.[3]?.[0];
+  const finals = finalsSeries?.winnerTeamId
+    ? finalsSeries.winnerTeamId === finalsSeries.teamA
+      ? { championWins: finalsSeries.winsA, runnerUpWins: finalsSeries.winsB }
+      : { championWins: finalsSeries.winsB, runnerUpWins: finalsSeries.winsA }
+    : undefined;
+
+  const playoffRound: Record<string, number> = {};
+  for (const round of bracket?.rounds ?? []) {
+    for (const s of round) {
+      for (const t of [s.teamA, s.teamB]) {
+        if (t) playoffRound[t] = Math.max(playoffRound[t] ?? 0, s.round);
+      }
+    }
+  }
+
+  const teamRecords: HistoryTeamRecord[] = league.teams.map(t => ({
+    teamId: t.id,
+    wins: t.record.wins,
+    losses: t.record.losses,
+    pointsFor: t.record.pointsFor,
+    pointsAgainst: t.record.pointsAgainst,
+    conference: (t.sportData as { conference?: 'Eastern' | 'Western' } | undefined)?.conference,
+  }));
+
+  const line = (s: BasketballStats) => {
+    const pg = perGame(s);
+    return `${(pg.points ?? 0).toFixed(1)} / ${(pg.totalRebounds ?? 0).toFixed(1)} / ${(pg.assists ?? 0).toFixed(1)}`;
+  };
+  const defLine = (s: BasketballStats) => {
+    const pg = perGame(s);
+    return `${(pg.steals ?? 0).toFixed(1)} SPG · ${(pg.blocks ?? 0).toFixed(1)} BPG`;
+  };
+  const awardRefs: NonNullable<SeasonHistoryEntry['awards']> = {};
+  if (w && awards) {
+    const playerAward = (key: 'dpoy' | 'roy' | 'sixthMan' | 'mip', fmt: (s: BasketballStats) => string) => {
+      const r = w[key];
+      if (!r) return;
+      const id = r.winnerId as PlayerId;
+      awardRefs[key] = {
+        id, name: nameOf(league, id), teamId: r.teamId ?? teamOf(league, id),
+        statline: fmt(awards.seasonStats.get(id) ?? zero()),
+      };
+    };
+    const m = mvpRef();
+    if (m) awardRefs.mvp = m;
+    const f = finalsMvpRef();
+    if (f) awardRefs.finalsMvp = f;
+    playerAward('dpoy', defLine);
+    playerAward('roy', line);
+    playerAward('sixthMan', line);
+    playerAward('mip', line);
+    if (w.coy) {
+      const coach = (league.coaches as Record<string, { firstName: string; lastName: string } | undefined>)[w.coy.winnerId];
+      const rec = w.coy.teamId ? league.teams.find(t => t.id === w.coy!.teamId)?.record : undefined;
+      awardRefs.coy = {
+        id: w.coy.winnerId,
+        name: coach ? `${coach.firstName} ${coach.lastName}` : 'Head coach',
+        teamId: w.coy.teamId ?? null,
+        statline: rec ? `${rec.wins}-${rec.losses}` : '',
+      };
+    }
+  }
+
+  const honors = computeHonors(league);
+
+  const playerLines: HistoryPlayerLine[] = [];
+  for (const [id, s] of awards?.seasonStats ?? []) {
+    if ((s.gamesPlayed ?? 0) < 1) continue;
+    const p = league.players[id] as BasketballPlayer | undefined;
+    playerLines.push({
+      id, name: nameOf(league, id), teamId: teamOf(league, id),
+      pos: p?.sportData.position ?? '',
+      age: p?.age ?? 0,
+      gp: s.gamesPlayed, pts: s.points, reb: s.totalRebounds, ast: s.assists,
+      stl: s.steals, blk: s.blocks, tpm: s.threePointsMade,
+    });
+  }
+
   return {
     season: league.currentSeason,
     champion: bracket?.championTeamId ?? null,
@@ -93,6 +239,29 @@ export function buildSeasonHistoryEntry(league: LeagueState): SeasonHistoryEntry
     finalsMvp: finalsMvpRef(),
     mvp: mvpRef(),
     scoringLeader: scoringLeaderRef(),
+    finals,
+    teamRecords,
+    playoffRound,
+    awards: awardRefs,
+    allLeague: honors?.allNBA,
+    allDefensive: honors?.allDefensive,
+    allRookie: honors?.allRookie,
+    playerLines,
+  };
+}
+
+/** Archive entry for a player retiring at this rollover. `p` is the player as
+ *  he finished the season (career stats already include the final season). */
+export function buildRetireeEntry(p: BasketballPlayer, age: number): HistoryRetiree {
+  return {
+    id: p.id,
+    name: `${p.firstName} ${p.lastName}`,
+    pos: p.sportData.position,
+    teamId: p.rosterSlot?.teamId ?? null,
+    age,
+    overall: p.ratings.overall,
+    gp: p.careerStats?.gamesPlayed ?? 0,
+    pts: p.careerStats?.points ?? 0,
   };
 }
 

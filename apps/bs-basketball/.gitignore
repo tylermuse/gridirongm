@@ -18,3 +18,8 @@ node_modules/
 
 # Turbopack trace
 .next/dev/trace
+
+# Serwist service worker — generated at build time from src/app/sw.ts
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js

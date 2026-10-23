@@ -7,8 +7,14 @@ import { isSoundEnabled, setSoundEnabled, playSound } from '@/lib/ui/sound';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { isGodMode } from '@/lib/godMode/godMode';
 import { type FranchiseEdit } from '@/lib/godMode/relocate';
+import { GodModeCreatePlayer } from '@/components/godMode/GodModePlayerEditor';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { CloudSavesPanel } from '@/components/settings/CloudSavesPanel';
+import { LeagueRulesPanel } from '@/components/settings/LeagueRulesPanel';
+import { Section } from '@/components/settings/Section';
+import { Field, ColorField } from '@/components/settings/FranchiseFields';
+import { expansionWindow, getExpansion } from '@/lib/expansion';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -54,13 +60,16 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
           Settings
         </h1>
-        <p className="text-sm text-[var(--text-sec)]">Appearance and sound saved on this device. Account + billing synced to your BS account.</p>
+        <p className="text-sm text-[var(--text-sec)]">Appearance and sound saved on this device. League rules saved with this league. Account + billing synced to your BS account.</p>
       </header>
 
       {/* STRIPE-4: account + subscription card — only renders when Supabase is
           configured. Mirrors the football settings page's AccountCard but slim:
           email, tier badge, manage-subscription / upgrade button, sign-out. */}
       <SubscriptionCard />
+
+      {/* Cloud Saves — opt-in cross-device backup (parity with BS Football). */}
+      <CloudSavesPanel />
 
       {/* Appearance */}
       <Section title="Appearance" desc="Switch between the warm light theme and a low-glare dark mode.">
@@ -93,7 +102,7 @@ export default function SettingsPage() {
       {league && (
         <Section
           title="God Mode"
-          desc="Commissioner powers — edit any player's overall, age, and potential from their card. Saved with this league."
+          desc="Commissioner powers — edit any player's ratings, age, potential, position, contract, injury, and trade request from their card, or create new players. Saved with this league."
         >
           <div className="flex gap-2">
             <Choice active={!godOn} onClick={() => void setGodMode(false)} icon="🔒" label="Off" />
@@ -105,55 +114,23 @@ export default function SettingsPage() {
         </Section>
       )}
 
-      {/* Commissioner salary-cap override (God Mode) */}
-      {league && godOn && <SalaryCapPanel />}
+      {/* League Rules — cap, calendar, health/development, roster. Always
+          available (like BS Football's league settings); not a God Mode power. */}
+      {league && <LeagueRulesPanel />}
+
+      {/* Create player (God Mode) */}
+      {league && godOn && (
+        <Section title="Create Player" desc="Generate a new player at a chosen position, age, and overall — added to a team or the free-agent pool.">
+          <GodModeCreatePlayer />
+        </Section>
+      )}
 
       {/* Franchise relocation / rebrand (God Mode) */}
       {league && godOn && <RelocatePanel />}
+
+      {/* League expansion (offseason, after the draft) — no God Mode needed */}
+      {league && <ExpansionPanel />}
     </main>
-  );
-}
-
-// ===========================================================================
-// Commissioner: custom salary cap (§1.5 — feature parity with football)
-// ===========================================================================
-
-function SalaryCapPanel() {
-  const league = useLeagueStore(s => s.league);
-  const setCap = useLeagueStore(s => s.setCommissionerSalaryCap);
-  const current = (league?.sportData as { commissionerSettings?: { salaryCap?: number } } | undefined)
-    ?.commissionerSettings?.salaryCap;
-  const [value, setValue] = useState(current ? String(Math.round(current / 1_000_000)) : '');
-
-  function apply() {
-    const m = parseFloat(value);
-    if (Number.isFinite(m) && m > 0) void setCap(Math.round(m * 1_000_000));
-  }
-  function clear() {
-    void setCap(null);
-    setValue('');
-  }
-
-  return (
-    <Section
-      title="Salary Cap"
-      desc="Commissioner override — set a flat league salary cap in $M (the tax line and aprons scale from it). Clear to use the standard inflation-based cap."
-    >
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <Field label="Cap ($M)" value={value} onChange={setValue} />
-        </div>
-        <button onClick={apply} className="px-3 py-2 rounded bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
-          Set
-        </button>
-        <button onClick={clear} className="px-3 py-2 rounded border border-[var(--border)] text-sm font-semibold hover:bg-[var(--surface-2)]">
-          Clear
-        </button>
-      </div>
-      <p className="text-xs text-[var(--text-sec)] mt-2">
-        {current ? `Active override: $${Math.round(current / 1_000_000)}M` : 'Using the standard inflation-based cap.'}
-      </p>
-    </Section>
   );
 }
 
@@ -284,7 +261,7 @@ function RelocatePanel() {
   }
 
   return (
-    <Section title="Relocate / rebrand a franchise" desc="Rename, re-city, and recolor any team. (Full league expansion to 31–32 teams is deferred — it requires a schedule-generator rewrite.)">
+    <Section title="Relocate / rebrand a franchise" desc="Rename, re-city, and recolor any team. To add teams, use League Expansion below.">
       <select value={teamId} onChange={e => choose(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border bg-[var(--surface-2)] text-sm mb-3" style={{ borderColor: 'var(--border)' }}>
         <option value="">Select a team…</option>
         {teams.map(t => <option key={t.id} value={t.id}>{t.city} {t.name}</option>)}
@@ -308,34 +285,30 @@ function RelocatePanel() {
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ExpansionPanel() {
+  const league = useLeagueStore(s => s.league);
+  if (!league) return null;
+  const win = expansionWindow(league);
+  const exp = getExpansion(league);
+  const inProgress = !!exp && exp.stage !== 'done';
   return (
-    <label className="block">
-      <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
-      <input value={value} onChange={e => onChange(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border bg-[var(--surface-2)] text-sm" style={{ borderColor: 'var(--border)' }} />
-    </label>
-  );
-}
-
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="flex items-center gap-2">
-      <input type="color" value={value} onChange={e => onChange(e.target.value)} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--border)' }} />
-      <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
-    </label>
-  );
-}
-
-function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
-  return (
-    <section
-      className="mb-4 rounded-xl border bg-[var(--surface)] p-5"
-      style={{ borderColor: 'var(--border)' }}
+    <Section
+      title="League Expansion"
+      desc={`Grow the league from ${league.teams.length} to up to 32 teams: create franchises, realign the conferences, run a protection list and an expansion draft. Irreversible.`}
     >
-      <h2 className="font-bold">{title}</h2>
-      <p className="text-sm text-[var(--text-sec)] mt-0.5 mb-3">{desc}</p>
-      {children}
-    </section>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          href="/expansion"
+          className="text-sm font-bold rounded-lg px-4 py-2"
+          style={inProgress || win.open
+            ? { background: 'var(--accent)', color: '#fff' }
+            : { background: 'var(--surface-2)', color: 'var(--text-sec)' }}
+        >
+          {inProgress ? 'Resume expansion →' : 'Open expansion →'}
+        </Link>
+        <span className="text-xs text-[var(--text-sec)]">{inProgress ? 'An expansion is in progress.' : win.reason}</span>
+      </div>
+    </Section>
   );
 }
 

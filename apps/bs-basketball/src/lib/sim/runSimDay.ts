@@ -23,6 +23,7 @@ import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, canPlayThrough, applyInjuryRolls, type InjuryMap } from '../injuries';
 import { getDiscipline, isSuspendedOn, applyDisciplineRolls, type DisciplineMap } from '../discipline';
 import { refreshTradeRumors } from '../trade/rumors';
+import { refreshTradeProposals } from '../trade/proposals';
 import { refreshTradeRequests } from '../roster/tradeRequests';
 import { runAiFreeAgency } from '../freeAgency';
 import type {
@@ -36,6 +37,8 @@ import type {
   BasketballRatings,
   BasketballStats,
 } from '@bs/sport-basketball';
+import { trimPlayLogs } from '../live/trimPlayLogs';
+import { ensureSeasonObjectives } from '../owner/objectives';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -54,7 +57,10 @@ function gameDay(g: GameResult): number {
   return typeof d === 'number' ? d : Infinity;
 }
 
-export function simNextDay(league: LeagueState): SimDayResult | null {
+export function simNextDay(input: LeagueState): SimDayResult | null {
+  // Old saves (and fresh leagues) freeze this season's owner objectives on the
+  // first simmed day — a no-op once they're stored.
+  const league = ensureSeasonObjectives(input);
   // Find the earliest dayOfSeason with at least one scheduled game. Day 0 is a
   // real opening-night day in legacy 0-indexed saves — do NOT skip it, or those
   // games never play and the regular season can't complete (blocking playoffs).
@@ -141,7 +147,7 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
 
   const simmed: LeagueState = {
     ...league,
-    games: updatedGames,
+    games: trimPlayLogs(updatedGames, league.userTeamId),
     teams: updatedTeams,
     // Simming a scheduled regular-season day means we're in the regular season.
     // `currentPhase` was stamped 'preseason' at creation and never advanced, so
@@ -159,9 +165,12 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
   const withDiscipline = applyDisciplineRolls(withInjuries, playedGames, nextDay, league.currentSeason);
   // Advance the trade-rumor mill (generates + resolves; ramps toward deadline).
   const withRumors = refreshTradeRumors(withDiscipline);
+  // AI front offices send the user real (persisted) trade offers; stale ones
+  // expire. No-op for spectators, after the deadline, and outside the season.
+  const withProposals = refreshTradeProposals(withRumors);
   // Advance the trade-request / refuse-to-play loop: sustained-discontent
   // players file requests, which seed the rumor feed and surface AI offers.
-  const withRequests = refreshTradeRequests(withRumors);
+  const withRequests = refreshTradeRequests(withProposals);
 
   // Light in-season free-agency backfill: roughly every two weeks, AI teams that
   // sit below a full roster sign the best available depth (fill-only — no

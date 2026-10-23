@@ -32,6 +32,7 @@ import type {
 } from '@bs/core/adapter';
 import type { BasketballRatings } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
+import { getHeadCoach } from '../coaching/coaches';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -114,7 +115,8 @@ export function computeSeasonAwards(league: LeagueState): SeasonAwards | null {
     losses: t.record.losses,
     pointsFor: t.record.pointsFor,
     pointsAgainst: t.record.pointsAgainst,
-    headCoachId: t.coachIds[0] as CoachId | undefined,
+    // coachIds also holds the dev coach — pick the HC explicitly.
+    headCoachId: (getHeadCoach(league, t.id)?.id ?? t.coachIds[0]) as CoachId | undefined,
   }));
 
   const bracket = getBracket(league);

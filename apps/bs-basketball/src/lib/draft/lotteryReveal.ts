@@ -146,6 +146,8 @@ export function buildLotteryReveal(
 ): LotteryRevealCard[] {
   const seedOf = new Map<TeamId, number>();
   (draft.lotteryOrder ?? []).forEach((teamId, i) => seedOf.set(teamId, i + 1));
+  // Odds table size = the lottery's size (14 normally; 15-16 after expansion).
+  const lotterySize = draft.picks.filter(p => p.isLottery).length || 14;
 
   const cards: LotteryRevealCard[] = [];
   for (const slot of draft.picks) {
@@ -167,7 +169,7 @@ export function buildLotteryReveal(
       team,
       originalTeam,
       expectedSlot,
-      oddsPct: lotteryTopPickOddsPct(expectedSlot),
+      oddsPct: lotteryTopPickOddsPct(expectedSlot, lotterySize),
       delta,
       movement: movementOf(delta),
       isUser: slot.teamId === userTeamId,

@@ -25,7 +25,7 @@ import {
   faPhase,
   faPriceDecay,
   FA_DAYS,
-  MAX_ROSTER,
+  getMaxRoster,
   type FreeAgentInfo,
   type CounterOffer,
 } from '@/lib/freeAgency';
@@ -94,7 +94,8 @@ export default function FreeAgencyPage() {
   const budget = userTeamId ? signingBudget(league, userTeamId) : 0;
   const appeal = userTeamId ? teamAppeal(league, userTeamId) : 0.5;
   const count = userTeamId ? rosterCount(league, userTeamId) : 0;
-  const rosterFull = count >= MAX_ROSTER;
+  const maxRoster = getMaxRoster(league);
+  const rosterFull = count >= maxRoster;
   const faDay = getFaDay(league);
   const phase = faPhase(faDay);
   const faClosed = faDay >= FA_DAYS;
@@ -160,7 +161,7 @@ export default function FreeAgencyPage() {
       <header className="flex flex-wrap items-center gap-3 mb-5">
         <div>
           <h1 className="text-2xl font-black uppercase tracking-tight">Free Agency</h1>
-          {userTeam && <p className="text-sm text-[var(--text-sec)]">{userTeam.city} · roster {count}/{MAX_ROSTER}</p>}
+          {userTeam && <p className="text-sm text-[var(--text-sec)]">{userTeam.city} · roster {count}/{maxRoster}</p>}
         </div>
         {userTeam && (
           <div className="text-right">

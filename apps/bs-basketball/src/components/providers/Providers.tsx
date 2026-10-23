@@ -3,6 +3,7 @@
 import { type ReactNode } from 'react';
 import { SubscriptionProvider } from './SubscriptionProvider';
 import { usePageView } from '@bs/core/analytics';
+import { ServiceWorkerRegister } from './ServiceWorkerRegister';
 
 /**
  * BS Hoops app providers.
@@ -21,6 +22,8 @@ import { usePageView } from '@bs/core/analytics';
  * PageViewTracker: page_view + session_start beacons to /api/analytics/track
  * (rows tagged app = 'bs-hoops'). Also makes trackAuthEvent's signup/login
  * beacons land — they were 404ing before this route existed.
+ *
+ * ServiceWorkerRegister: production-only PWA/offline registration (sw.ts).
  */
 function PageViewTracker() {
   usePageView();
@@ -31,6 +34,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <SubscriptionProvider>
       <PageViewTracker />
+      <ServiceWorkerRegister />
       {children}
     </SubscriptionProvider>
   );

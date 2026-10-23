@@ -46,12 +46,63 @@ const LOTTERY_TOTAL = 1000;
   }
 }
 
-/** Chance (in %) that the team seeded at `seedSlot` (1 = worst record, 14 =
- *  best non-playoff record) wins the No. 1 pick. Used by the lottery reveal to
- *  show each team's pre-lottery odds. Returns 0 outside the 14-team lottery. */
-export function lotteryTopPickOddsPct(seedSlot: number): number {
-  const combinations = LOTTERY_ODDS_NUMBER_ONE[seedSlot - 1] ?? 0;
+/**
+ * Expanded-league lottery tables. The lottery BOARD (picks flagged isLottery)
+ * is every team outside the 16-team first round: 14 at 30 teams, 15 at 31, 16
+ * at 32. The odds row used for the draw is the one sized to that board. Tables
+ * for 17 and 18 exist as headroom (and are what a future 33-34 team league or
+ * a "play-in losers enter the draw" rule would use).
+ *
+ * Extension rule: the bottom 3 keep their flat 14.0% (anti-tank) — 420 of the
+ * 1000 combinations — and slots 4..N re-spread the remaining 580 on the same
+ * descending shape. Each added seat takes a small share (0.5-1.5%) mostly from
+ * slots 4-8, so the 4th-worst team loses ~0.5% per extra lottery team and the
+ * new tail seats sit at 0.5-1.5%:
+ *   14: 140 140 140 125 105 90 75 60 45 30 20 15 10 5          (NBA standard)
+ *   15: 140 140 140 120 100 85 70 55 45 35 25 20 15 5 5
+ *   16: 140 140 140 115 95 80 65 55 45 35 25 20 15 10 10 10
+ *   17: 140 140 140 110 90 75 60 50 45 35 25 20 15 15 15 15 10
+ *   18: 140 140 140 105 90 75 60 50 45 35 25 20 15 15 15 10 10 10
+ * A module-load check enforces len === size, sum === 1000, non-increasing.
+ */
+const LOTTERY_ODDS_BY_SIZE: Readonly<Record<number, readonly number[]>> = {
+  14: LOTTERY_ODDS_NUMBER_ONE,
+  15: [140, 140, 140, 120, 100, 85, 70, 55, 45, 35, 25, 20, 15, 5, 5],
+  16: [140, 140, 140, 115, 95, 80, 65, 55, 45, 35, 25, 20, 15, 10, 10, 10],
+  17: [140, 140, 140, 110, 90, 75, 60, 50, 45, 35, 25, 20, 15, 15, 15, 15, 10],
+  18: [140, 140, 140, 105, 90, 75, 60, 50, 45, 35, 25, 20, 15, 15, 15, 10, 10, 10],
+};
+for (const [size, row] of Object.entries(LOTTERY_ODDS_BY_SIZE)) {
+  const sum = row.reduce((s, n) => s + n, 0);
+  if (row.length !== Number(size) || sum !== LOTTERY_TOTAL) {
+    throw new Error(`Lottery odds table ${size} invalid (len ${row.length}, sum ${sum})`);
+  }
+  for (let i = 1; i < row.length; i++) {
+    if (row[i] > row[i - 1]) throw new Error(`Lottery odds table ${size} not non-increasing at ${i}`);
+  }
+}
+
+/** The No. 1-pick odds row (combinations out of 1000) for a lottery of
+ *  `lotterySize` teams. Sizes ≤ 14 use the standard table (truncated); larger
+ *  lotteries use the expansion tables above (capped at 18). */
+export function lotteryOddsTable(lotterySize: number): readonly number[] {
+  if (lotterySize <= 14) return LOTTERY_ODDS_NUMBER_ONE;
+  return LOTTERY_ODDS_BY_SIZE[Math.min(18, lotterySize)];
+}
+
+/** Chance (in %) that the team seeded at `seedSlot` (1 = worst record) wins the
+ *  No. 1 pick in a lottery of `lotterySize` teams (default 14). Used by the
+ *  lottery reveal to show each team's pre-lottery odds. 0 outside the lottery. */
+export function lotteryTopPickOddsPct(seedSlot: number, lotterySize = 14): number {
+  const combinations = lotteryOddsTable(lotterySize)[seedSlot - 1] ?? 0;
   return combinations / (LOTTERY_TOTAL / 100);
+}
+
+/** Lottery board size for a league with `teamsOutsideFirstRound` teams that
+ *  missed the 16-team first round (30 teams → 14, 31 → 15, 32 → 16). Clamped
+ *  to the odds tables' 14..18 range. */
+export function lotterySizeFor(teamsOutsideFirstRound: number): number {
+  return Math.max(14, Math.min(18, teamsOutsideFirstRound));
 }
 
 // ===========================================================================
@@ -108,6 +159,10 @@ export interface DraftOrderOptions {
   rngSeed?: string;
   /** Number of rounds. Default 2 (NBA standard). */
   rounds?: number;
+  /** Lottery board size (picks flagged as lottery picks) — selects the odds
+   *  table and caps how many non-playoff teams enter the draw. Default 14
+   *  (30 teams); 15 / 16 for 31 / 32 teams. See lotterySizeFor. */
+  lotteryBoardSize?: number;
 }
 
 /**
@@ -120,8 +175,8 @@ export function generateBasketballDraftOrder(
   standings: StandingsEntry[],
   opts: DraftOrderOptions = {},
 ): TeamId[] {
-  if (standings.length !== 30) {
-    throw new Error(`Basketball draft order expects 30 teams (got ${standings.length})`);
+  if (standings.length < 30 || standings.length > 32) {
+    throw new Error(`Basketball draft order expects 30-32 teams (got ${standings.length})`);
   }
   const rng = makeRng(opts.rngSeed ?? 'default-draft-seed');
   const rounds = opts.rounds ?? 2;
@@ -143,9 +198,13 @@ export function generateBasketballDraftOrder(
   const lotteryTeams = sorted.filter(s => !s.madePlayoffs);
   const playoffTeamsByRecord = sorted.filter(s => s.madePlayoffs);
 
-  // Standard NBA: 14 lottery teams. If fewer, run a smaller lottery.
-  // If more, only the bottom 14 enter the lottery.
-  const numLotterySlots = Math.min(14, lotteryTeams.length);
+  // Standard NBA: 14 lottery teams. If fewer, run a smaller lottery. If more,
+  // only the bottom `boardSize` enter the draw (surplus picks by record). The
+  // odds row is the one sized to the league's lottery board (14 at 30 teams —
+  // unchanged — 15/16 after expansion).
+  const boardSize = opts.lotteryBoardSize ?? 14;
+  const numLotterySlots = Math.min(boardSize, lotteryTeams.length);
+  const odds = lotteryOddsTable(boardSize);
 
   // ------------------------------------------------------------------
   // Run lottery for slots 1-3 (anti-tank flat odds)
@@ -154,7 +213,7 @@ export function generateBasketballDraftOrder(
   const remainingLottery = lotteryTeams.slice(0, numLotterySlots);
 
   for (let lotteryPickNum = 0; lotteryPickNum < 3 && remainingLottery.length > 0; lotteryPickNum++) {
-    const winnerIdx = pickByWeightedOdds(remainingLottery, rng);
+    const winnerIdx = pickByWeightedOdds(remainingLottery, odds, rng);
     const winner = remainingLottery.splice(winnerIdx, 1)[0];
     order.push(winner.teamId);
   }
@@ -165,6 +224,10 @@ export function generateBasketballDraftOrder(
   // ------------------------------------------------------------------
   // remainingLottery is still sorted worst-to-best by record
   for (const team of remainingLottery) {
+    order.push(team.teamId);
+  }
+  // Non-playoff teams beyond the lottery board (if any) by record.
+  for (const team of lotteryTeams.slice(numLotterySlots)) {
     order.push(team.teamId);
   }
 
@@ -187,15 +250,15 @@ export function generateBasketballDraftOrder(
   return order;
 }
 
-/** Pick a winner from `teams` using LOTTERY_ODDS_NUMBER_ONE weights for
- *  whichever slots they occupy. Returns the index into `teams`. */
-function pickByWeightedOdds(teams: StandingsEntry[], rng: SimpleRng): number {
+/** Pick a winner from `teams` using the lottery-size odds row for whichever
+ *  slots they occupy. Returns the index into `teams`. */
+function pickByWeightedOdds(teams: StandingsEntry[], odds: readonly number[], rng: SimpleRng): number {
   // Sum the odds for the teams currently in the lottery (some may have
   // already won a previous lottery slot and been removed)
   let total = 0;
   const weights: number[] = [];
   for (let i = 0; i < teams.length; i++) {
-    const w = LOTTERY_ODDS_NUMBER_ONE[i] ?? 0;
+    const w = odds[i] ?? 0;
     weights.push(w);
     total += w;
   }
