@@ -887,6 +887,8 @@ function TeamSpotlightSection({
                 team={team}
                 teams={allTeams}
                 players={allPlayers}
+                schedule={schedule}
+                season={season}
                 poster={{ episodeLabel: episodeLabelFor(currentNarrative, phase, week), ready: podcastReady }}
                 moment={showMoment}
               />
