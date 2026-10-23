@@ -53,7 +53,7 @@ export const themePlan = (e: EpisodeInput): ThemePlan | null =>
 const themedTopics = new WeakMap<EpisodeInput, ShowTopicInput[]>();
 export function writerTopics(e: EpisodeInput, plan: ThemePlan | null): ShowTopicInput[] {
   const notes = plan ? verdictTopicNotes(plan) : [];
-  if (!notes.length) return e.topics;
+  if (!plan || !notes.length) return e.topics;
   const memo = themedTopics.get(e);
   if (memo) return memo;
   const out = [...e.topics, {

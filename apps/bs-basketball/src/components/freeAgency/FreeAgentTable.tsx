@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Chip } from '@/components/ui/Chip';
 import { ratingColor } from '@/lib/ui/ratingColor';
-import { acceptanceProbability, bestCompetingOffer, rosterCount, MAX_ROSTER, type FreeAgentInfo } from '@/lib/freeAgency';
+import { acceptanceProbability, bestCompetingOffer, rosterCount, getMaxRoster, type FreeAgentInfo } from '@/lib/freeAgency';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import { careerPerGameLine } from '@/lib/stats/statLine';
+import { SuitorIntel } from './SuitorIntel';
 
 /**
  * Sortable free-agent table with an expandable intel panel (parity with
@@ -159,7 +160,7 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
   const affordable = info.marketSalary <= budget;
   // Over the cap, but signable to a vet minimum because a roster spot is open and
   // nobody else is bidding — regardless of his market value (BUG-30).
-  const openSpot = league.userTeamId ? rosterCount(league, league.userTeamId) < MAX_ROSTER : false;
+  const openSpot = league.userTeamId ? rosterCount(league, league.userTeamId) < getMaxRoster(league) : false;
   const minDeal = room <= 0 && openSpot && !competing;
   const compTeam = competing ? teamById.get(competing.teamId) : null;
   const rec = info.player.ratings.overall >= 78 ? 'Priority Target' : info.player.ratings.overall >= 70 ? 'Solid Add' : affordable ? 'Depth Option' : 'Stretch';
@@ -200,6 +201,7 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
       <div className="text-xs italic text-[var(--text-sec)]">
         GM take: {accept >= 60 ? 'Should sign at market.' : accept >= 35 ? 'May need to beat the market or his ask.' : 'Will likely take a better offer elsewhere.'}{!affordable ? ' Over your cap room — clear space first.' : ''}
       </div>
+      <SuitorIntel league={league} playerId={info.player.id} teamById={teamById} />
     </div>
   );
 }

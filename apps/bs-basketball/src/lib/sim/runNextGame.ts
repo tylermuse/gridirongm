@@ -36,6 +36,8 @@ import type {
   BasketballRatings,
   BasketballStats,
 } from '@bs/sport-basketball';
+import { trimPlayLogs } from '../live/trimPlayLogs';
+import { ensureSeasonObjectives } from '../owner/objectives';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -47,9 +49,10 @@ export interface SimNextGameResult {
 }
 
 export function simNextGameForTeam(
-  league: LeagueState,
+  input: LeagueState,
   teamId: TeamId,
 ): SimNextGameResult | null {
+  const league = ensureSeasonObjectives(input);
   // Find the next 'scheduled' game for this team. games is roughly schedule-
   // ordered; we walk to be safe.
   const nextIdx = league.games.findIndex(g =>
@@ -106,7 +109,7 @@ export function simNextGameForTeam(
   const finalScore = playedGame.finalScore ?? { home: 0, away: 0 };
   const updatedTeams = updateTeamRecords(league.teams, playedGame, finalScore);
 
-  const simmed: LeagueState = { ...league, games: updatedGames, teams: updatedTeams, currentPhase: 'regular_season' };
+  const simmed: LeagueState = { ...league, games: trimPlayLogs(updatedGames, league.userTeamId), teams: updatedTeams, currentPhase: 'regular_season' };
   const withInjuries = applyInjuryRolls(simmed, [playedGame], gameDayNum, league.currentSeason);
   const withDiscipline = applyDisciplineRolls(withInjuries, [playedGame], gameDayNum, league.currentSeason);
 

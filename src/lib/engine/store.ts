@@ -62,6 +62,8 @@ export function pickJerseyFor(
   teamId: string,
   players: Player[],
   teams: Team[],
+  /** the number he wears now: a traded / signed player keeps it when it's free on the new team (CeeDee Lamb was traded and came out #12, not #88) */
+  current?: number,
 ): number {
   const taken = new Set<number>();
   for (const p of players) {
@@ -69,6 +71,7 @@ export function pickJerseyFor(
   }
   const team = teams.find(t => t.id === teamId);
   const retired = new Set<number>((team?.retiredNumbers ?? []).map(r => r.number));
+  if (typeof current === 'number' && Number.isInteger(current) && current >= 0 && current <= 99 && !taken.has(current) && !retired.has(current)) return current;
   return assignJerseyNumber(position, taken, retired);
 }
 
@@ -352,7 +355,7 @@ function sortRosterByDepthChart(
 // ---------------------------------------------------------------------------
 
 function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | undefined {
-  const totalPicks = state.teams.length * 7;
+  const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
@@ -1079,7 +1082,11 @@ export function generateDraftClassPreview(season: number): { season: number; gro
 
 /** Pick value based on estimated overall pick number.
  *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 2200, #20 ≈ 1600, #32 ≈ 1100, #64 ≈ 400. */
-export function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
+export function pickTradeValue(pick: DraftPick, teams?: Team[], draftPickOrder?: string[]): number {
+  if (draftPickOrder && draftPickOrder.length > 0) {
+    const idx = draftPickOrder.indexOf(pick.id);
+    if (idx >= 0) return draftPickPointValue(idx + 1);
+  }
   if (teams && teams.length > 0) {
     const overallPick = estimateOverallPick(pick.round, teams, pick.originalTeamId);
     return draftPickPointValue(overallPick);
@@ -2496,6 +2503,28 @@ export function splitScoreByQuarter(seedStr: string, home: number, away: number)
   return { home: dist(home), away: dist(away) };
 }
 
+/** Per-quarter cumulative splits from the sim's actual scoring-play log
+ *  (index 0..3 = end of Q1..Q4; OT folds into index 3 so it equals the final).
+ *  Falls back to the synthetic `splitScoreByQuarter` only when the log is
+ *  missing or doesn't reconcile with the final score. Using the real plays
+ *  keeps halftime numbers to what actually happened in the sim instead of a
+ *  random re-decomposition (which over-produced safeties: halftime 2s/4s/5s). */
+export function splitsFromResult(r: Pick<GameResult, 'id' | 'homeTeamId' | 'awayTeamId' | 'homeScore' | 'awayScore' | 'scoringPlays'>): { home: number[]; away: number[] } {
+  const plays = r.scoringPlays ?? [];
+  if (plays.length > 0 || (r.homeScore === 0 && r.awayScore === 0)) {
+    const home = [0, 0, 0, 0];
+    const away = [0, 0, 0, 0];
+    for (const p of plays) {
+      const q = Math.min(4, Math.max(1, p.quarter)) - 1;
+      if (p.teamId === r.homeTeamId) home[q] += p.points;
+      else if (p.teamId === r.awayTeamId) away[q] += p.points;
+    }
+    for (let i = 1; i < 4; i++) { home[i] += home[i - 1]; away[i] += away[i - 1]; }
+    if (home[3] === r.homeScore && away[3] === r.awayScore) return { home, away };
+  }
+  return splitScoreByQuarter(r.id, r.homeScore, r.awayScore);
+}
+
 /** Return the stashed pre-sim result for a game if the live scoreboard covers
  *  the current week, else undefined. Keeps simulateOneWeek and its test in
  *  lockstep on the reuse rule. */
@@ -2720,6 +2749,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     teams: newTeams,
     season: state.season,
     week: state.week,
+    userTeamId: state.userTeamId,
   });
 
   // Trade rumors
@@ -5123,7 +5153,7 @@ export const useGameStore = create<GameStore>()(
 
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const overallPick = totalPicks - state.draftOrder.length + 1;
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
@@ -5263,7 +5293,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
@@ -5364,7 +5394,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
@@ -5865,7 +5895,7 @@ export const useGameStore = create<GameStore>()(
 
           currentPlayers = currentPlayers.map(p =>
             p.id === target.id
-              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true }, jerseyNumber: pickJerseyFor(p.position, aiTeamId, currentPlayers, currentTeams) }
+              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true }, jerseyNumber: pickJerseyFor(p.position, aiTeamId, currentPlayers, currentTeams, p.jerseyNumber) }
               : p,
           );
           currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
@@ -6065,7 +6095,7 @@ export const useGameStore = create<GameStore>()(
         const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
         let currentPlayers = state.players.map(p =>
           p.id === playerId
-            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, acquiredSeason: state.season, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) }, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams) }
+            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, acquiredSeason: state.season, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) }, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams, p.jerseyNumber) }
             : p,
         );
         let currentTeams = state.teams.map(t => {
@@ -6228,7 +6258,7 @@ export const useGameStore = create<GameStore>()(
                   totalYears: years,
                   ...(isOffseason ? { offseasonSigned: true } : {}),
                 },
-                jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams),
+                jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams, p.jerseyNumber),
               }
             : p,
         );
@@ -6876,7 +6906,7 @@ export const useGameStore = create<GameStore>()(
                     guaranteed: 0,
                     totalYears: 1,
                   },
-                  jerseyNumber: pickJerseyFor(p.position, state.userTeamId!, state.players, state.teams),
+                  jerseyNumber: pickJerseyFor(p.position, state.userTeamId!, state.players, state.teams, p.jerseyNumber),
                 }
               : p,
           ),
@@ -7208,7 +7238,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? aiValueOf(p) : 0);
         }, 0) + offeredPickIds.reduce((sum, id) => {
           const pick = userTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams, state.draftPickOrder) : 0);
         }, 0);
 
         const receivedValue = receivedPlayerIds.reduce((sum, id) => {
@@ -7216,7 +7246,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? aiValueOf(p) : 0);
         }, 0) + receivedPickIds.reduce((sum, id) => {
           const pick = aiTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams, state.draftPickOrder) : 0);
         }, 0);
 
         // AI accepts if within 5% value (skip for AI-initiated proposals or God Mode force)
@@ -7325,7 +7355,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, counterpartTeamId, state.players, state.teams) };
+            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, counterpartTeamId, state.players, state.teams, p.jerseyNumber) };
           }
           if (receivedPlayerIdsSet.has(p.id)) {
             const cleanContract = p.contract.contractYears
@@ -7340,7 +7370,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams) };
+            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams, p.jerseyNumber) };
           }
           return p;
         });
@@ -10147,7 +10177,7 @@ export const useGameStore = create<GameStore>()(
         for (const game of weekGames) {
           const r = simulateScheduledGame(state, resortedTeams, game);
           results[game.id] = { ...r, played: true };
-          splits[game.id] = splitScoreByQuarter(game.id, r.homeScore, r.awayScore);
+          splits[game.id] = splitsFromResult({ ...r, id: game.id });
         }
         set({ liveScoreboard: { week: state.week, results, splits } });
       },

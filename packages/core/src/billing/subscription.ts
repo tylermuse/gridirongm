@@ -68,6 +68,17 @@ export const PODCAST_CREDITS_PER_MONTH: Record<Tier, number> = {
 };
 
 /**
+ * Episode pack: extra Team Spotlight episodes for Premium subscribers who've
+ * used the month's included ones. A one-time Stripe price; set
+ * NEXT_PUBLIC_STRIPE_EPISODE_PACK_PRICE_ID once it exists in the dashboard.
+ */
+export const EPISODE_PACK = {
+  credits: 5,
+  priceLabel: '$2.99',
+  priceId: process.env.NEXT_PUBLIC_STRIPE_EPISODE_PACK_PRICE_ID ?? '',
+} as const;
+
+/**
  * Stripe price ID for the $4.99/mo Premium tier.
  * Set NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID in .env.local once the price is
  * created in the Stripe dashboard.

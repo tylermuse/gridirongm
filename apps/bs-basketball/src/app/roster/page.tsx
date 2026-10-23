@@ -765,6 +765,7 @@ function acquiredLabel(p: BasketballPlayer): string {
     case 'draft': return `Draft #${sd.draftPick ?? '?'}${sd.draftYear ? ` (${sd.draftYear})` : ''}`;
     case 'free-agency': return `Free Agent${sd.acquiredSeason ? ` (${sd.acquiredSeason})` : ''}`;
     case 'trade': return `Trade${sd.acquiredSeason ? ` (${sd.acquiredSeason})` : ''}`;
+    case 'expansion': return `Expansion Draft${sd.acquiredSeason ? ` (${sd.acquiredSeason})` : ''}`;
     case 'initial': return sd.draftPick ? `Draft #${sd.draftPick}` : 'Original';
     default: return sd.draftPick ? `Draft #${sd.draftPick}` : sd.draftRound ? 'Drafted' : '—';
   }

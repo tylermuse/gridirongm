@@ -41,6 +41,7 @@ import type {
 import { getHeadCoach } from '../coaching/coaches';
 import { seedConferences } from './seeding';
 import type { PlayoffBracket, PlayoffSeedInfo, PlayoffSeries } from './types';
+import { trimPlayLogs } from '../live/trimPlayLogs';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -335,7 +336,7 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
 
   const updatedLeague: LeagueState = {
     ...league,
-    games: [...league.games, ...newGames],
+    games: trimPlayLogs([...league.games, ...newGames], league.userTeamId),
     competitions,
     currentTick: Math.min(REGULAR_SEASON_DAYS + 30 + day, 250),
     sportData: { ...(league.sportData as LeagueSportData), playoffs: bracket },

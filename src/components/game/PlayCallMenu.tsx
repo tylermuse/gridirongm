@@ -18,6 +18,8 @@ interface PlayCallMenuProps {
   isFourthDown: boolean;
   /** True when the engine is waiting for XP/2PT choice after a user TD */
   awaitingXpChoice?: boolean;
+  /** True when the user chose to go for two and the engine wants the play call (ball at the 3) */
+  awaitingTwoPointCall?: boolean;
   /** True when the engine is waiting for kickoff choice (regular vs onside) */
   awaitingKickoffChoice?: boolean;
   /** Timeouts remaining for the user's team */
@@ -55,7 +57,7 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
   { type: 'screen', label: 'Screen', icon: '🛡️', color: 'bg-teal-600 hover:bg-teal-700' },
 ];
 
-export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
+export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTwoPointCall, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
   const [goingForIt, setGoingForIt] = useState(false);
 
   function downLabel(down: number, yardsToGo: number): string {
@@ -126,8 +128,24 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKi
                 onClick={() => onPlayCall('two_point')}
                 className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-red-600 hover:bg-red-700 transition-colors"
               >
-                💪 Go for 2 (48% success)
+                💪 Go for 2 (you call the play)
               </button>
+            </div>
+          ) : awaitingTwoPointCall ? (
+            <div className="space-y-1.5">
+              <div className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">💪 Two-point try from the 3 — call it:</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {PLAY_BUTTONS.map(btn => (
+                  <button
+                    key={btn.type}
+                    onClick={() => onPlayCall(btn.type)}
+                    className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs transition-colors ${btn.color}`}
+                  >
+                    <span>{btn.icon}</span>
+                    <span>{btn.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           ) : isFourthDown && !goingForIt ? (
             <div className="space-y-1.5">

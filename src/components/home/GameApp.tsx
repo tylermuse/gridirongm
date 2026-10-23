@@ -85,6 +85,21 @@ function TeamPicker() {
       .finally(() => setImportLoading(false));
   }, [searchParams]);
 
+  // Visitors arriving via a "Play in BS Football" deep link (?roster=...) have
+  // already decided to play, so skip the first-visit hero and take them
+  // straight to team selection once the roster file has loaded (waiting avoids
+  // scrolling to a spot that moves when the imported teams render).
+  const arrivedToPick = searchParams.get('roster') !== null;
+  const scrolledToPickerRef = useRef(false);
+  useEffect(() => {
+    if (!arrivedToPick || scrolledToPickerRef.current) return;
+    if (importLoading || (!importedTeams && !error)) return;
+    scrolledToPickerRef.current = true;
+    requestAnimationFrame(() => {
+      document.getElementById('team-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [arrivedToPick, importLoading, importedTeams, error]);
+
   const [migrated, setMigrated] = useState(false);
 
   // After a native-save URL import reloads the page (§1.3), surface the one-time
@@ -286,55 +301,57 @@ function TeamPicker() {
           straight to team selection. Only the TeamPicker renders this, so it is
           shown to new/guest visitors; returning players with a save land in the
           Dashboard instead and never see it. */}
-      <div className="w-full max-w-3xl mx-auto text-center mb-10">
-        <div className="text-base font-black tracking-tight mb-4">
-          <span className="text-blue-600">BS</span> Football
-        </div>
-        <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-[1.05] mb-4">
-          You&apos;re the GM. Build a dynasty.
-        </h1>
-        <p className="text-[var(--text-sec)] text-base sm:text-lg max-w-2xl mx-auto mb-6">
-          Draft rookies, scout hidden talent, manage a real salary cap, make trades, and sim
-          season after season. Free, in your browser &mdash; no download, no account needed to start.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-          <button
-            onClick={() => document.getElementById('team-picker')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base
-                       px-7 py-3.5 rounded-xl shadow-lg shadow-blue-600/25 transition-colors"
-          >
-            Pick your team &mdash; play free <span aria-hidden>&rarr;</span>
-          </button>
-          {savedGame && (
+      {!arrivedToPick && (
+        <div className="w-full max-w-3xl mx-auto text-center mb-10">
+          <div className="text-base font-black tracking-tight mb-4">
+            <span className="text-blue-600">BS</span> Football
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-[1.05] mb-4">
+            You&apos;re the GM. Build a dynasty.
+          </h1>
+          <p className="text-[var(--text-sec)] text-base sm:text-lg max-w-2xl mx-auto mb-6">
+            Draft rookies, scout hidden talent, manage a real salary cap, make trades, and sim
+            season after season. Free, in your browser &mdash; no download, no account needed to start.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
             <button
-              onClick={handleResume}
-              disabled={resumeLoading}
-              className="inline-flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] hover:border-blue-400
-                         text-[var(--text)] font-semibold text-sm px-5 py-3.5 rounded-xl transition-colors disabled:opacity-60"
+              onClick={() => document.getElementById('team-picker')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base
+                         px-7 py-3.5 rounded-xl shadow-lg shadow-blue-600/25 transition-colors"
             >
-              Continue your league <span aria-hidden>&rarr;</span>
+              Pick your team &mdash; play free <span aria-hidden>&rarr;</span>
             </button>
-          )}
+            {savedGame && (
+              <button
+                onClick={handleResume}
+                disabled={resumeLoading}
+                className="inline-flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] hover:border-blue-400
+                           text-[var(--text)] font-semibold text-sm px-5 py-3.5 rounded-xl transition-colors disabled:opacity-60"
+              >
+                Continue your league <span aria-hidden>&rarr;</span>
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-sm font-semibold text-[var(--text-sec)] mb-7">
+            <span>Deep scouting &amp; the draft</span><span aria-hidden className="opacity-40">&middot;</span>
+            <span>A real salary cap</span><span aria-hidden className="opacity-40">&middot;</span>
+            <span>Trades &amp; free agency</span><span aria-hidden className="opacity-40">&middot;</span>
+            <span>Multi-season dynasties</span>
+          </div>
+          <div className="max-w-2xl mx-auto rounded-xl overflow-hidden border border-[var(--border)] shadow-xl">
+            <img
+              src="/images/hero-dashboard.jpg"
+              alt="BS Football game dashboard showing a team's record, owner objectives, upcoming matchup, injury report, draft capital, standings and finances"
+              width={1200}
+              height={593}
+              className="w-full h-auto block"
+            />
+          </div>
+          <p className="mt-4 text-xs text-[var(--text-sec)]">
+            Play free as a guest. Create a free account to save your franchise across devices.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-sm font-semibold text-[var(--text-sec)] mb-7">
-          <span>Deep scouting &amp; the draft</span><span aria-hidden className="opacity-40">&middot;</span>
-          <span>A real salary cap</span><span aria-hidden className="opacity-40">&middot;</span>
-          <span>Trades &amp; free agency</span><span aria-hidden className="opacity-40">&middot;</span>
-          <span>Multi-season dynasties</span>
-        </div>
-        <div className="max-w-2xl mx-auto rounded-xl overflow-hidden border border-[var(--border)] shadow-xl">
-          <img
-            src="/images/hero-dashboard.jpg"
-            alt="BS Football game dashboard showing a team's record, owner objectives, upcoming matchup, injury report, draft capital, standings and finances"
-            width={1200}
-            height={593}
-            className="w-full h-auto block"
-          />
-        </div>
-        <p className="mt-4 text-xs text-[var(--text-sec)]">
-          Play free as a guest. Create a free account to save your franchise across devices.
-        </p>
-      </div>
+      )}
 
       {/* Native-save URL-import notice (§1.3) */}
       {importNotice && (
@@ -929,6 +946,7 @@ function TeamSpotlightSection({
 
 function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string; playerId?: string }[] }; season: number; phase: string; teams: { id: string; abbreviation: string }[] }) {
   const [showFuture, setShowFuture] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   // Ground-truth the draft year from the actual pick data rather than the
   // season counter. In BS Mode offseason-start the `season` value can already
   // be the next year before the draft runs, which made the card show
@@ -953,11 +971,30 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
     return `Rd ${pk.round}${isOwn ? '' : ` (via ${orig?.abbreviation ?? '?'})`}`;
   };
 
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="w-full flex items-center justify-between px-4 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-sec)] hover:bg-[var(--surface-2)]"
+      >
+        <span>
+          <span className="font-semibold text-[var(--text)]">Draft Capital</span>
+          {' · '}{currentPicks.length} pick{currentPicks.length === 1 ? '' : 's'} in {nextDraftYear}
+          {futurePicks.length > 0 ? ` · ${futurePicks.length} future` : ''}
+        </span>
+        <span>Show ▸</span>
+      </button>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Draft Capital</CardTitle>
-        <span className="text-xs text-[var(--text-sec)]">{nextDraftYear} Draft</span>
+        <span className="flex items-center gap-3 text-xs text-[var(--text-sec)]">
+          {nextDraftYear} Draft
+          <button onClick={() => setExpanded(false)} className="text-blue-600 hover:underline">Hide</button>
+        </span>
       </CardHeader>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {currentPicks.map(pk => (
@@ -1448,12 +1485,6 @@ function Dashboard() {
             unfiltered league view. */}
         {!isSpectator && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Draft capital — mounted here so it's visible on the dashboard
-              year-round, including the offseason draft-prep window. The card
-              self-hides when the team has no unplayed picks, and grounds the
-              draft year in actual pick data (fixes the BS-Mode "2028 in a 2027
-              season" display). Was shipped in PR #431 but never mounted. */}
-          <DraftCapitalCard team={userTeam} season={season} phase={phase} teams={teams} />
           {/* Conference standings with GB */}
           <Card>
             <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>
@@ -1704,6 +1735,13 @@ function Dashboard() {
             )}
           </Card>
         </div>
+
+        {/* Draft capital — low-prominence, collapsed-by-default strip below
+            the main card rows. Self-hides when the team has no unplayed picks;
+            draft year is grounded in actual pick data (BS-Mode fix). */}
+        {!isSpectator && (
+          <DraftCapitalCard team={userTeam} season={season} phase={phase} teams={teams} />
+        )}
 
         {/* Team Spotlight — generates dialogue framed around the user's
             team. Spectator leagues skip; the news feed already covers

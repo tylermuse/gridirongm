@@ -67,6 +67,23 @@ export interface DevelopSeasonOptions {
    * Defaults to player.id when omitted (still stable, but shared across saves).
    */
   devTraitSeed?: string;
+  /**
+   * League-rule scale on POSITIVE drift (growth), stacked on top of
+   * developmentMultiplier. 1 (default) leaves the curve untouched; 0 freezes
+   * growth; 2 doubles it.
+   */
+  progressionScale?: number;
+  /**
+   * League-rule scale on NEGATIVE drift (age regression). 1 (default) leaves the
+   * curve untouched; 0 means nobody declines; 2 doubles the decline.
+   */
+  regressionScale?: number;
+  /**
+   * Retirement only: shifts every age threshold by this many years. +3 means
+   * players hang on three years longer; -3 means they retire three years earlier.
+   * 0 / omitted reproduces the stock rules exactly.
+   */
+  retirementAgeOffset?: number;
 }
 
 /**
@@ -116,7 +133,14 @@ export function developBasketballPlayer(
   // A development coach only accelerates upward drift; decline is unaffected.
   // mult === 1 leaves the expression identical to the un-coached path.
   const mult = opts.developmentMultiplier ?? 1;
-  const drift = Math.round(mult !== 1 && raw > 0 ? raw * mult : raw);
+  let adjusted = mult !== 1 && raw > 0 ? raw * mult : raw;
+  // League rules (progression / regression speed). Both default to 1, which
+  // leaves `adjusted` — and so the drift — bit-identical to the stock path.
+  const prog = opts.progressionScale ?? 1;
+  const reg = opts.regressionScale ?? 1;
+  if (adjusted > 0 && prog !== 1) adjusted *= prog;
+  else if (adjusted < 0 && reg !== 1) adjusted *= reg;
+  const drift = Math.round(adjusted);
 
   const newRatings = applyAgingToRatings(player.ratings, newAge, drift, rng);
   const newOverall = approximateOverall(newRatings, player.sportData.position);
@@ -162,7 +186,8 @@ export function shouldBasketballPlayerRetire(
   opts: DevelopSeasonOptions = {},
 ): boolean {
   const rng = makeRng(opts.rngSeed ?? `retire-${player.id}-${player.age}`);
-  const age = player.age;
+  // A positive offset makes the player "play young" against every threshold.
+  const age = player.age - (opts.retirementAgeOffset ?? 0);
   const ovr = player.ratings.overall;
 
   if (age >= 40) return true;
