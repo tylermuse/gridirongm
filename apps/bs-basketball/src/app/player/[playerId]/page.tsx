@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ratingDeltas, trajectoryDescription } from '@/lib/development';
 import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
+import { buildAdvancedContext } from '@/lib/stats/advancedLeague';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
@@ -107,6 +108,9 @@ export default function PlayerPage() {
   // up to date during the season); career stats are rolled up at season's end.
   const aggregatedSeason = statsForPlayer(regularSeasonStatsByPlayer(league), player.id);
   const stats = statMode === 'season' ? aggregatedSeason : player.careerStats;
+  // Advanced line (TS% / eFG% / +/- / USG% / PER — lib/stats/advanced.ts).
+  // USG% depends on current-team totals, so it's season-only.
+  const advanced = buildAdvancedContext(league).forPlayer(player.id, stats);
   // League ranks only make sense for the current season's per-game stats.
   const seasonRanks = statMode === 'season' ? computeLeagueStatRanks(league) : null;
   const statRank = (cat: StatCategory): number | null => seasonRanks?.rank(player.id, cat) ?? null;
@@ -310,6 +314,11 @@ export default function PlayerPage() {
             <Stat label="FG%" value={pct(stats.fieldGoalsMade, stats.fieldGoalsAttempted)} />
             <Stat label="3P%" value={pct(stats.threePointsMade, stats.threePointsAttempted)} />
             <Stat label="FT%" value={pct(stats.freeThrowsMade, stats.freeThrowsAttempted)} />
+            <Stat label="TS%" value={(advanced.ts * 100).toFixed(1)} />
+            <Stat label="eFG%" value={(advanced.efg * 100).toFixed(1)} />
+            <Stat label="+/− PG" value={`${advanced.plusMinusPg >= 0 ? '+' : ''}${advanced.plusMinusPg.toFixed(1)}`} />
+            {statMode === 'season' && <Stat label="USG%" value={advanced.usg.toFixed(1)} />}
+            <Stat label="PER" value={advanced.per.toFixed(1)} />
           </div>
         ) : (
           <EmptyState

@@ -5,15 +5,24 @@
 
 import type { PlayerId, TeamId } from '@bs/core/adapter';
 
-/** Scouting reveals a prospect's true potential; you get this many per draft. */
+/**
+ * LEGACY: the old flat budget (8 scouts, each revealing true potential). Kept so
+ * saves made before tiered scouting can be converted — see scoutPointsLeft().
+ */
 export const SCOUTS_PER_DRAFT = 8;
 
+/** Tiered scouting budget (points) per draft. */
+export const SCOUT_POINTS_PER_DRAFT = 30;
+
+/** 1 = Quick look, 2 = Workout, 3 = Full evaluation. 0 = unscouted. */
+export type ScoutLevel = 0 | 1 | 2 | 3;
+
 export interface DraftPickSlot {
-  /** 1..60 overall pick number. */
+  /** 1..2N overall pick number (60 in a 30-team league). */
   overall: number;
   /** 1 or 2. */
   round: number;
-  /** 1..30 within the round. */
+  /** 1..N within the round (N = team count). */
   pickInRound: number;
   /** Team currently making this pick. Re-resolved from the pick-ownership
    *  registry on every read (see getDraft), so a mid-draft pick trade takes
@@ -23,7 +32,7 @@ export interface DraftPickSlot {
    *  pick-ownership registry. Lets ownership be re-resolved after trades.
    *  (Optional at runtime for saves made before this field existed.) */
   originalTeamId: TeamId;
-  /** Lottery picks are 1..14. */
+  /** Lottery picks: every non-playoff team (1..14 at 30 teams, 1..16 at 32). */
   isLottery: boolean;
   /** Prospect taken, or null if not yet made. */
   prospectId: PlayerId | null;
@@ -47,7 +56,7 @@ export interface DraftTradeRecord {
 export interface DraftState {
   /** Season the rookies sign for (the upcoming season). */
   season: number;
-  /** 60 picks in order. */
+  /** 2 × team-count picks in order (60 in a 30-team league). */
   picks: DraftPickSlot[];
   /** Remaining undrafted prospect ids. */
   poolIds: PlayerId[];
@@ -66,10 +75,17 @@ export interface DraftState {
    * reveal landed.
    */
   lotteryOrder?: TeamId[];
-  /** Scouting budget left for this draft. */
+  /** LEGACY flat-scout budget (pre-tiered saves). Read only for conversion. */
   scoutsRemaining?: number;
-  /** Prospect ids whose true potential has been revealed. */
+  /** LEGACY: prospects revealed under the flat system — treated as fully
+   *  evaluated (level 3). Never written by new code. */
   scoutedIds?: PlayerId[];
+  /** Tiered scouting points left. Absent on legacy saves (derived lazily). */
+  scoutPoints?: number;
+  /** Highest scouting tier reached per prospect id. */
+  scoutLevels?: Record<string, ScoutLevel>;
+  /** User's starred prospects (watchlist). */
+  watchlist?: PlayerId[];
   /** Pick/player swaps the user made during the draft, oldest first. Drives the
    *  post-draft report's Trade Activity panel. Absent on saves with no trades. */
   trades?: DraftTradeRecord[];

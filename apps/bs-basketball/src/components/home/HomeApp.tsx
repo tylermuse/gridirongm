@@ -1,0 +1,586 @@
+'use client';
+
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { useLeagueStore } from '@/lib/store/leagueStore';
+import { listLeagues, deleteLeague, renameLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
+import { HOOPS_LEAGUE_TEAMS } from '@/lib/data/teams';
+import { Button } from '@/components/ui/Button';
+import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { NewsFeed } from '@/components/feed/NewsFeed';
+import { TeamHero } from '@/components/dashboard/TeamHero';
+import { TradeOffersBanner } from '@/components/dashboard/TradeOffersBanner';
+import { OwnerObjectives } from '@/components/dashboard/OwnerObjectives';
+import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
+import { DashboardRow } from '@/components/dashboard/DashboardRow';
+import { EditorialWidgets } from '@/components/dashboard/EditorialWidgets';
+import { TeamSpotlight } from '@/components/show/TeamSpotlight';
+import { TeamLeaders } from '@/components/dashboard/TeamLeaders';
+import { LiveViewer } from '@/components/live/LiveViewer';
+import { CloudRestoreBanner } from '@/components/settings/CloudRestoreBanner';
+import { ApprovalRings, TrophyCase } from '@/components/dashboard/MetaWidgets';
+import { InjuryReport } from '@/components/dashboard/InjuryReport';
+import { GamePlanModal } from '@/components/modals/GamePlanModal';
+import { nextAction } from '@/lib/ui/nextAction';
+import { useRouter } from 'next/navigation';
+import { canAdvanceSeason } from '@/lib/season';
+import { getBracket } from '@/lib/playoffs';
+import { getDraft } from '@/lib/draft';
+import { getGmFired, getGmOpenings } from '@/lib/approval';
+import { isGodMode } from '@/lib/godMode/godMode';
+import { capRoom } from '@/lib/freeAgency';
+import { getTeamPicks } from '@/lib/trade';
+import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+
+/**
+ * BS Hoops home — port of bs-football's TeamPicker pattern.
+ *
+ *   - Top: hero (BS HOOPS lockup + tagline)
+ *   - Resume card (if there's a saved league)
+ *   - Spectator card (dashed border, watch-only)
+ *   - Search input
+ *   - 30 team grid: each card shows the TeamLogo + city + nickname
+ *
+ * Clicking a team starts a new league and stamps that team as userTeamId
+ * before navigating to /league.
+ *
+ * Rendered by the server page app/page.tsx, which passes the crawlable
+ * <HomeIntro/> as `intro`. It's shown ONLY in the pre-league splash — the
+ * server always renders the splash (the saved league loads client-side), so the
+ * intro is in the SSR HTML, but it never clutters the in-league dashboard.
+ */
+
+export default function HomeApp({ intro }: { intro?: ReactNode }) {
+  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason, watchNextUserGame } = useLeagueStore();
+  const router = useRouter();
+  const [watching, setWatching] = useState<{ userGameId: string; dayGameIds: string[] } | null>(null);
+  const [gamePlanOpen, setGamePlanOpen] = useState(false);
+
+  async function handleWatchLive() {
+    const res = await watchNextUserGame();
+    if (res) setWatching({ userGameId: res.userGameId, dayGameIds: res.dayGameIds });
+  }
+  const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
+  const saveIds = useMemo(() => saves.map(s => s.id), [saves]);
+  const [showLoadList, setShowLoadList] = useState(false);
+  const [search, setSearch] = useState('');
+  const [pickingAbbr, setPickingAbbr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const all = await listLeagues();
+      if (!cancelled) setSaves(all);
+    })();
+    return () => { cancelled = true; };
+  }, [league]);
+
+  async function handlePick(abbreviation: string, spectator = false) {
+    setPickingAbbr(abbreviation);
+    try {
+      await newLeague();
+      if (!spectator) {
+        // After newLeague, the store's league has the freshly generated
+        // teams with new IDs; find the one matching the chosen abbreviation.
+        const state = useLeagueStore.getState();
+        const picked = state.league?.teams.find(t => t.abbreviation === abbreviation);
+        if (picked) {
+          await pickUserTeam(picked.id);
+        }
+      }
+    } finally {
+      setPickingAbbr(null);
+    }
+  }
+
+  // Take over a club WITHIN the current league after being fired. Must NOT call
+  // newLeague() — that regenerates a fictional league and wipes the imported
+  // rosters (BUG-23 data loss). pickUserTeam clears the fired flag, sets the new
+  // userTeamId on the existing league, and drops the GM into the live offseason
+  // (pending draft, own picks, AI free agency not yet run).
+  async function handleTakeover(teamId: BasketballTeam['id'], abbreviation: string) {
+    setPickingAbbr(abbreviation);
+    try {
+      await pickUserTeam(teamId);
+    } finally {
+      setPickingAbbr(null);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!window.confirm('Delete this saved league? This cannot be undone.')) return;
+    await deleteLeague(id);
+    const all = await listLeagues();
+    setSaves(all);
+  }
+
+  async function handleRename(id: string, current: string) {
+    const name = window.prompt('Rename this league', current);
+    if (name == null || !name.trim()) return;
+    await renameLeague(id, name);
+    const all = await listLeagues();
+    setSaves(all);
+  }
+
+  // ---------------- League loaded ----------------
+  if (league) {
+    const userTeam = league.userTeamId ? league.teams.find(t => t.id === league.userTeamId) : null;
+    const bracket = getBracket(league);
+    const draft = getDraft(league);
+    const fired = getGmFired(league);
+    const seasonOver = canAdvanceSeason(league);
+    const champion = seasonOver && bracket?.championTeamId
+      ? (league.teams.find(t => t.id === bracket.championTeamId) as BasketballTeam | undefined)
+      : undefined;
+    return (
+      <div className="max-w-6xl mx-auto px-5 py-12">
+        {userTeam ? (
+          <>
+            <TeamHero league={league} team={userTeam as BasketballTeam} />
+            <TradeOffersBanner league={league} />
+          </>
+        ) : (
+          // R2-4: lead with the current season so the headline reads as the
+          // active state, not the league founding year. League name was
+          // surfacing as "BS Hoops 2026" (the year the save was created)
+          // adjacent to "Season 2029 · Draft" — those two years contradicted
+          // each other on first glance. Now the current season is the lockup
+          // and the league name is the smaller meta label underneath.
+          <div className="flex flex-wrap items-baseline gap-4 mb-6">
+            <h1
+              className="text-5xl sm:text-6xl font-black tracking-tight"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
+            >
+              {league.currentSeason} {nextAction(league).phaseLabel}
+            </h1>
+            <span className="text-[var(--text-sec)] text-sm">
+              {league.displayName}
+            </span>
+          </div>
+        )}
+
+        {fired && !league.userTeamId && (() => {
+          const openingIds = getGmOpenings(league);
+          const stored = openingIds
+            .map(id => league.teams.find(t => t.id === id) as BasketballTeam | undefined)
+            .filter((t): t is BasketballTeam => !!t);
+          // Fallback for saves made before openings were tracked: the worst few
+          // other clubs by record. Never offer the team that just fired you.
+          const base = stored.length
+            ? stored
+            : [...(league.teams as BasketballTeam[])]
+                .sort((a, b) => (a.record.wins - a.record.losses) - (b.record.wins - b.record.losses))
+                .slice(0, 6);
+          const openings = base.filter(t => t.id !== fired.teamId).slice(0, 5);
+          return (
+            <div className="mb-8 rounded-xl border-2 p-5" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="text-3xl">📉</div>
+                <div className="min-w-0">
+                  <div className="font-bold">You were fired by the {fired.teamName}</div>
+                  <div className="text-sm text-[var(--text-sec)]">
+                    Ownership ran out of patience after the {fired.season} season. {openings.length} club{openings.length === 1 ? '' : 's'} with a front-office vacancy want to talk — pick your next job.
+                  </div>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {openings.map(t => {
+                  // Per-team situation summary so you can tell a rebuild from a
+                  // retool at a glance (FEAT-20).
+                  const players = t.playerIds
+                    .map(id => league.players[id] as BasketballPlayer | undefined)
+                    .filter((p): p is BasketballPlayer => !!p);
+                  const top = [...players].sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 2);
+                  const avgAge = players.length ? players.reduce((s, p) => s + p.age, 0) / players.length : 0;
+                  const young = players.filter(p => p.age <= 23).length;
+                  const cap = capRoom(league, t.id);
+                  const r1 = getTeamPicks(league, t.id).filter(p => p.round === 1);
+                  const extra1 = r1.filter(p => p.originalTeamId !== t.id).length;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => void handleTakeover(t.id, t.abbreviation)}
+                      disabled={pickingAbbr != null}
+                      className="rounded-lg border bg-[var(--surface)] p-3 text-left hover:border-[var(--accent)] transition-colors disabled:opacity-50"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
+                        <span className="min-w-0">
+                          <span className="font-bold text-sm block truncate">{t.city} {t.name}</span>
+                          <span className="text-[11px] text-[var(--text-sec)]">{t.record.wins}-{t.record.losses}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-0.5 text-[11px] text-[var(--text-sec)]">
+                        <div className="truncate">
+                          <span className="opacity-60">Core: </span>
+                          {top.length ? top.map(p => `${p.lastName} ${p.ratings.overall}`).join(' · ') : '—'}
+                        </div>
+                        <div>
+                          <span className="opacity-60">Cap: </span>
+                          {cap >= 0 ? `$${(cap / 1e6).toFixed(1)}M space` : `$${(-cap / 1e6).toFixed(1)}M over`}
+                          <span className="opacity-60"> · Age </span>{avgAge.toFixed(1)}y
+                        </div>
+                        <div>
+                          <span className="opacity-60">Picks: </span>
+                          {r1.length} 1st{r1.length === 1 ? '' : 's'}{extra1 > 0 ? ` (${extra1} extra)` : ''}
+                          <span className="opacity-60"> · Young </span>{young}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[11px] font-semibold" style={{ color: 'var(--accent)' }}>Take the job →</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* R2-3: when the user has been fired and has not yet taken a new job,
+            suppress the draft / season-over CTAs and the bottom action row.
+            Otherwise the home dashboard had three competing "primary" paths
+            (the openings list, the draft banner, "Enter League") all asking
+            for the same click. Sequence it: take a job first, *then* surface
+            the draft / season-over CTAs once they have a team. */}
+        {fired && !league.userTeamId ? null : draft ? (
+          <div
+            className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
+            style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
+          >
+            <div className="text-3xl">🎟️</div>
+            <div className="min-w-0 flex-1">
+              <div className="font-bold">{draft.season} Draft is on the clock</div>
+              <div className="text-sm text-[var(--text-sec)]">
+                {draft.complete
+                  ? 'The draft is done — finalize rosters and tip off the season.'
+                  : `Pick ${draft.currentPick + 1} of ${draft.picks.length}. Make your selections, then start the season.`}
+              </div>
+            </div>
+            <Link href="/draft">
+              <Button variant="primary" size="lg">
+                {draft.complete ? 'Finish Offseason →' : 'Continue Draft →'}
+              </Button>
+            </Link>
+          </div>
+        ) : seasonOver && (
+          <div
+            className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
+            style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
+          >
+            <div className="text-3xl">🏁</div>
+            <div className="min-w-0 flex-1">
+              <div className="font-bold">Season {league.currentSeason} is complete</div>
+              <div className="text-sm text-[var(--text-sec)]">
+                {champion
+                  ? `${champion.city} ${champion.name} are your champions. `
+                  : ''}
+                Age your league and head into the {league.currentSeason + 1} Draft.
+              </div>
+            </div>
+            <Button
+              variant="primary"
+              size="lg"
+              disabled={loading}
+              onClick={() => {
+                void (async () => {
+                  const ok = await enterOffseason();
+                  if (ok) router.push('/draft');
+                })();
+              }}
+            >
+              {loading ? 'Working…' : 'Enter Offseason →'}
+            </Button>
+          </div>
+        )}
+
+        {userTeam && (
+          <>
+            <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void handleWatchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} />
+            {isGodMode(league) && (
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
+                <span className="font-bold" style={{ color: 'var(--accent)' }}>🛠️ God Mode</span>
+                <span className="text-[var(--text-sec)]">Force your next game:</span>
+                <button onClick={() => void useLeagueStore.getState().forceUserGame(true)} className="rounded-md px-2.5 py-1 text-xs font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>Force Win</button>
+                <button onClick={() => void useLeagueStore.getState().forceUserGame(false)} className="rounded-md px-2.5 py-1 text-xs font-bold border" style={{ borderColor: 'var(--border)' }}>Force Loss</button>
+              </div>
+            )}
+            <InjuryReport league={league} team={userTeam as BasketballTeam} />
+            <DashboardRow league={league} team={userTeam as BasketballTeam} />
+            <div className="mb-6"><TeamSpotlight league={league} compact /></div>
+            <TeamLeaders league={league} team={userTeam as BasketballTeam} />
+            <EditorialWidgets league={league} team={userTeam as BasketballTeam} />
+            <div className="grid md:grid-cols-[1fr_15rem] gap-4 mb-6 items-start">
+              <TrophyCase league={league} team={userTeam as BasketballTeam} />
+              <ApprovalRings team={userTeam as BasketballTeam} />
+            </div>
+          </>
+        )}
+
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Main column */}
+          <div className="lg:col-span-2">
+            {userTeam && <OwnerObjectives league={league} team={userTeam as BasketballTeam} />}
+
+            {/* R2-3: bottom action row collapses while the user is between
+                jobs (fired + no replacement team). Only "Back to menu" remains
+                so they can bail out to save management — every other button
+                points to surfaces that require a team. */}
+            <div className="flex flex-wrap gap-3">
+              {(!fired || !!league.userTeamId) && (
+                <>
+                  <Link href="/league">
+                    <Button variant="primary" size="lg">Enter League →</Button>
+                  </Link>
+                  <Link href="/standings">
+                    <Button variant="secondary" size="lg">Standings</Button>
+                  </Link>
+                </>
+              )}
+              {fired && !league.userTeamId && (
+                <Link href="/standings">
+                  <Button variant="secondary" size="lg">Browse Standings</Button>
+                </Link>
+              )}
+              {userTeam && (
+                <Link href={`/team/${userTeam.id}`}>
+                  <Button variant="secondary" size="lg">My Team</Button>
+                </Link>
+              )}
+              <Button variant="ghost" size="lg" onClick={clearActive}>
+                ← Back to menu
+              </Button>
+            </div>
+
+          </div>
+
+          {/* News sidebar */}
+          <aside className="lg:col-span-1">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold">League News</h2>
+              <Link href="/news" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+                View all →
+              </Link>
+            </div>
+            <NewsFeed league={league} max={6} />
+          </aside>
+        </div>
+
+        {watching && (
+          <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} />
+        )}
+        {userTeam && (
+          <GamePlanModal teamId={userTeam.id} open={gamePlanOpen} onClose={() => setGamePlanOpen(false)} />
+        )}
+      </div>
+    );
+  }
+
+  // ---------------- Splash ----------------
+  const filtered = HOOPS_LEAGUE_TEAMS
+    .filter(t =>
+      !search ||
+      t.city.toLowerCase().includes(search.toLowerCase()) ||
+      t.name.toLowerCase().includes(search.toLowerCase()) ||
+      t.abbreviation.toLowerCase().includes(search.toLowerCase()),
+    )
+    .sort((a, b) => a.city.localeCompare(b.city));
+
+  return (
+    <div className="min-h-screen flex flex-col items-center">
+      {/* Hero banner — full-bleed court backdrop with the wordmark over it. */}
+      <div className="w-full relative overflow-hidden" style={{ background: 'radial-gradient(120% 90% at 50% 110%, #2a1808 0%, #120c16 55%, #0a0a0f 100%)' }}>
+        {/* Court key lines */}
+        <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMax slice" viewBox="0 0 400 200" fill="none" aria-hidden>
+          <g stroke="#ffffff" strokeOpacity="0.07" strokeWidth="1.4">
+            <circle cx="200" cy="210" r="58" />
+            <circle cx="200" cy="210" r="30" />
+            <rect x="170" y="150" width="60" height="80" />
+            <path d="M118 230 A 100 100 0 0 1 282 230" />
+          </g>
+          <circle cx="200" cy="62" r="120" fill="#E66B00" fillOpacity="0.10" />
+        </svg>
+        <div className="relative z-10 flex flex-col items-center text-center px-4 pt-16 pb-12 sm:pt-20 sm:pb-16">
+          <span className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-white/40 mb-2">Franchise Basketball · Parody GM Sim</span>
+          <h1 className="text-6xl sm:text-8xl font-black tracking-tighter leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+            <span style={{ color: 'var(--accent)' }}>BS</span> <span className="text-white">HOOPS</span>
+          </h1>
+          <p className="text-white/70 text-base sm:text-xl mt-4 max-w-xl">
+            30 cities. 60 prospects. One banner. Build your dynasty and run the franchise.
+          </p>
+          <div className="text-white/40 text-xs mt-6 animate-pulse">↓ pick your team</div>
+        </div>
+      </div>
+
+      <div className="w-full flex flex-col items-center px-4 sm:px-8 py-10 max-w-5xl">
+      {error && (
+        <div className="mb-6 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 text-sm">
+          {error}
+        </div>
+      )}
+
+      <CloudRestoreBanner localIds={saveIds} />
+
+      {/* Resume saved game */}
+      {saves.length > 0 && (
+        <div className="mb-6 max-w-md w-full">
+          <button
+            onClick={() => void continueLatest()}
+            disabled={loading}
+            className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-[var(--accent)] bg-[var(--accent)]/5
+                       hover:bg-[var(--accent)]/10 hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all group"
+          >
+            <div className="flex items-center gap-3 text-left">
+              <div
+                className="w-10 h-10 rounded-full text-white flex items-center justify-center text-sm font-black shrink-0"
+                style={{ background: 'var(--accent)', fontFamily: 'var(--font-display)' }}
+              >
+                {(saves[0].displayName ?? 'BS').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <div className="text-sm font-bold" style={{ color: 'var(--accent)' }}>
+                  Continue League
+                </div>
+                <div className="text-xs text-[var(--text-sec)]">
+                  Season {saves[0].currentSeason} · {saves[0].currentPhase} · {saves[0].teamCount} teams
+                </div>
+              </div>
+            </div>
+            <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform">→</div>
+          </button>
+          <div className="text-center mt-2">
+            <button
+              onClick={() => setShowLoadList(s => !s)}
+              className="text-xs text-[var(--text-sec)] hover:text-[var(--accent)] underline-offset-4 hover:underline"
+            >
+              {showLoadList ? 'Hide' : 'Or browse'} {saves.length} saved {saves.length === 1 ? 'league' : 'leagues'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Browseable saved leagues */}
+      {showLoadList && saves.length > 0 && (
+        <div className="mb-6 max-w-2xl w-full">
+          <CardHeader>
+            <CardTitle>Saved leagues</CardTitle>
+          </CardHeader>
+          <div className="space-y-2">
+            {saves.map(s => (
+              <Card key={s.id} className="flex items-center gap-3 !p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold truncate">{s.displayName}</div>
+                  <div className="text-xs text-[var(--text-sec)] truncate">
+                    Season {s.currentSeason} · {s.currentPhase} · {s.teamCount} teams · {s.playerCount} players
+                  </div>
+                  <div className="text-xs text-[var(--text-sec)] opacity-70 mt-0.5">
+                    Saved {new Date(s.updatedAt).toLocaleString()}
+                  </div>
+                </div>
+                <Button size="sm" onClick={() => void loadLeague(s.id)}>Load</Button>
+                <Button size="sm" variant="ghost" onClick={() => void handleRename(s.id, s.displayName)} title="Rename save">✎</Button>
+                <Button size="sm" variant="ghost" onClick={() => void handleDelete(s.id)} title="Delete save">✕</Button>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      <input
+        type="text"
+        placeholder="Search teams…"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        className="w-full max-w-md mb-4 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm focus:outline-none focus:border-[var(--accent)]"
+      />
+
+      {/* Spectator card */}
+      <button
+        onClick={() => void handlePick('', true)}
+        disabled={!!pickingAbbr || loading}
+        className="w-full max-w-4xl mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)]
+                   hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all text-left disabled:opacity-50"
+      >
+        <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">
+          👁
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold">Spectator (no team)</div>
+          <div className="text-xs text-[var(--text-sec)]">Watch all 30 AI-controlled teams play out the season. No managing.</div>
+        </div>
+        <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
+      </button>
+
+      {/* Import a real roster (BBGM/ZenGM) */}
+      <Link
+        href="/rosters"
+        className="w-full max-w-4xl mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)]
+                   hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all text-left"
+      >
+        <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">
+          📥
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold">Import a real roster</div>
+          <div className="text-xs text-[var(--text-sec)]">Start from the real NBA roster — or your own BBGM/ZenGM league file.</div>
+        </div>
+        <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
+      </Link>
+
+      {/* Team grid (skeletons while a saved league is loading) */}
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl w-full">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]"
+            >
+              <div className="w-12 h-12 rounded-xl bg-[var(--surface-2)] animate-pulse shrink-0" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-3 w-3/4 rounded bg-[var(--surface-2)] animate-pulse" />
+                <div className="h-2.5 w-1/2 rounded bg-[var(--surface-2)] animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl w-full">
+        {filtered.map(team => {
+          const isPicking = pickingAbbr === team.abbreviation;
+          return (
+            <button
+              key={team.abbreviation}
+              onClick={() => void handlePick(team.abbreviation)}
+              disabled={!!pickingAbbr || loading}
+              className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]
+                         hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all text-left
+                         disabled:opacity-50 disabled:cursor-wait"
+            >
+              <TeamLogo
+                abbreviation={team.abbreviation}
+                primaryColor={team.primaryColor}
+                secondaryColor={team.secondaryColor}
+                size="lg"
+              />
+              <div className="min-w-0">
+                <div className="text-sm font-bold truncate">{team.city}</div>
+                <div className="text-xs text-[var(--text-sec)] truncate">
+                  {isPicking ? 'Starting…' : team.name}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      )}
+      </div>
+      {intro}
+    </div>
+  );
+}
+
+// ===========================================================================
+// Bits
+// ===========================================================================
+

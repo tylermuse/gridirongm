@@ -18,7 +18,8 @@
 
 import type { BaseLeagueState, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
-import { userPlayoffResult, type PlayoffResult } from '@/lib/approval/approval';
+import { userPlayoffResult, type PlayoffResult } from '../approval/playoffResult';
+import { seasonObjectiveGrades, type ObjectiveGrade } from './objectives';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -33,6 +34,20 @@ export interface OwnerMessage {
   tone: 'celebrate' | 'encourage' | 'level' | 'concern' | 'warning';
   /** True when the owner specifically calls out the job is at risk. */
   hotSeat: boolean;
+  /** Season-end grades for the owner's objectives (empty when none were set). */
+  objectiveGrades: ObjectiveGrade[];
+  /** Owner-approval points the objectives contributed (see owner/objectives.ts). */
+  objectiveDelta: number;
+}
+
+function objectiveLine(grades: ObjectiveGrade[]): string | null {
+  if (!grades.length) return null;
+  const met = grades.filter(g => g.grade === 'met').length;
+  const missed = grades.filter(g => g.grade === 'missed');
+  if (met === grades.length) return `You hit every objective I set (${met}/${grades.length}). That's how trust gets built.`;
+  if (missed.length === grades.length) return `You missed every objective I set — ${missed.map(g => g.description.toLowerCase()).join(', ')}. That gets noticed.`;
+  const miss = missed[0];
+  return `On my objectives: ${met} of ${grades.length} met${miss ? ` — "${miss.description}" fell short` : ''}.`;
 }
 
 // ============================================================================
@@ -239,10 +254,14 @@ export function buildOwnerMessage(league: LeagueState, season: number): OwnerMes
     : `${wins}-${losses} cannot become the norm.`;
   body.push(recordLine);
 
+  const { grades: objectiveGrades, delta: objectiveDelta } = seasonObjectiveGrades(league, season);
+  const objLine = objectiveLine(objectiveGrades);
+  if (objLine) body.push(objLine);
+
   const directive = pick(directivePool, seed('dir'));
 
   const headline = `From the Owner's Desk — ${ownerName}`;
   const hotSeat = tone === 'warning' || jobSecurity === 'final_warning';
 
-  return { headline, body, directive, tone, hotSeat };
+  return { headline, body, directive, tone, hotSeat, objectiveGrades, objectiveDelta };
 }
