@@ -1,8 +1,22 @@
 {
- "panic_open_1": "cccpcc", "panic_open_2": "pcccc", "panic_verdict_1": "cp", "panic_verdict_2": "cp",
- "buysell_open_1": "cpcccp", "buysell_open_2": "ccpp",
- "contender_open_1": "ccccpp", "contender_open_2": "cppp", "contender_verdict_1": "cp",
- "signoff_1": "ccc", "signoff_2": "cpc", "banter_1": "ppp", "banter_2": "ppp",
- "panic_open_3": "ccccpp", "contender_open_3": "ccccpp", "contender_verdict_2": "cp", "buysell_final_1": "cpp",
- "banter_3": "ppp", "banter_4": "ppp", "signoff_3": "ccc"
+ "panic_open_1": "cccppp",
+ "panic_open_2": "pcccc",
+ "panic_verdict_1": "cp",
+ "panic_verdict_2": "cp",
+ "buysell_open_1": "ppcccp",
+ "buysell_open_2": "ccpp",
+ "contender_open_1": "ccccpp",
+ "contender_open_2": "cppp",
+ "contender_verdict_1": "cp",
+ "signoff_1": "ccc",
+ "signoff_2": "ppp",
+ "banter_1": "ppp",
+ "banter_2": "ppp",
+ "panic_open_3": "ccccpp",
+ "contender_open_3": "ccccpp",
+ "contender_verdict_2": "cp",
+ "buysell_final_1": "cpp",
+ "banter_3": "ppp",
+ "banter_4": "ppp",
+ "signoff_3": "ccc"
 }

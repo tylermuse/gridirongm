@@ -6,21 +6,15 @@
     "kind": "c",
     "a": 0.0,
     "b": 8.96,
-    "id": "panic_open_1__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "panic_open_1__0"
    },
    {
     "kind": "p",
     "a": 8.96,
-    "b": 11.84,
-    "start": 8.96
-   },
-   {
-    "kind": "c",
-    "a": 11.84,
     "b": 21.394286,
-    "id": "panic_open_1__2",
-    "start": 11.84
+    "start": 8.96,
+    "id": "panic_open_1__1"
    }
   ]
  },
@@ -31,14 +25,15 @@
     "kind": "p",
     "a": 0.0,
     "b": 2.24,
-    "start": 0.0
+    "start": 0.0,
+    "id": "panic_open_2__0"
    },
    {
     "kind": "c",
     "a": 2.24,
     "b": 19.252245,
-    "id": "panic_open_2__1",
-    "start": 2.24
+    "start": 2.24,
+    "id": "panic_open_2__1"
    }
   ]
  },
@@ -49,14 +44,15 @@
     "kind": "c",
     "a": 0.6,
     "b": 3.48,
-    "id": "panic_verdict_1__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "panic_verdict_1__0"
    },
    {
     "kind": "p",
     "a": 3.48,
     "b": 5.929796,
-    "start": 3.48
+    "start": 3.48,
+    "id": "panic_verdict_1__1"
    }
   ]
  },
@@ -67,14 +63,15 @@
     "kind": "c",
     "a": 0.0,
     "b": 3.9,
-    "id": "panic_verdict_2__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "panic_verdict_2__0"
    },
    {
     "kind": "p",
     "a": 3.9,
     "b": 7.000816,
-    "start": 3.9
+    "start": 3.9,
+    "id": "panic_verdict_2__1"
    }
   ]
  },
@@ -82,30 +79,25 @@
   "dur": 19.722449,
   "segs": [
    {
-    "kind": "c",
-    "a": 0.0,
-    "b": 2.72,
-    "id": "buysell_open_1__0",
-    "start": 0.0
-   },
-   {
     "kind": "p",
-    "a": 2.72,
+    "a": 0.0,
     "b": 5.84,
-    "start": 2.72
+    "start": 0.0,
+    "id": "buysell_open_1__0"
    },
    {
     "kind": "c",
     "a": 5.84,
     "b": 17.36,
-    "id": "buysell_open_1__2",
-    "start": 5.84
+    "start": 5.84,
+    "id": "buysell_open_1__1"
    },
    {
     "kind": "p",
     "a": 17.36,
     "b": 19.722449,
-    "start": 17.36
+    "start": 17.36,
+    "id": "buysell_open_1__2"
    }
   ]
  },
@@ -116,14 +108,15 @@
     "kind": "c",
     "a": 0.0,
     "b": 6.24,
-    "id": "buysell_open_2__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "buysell_open_2__0"
    },
    {
     "kind": "p",
     "a": 6.24,
     "b": 12.199184,
-    "start": 6.24
+    "start": 6.24,
+    "id": "buysell_open_2__1"
    }
   ]
  },
@@ -134,14 +127,15 @@
     "kind": "c",
     "a": 0.0,
     "b": 14.91,
-    "id": "contender_open_1__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "contender_open_1__0"
    },
    {
     "kind": "p",
     "a": 14.91,
     "b": 18.285714,
-    "start": 14.91
+    "start": 14.91,
+    "id": "contender_open_1__1"
    }
   ]
  },
@@ -152,14 +146,15 @@
     "kind": "c",
     "a": 0.0,
     "b": 5.46,
-    "id": "contender_open_2__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "contender_open_2__0"
    },
    {
     "kind": "p",
     "a": 5.46,
     "b": 14.863673,
-    "start": 5.46
+    "start": 5.46,
+    "id": "contender_open_2__1"
    }
   ]
  },
@@ -170,14 +165,15 @@
     "kind": "c",
     "a": 0.0,
     "b": 2.93,
-    "id": "contender_verdict_1__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "contender_verdict_1__0"
    },
    {
     "kind": "p",
     "a": 2.93,
     "b": 5.668571,
-    "start": 2.93
+    "start": 2.93,
+    "id": "contender_verdict_1__1"
    }
   ]
  },
@@ -188,8 +184,8 @@
     "kind": "c",
     "a": 0.0,
     "b": 5.250612,
-    "id": "signoff_1__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "signoff_1__0"
    }
   ]
  },
@@ -197,24 +193,11 @@
   "dur": 5.276735,
   "segs": [
    {
-    "kind": "c",
-    "a": 0.6,
-    "b": 2.36,
-    "id": "signoff_2__0",
-    "start": 0.0
-   },
-   {
     "kind": "p",
-    "a": 2.36,
-    "b": 3.0,
-    "start": 2.36
-   },
-   {
-    "kind": "c",
-    "a": 3.0,
+    "a": 0.6,
     "b": 5.276735,
-    "id": "signoff_2__2",
-    "start": 3.0
+    "start": 0.0,
+    "id": "signoff_2__0"
    }
   ]
  },
@@ -225,7 +208,8 @@
     "kind": "p",
     "a": 0.0,
     "b": 6.112653,
-    "start": 0.0
+    "start": 0.0,
+    "id": "banter_1__0"
    }
   ]
  },
@@ -236,7 +220,8 @@
     "kind": "p",
     "a": 0.0,
     "b": 6.373878,
-    "start": 0.0
+    "start": 0.0,
+    "id": "banter_2__0"
    }
   ]
  },
@@ -247,14 +232,15 @@
     "kind": "c",
     "a": 0.6,
     "b": 17.895000000000003,
-    "id": "panic_open_3__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "panic_open_3__0"
    },
    {
     "kind": "p",
     "a": 17.895000000000003,
     "b": 24.163265,
-    "start": 17.895000000000003
+    "start": 17.895000000000003,
+    "id": "panic_open_3__1"
    }
   ]
  },
@@ -265,14 +251,15 @@
     "kind": "c",
     "a": 0.6,
     "b": 17.44,
-    "id": "contender_open_3__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "contender_open_3__0"
    },
    {
     "kind": "p",
     "a": 17.44,
     "b": 23.510204,
-    "start": 17.44
+    "start": 17.44,
+    "id": "contender_open_3__1"
    }
   ]
  },
@@ -283,14 +270,15 @@
     "kind": "c",
     "a": 0.6,
     "b": 4.955,
-    "id": "contender_verdict_2__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "contender_verdict_2__0"
    },
    {
     "kind": "p",
     "a": 4.955,
     "b": 7.444898,
-    "start": 4.955
+    "start": 4.955,
+    "id": "contender_verdict_2__1"
    }
   ]
  },
@@ -301,14 +289,15 @@
     "kind": "c",
     "a": 0.6,
     "b": 6.8,
-    "id": "buysell_final_1__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "buysell_final_1__0"
    },
    {
     "kind": "p",
     "a": 6.8,
     "b": 10.396735,
-    "start": 6.8
+    "start": 6.8,
+    "id": "buysell_final_1__1"
    }
   ]
  },
@@ -319,7 +308,8 @@
     "kind": "p",
     "a": 0.6,
     "b": 8.411429,
-    "start": 0.0
+    "start": 0.0,
+    "id": "banter_3__0"
    }
   ]
  },
@@ -330,7 +320,8 @@
     "kind": "p",
     "a": 0.6,
     "b": 6.086531,
-    "start": 0.0
+    "start": 0.0,
+    "id": "banter_4__0"
    }
   ]
  },
@@ -341,8 +332,8 @@
     "kind": "c",
     "a": 0.6,
     "b": 8.071837,
-    "id": "signoff_3__0",
-    "start": 0.0
+    "start": 0.0,
+    "id": "signoff_3__0"
    }
   ]
  }

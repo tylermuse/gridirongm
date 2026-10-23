@@ -89,8 +89,16 @@ two-shot and both are composited back over the still:
      the same still with both hosts turned to the lens) →
      `<key>__<n>.marcus.cam.mp4` / `<key>__<n>.tony.cam.mp4`.
    All crops and stills live in show-assets/wide2.
-6. `python3 compose_shots.py <key>` → `<key>.mp4`: the segments are cut at the
-   pauses between lines, and every render is delayed 0.16 s (HeyGen's lips
-   run ahead of the voice by about that). Copy to `public/show/wide/`, add it
-   to `src/lib/spotlight/wideClips.json` (lines, spans, shots), and re-run
-   `measure_levels.py`.
+   Face-to-face segments are rendered on the grinning still `medium_smile.png`
+   (crops `crop_marcus_smile.png` / `crop_tony_smile.png`) — those lines are
+   the jabs — and camera segments on `medium_cam.png`.
+6. `python3 compose_shots.py <key>` → `<key>.mp4` and `<key>.timing.json`:
+   at every shot change a 1 s clip of the hosts actually turning their heads
+   (`turn_pc.mp4` / `turn_cp.mp4`: a Seedance start-frame/end-frame
+   generation between the two stills, retimed, persons only composited over
+   the still; `turn_cp` is `turn_pc` reversed) is cut in at the pause, with
+   1 s of silence added to the audio, so every line after a turn moves back
+   by 1 s — `timing.json` has the lines' final spans. Every HeyGen render is
+   delayed 0.16 s (its lips run ahead of the voice by about that). Copy to
+   `public/show/wide/`, put the timing.json spans, duration and shots into
+   `src/lib/spotlight/wideClips.json`, and re-run `measure_levels.py`.

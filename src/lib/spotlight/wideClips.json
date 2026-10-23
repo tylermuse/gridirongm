@@ -1,10 +1,10 @@
 {
  "panic_open_1": {
   "src": "/show/wide/panic_open_1.mp4",
-  "duration": 21.72,
+  "duration": 22.72,
   "speech": {
    "start": 0.0,
-   "end": 21.2
+   "end": 22.2
   },
   "lines": [
    {
@@ -28,30 +28,30 @@
    {
     "host": "tony",
     "text": "\u2014or the other way around, depending how I feel.",
-    "start": 8.96,
-    "end": 11.84
+    "start": 9.96,
+    "end": 12.84
    },
    {
     "host": "marcus",
     "text": "And at the end, we both put a number on it. One, totally fine. Ten, hit the button.",
-    "start": 11.84,
-    "end": 16.78
+    "start": 12.84,
+    "end": 17.78
    },
    {
     "host": "tony",
     "text": "And for the record, I've never gone below a six in my life.",
-    "start": 16.78,
-    "end": 21.2
+    "start": 17.78,
+    "end": 22.2
    }
   ],
-  "shots": "cccpcc"
+  "shots": "cccppp"
  },
  "panic_open_2": {
   "src": "/show/wide/panic_open_2.mp4",
-  "duration": 19.56,
+  "duration": 20.56,
   "speech": {
    "start": 0.0,
-   "end": 19.2
+   "end": 20.2
   },
   "lines": [
    {
@@ -63,36 +63,36 @@
    {
     "host": "marcus",
     "text": "Of course you do. Welcome to Panic Mode, everybody.",
-    "start": 2.24,
-    "end": 5.72
+    "start": 3.24,
+    "end": 6.72
    },
    {
     "host": "tony",
     "text": "Simple game. Is it time to panic on this team, or is everybody overreacting?",
-    "start": 5.72,
-    "end": 10.72
+    "start": 6.72,
+    "end": 11.72
    },
    {
     "host": "marcus",
     "text": "We argue it out, then we each give it a number. One to ten. Ten means blow the whole thing up.",
-    "start": 10.72,
-    "end": 15.76
+    "start": 11.72,
+    "end": 16.76
    },
    {
     "host": "tony",
     "text": "One means relax, go make a sandwich, you're fine.",
-    "start": 15.76,
-    "end": 19.2
+    "start": 16.76,
+    "end": 20.2
    }
   ],
   "shots": "pcccc"
  },
  "panic_verdict_1": {
   "src": "/show/wide/panic_verdict_1.mp4",
-  "duration": 6.24,
+  "duration": 7.24,
   "speech": {
    "start": 0.35,
-   "end": 5.48
+   "end": 6.48
   },
   "lines": [
    {
@@ -104,18 +104,18 @@
    {
     "host": "tony",
     "text": "Oh, I've had my number ready for ten minutes.",
-    "start": 3.48,
-    "end": 5.48
+    "start": 4.48,
+    "end": 6.48
    }
   ],
   "shots": "cp"
  },
  "panic_verdict_2": {
   "src": "/show/wide/panic_verdict_2.mp4",
-  "duration": 7.36,
+  "duration": 8.32,
   "speech": {
    "start": 0.0,
-   "end": 6.96
+   "end": 7.96
   },
   "lines": [
    {
@@ -127,18 +127,18 @@
    {
     "host": "marcus",
     "text": "Let me think about this for a second.",
-    "start": 3.9,
-    "end": 6.96
+    "start": 4.9,
+    "end": 7.96
    }
   ],
   "shots": "cp"
  },
  "buysell_open_1": {
   "src": "/show/wide/buysell_open_1.mp4",
-  "duration": 20.04,
+  "duration": 21.92,
   "speech": {
    "start": 0.0,
-   "end": 19.68
+   "end": 21.68
   },
   "lines": [
    {
@@ -156,36 +156,36 @@
    {
     "host": "marcus",
     "text": "Here's how it works. I put something on the board. A player, a number, a take that's going around\u2014",
-    "start": 5.84,
-    "end": 11.36
+    "start": 6.84,
+    "end": 12.36
    },
    {
     "host": "tony",
     "text": "\u2014and we tell you if we're buying it, or selling it.",
-    "start": 11.36,
-    "end": 14.48
+    "start": 12.36,
+    "end": 15.48
    },
    {
     "host": "marcus",
     "text": "And there's no hold. You have to pick a side.",
-    "start": 14.48,
-    "end": 17.36
+    "start": 15.48,
+    "end": 18.36
    },
    {
     "host": "tony",
     "text": "Hold is for cowards, Marcus.",
-    "start": 17.36,
-    "end": 19.68
+    "start": 19.36,
+    "end": 21.68
    }
   ],
-  "shots": "cpcccp"
+  "shots": "ppcccp"
  },
  "buysell_open_2": {
   "src": "/show/wide/buysell_open_2.mp4",
-  "duration": 12.52,
+  "duration": 13.52,
   "speech": {
    "start": 0.0,
-   "end": 12.16
+   "end": 13.16
   },
   "lines": [
    {
@@ -203,24 +203,24 @@
    {
     "host": "tony",
     "text": "He says no hedging like he doesn't hedge every single week.",
-    "start": 6.24,
-    "end": 9.84
+    "start": 7.24,
+    "end": 10.84
    },
    {
     "host": "marcus",
     "text": "I commit. Eventually.",
-    "start": 9.84,
-    "end": 12.16
+    "start": 10.84,
+    "end": 13.16
    }
   ],
   "shots": "ccpp"
  },
  "contender_open_1": {
   "src": "/show/wide/contender_open_1.mp4",
-  "duration": 18.6,
+  "duration": 19.6,
   "speech": {
    "start": 0.0,
-   "end": 18.24
+   "end": 19.24
   },
   "lines": [
    {
@@ -250,24 +250,24 @@
    {
     "host": "tony",
     "text": "Loser buys lunch.",
-    "start": 14.91,
-    "end": 16.56
+    "start": 15.91,
+    "end": 17.56
    },
    {
     "host": "marcus",
     "text": "You still owe me two lunches.",
-    "start": 16.56,
-    "end": 18.24
+    "start": 17.56,
+    "end": 19.24
    }
   ],
   "shots": "ccccpp"
  },
  "contender_open_2": {
   "src": "/show/wide/contender_open_2.mp4",
-  "duration": 15.2,
+  "duration": 16.2,
   "speech": {
    "start": 0.0,
-   "end": 14.8
+   "end": 15.8
   },
   "lines": [
    {
@@ -279,30 +279,30 @@
    {
     "host": "tony",
     "text": "Records lie all the time, Marcus. Mine says I'm undefeated at karaoke.",
-    "start": 5.46,
-    "end": 10.0
+    "start": 6.46,
+    "end": 11.0
    },
    {
     "host": "marcus",
     "text": "That's because nobody's ever let you finish a song.",
-    "start": 10.0,
-    "end": 12.56
+    "start": 11.0,
+    "end": 13.56
    },
    {
     "host": "tony",
     "text": "Fair. That's fair.",
-    "start": 12.56,
-    "end": 14.8
+    "start": 13.56,
+    "end": 15.8
    }
   ],
   "shots": "cppp"
  },
  "contender_verdict_1": {
   "src": "/show/wide/contender_verdict_1.mp4",
-  "duration": 6.0,
+  "duration": 7.0,
   "speech": {
    "start": 0.0,
-   "end": 5.2
+   "end": 6.2
   },
   "lines": [
    {
@@ -314,15 +314,15 @@
    {
     "host": "tony",
     "text": "You first. I don't want you copying off me.",
-    "start": 2.93,
-    "end": 5.2
+    "start": 3.93,
+    "end": 6.2
    }
   ],
   "shots": "cp"
  },
  "signoff_1": {
   "src": "/show/wide/signoff_1.mp4",
-  "duration": 5.56,
+  "duration": 5.68,
   "speech": {
    "start": 0.0,
    "end": 5.2
@@ -351,7 +351,7 @@
  },
  "signoff_2": {
   "src": "/show/wide/signoff_2.mp4",
-  "duration": 5.6,
+  "duration": 5.72,
   "speech": {
    "start": 0.35,
    "end": 4.84
@@ -376,11 +376,11 @@
     "end": 4.84
    }
   ],
-  "shots": "cpc"
+  "shots": "ppp"
  },
  "banter_1": {
   "src": "/show/wide/banter_1.mp4",
-  "duration": 6.44,
+  "duration": 6.56,
   "speech": {
    "start": 0.0,
    "end": 5.2
@@ -409,7 +409,7 @@
  },
  "banter_2": {
   "src": "/show/wide/banter_2.mp4",
-  "duration": 6.68,
+  "duration": 6.8,
   "speech": {
    "start": 0.0,
    "end": 6.32
@@ -438,10 +438,10 @@
  },
  "panic_open_3": {
   "src": "/show/wide/panic_open_3.mp4",
-  "duration": 24.52,
+  "duration": 25.48,
   "speech": {
    "start": 0.35,
-   "end": 23.72
+   "end": 24.72
   },
   "lines": [
    {
@@ -471,24 +471,24 @@
    {
     "host": "marcus",
     "text": "And Tony has never said a number under six.",
-    "start": 17.9,
-    "end": 21.06
+    "start": 18.9,
+    "end": 22.06
    },
    {
     "host": "tony",
     "text": "Because nobody's ever earned it.",
-    "start": 21.06,
-    "end": 23.72
+    "start": 22.06,
+    "end": 24.72
    }
   ],
   "shots": "ccccpp"
  },
  "contender_open_3": {
   "src": "/show/wide/contender_open_3.mp4",
-  "duration": 23.84,
+  "duration": 24.84,
   "speech": {
    "start": 0.35,
-   "end": 23.08
+   "end": 24.08
   },
   "lines": [
    {
@@ -518,24 +518,24 @@
    {
     "host": "tony",
     "text": "I have never once said 'it depends'.",
-    "start": 17.44,
-    "end": 21.14
+    "start": 18.44,
+    "end": 22.14
    },
    {
     "host": "marcus",
     "text": "You said it twice last week.",
-    "start": 21.14,
-    "end": 23.08
+    "start": 22.14,
+    "end": 24.08
    }
   ],
   "shots": "ccccpp"
  },
  "contender_verdict_2": {
   "src": "/show/wide/contender_verdict_2.mp4",
-  "duration": 7.76,
+  "duration": 8.76,
   "speech": {
    "start": 0.35,
-   "end": 7.0
+   "end": 8.0
   },
   "lines": [
    {
@@ -547,18 +547,18 @@
    {
     "host": "marcus",
     "text": "You're never scared. You're just wrong a lot.",
-    "start": 4.96,
-    "end": 7.0
+    "start": 5.96,
+    "end": 8.0
    }
   ],
   "shots": "cp"
  },
  "buysell_final_1": {
   "src": "/show/wide/buysell_final_1.mp4",
-  "duration": 10.72,
+  "duration": 11.72,
   "speech": {
    "start": 0.35,
-   "end": 9.96
+   "end": 10.96
   },
   "lines": [
    {
@@ -570,21 +570,21 @@
    {
     "host": "tony",
     "text": "One move? I've got four.",
-    "start": 6.8,
-    "end": 9.19
+    "start": 7.8,
+    "end": 10.19
    },
    {
     "host": "marcus",
     "text": "One.",
-    "start": 9.19,
-    "end": 9.96
+    "start": 10.19,
+    "end": 10.96
    }
   ],
   "shots": "cpp"
  },
  "banter_3": {
   "src": "/show/wide/banter_3.mp4",
-  "duration": 8.72,
+  "duration": 8.84,
   "speech": {
    "start": 0.35,
    "end": 7.96
@@ -613,7 +613,7 @@
  },
  "banter_4": {
   "src": "/show/wide/banter_4.mp4",
-  "duration": 6.4,
+  "duration": 6.52,
   "speech": {
    "start": 0.35,
    "end": 5.64
@@ -642,7 +642,7 @@
  },
  "signoff_3": {
   "src": "/show/wide/signoff_3.mp4",
-  "duration": 8.4,
+  "duration": 8.52,
   "speech": {
    "start": 0.35,
    "end": 7.64

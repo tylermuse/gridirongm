@@ -1,8 +1,8 @@
 """Turn shots.json (per clip, one letter per line: c = camera, p = each other)
-into plan.json (the clip's segments on the timeline) and, for every camera
-segment, an audio slice per host in seg/ for HeyGen: the other host's lines
-muted, 0.6 s of silence in front (HeyGen's lips start late otherwise) and
-0.4 s after. Needs <key>.json, <key>.mp3, <key>.mp3.spans.json per clip.
+into plan.json (the clip's segments on the timeline) and, for every segment,
+an audio slice per host in seg/ for HeyGen: the other host's lines muted,
+0.6 s of silence in front (HeyGen's lips start late otherwise) and 0.4 s
+after. Needs <key>.json, <key>.mp3, <key>.mp3.spans.json per clip.
 
 Usage: python3 plan_shots.py [key ...]   (default: every clip in shots.json)
 """
@@ -26,7 +26,6 @@ def main(keys):
             else: segs.append({'kind': c, 'a': a, 'b': b})
         for n, sg in enumerate(segs):
             sg['start'] = 0.0 if n == 0 else sg['a']  # timeline; 'a' is where the slice's audio begins
-            if sg['kind'] != 'c': continue
             sg['id'] = f'{k}__{n}'
             for host in ('marcus', 'tony'):
                 mute = [f"between(t,{x:.3f},{y:.3f})" for (s, _), (x, y) in zip(lines, sp) if s != host]
