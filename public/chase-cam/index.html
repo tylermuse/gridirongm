@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17d'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17f'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1030,8 +1030,8 @@ function choreograph(res){
     tEnd = tHole + Math.max(.35, Math.abs(Y+.6)/ (Y>12? 8.2:7));
     /* Out of bounds: a scramble (and some outside runs) bends to the sideline and he steps out at the end of the run instead of
        taking the hit — the chaser runs him to the boundary and pulls up (reference: QB scramble up the sideline for the first down) */
-    /* only a gain long enough to look like "beat the edge, turn up the sideline": a 3-6 yd sideline run had him sprint ~24 yds sideways for a couple of yards (Tyler: wide open, never turned upfield). Short scrambles get tackled instead. */
-    const oob = !td && !res.fumble && Y>=7 && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
+    /* only a gain long enough to look like "beat the edge, turn up the sideline": a 3-6 yd sideline run had him sprint ~24 yds sideways for a couple of yards (Tyler: wide open, never turned upfield). Only long gains (scramble 15+, outside run 10+) end out of bounds; shorter ones get tackled. */
+    const oob = !td && !res.fumble && Y>=(scr? 15 : 10) && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
     const oobSide = Math.sign(gapX) || (Math.random()<.5? -1 : 1);
     if(oob){ endX = oobSide*28.2; tEnd = tHole + Math.max(.6, Math.hypot(endX-gapX, Y+.6)/6.9); res.oob = true; }
     carrier = C;
@@ -1039,7 +1039,8 @@ function choreograph(res){
       ? [[qbRecv,0,z0-4.7],[snap+.95,gapX*.3,z0-2.3],[tHole,gapX,z0-.6]]                      // straight downhill from the snap, a slide to the gap at the line, then upfield
       : [[0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.6]];
     if(oob){ /* gets outside the contain, squares his shoulders and runs UP the sideline, then steps out at the spot - not a straight diagonal to the boundary */
-      const pts = [[oobSide*R(17,20), z0+Math.min(3, Y*.3)], [oobSide*25.3, z0+Y*.85], [endX, zEnd]]; let t=tHole, px=gapX, pz=z0-.6;
+      /* measured on b17d: the QB was still 22 yds wide for 6 yds gained - so break contain just outside the tackle box, run UPFIELD first, and only drift to the boundary over the back half */
+      const pts = [[oobSide*Math.max(Math.abs(gapX), 9), z0+1], [oobSide*15, z0+Y*.55], [oobSide*24.3, z0+Y*.92], [endX, zEnd]]; let t=tHole, px=gapX, pz=z0-.6;
       pts.forEach(([x,z],i)=>{ t += Math.max(.25, Math.hypot(x-px, z-pz)/(i===0? 6.4 : 7.3)); keys.push([t, x, z]); px=x; pz=z; });
       tEnd = t;
     } else {
@@ -1937,8 +1938,10 @@ function frame(now){
     const zk=G.fieldPos-50-6.8, seg=running? ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1) : null, inAir = !!(seg && seg.flight && seg.flight.h > 3), landed = !!(seg && seg.rest);
     wantPos.set(-6.5, 3.4, zk-7.5);
     if(inAir || landed) wantLook.set(ball.position.x*.6, clamp(ball.position.y*.5+1, 1, 5.5), clamp(ball.position.z, zk+8, 61)); else wantLook.set(.3, 1.0, zk+8);
-    if(running && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±3.9) fit the frame: at 6.2 m a square phone frame only spans ±2.8 m, so neither signal was on screen */
-      const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(6.2, 5.4/hw); wantPos.set(0, 1.6 + (back-6.2)*.12, 62.4-back); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } } }   /* broadcast cut to the officials under the uprights for the signal */
+  }
+  /* the result shot cuts to the officials under the uprights on EVERY camera: High (cp = null) skipped the whole kick block above, so it never showed the signal */
+  if(running && play && play.res.kind==='fg' && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±3.9) fit the frame: at 6.2 m a square phone frame only spans ±2.8 m, so neither signal was on screen */
+      const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(6.2, 5.4/hw); wantPos.set(0, 1.6 + (back-6.2)*.12, 62.4-back); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } }   /* broadcast cut to the officials under the uprights for the signal */
   if(window.__camOverride){ const o=window.__camOverride; wantPos.set(o[0],o[1],o[2]+G.fieldPos-50); wantLook.set(o[3],o[4],o[5]+G.fieldPos-50); }
   if(window.__camFollow){ const f=window.__camFollow, a=f.actor(); const sx=Math.cos(a.face), sz=-Math.sin(a.face), fx=Math.sin(a.face), fz=Math.cos(a.face); wantPos.set(a.x+sx*f.side+fx*f.fwd, f.h, a.z+sz*f.side+fz*f.fwd); wantLook.set(a.x, f.ly, a.z); camPos.copy(wantPos); camLook.copy(wantLook); }
   const inFlight = running && !!(ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1)||{}).flight;
