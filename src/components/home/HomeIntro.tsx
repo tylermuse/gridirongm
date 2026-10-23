@@ -39,6 +39,9 @@ export default function HomeIntro() {
 
         <h2 className="text-xl font-bold text-gray-900 mb-4">Explore BS Football</h2>
         <div className="flex flex-wrap gap-3">
+          <Link href="/predictions" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:border-blue-300 hover:text-blue-700 transition-colors">
+            NFL playoff odds this week
+          </Link>
           <Link href="/rosters/2026" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:border-blue-300 hover:text-blue-700 transition-colors">
             Browse 2026 team rosters
           </Link>
