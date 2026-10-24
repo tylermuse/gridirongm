@@ -10,7 +10,7 @@ import { Avatar, BoothPanel } from './SpotlightCallIn';
 /**
  * The Booth on every in-game screen: the docked panel plus the floating
  * launcher in the bottom-right corner (which replaces the feedback bubble
- * on game screens). The top bar's Booth button opens the same panel.
+ * on game screens).
  *
  * Builds the hosts' grounding straight from the game store so it works on
  * any page, not just the dashboard that renders the Team Spotlight.
