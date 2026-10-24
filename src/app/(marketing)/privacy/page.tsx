@@ -64,7 +64,9 @@ export default function PrivacyPage() {
           <li>
             <strong>Usage and device information.</strong> Like most websites, we automatically receive standard log
             data such as your IP address, browser type, pages visited, and timestamps, used to operate, secure, and
-            improve the Service.
+            improve the Service. We also record how you use the game&rsquo;s interface, such as which buttons and
+            menus you click or hover over, the options you choose, and how long you spend on each screen, so we can
+            see which features work well and which need fixing. We never record what you type into text fields.
           </li>
           <li>
             <strong>Cookies and similar technologies.</strong> We and our partners use cookies and local browser

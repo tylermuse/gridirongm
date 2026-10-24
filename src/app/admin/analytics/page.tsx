@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { InteractionsSection, type InteractionReport } from './InteractionsSection';
 
 interface AnalyticsData {
   period: string;
@@ -22,6 +23,7 @@ interface AnalyticsData {
   activeUsersRolling: ActiveUsersRolling | null;
   hoopsActiveUsersRolling: ActiveUsersRolling | null;
   sim3dCohorts: Sim3dCohorts | null;
+  interactions: InteractionReport | null;
 }
 
 interface Sim3dCohort { devices: number; sessions: number; sessionsPerDevice: number; medianMinutes: number; meanMinutes: number; pctMultiDay: number; pctReturned7d: number }
@@ -202,6 +204,9 @@ export default function AdminAnalyticsPage() {
 
             {/* 3D live sim launch experiment (free for everyone from 2026-10-23; decide ~2026-11-06) */}
             {data.sim3dCohorts && <Sim3dSection c={data.sim3dCohorts} period={period} />}
+
+            {/* Automatic click / hover / change capture — what people use, ignore, and fight with */}
+            <InteractionsSection r={data.interactions} period={period} />
 
             {/* Signups chart + Top pages side by side */}
             <div className="grid lg:grid-cols-2 gap-6">
@@ -410,6 +415,10 @@ function EventBadge({ event }: { event: string }) {
     login: 'bg-blue-100 text-blue-700',
     signup: 'bg-green-100 text-green-700',
     session_start: 'bg-purple-100 text-purple-700',
+    ui_click: 'bg-sky-50 text-sky-700',
+    ui_change: 'bg-sky-50 text-sky-700',
+    ui_rage_click: 'bg-red-100 text-red-700',
+    ui_dead_click: 'bg-amber-100 text-amber-700',
   };
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors[event] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -419,6 +428,7 @@ function EventBadge({ event }: { event: string }) {
 }
 
 function formatProperties(props: Record<string, unknown>): string {
+  if (props.target) return `${props.target}${props.value ? ` → ${props.value}` : ''} · ${props.path ?? ''}`;
   if (props.path) return String(props.path);
   const entries = Object.entries(props).filter(([, v]) => v != null);
   if (entries.length === 0) return '—';

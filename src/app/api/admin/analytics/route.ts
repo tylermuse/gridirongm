@@ -57,11 +57,13 @@ export async function GET(request: NextRequest) {
     // here: PostgREST caps row-returning requests at `db-max-rows` (1000 on
     // Supabase hosted), so any JS-side aggregate over a table this size is
     // computed on an arbitrary truncated slice and silently under-reports.
-    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes] = await Promise.all([
+    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, interactionsRes] = await Promise.all([
       service.rpc('admin_analytics_summary', { p_since: since }),
 
       service.from('analytics_events')
         .select('event, properties, created_at, user_id')
+        // hovers + time-on-page rows would bury everything else in the live feed
+        .not('event', 'in', '(ui_hover,page_engagement)')
         .order('created_at', { ascending: false })
         .limit(50),
 
@@ -75,6 +77,8 @@ export async function GET(request: NextRequest) {
       service.rpc('admin_active_users', { p_app: 'bs-hoops' }),
       // 3D live sim launch experiment: free-for-all from 2026-10-23, compare 3D-on vs 3D-off devices (migration 20261023_sim3d_cohorts)
       service.rpc('admin_sim3d_cohorts', { p_since: since }),
+      // Feature usage from automatic click/hover capture (migration 20261024_ui_interactions)
+      service.rpc('admin_interaction_report', { p_since: since, p_app: 'bs-football' }),
     ]);
 
     if (summaryRes.error) {
@@ -142,6 +146,7 @@ export async function GET(request: NextRequest) {
       activeUsersRolling: activeRes.error ? null : (activeRes.data ?? null),
       hoopsActiveUsersRolling: hoopsActiveRes.error ? null : (hoopsActiveRes.data ?? null),
       sim3dCohorts: sim3dRes.error ? null : (sim3dRes.data ?? null),
+      interactions: interactionsRes.error ? null : (interactionsRes.data ?? null),
     });
   } catch (err) {
     console.error('Analytics API error:', err);
