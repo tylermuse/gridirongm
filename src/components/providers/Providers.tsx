@@ -2,10 +2,11 @@
 
 import { type ReactNode } from 'react';
 import { SubscriptionProvider } from './SubscriptionProvider';
-import { usePageView } from '@bs/core/analytics';
+import { useInteractionTracking, usePageView } from '@bs/core/analytics';
 
 function PageViewTracker() {
   usePageView();
+  useInteractionTracking();
   return null;
 }
 

@@ -21,6 +21,7 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { trackEvent } from './track';
+import { setInteractionPage, startInteractionTracking } from './interactions';
 
 export { trackEvent, flushEvents } from './track';
 
@@ -96,4 +97,14 @@ export function usePageView() {
     sessionStorage.setItem('gg_session', '1');
     trackEvent('session_start');
   }, []);
+}
+
+/**
+ * Automatic click / hover / change / time-on-page capture (see ./interactions.ts).
+ * Call once in a root provider, alongside usePageView().
+ */
+export function useInteractionTracking() {
+  const pathname = usePathname();
+  useEffect(() => startInteractionTracking(), []);
+  useEffect(() => { setInteractionPage(pathname); }, [pathname]);
 }
