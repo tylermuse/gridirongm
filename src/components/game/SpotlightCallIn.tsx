@@ -7,7 +7,7 @@ import { CALL_IN_CHIPS, answerChip } from '@/lib/engine/callInTemplates';
 import { buildLeagueScoutPacket, fallbackFollowUps } from '@/lib/engine/leagueScout';
 import { useGameStore } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { useBoothStore, EMPTY_BOOTH_LOG, type BoothEpisodeTopic, type BoothHost, type BoothMsg, type BoothLog } from '@/lib/engine/boothStore';
+import { useBoothStore, boothEpisodeKey, EMPTY_BOOTH_LOG, type BoothEpisodeTopic, type BoothHost, type BoothMsg, type BoothLog } from '@/lib/engine/boothStore';
 
 /**
  * "Call In to the Show" — the Booth. Ask Marcus Cole & Tony Blaze a question
@@ -42,6 +42,19 @@ interface BoothPanelProps {
   weekKey: string;
   open: boolean;
   onClose: () => void;
+  /** The current Spotlight episode, pinned at the top of the Booth. */
+  onAir?: OnAirInfo | null;
+  /** Called when the caller asks anything (chip or typed). */
+  onAsk?: () => void;
+}
+
+export interface OnAirInfo {
+  /** e.g. "Trade deadline"; null on an ordinary week. */
+  moment: string | null;
+  topics: BoothEpisodeTopic[];
+  /** Expanded until the caller watches it or calls in. */
+  fresh: boolean;
+  onWatch: () => void;
 }
 
 const HOST_META = {
@@ -108,7 +121,91 @@ function TakeColumn({ host, msg, pending }: { host: Host; msg?: Msg; pending: bo
   );
 }
 
-export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose }: BoothPanelProps) {
+/** A host's first line in the episode, for the "says" row. */
+function firstLine(topics: BoothEpisodeTopic[], speakerId: 'stats' | 'hottake'): string | null {
+  for (const t of topics) {
+    const e = t.exchanges.find(x => x.speakerId === speakerId);
+    if (e) return e.text;
+  }
+  return null;
+}
+
+function PlayIcon() {
+  return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z" /></svg>;
+}
+
+function OnAirCard({ info, onCallIn }: { info: OnAirInfo; onCallIn: () => void }) {
+  const lead = info.topics[0];
+  if (!lead) return null;
+
+  if (!info.fresh) {
+    return (
+      <button
+        onClick={info.onWatch}
+        className="w-full flex items-center gap-2.5 px-3 min-h-12 rounded-lg bg-[#121A2B] text-white text-left hover:bg-[#1c2740] transition-colors"
+      >
+        <span className="text-[10px] font-extrabold tracking-widest text-slate-300 border border-slate-500 px-1.5 py-0.5 rounded shrink-0">ON AIR</span>
+        <span className="text-[13px] font-bold flex-1 min-w-0 truncate">{lead.headline}</span>
+        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-blue-200 shrink-0"><PlayIcon />Watch</span>
+      </button>
+    );
+  }
+
+  const marcus = firstLine(info.topics, 'stats');
+  const tony = firstLine(info.topics, 'hottake');
+  return (
+    <article className="rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm overflow-hidden">
+      <div className="bg-[#121A2B] text-white px-4 py-3.5 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 bg-red-600 text-white text-[11px] font-extrabold tracking-widest px-2 py-1 rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-white" />ON AIR
+          </span>
+          <span className="text-xs text-slate-300">New episode{info.moment ? ` · ${info.moment}` : ''}</span>
+        </div>
+        <h3 className="text-lg font-extrabold leading-tight">{lead.headline}</h3>
+      </div>
+
+      {marcus && tony && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 sm:divide-x divide-[var(--border)] border-b border-[var(--border)]">
+          {([['marcus', marcus], ['tony', tony]] as const).map(([h, line]) => (
+            <div key={h} className={`flex gap-2 px-3.5 py-3 border-t-[3px] ${HOST_META[h].rule}`}>
+              <Avatar host={h} size="sm" />
+              <div className="min-w-0">
+                <div className={`text-[11px] font-extrabold uppercase tracking-wider ${HOST_META[h].label}`}>{HOST_META[h].name} says</div>
+                <p className={`text-[13px] leading-snug line-clamp-3 ${h === 'tony' ? 'font-semibold' : ''}`}>{line}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {info.topics.length > 1 && (
+        <div className="px-4 py-3 space-y-1.5">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-sec)]">In this episode</div>
+          <ol className="space-y-1">
+            {info.topics.slice(0, 4).map((t, i) => (
+              <li key={i} className="flex gap-2.5 text-[13px]">
+                <span className="w-3 font-bold text-[var(--text-sec)] shrink-0">{i + 1}</span>
+                <span className="min-w-0">{t.headline}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 px-4 py-3 border-t border-[var(--border)] bg-[var(--surface-2)]/40">
+        <button onClick={info.onWatch} className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+          <PlayIcon />Watch episode
+        </button>
+        <button onClick={onCallIn} className="min-h-11 px-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-semibold hover:bg-[var(--bg-hover)] transition-colors">
+          Call in about this
+        </button>
+      </div>
+    </article>
+  );
+}
+
+export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, onAsk }: BoothPanelProps) {
   const { user, hasFeature, loading: subLoading } = useSubscription();
   const { teams, players, userTeamId, freeAgents, tradeRumors, season, week, phase, champions, draftScoutingData } = useGameStore();
   const isPremium = hasFeature('ai_commentary');
@@ -152,6 +249,7 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose }: Booth
 
   function tapChip(id: string, label: string) {
     if (busy) return;
+    onAsk?.();
     setError(null);
     setExpanded(null);
     setFollowUps(null);
@@ -177,6 +275,7 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose }: Booth
   async function send(preset?: string) {
     const text = (preset ?? input).trim();
     if (!text || busy || !canType) return;
+    onAsk?.();
     setError(null);
     setExpanded(null);
     setBusy(true);
@@ -255,13 +354,22 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose }: Booth
 
           {/* Calls */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[var(--surface-2)]/40">
+            {onAir && <OnAirCard info={onAir} onCallIn={() => inputRef.current?.focus()} />}
+
             {calls.length === 0 && (
-              <div className="text-center py-10 px-6">
-                <p className="text-sm font-semibold">You&apos;re on the air.</p>
-                <p className="text-xs text-[var(--text-sec)] mt-1">
-                  Marcus &amp; Tony know the {teamName}: your roster, your record, your moves. Ask anything and you&apos;ll get both takes.
-                </p>
-              </div>
+              onAir?.fresh ? (
+                <div className="text-center py-4 px-6">
+                  <p className="text-sm font-semibold">Think one of them got it wrong?</p>
+                  <p className="text-xs text-[var(--text-sec)] mt-1">Call in and you&apos;ll get both takes, side by side.</p>
+                </div>
+              ) : (
+                <div className="text-center py-10 px-6">
+                  <p className="text-sm font-semibold">You&apos;re on the air.</p>
+                  <p className="text-xs text-[var(--text-sec)] mt-1">
+                    Marcus &amp; Tony know the {teamName}: your roster, your record, your moves. Ask anything and you&apos;ll get both takes.
+                  </p>
+                </div>
+              )
             )}
 
             {calls.map((call, i) => {
@@ -416,8 +524,10 @@ export function SpotlightCallIn({ episode }: { episode: BoothEpisodeTopic[] }) {
   const setEpisode = useBoothStore(s => s.setEpisode);
   const setOpen = useBoothStore(s => s.setOpen);
   const open = useBoothStore(s => s.open);
+  const { season, week, phase, playoffBracket, userTeamId } = useGameStore();
+  const episodeFor = boothEpisodeKey(season, week, phase, playoffBracket, userTeamId);
 
-  useEffect(() => { setEpisode(episode); }, [episode, setEpisode]);
+  useEffect(() => { setEpisode(episode, episodeFor); }, [episode, episodeFor, setEpisode]);
 
   return (
     <button
