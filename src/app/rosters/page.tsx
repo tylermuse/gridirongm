@@ -21,6 +21,14 @@ interface RosterEntry {
    *  new build of the same era roster ships. (somedude4759 4/29: post-v1 ship
    *  was still serving the v0 JSON because the URL hadn't changed.) */
   cacheBust?: number;
+  /** Stock Football GM names each draft by the season it happens in, so a
+   *  league loaded mid-2026 runs the "2026" draft at season's end. Our real
+   *  prospect classes are keyed by NFL draft year (2027+), which leaves 2026
+   *  empty and FBGM fills it with generated players. BS Football handles the
+   *  original file correctly, so when set, the Download JSON button serves
+   *  this year-shifted variant for vanilla FBGM while Play in BS Football
+   *  keeps using fileName. Built by scripts/build_vanilla_fbgm.py. */
+  downloadFileName?: string;
 }
 
 const ROSTERS: RosterEntry[] = [
@@ -30,11 +38,14 @@ const ROSTERS: RosterEntry[] = [
     description:
       'Starts at the current NFL week — the real 2026 schedule and real win-loss records so far are baked in, so you pick up the season exactly where the real NFL is (no more booting into free agency), and every team plays its actual real-life slate the rest of the way. Reconciled against real active rosters as of the 2026 season opener — every team’s 53-man roster plus practice squad and injured reserve verified against ESPN. September 3 v5: a full league-wide reconciliation after training camp and the cut to 53, with ~270 team changes, 550+ players released to free agency, and 40+ un-retirements. Headliners: Aaron Donald back with the Rams, Stefon Diggs to the Commanders, Keenan Allen to the Colts, Za’Darius Smith to the Falcons, L’Jarius Sneed to the Chiefs, Bobby Okereke to the Panthers and Deebo Samuel to the 49ers, plus duplicate-record cleanup. July 1 v4: caught up on every post-draft move through July 1 — the June 1 blockbusters (Myles Garrett to the Rams, A.J. Brown to the Patriots), 20+ contract extensions (Mahomes through 2033, Jeffery Simmons, Drake London and more) and Russell Wilson’s retirement. Earlier passes set all 2,636 contracts from Spotrac and reconciled every roster against ESPN with a 99%+ match rate. Starts at the 2026 regular season. Weekly refresh (through Week 6): rosters + injuries updated; best records so far — Vikings 5-0, 49ers 5-0, Chiefs 4-0, Ravens 4-1, Bills 4-1. Sep 15 update: corrected 41 un-retired players’ expired contract years and two erroneous player weights.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
+    downloadFileName: 'FBGM_NFL_Roster_2026_Vanilla.json',
     lastUpdated: 'October 16, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
     cacheBust: 24,
+    caveat:
+      'Download JSON is tuned for stock Football GM (play.football-gm.com): the draft classes are aligned so the first draft you reach is the real class, since FBGM indexes drafts by season. Play in BS Football handles this automatically and uses the standard file.',
   },
   {
     id: 'nfl-1994-montana-era',
@@ -222,10 +233,11 @@ export default function RostersPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const url = `/rosters/${roster.fileName}${roster.cacheBust ? `?v=${roster.cacheBust}` : ''}`;
+                    const dl = roster.downloadFileName ?? roster.fileName;
+                    const url = `/rosters/${dl}${roster.cacheBust ? `?v=${roster.cacheBust}` : ''}`;
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = roster.fileName;
+                    a.download = dl;
                     a.rel = 'noopener noreferrer';
                     document.body.appendChild(a);
                     a.click();
