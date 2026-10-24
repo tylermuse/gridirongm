@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { mp3Frames, mp3Slice, wantsLips } from '@/lib/spotlight/showLips';
+import { mp3Frames, mp3Slice, talkSrc, wantsLips, TALK_MIN, TALK_MAX } from '@/lib/spotlight/showLips';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ShowSegment } from '@/lib/spotlight/showScript';
 
 /** N frames of MPEG-1 Layer III, 128 kbps, 44.1 kHz (417 bytes each), after
@@ -50,5 +52,13 @@ describe('two-shot lip sync', () => {
     expect(wantsLips(line('Brooks at 134 tackles and Simmons with 10 sacks.'), 5)).toBe(false);
     expect(wantsLips(line('Too short.'), 1.2)).toBe(false);
     expect(wantsLips(line('The show open.', -1), 5)).toBe(false);
+  });
+
+  it('footage cut to the line, and every length has a file', () => {
+    expect(talkSrc('tony', 5.2)).toBe('/show/lips/talk_tony_6.mp4');
+    expect(talkSrc('marcus', 1)).toBe('/show/lips/talk_marcus_3.mp4');
+    expect(talkSrc('marcus', 40)).toBe('/show/lips/talk_marcus_16.mp4');
+    for (const h of ['marcus', 'tony'] as const)
+      for (let n = TALK_MIN; n <= TALK_MAX; n++) expect(existsSync(join(process.cwd(), 'public', `/show/lips/talk_${h}_${n}.mp4`))).toBe(true);
   });
 });
