@@ -140,10 +140,14 @@ export function GlobalBooth() {
     ? { moment: MOMENT_LABEL[narrative], topics: episode, fresh, onWatch: watch }
     : null;
 
+  // TopBar renders a fixed bottom action bar (Sim Week / Sim Season) on phones
+  // during the regular season only; clear it then, otherwise sit at the bottom.
+  const mobileBottomBar = phase === 'regular';
+
   return (
     <>
       {!open && !onLiveGame && (
-        <div className="fixed right-4 bottom-20 sm:bottom-5 sm:right-5 z-50 flex flex-col items-end gap-2">
+        <div className={`fixed right-4 ${mobileBottomBar ? 'bottom-20' : 'bottom-4'} sm:bottom-5 sm:right-5 z-50 flex flex-col items-end gap-2`}>
           {showCallout && (
             <div
               role="status"
@@ -179,7 +183,7 @@ export function GlobalBooth() {
           <button
             onClick={() => setOpen(true)}
             aria-label={showDot ? 'Open the Booth: new episode from Marcus & Tony' : 'Open the Booth: ask Marcus & Tony'}
-            className="relative flex items-center gap-2 pl-1.5 pr-1.5 sm:pr-4 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all"
+            className={`relative ${showCallout ? 'hidden sm:flex' : 'flex'} items-center gap-2 pl-1.5 pr-1.5 sm:pr-4 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all`}
           >
             <span className="flex">
               <Avatar host="marcus" />
