@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
@@ -27,11 +27,23 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { ShowCaption, ShowGraphic, ThemeCard, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
 import { wideLineAt, type Calls, type ShowThemeId, type Verdict } from '@/lib/spotlight/showThemes';
+import { ALL_SFX, MUSIC_LEVEL, SFX_GAIN, graphicCues, sfxSrc, type MusicId, type SfxId } from '@/lib/spotlight/showSfx';
 
 /** Over-the-shoulder listening loops (studio screens frozen, so the
  *  footage on them doesn't run backward on the loop). */
 const OTS_SRC = (listener: Host) => `/show/ots/${listener}_listen.mp4`;
 const OTS_ALL = [OTS_SRC('marcus'), OTS_SRC('tony')];
+
+/** The lip-synced two-shot (both hosts facing camera): each host's crop of
+ *  the 1920×1080 frame, as % of it, and his silent loop / mask. */
+const LIPS_CROP: Record<Host, { left: string; top: string; width: string; height: string }> = {
+  marcus: { left: '9.375%', top: '11.111%', width: '31.25%', height: '55.556%' },
+  tony: { left: '52.083%', top: '11.111%', width: '31.25%', height: '55.556%' },
+};
+const LIPS_STUDIO = '/show/lips/studio.jpg';
+const lipsIdle = (h: Host) => `/show/lips/idle_${h}.mp4`;
+const lipsMask = (h: Host) => `url(/show/lips/mask_${h}.png)`;
+const LIPS_POLL_MS = 5000;
 
 type ShowTopic = {
   headline: string;
@@ -141,6 +153,18 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // The clip actually on screen: switched only once the next clip is really
   // playing, so a cut never flashes a stale frame or an empty stage.
   const [visibleVideo, setVisibleVideo] = useState<string | null>(null);
+  // Two-shot renders: requested (line → fal request + where its sound starts
+  // in the block), finished (line → clip URL), and where each line's audio
+  // buffer starts in its block (to line a clip up with the voice).
+  const lipsReq = useRef(new Map<number, { request: string; start: number }>());
+  const lipsDead = useRef(new Set<number>());
+  const [lipsUrl, setLipsUrl] = useState<Map<number, string>>(() => new Map());
+  const lipsUrlRef = useRef(lipsUrl);
+  const lipsRefs = useRef(new Map<number, HTMLVideoElement>());
+  const lineFrom = useRef(new Map<number, number>());
+  const [lipsWanted, setLipsWanted] = useState(0); // bumps when a request arrives
+  const [twoShot, setTwoShot] = useState<{ seg: number; host: Host } | null>(null);
+  const idleRefs = useRef(new Map<Host, HTMLVideoElement>());
   // Clips fetched into memory (src → blob URL): the first few before Start,
   // the rest during playback. An element keeps whatever source it was first
   // given, so a clip never reloads under the viewer.
@@ -197,6 +221,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const spansRef = useRef<Map<number, { start: number; end: number; tail: number }>>(new Map());
   /** Speech loudness (dBFS) of each generated line, for leveling. */
   const levelsRef = useRef<Map<number, number | null>>(new Map());
+  /** Sound design: decoded cues, what's sounding, and which graphic cue
+   *  groups already played (once per topic). */
+  const sfxBufs = useRef<Map<string, AudioBuffer>>(new Map());
+  const sfxPlaying = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const musicRef = useRef<{ src: AudioBufferSourceNode; gain: GainNode } | null>(null);
+  const firedSfx = useRef<Set<string>>(new Set());
 
   // Only mount <video> elements for clips this episode actually uses.
   const videoSegs = useMemo(() => {
@@ -230,6 +260,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     if (endTimer.current) { clearTimeout(endTimer.current); endTimer.current = null; }
     stopSources();
     for (const v of videoRefs.current.values()) { v.onended = null; v.pause(); }
+    for (const v of lipsRefs.current.values()) v.pause();
   }, [stopSources]);
 
   useEffect(() => {
@@ -265,6 +296,42 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       else v.pause();
     }
   }, [phase]);
+
+  // The two-shot's silent loops too, once there's a two-shot to show.
+  const hasLips = lipsUrl.size > 0;
+  useEffect(() => {
+    for (const v of idleRefs.current.values()) {
+      if (phase === 'playing') void v.play().catch(() => {});
+      else v.pause();
+    }
+  }, [phase, hasLips]);
+
+  // Ask for the two-shot renders while the episode is up; a line cuts to
+  // its two-shot only once its clip is in.
+  useEffect(() => {
+    if (phase !== 'ready' && phase !== 'playing' && phase !== 'paused') return;
+    let stop = false;
+    const poll = async () => {
+      const pending = [...lipsReq.current].filter(([i]) => !lipsUrlRef.current.has(i) && !lipsDead.current.has(i));
+      if (!pending.length) return;
+      try {
+        const r = await fetch(`/api/spotlight-show/lips?ids=${pending.map(([, q]) => q.request).join(',')}`, { cache: 'no-store' });
+        if (!r.ok || stop) return;
+        const { clips } = (await r.json()) as { clips: { id: string; status: string; url?: string }[] };
+        const byId = new Map(clips.map(c => [c.id, c]));
+        const next = new Map(lipsUrlRef.current);
+        for (const [i, q] of pending) {
+          const c = byId.get(q.request);
+          if (c?.status === 'done' && c.url) next.set(i, c.url);
+          else if (c?.status === 'failed') lipsDead.current.add(i);
+        }
+        if (next.size !== lipsUrlRef.current.size) { lipsUrlRef.current = next; setLipsUrl(next); }
+      } catch { /* try again next round */ }
+    };
+    void poll();
+    const t = setInterval(poll, LIPS_POLL_MS);
+    return () => { stop = true; clearInterval(t); };
+  }, [phase, lipsWanted]);
 
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -308,6 +375,67 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     }
     return outRef.current;
   }, []);
+
+  /** One-shot effect, `delay` seconds from now. */
+  const playSfx = useCallback((id: SfxId, delay = 0) => {
+    const ctx = ctxRef.current;
+    const buf = sfxBufs.current.get(id);
+    if (!ctx || !buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = SFX_GAIN[id];
+    src.connect(g).connect(out(ctx));
+    sfxPlaying.current.add(src);
+    src.onended = () => { sfxPlaying.current.delete(src); src.disconnect(); };
+    src.start(ctx.currentTime + Math.max(0, delay));
+  }, [out]);
+
+  /** Music: one cue at a time (a new one fades the last out); it comes in
+   *  at its `start` level and settles to a bed under the voices. */
+  const playMusic = useCallback((id: MusicId) => {
+    const ctx = ctxRef.current;
+    const buf = sfxBufs.current.get(id);
+    if (!ctx || !buf) return;
+    const now = ctx.currentTime;
+    const prev = musicRef.current;
+    if (prev) {
+      prev.gain.gain.cancelScheduledValues(now);
+      prev.gain.gain.setValueAtTime(prev.gain.gain.value, now);
+      prev.gain.gain.linearRampToValueAtTime(0, now + 0.3);
+      try { prev.src.stop(now + 0.35); } catch { /* already stopped */ }
+    }
+    const lv = MUSIC_LEVEL[id];
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(lv.start, now);
+    if (lv.settle > 0) gain.gain.linearRampToValueAtTime(lv.bed, now + lv.settle + 0.4);
+    src.connect(gain).connect(out(ctx));
+    const cur = { src, gain };
+    musicRef.current = cur;
+    src.onended = () => { if (musicRef.current === cur) musicRef.current = null; src.disconnect(); };
+    src.start(now);
+  }, [out]);
+
+  /** Silence all sound design (close, seek, restart). */
+  const stopSfx = useCallback(() => {
+    for (const s of sfxPlaying.current) { try { s.stop(); } catch { /* already stopped */ } }
+    sfxPlaying.current.clear();
+    if (musicRef.current) { try { musicRef.current.src.stop(); } catch { /* already stopped */ } musicRef.current = null; }
+  }, []);
+
+  /** The graphic's effects (topic wipe, Buy/Sell chips, verdict board),
+   *  timed to its animations from the topic's start. */
+  const graphicSfx = useCallback((g: Parameters<typeof graphicCues>[0]) => {
+    const cues = graphicCues(g, firedSfx.current);
+    if (!cues.length) return;
+    // The board may come in after its topic began (a voiceover opened it):
+    // keep the stagger, start from now.
+    const t = (performance.now() - pausedTotal.current - topicStart.current) / 1000;
+    const shift = Math.min(t, ...cues.map(c => c.at));
+    for (const c of cues) playSfx(c.id, c.at - shift);
+  }, [playSfx]);
 
   const gainFor = useCallback((key: string, v: HTMLVideoElement) => {
     const ctx = ctxRef.current;
@@ -397,16 +525,19 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       // host) until the next lines land.
       if (!streamDone.current) { waitingFor.current = i; setBuffering(true); setHolding(true); setVisibleVideo(null); return; }
       setPhase('ended');
+      playMusic('outro');
       return;
     }
     const prev = segs[i - 1];
     const seg = segs[i];
     setHolding(false);
+    setTwoShot(null);
     segIdxRef.current = i;
     segStart.current = performance.now() - pausedTotal.current;
     setSegIdx(i);
     const advance = () => { if (tokenRef.current === token) playSegment(i + 1); };
     const ctx = ctxRef.current;
+    if (i === 0) { firedSfx.current.clear(); playMusic('open'); }
 
     if (seg.kind === 'clip' || seg.kind === 'phrase') {
       if (lowerTimer.current) clearTimeout(lowerTimer.current);
@@ -438,6 +569,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         // Topic transition: the host's line plays over the new topic's
         // graphic wiping in, rather than as a one-second shot of a host.
         enterGraphic(`graphic:${seg.voiceover.topicIdx}`, true);
+        graphicSfx({ topicIdx: seg.voiceover.topicIdx, visual: 'graphic' });
+      }
+      if (seg.kind === 'phrase' && seg.themeCard) {
+        // The theme's title card slams in over the two-shot.
+        playMusic(seg.themeCard);
+        playSfx('slam');
       }
       if (seg.kind === 'phrase') {
         if (!seg.wide && (!prev || prev.speaker !== seg.speaker || prev.kind === 'tts')) showLowerThird();
@@ -481,6 +618,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     setVisibleVideo(null);
     const onGraphic = prev && (prev.kind === 'tts' || (prev.kind === 'clip' && !!prev.voiceover));
     enterGraphic(`${seg.visual}:${seg.topicIdx}`, !onGraphic || prev.speaker !== seg.speaker);
+    graphicSfx(seg);
     const buf = buffersRef.current.get(i);
     if (!ctx) return advance();
     if (!buf) {
@@ -503,8 +641,20 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     src.connect(lg).connect(out(ctx));
     src.onended = advance;
     srcRef.current = src;
+    // Its two-shot, if the clip is in: lined up with the voice (the clip's
+    // sound starts at req.start in the block; this line's audio at
+    // lineFrom + from).
+    const lipsReqI = lipsReq.current.get(i);
+    const lv = lipsRefs.current.get(i);
+    if (lipsReqI && lv && lipsUrlRef.current.has(i) && lv.readyState >= 2) {
+      const at = (lineFrom.current.get(i) ?? 0) + from - lipsReqI.start;
+      lv.currentTime = Math.max(0, at);
+      if (at >= 0) void lv.play().catch(() => {});
+      else setTimeout(() => { if (tokenRef.current === token) void lv.play().catch(() => {}); }, -at * 1000);
+      setTwoShot({ seg: i, host: seg.speaker });
+    }
     src.start(0, from, to - from);
-  }, [armClipEnd, enterGraphic, gainFor, out, showLowerThird, stopAll]);
+  }, [armClipEnd, enterGraphic, gainFor, graphicSfx, out, playMusic, playSfx, showLowerThird, stopAll]);
   // Latest sequencer and phase for callbacks that outlive a render (voices
   // arriving from the stream).
   const playSegmentRef = useRef(playSegment);
@@ -531,6 +681,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       const line = ctx.createBuffer(block.numberOfChannels, to - from + (last ? Math.round(BLOCK_TAIL * sr) : 0), sr);
       for (let c = 0; c < block.numberOfChannels; c++) line.copyToChannel(block.getChannelData(c).subarray(from, to), c);
       buffersRef.current.set(l.seg, line);
+      lineFrom.current.set(l.seg, from / sr);
       const span = { ...speechSpan(line), tail: last ? BLOCK_TAIL : TAIL_PAD };
       spansRef.current.set(l.seg, span);
       levelsRef.current.set(l.seg, speechDb(line, span.start, span.end));
@@ -568,6 +719,13 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   /** Fetch what a (possibly grown) script needs: rank ordinals for slot
    *  phrases, and its clips — queued in play order, three at a time. */
   async function loadAssets(ctx: AudioContext, segs: TimedShowSegment[]) {
+    for (const id of ALL_SFX) {
+      if (sfxBufs.current.has(id)) continue;
+      void fetch(sfxSrc(id))
+        .then(r => (r.ok ? r.arrayBuffer() : Promise.reject()))
+        .then(b => ctx.decodeAudioData(b))
+        .then(buf => { sfxBufs.current.set(id, buf); }, () => { /* the show plays without it */ });
+    }
     await Promise.all(segs.map(async seg => {
       if (seg.kind !== 'phrase' || !seg.slot) return;
       const k = `${seg.speaker}/${seg.slot.rank}`;
@@ -642,6 +800,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       ctxRef.current = ctx;
       buffersRef.current = new Map();
       spansRef.current = new Map();
+      lipsReq.current = new Map();
+      lipsDead.current = new Set();
+      lineFrom.current = new Map();
+      lipsUrlRef.current = new Map();
+      setLipsUrl(lipsUrlRef.current);
       levelsRef.current = new Map();
       ordinalBufs.current = new Map();
 
@@ -654,7 +817,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           if (sg.kind === 'tts' && sg.audioIndex != null && sg.audioStart != null && sg.audioDuration != null) {
             blocks[sg.audioIndex]?.lines.push({ seg: i, start: sg.audioStart, duration: sg.audioDuration });
           }
+          if (sg.lips) lipsReq.current.set(i, sg.lips);
         });
+        setLipsWanted(n => n + 1);
         await Promise.all([prepare(ctx, segs), ...blocks.map(b => addBlock(ctx, b))]);
         setPhase('ready');
         return;
@@ -681,7 +846,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
               const line = buf.slice(0, nl).trim();
               buf = buf.slice(nl + 1);
               if (!line) continue;
-              const msg = JSON.parse(line) as { type: string; segments?: TimedShowSegment[]; message?: string } & Partial<BlockMsg>;
+              const msg = JSON.parse(line) as { type: string; segments?: TimedShowSegment[]; message?: string; seg?: number; request?: string; start?: number } & Partial<BlockMsg>;
               if (msg.type === 'script' && msg.segments) {
                 if (!gotScript) {
                   gotScript = true;
@@ -689,6 +854,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 } else {
                   updateScript(ctx, msg.segments);
                 }
+              } else if (msg.type === 'lips' && typeof msg.seg === 'number' && msg.request) {
+                lipsReq.current.set(msg.seg, { request: msg.request, start: msg.start ?? 0 });
+                setLipsWanted(n => n + 1);
               } else if (msg.type === 'block' && msg.audio && msg.lines) {
                 pending.push(addBlock(ctx, msg as BlockMsg).catch(() => {}));
               } else if (msg.type === 'error' && !gotScript) {
@@ -719,6 +887,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         videoRefs.current.get(videoKey(seg))?.play().catch(() => {});
         resumeClip.current?.();
       }
+      if (twoShot && twoShot.seg === segIdxRef.current) void lipsRefs.current.get(twoShot.seg)?.play().catch(() => {});
       phaseRef.current = 'playing';
       setPhase('playing');
       resumeWaiting();
@@ -734,12 +903,14 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     if (endTimer.current) { clearTimeout(endTimer.current); endTimer.current = null; }
     void ctxRef.current?.suspend();
     for (const v of videoRefs.current.values()) v.pause();
+    for (const v of lipsRefs.current.values()) v.pause();
     setPhase('paused');
   }
 
   function handleClose() {
     void leaveFull();
     stopAll();
+    stopSfx();
     void ctxRef.current?.suspend();
     setPhase('idle');
     setSegIdx(0);
@@ -762,6 +933,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     if (ctx && ctx.state !== 'running') await ctx.resume();
     if (pausedAt.current != null) { pausedTotal.current += performance.now() - pausedAt.current; pausedAt.current = null; }
     // Jumping into a topic mid-way: let its graphic come in fresh.
+    stopSfx();
+    firedSfx.current.clear();
     blockKey.current = '';
     panelKey.current = '';
     phaseRef.current = 'playing';
@@ -903,9 +1076,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     return other.id !== team.id && namesTeam(gfx.text, other) ? other : null;
   })();
   const shot = tts && phase !== 'ended' ? shots[segIdx] : undefined;
-  const ots = shot?.kind === 'ots';
-  const otsSrc = shot?.kind === 'ots' ? OTS_SRC(shot.listener) : null;
-  const onGfx = !!(tts || vo || (holding && phase === 'playing')) && !ots;
+  // A line whose two-shot clip is in plays on camera instead.
+  const lipsOn = !!tts && phase !== 'ended' && twoShot?.seg === segIdx;
+  const ots = shot?.kind === 'ots' && !lipsOn;
+  const otsSrc = ots && shot?.kind === 'ots' ? OTS_SRC(shot.listener) : null;
+  const onGfx = !!(tts || vo || (holding && phase === 'playing')) && !ots && !lipsOn;
   // Tiles only when they match what's being said: the player's or the
   // unit's numbers, the team's when a team stat comes up — and none for a
   // line with nothing measurable (just the quote).
@@ -1077,6 +1252,45 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
             />
           ))}
 
+          {/* Lip-synced two-shot for generated lines (showLips): the studio
+              facing camera, each host's silent loop, and the speaking host's
+              clip over his crop while it plays. */}
+          {hasLips && (
+            <div className="pointer-events-none absolute inset-0 transition-opacity duration-200" style={{ opacity: lipsOn ? 1 : 0 }} aria-hidden>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={LIPS_STUDIO} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              {(['marcus', 'tony'] as const).map(h => {
+                const box: CSSProperties = { ...LIPS_CROP[h], maskImage: lipsMask(h), WebkitMaskImage: lipsMask(h), maskSize: '100% 100%', WebkitMaskSize: '100% 100%' };
+                return (
+                  <Fragment key={h}>
+                    <video
+                      ref={el => { if (el) idleRefs.current.set(h, el); else idleRefs.current.delete(h); }}
+                      src={lipsIdle(h)}
+                      muted
+                      loop
+                      playsInline
+                      preload="auto"
+                      className="absolute object-cover"
+                      style={box}
+                    />
+                    {[...lipsUrl].filter(([i]) => segments[i]?.speaker === h).map(([i, url]) => (
+                      <video
+                        key={i}
+                        ref={el => { if (el) lipsRefs.current.set(i, el); else lipsRefs.current.delete(i); }}
+                        src={url}
+                        muted
+                        playsInline
+                        preload="auto"
+                        className="absolute object-cover transition-opacity duration-150"
+                        style={{ ...box, opacity: lipsOn && twoShot?.seg === i ? 1 : 0 }}
+                      />
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </div>
+          )}
+
           {/* Lip-synced clips: fixed lines + this episode's phrases */}
           {videoSegs.map(([key, vs]) => (
             <video
@@ -1124,7 +1338,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           )}
 
           {/* Captions (topic graphics carry the line as a pull quote instead) */}
-          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic' && !ots) && !vo && <ShowCaption text={captionOf(seg, (clock - segStart.current) / 1000)} />}
+          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic' && !ots && !lipsOn) && !vo && <ShowCaption text={captionOf(seg, (clock - segStart.current) / 1000)} />}
 
           {/* Waiting on a line's voices (rare: they stream in during the open) */}
           {buffering && phase === 'playing' && (

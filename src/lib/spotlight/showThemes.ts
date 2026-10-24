@@ -35,8 +35,12 @@ export const WIDE_BANTER: { id: string; when: string }[] = [
   { id: 'banter_2', when: 'right after Tony makes a big claim Marcus doesn\'t buy (Marcus opens: "See, this is where you lose me.")' },
   { id: 'banter_3', when: 'right after Marcus rattles off a statistic or a league rank (Tony opens: "Here come the spreadsheets.")' },
   { id: 'banter_4', when: 'right after Tony gets worked up — raises his voice, calls for somebody\'s job (Marcus opens: "Take a breath.")' },
+  { id: 'banter_5', when: 'right after Tony calls a player elite on feel, with no numbers behind it (Marcus opens: "You can\'t just say a player is \'him\'.")' },
+  { id: 'banter_6', when: 'right after Tony makes a prediction and wants it on the record (Tony opens: "Write this down. I\'ve never been more sure of anything.")' },
+  { id: 'banter_7', when: 'right before Marcus digs into the numbers on a topic (Marcus opens: "Let\'s look at the numbers.")' },
+  { id: 'banter_8', when: 'right after Tony suggests firing a coach, coordinator or GM (Tony opens: "I\'m not saying fire everybody.")' },
 ];
-export const SIGNOFFS = ['signoff_1', 'signoff_2', 'signoff_3'];
+export const SIGNOFFS = ['signoff_1', 'signoff_2', 'signoff_3', 'signoff_4'];
 
 /** A panic number, a contender/pretender stamp, or (Buy or Sell) each host's one move. */
 export type VerdictKind = 'meter' | 'stamp' | 'move';
@@ -88,7 +92,7 @@ export const THEMES: Record<ShowThemeId, ShowTheme> = {
     id: 'buysell',
     title: 'BUY OR SELL',
     kicker: 'Trade deadline edition',
-    openers: ['buysell_open_1', 'buysell_open_2'],
+    openers: ['buysell_open_1', 'buysell_open_2', 'buysell_open_3'],
     verdictClips: [{ id: 'buysell_final_1', first: 'tony' }],
     verdict: 'move',
     verdictTitle: 'The one move',

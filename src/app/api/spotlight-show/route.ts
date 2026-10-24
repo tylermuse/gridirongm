@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       async start(controller) {
         const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + '\n'));
         try {
-          const payload = await streamEpisode(sb, episode, send);
+          const payload = await streamEpisode(sb, episode, send, new URL(request.url).origin);
           send({ type: 'done' });
           await writeJson(sb, payloadPath(episode), payload);
         } catch (err) {
