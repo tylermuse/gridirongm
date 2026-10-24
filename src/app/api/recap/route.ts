@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { requirePremium } from '@/lib/server/requirePremium';
 
 // ── Persistent cache via Supabase ──────────────────────────────────────────
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -46,6 +47,10 @@ export async function POST(request: Request) {
     if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
     }
+
+    // Premium only — checked before the cache so free users can't read paid output.
+    const denied = await requirePremium('AI weekly recap');
+    if (denied) return denied;
 
     const { games, season, week, isPlayoffs } = await request.json();
     if (!games || !Array.isArray(games) || games.length === 0) {
@@ -95,7 +100,9 @@ Return ONLY the JSON array.`;
         const result = await model.generateContent({
           systemInstruction: systemPrompt,
           contents: [{ role: 'user', parts: [{ text: userContent }] }],
-          generationConfig: { maxOutputTokens: 2000, responseMimeType: 'application/json' },
+          // Thinking off: gemini-2.5-flash's thinking tokens count against
+          // maxOutputTokens and can truncate the JSON.
+          generationConfig: { maxOutputTokens: 6000, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } } as GenerationConfig,
         });
         raw = result.response.text();
       } catch (geminiErr) {

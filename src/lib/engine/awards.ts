@@ -15,9 +15,15 @@ export function mvpScore(p: Player, teams: Team[]): number {
   const winBonus = wins * 8 + (winPct >= 0.65 ? 50 : winPct >= 0.5 ? 20 : -40);
 
   if (p.position === 'QB') {
+    // OVR tie-breaker (2026-10-01, obungaloo via Commish): mvpScore was purely
+    // stat-based, so mid-70 OVR QBs with the irrational_confidence trait rode
+    // hero-game stat spikes past genuinely better 80+ OVR passers. allLeagueScore
+    // already blends ~20% OVR; mirror that here so talent breaks ties without
+    // overriding legitimate stat dominance (80 OVR * 0.3 = 24 pts on a ~600-pt score).
     return p.stats.passYards * 0.05 + p.stats.passTDs * 8 - p.stats.interceptions * 6
       + p.stats.rushTDs * 4 + p.stats.rushYards * 0.02
-      + winBonus * 1.2;
+      + winBonus * 1.2
+      + p.ratings.overall * 0.3;
   }
   if (p.position === 'RB') {
     return p.stats.rushYards * 0.06 + p.stats.rushTDs * 6 + p.stats.receivingYards * 0.02 + winBonus;
@@ -31,15 +37,50 @@ export function mvpScore(p: Player, teams: Team[]): number {
 export function dpoyScore(p: Player, teams: Team[]): number {
   const team = teams.find(t => t.id === p.teamId);
   const winBonus = team ? team.record.wins * 3 : 0;
-  return p.stats.tackles * 0.5 + p.stats.sacks * 8 + p.stats.defensiveINTs * 7
-    + (p.stats.tacklesForLoss ?? 0) * 2 + (p.stats.passDeflections ?? 0) * 2
-    + (p.stats.forcedFumbles ?? 0) * 4 + winBonus;
+  const s = p.stats;
+  // 2026-10-02 (obungaloo via Commish): the 2026-09-22 flat INT/PD bump
+  // over-corrected. Because every defensive position shared one formula, a CB
+  // with ~4 INTs could out-score a DL with 17 sacks ("why does a CB with 4 INTs
+  // win DPOY over a DL with 17 sacks?"). droyScore() already splits DL/LB vs
+  // CB/S; mirror that here so disruption (sacks/TFL) drives DL/LB scoring and
+  // ball production (INTs/PDs) drives CB/S scoring. A sack-rich DL reclaims the
+  // mid-range while a genuinely elite ball-hawk corner can still take it.
+  let statPts = 0;
+  switch (p.position) {
+    case 'DL':
+    case 'LB':
+      statPts = s.sacks * 10
+        + (s.tacklesForLoss ?? 0) * 3
+        + s.tackles * 0.4
+        + (s.forcedFumbles ?? 0) * 4;
+      break;
+    case 'CB':
+    case 'S':
+      statPts = s.defensiveINTs * 9
+        + (s.passDeflections ?? 0) * 3
+        + s.tackles * 0.3
+        + (s.forcedFumbles ?? 0) * 4;
+      break;
+    default:
+      // Safety net for any other defensive alignment — blend both axes so no
+      // position is zeroed out.
+      statPts = s.sacks * 10 + (s.tacklesForLoss ?? 0) * 3 + s.defensiveINTs * 9
+        + (s.passDeflections ?? 0) * 3 + s.tackles * 0.4 + (s.forcedFumbles ?? 0) * 4;
+      break;
+  }
+  return statPts + winBonus;
 }
 
 export function opoyScore(p: Player): number {
-  const yards = p.stats.passYards + p.stats.rushYards + p.stats.receivingYards;
-  const tds = p.stats.passTDs + p.stats.rushTDs + p.stats.receivingTDs;
-  return yards + tds * 30;
+  // 2026-09-22 (obungaloo, #general): WR/TE could effectively never win OPOY —
+  // the old raw total (pass+rush+receiving yards, all TDs x30) let RBs stack
+  // rushing AND receiving yards to beat receivers who only accrue receiving
+  // yards. OPOY excludes QBs (see computeSeasonAwards), so pass stats don't
+  // belong here. Now a pure receiver-vs-runner battle with a slight receiving
+  // boost (1.2x yards, TD 30 vs rush TD 25) so WR/TE get a fair shot while RBs
+  // stay competitive and still win the majority.
+  return p.stats.receivingYards * 1.2 + p.stats.rushYards
+    + p.stats.receivingTDs * 30 + p.stats.rushTDs * 25;
 }
 
 export function droyScore(p: Player): number {

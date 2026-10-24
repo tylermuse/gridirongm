@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getStripe } from '@bs/core/billing';
 import { createClient } from '@bs/core/supabase/server';
-import { createServerClient } from '@supabase/ssr';
 import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS } from '@bs/core/billing';
+import { getOrCreateCustomerId, hasLiveSubscription } from '@/lib/server/stripeSync';
 
 // Only the configured Premium price is allowed at checkout. Legacy prices
 // remain valid for existing subscribers (the webhook still maps them up to
@@ -34,42 +34,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Look up or create Stripe customer
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('stripe_customer_id')
-      .eq('id', user.id)
-      .single();
-
-    let customerId = profile?.stripe_customer_id;
-
-    if (!customerId) {
-      const customer = await getStripe().customers.create({
-        email: user.email,
-        metadata: { supabase_user_id: user.id },
-      });
-      customerId = customer.id;
-
-      // Store the Stripe customer ID — use service role to bypass RLS
-      const serviceClient = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { cookies: { getAll: () => [], setAll: () => {} } },
+    // Never sell a second subscription to someone who already has one. This is
+    // what let users who still saw the paywall (webhook late or failed) pay
+    // 4–5 times in a few minutes.
+    if (await hasLiveSubscription(user.id)) {
+      return NextResponse.json(
+        {
+          error: 'You already have an active Premium subscription. It may take a minute to show up — try refreshing.',
+          alreadySubscribed: true,
+        },
+        { status: 409 },
       );
-      await serviceClient
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id);
     }
+
+    // Reuse the user's existing Stripe customer instead of minting a new one per click.
+    const customerId = await getOrCreateCustomerId(user.id, user.email);
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
     const session = await getStripe().checkout.sessions.create({
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${appUrl}/settings?subscription=success`,
+      // session_id lets the success page sync the subscription immediately
+      // instead of waiting on the webhook.
+      success_url: `${appUrl}/settings?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pricing?subscription=canceled`,
       metadata: { supabase_user_id: user.id },
+      // Put the user ID on the subscription itself so every later
+      // subscription event can be tied back to the user.
+      subscription_data: { metadata: { supabase_user_id: user.id } },
     });
 
     return NextResponse.json({ url: session.url });

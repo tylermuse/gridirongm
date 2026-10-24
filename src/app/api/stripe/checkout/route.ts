@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getStripe } from '@bs/core/billing';
 import { createClient } from '@bs/core/supabase/server';
-import { createServerClient } from '@supabase/ssr';
-import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS } from '@bs/core/billing';
+import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS, EPISODE_PACK } from '@bs/core/billing';
+import { readCredits, getServiceClient } from '@bs/core/podcast';
+import { getOrCreateCustomerId, hasLiveSubscription } from '@/lib/server/stripeSync';
 
 // Only the configured Premium price is allowed at checkout. Legacy prices
 // remain valid for existing subscribers (the webhook still maps them up to
@@ -13,17 +14,22 @@ const ALLOWED_PRICE_IDS = new Set<string>(
 
 export async function POST(request: Request) {
   try {
-    const { priceId } = await request.json();
-    if (!priceId || typeof priceId !== 'string') {
+    const { priceId, product } = (await request.json()) as { priceId?: string; product?: string };
+    // Episode pack: a one-time purchase, Premium subscribers only.
+    const pack = product === 'episode_pack';
+    if (pack && !EPISODE_PACK.priceId) {
+      return NextResponse.json({ error: 'Episode packs are not configured. Set NEXT_PUBLIC_STRIPE_EPISODE_PACK_PRICE_ID.' }, { status: 503 });
+    }
+    if (!pack && (!priceId || typeof priceId !== 'string')) {
       return NextResponse.json({ error: 'Price ID is required' }, { status: 400 });
     }
-    if (!PREMIUM_PRICE_ID) {
+    if (!pack && !PREMIUM_PRICE_ID) {
       return NextResponse.json(
         { error: 'Premium plan is not configured. Set NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID.' },
         { status: 503 },
       );
     }
-    if (!ALLOWED_PRICE_IDS.has(priceId)) {
+    if (!pack && !ALLOWED_PRICE_IDS.has(priceId!)) {
       return NextResponse.json({ error: 'Invalid price ID' }, { status: 400 });
     }
 
@@ -34,42 +40,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Look up or create Stripe customer
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('stripe_customer_id')
-      .eq('id', user.id)
-      .single();
-
-    let customerId = profile?.stripe_customer_id;
-
-    if (!customerId) {
-      const customer = await getStripe().customers.create({
-        email: user.email,
-        metadata: { supabase_user_id: user.id },
-      });
-      customerId = customer.id;
-
-      // Store the Stripe customer ID — use service role to bypass RLS
-      const serviceClient = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { cookies: { getAll: () => [], setAll: () => {} } },
+    // Never sell a second subscription to someone who already has one. This is
+    // what let users who still saw the paywall (webhook late or failed) pay
+    // 4–5 times in a few minutes.
+    if (await hasLiveSubscription(user.id)) {
+      return NextResponse.json(
+        {
+          error: 'You already have an active Premium subscription. It may take a minute to show up — try refreshing.',
+          alreadySubscribed: true,
+        },
+        { status: 409 },
       );
-      await serviceClient
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id);
     }
 
+    // Reuse the user's existing Stripe customer instead of minting a new one per click.
+    const customerId = await getOrCreateCustomerId(user.id, user.email);
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+    if (pack) {
+      const credits = await readCredits(getServiceClient(), user.id, user.created_at);
+      if (credits.tier !== 'premium') {
+        return NextResponse.json({ error: 'Episode packs are for Premium subscribers.', code: 'premium_required' }, { status: 403 });
+      }
+      const session = await getStripe().checkout.sessions.create({
+        customer: customerId,
+        line_items: [{ price: EPISODE_PACK.priceId, quantity: 1 }],
+        mode: 'payment',
+        // Back to the dashboard: the show is right there, with the new episodes.
+        success_url: `${appUrl}/?episodes=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}/?episodes=canceled`,
+        metadata: { supabase_user_id: user.id, episode_pack: String(EPISODE_PACK.credits) },
+      });
+      return NextResponse.json({ url: session.url });
+    }
     const session = await getStripe().checkout.sessions.create({
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${appUrl}/settings?subscription=success`,
+      // session_id lets the success page sync the subscription immediately
+      // instead of waiting on the webhook.
+      success_url: `${appUrl}/settings?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pricing?subscription=canceled`,
       metadata: { supabase_user_id: user.id },
+      // Put the user ID on the subscription itself so every later
+      // subscription event can be tied back to the user.
+      subscription_data: { metadata: { supabase_user_id: user.id } },
     });
 
     return NextResponse.json({ url: session.url });

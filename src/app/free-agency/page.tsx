@@ -150,7 +150,7 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 }
 
 export default function FreeAgencyPage() {
-  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA } = useGameStore();
+  const { phase, players, freeAgents, signFreeAgent, unretirePlayer, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA, retiredSigningsThisSeason } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const { hasScouting, scoutingAllocations, tier } = useSubscription();
 
@@ -169,6 +169,9 @@ export default function FreeAgencyPage() {
   const [walkedAwayIds, setWalkedAwayIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'salary'>('ovr');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // Feature: un-retire a player. Toggle between the FA pool and retired players.
+  const [faView, setFaView] = useState<'available' | 'retired'>('available');
+  const [retiredError, setRetiredError] = useState<string | null>(null);
   const msgFeedRef = useRef<HTMLDivElement>(null);
 
   // Auto-initialize pursuitState for existing saves that entered FA before
@@ -327,8 +330,8 @@ export default function FreeAgencyPage() {
         case 'ovr': return dir * (a.ratings.overall - b.ratings.overall);
         case 'pot': return dir * (a.potential - b.potential);
         case 'salary': {
-          const aSal = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
-          const bSal = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
+          const aSal = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci, a.subPosition) * decay;
+          const bSal = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci, b.subPosition) * decay;
           return dir * (aSal - bSal);
         }
         default: return 0;
@@ -347,15 +350,15 @@ export default function FreeAgencyPage() {
       ? LEAGUE_MINIMUM_SALARY * 1.5  // tight: only players asking ~$1.1M or less
       : capSpace;
     filteredAgents = filteredAgents.filter(p => {
-      const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
+      const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci, p.subPosition) * decay;
       return market <= maxAffordable;
     });
     // When over the cap, sort cheapest first so signable players are at the top.
     // When under the cap, keep the user's selected sort order (default: OVR desc).
     if (capSpace <= LEAGUE_MINIMUM_SALARY) {
       filteredAgents.sort((a, b) => {
-        const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
-        const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
+        const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci, a.subPosition) * decay;
+        const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci, b.subPosition) * decay;
         return aM - bM;
       });
     }
@@ -366,7 +369,7 @@ export default function FreeAgencyPage() {
 
   function startNegotiation(player: typeof agents[0]) {
     if (faRefusals.includes(player.id)) return;
-    const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
+    const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci, player.subPosition);
     const salary = Math.round(baseSal * decay * 10) / 10;
     const hasIntel = !!effectivePursuitState?.intelReports[player.id];
     const userTeamData = teams.find(t => t.id === userTeamId);
@@ -493,7 +496,7 @@ export default function FreeAgencyPage() {
         </div>
 
         {/* Free-tier ad slot. Hidden for premium. */}
-        <AdSlot size="leaderboard" slotId="fa-top" />
+        <AdSlot size="leaderboard" slotId="9035391068" />
 
         {/* FA Day progress bar */}
         {phase === 'freeAgency' && (
@@ -808,7 +811,7 @@ export default function FreeAgencyPage() {
                               </div>
                             </div>
                             <div className="text-[10px] text-[var(--text-sec)]">
-                              Asking: <span className="text-amber-600 font-medium">${negotiation.askingSalary}M/yr</span>
+                              Asking: <span className="text-amber-600 font-medium">${Math.round(negotiation.askingSalary * 10) / 10}M/yr</span>
                             </div>
                           </div>
                         )}
@@ -845,6 +848,24 @@ export default function FreeAgencyPage() {
               </Card>
             )}
 
+            {/* Free agency / retired players tab bar */}
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                onClick={() => { setFaView('available'); setRetiredError(null); }}
+                className={`px-3 py-1.5 text-sm font-semibold rounded-lg ${faView === 'available' ? 'bg-blue-600 text-white' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'}`}
+              >
+                Free Agents
+              </button>
+              <button
+                onClick={() => { setFaView('retired'); setRetiredError(null); }}
+                className={`px-3 py-1.5 text-sm font-semibold rounded-lg ${faView === 'retired' ? 'bg-blue-600 text-white' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'}`}
+              >
+                Retired Players
+              </button>
+            </div>
+
+            {faView === 'available' && (
+            <>
             {/* Free agent table */}
             <Card>
               <div className="overflow-x-auto">
@@ -863,7 +884,7 @@ export default function FreeAgencyPage() {
                 </thead>
                 <tbody>
                   {agents.map(p => {
-                    const baseSal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci);
+                    const baseSal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci, p.subPosition);
                     const salary = Math.round(baseSal * decay * 10) / 10;
                     const isRefused = faRefusals.includes(p.id);
                     const isExpanded = expandedPlayerId === p.id;
@@ -1026,7 +1047,7 @@ export default function FreeAgencyPage() {
                                   <div className="grid grid-cols-2 gap-3 text-xs">
                                     <div>
                                       <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">True Asking Price</div>
-                                      <div className="font-bold">${report.trueAskingSalary}M/yr, {report.trueAskingYears}yr</div>
+                                      <div className="font-bold">${Math.round(report.trueAskingSalary * 10) / 10}M/yr, {report.trueAskingYears}yr</div>
                                     </div>
                                     <div>
                                       <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Willingness</div>
@@ -1121,6 +1142,83 @@ export default function FreeAgencyPage() {
               </table>
               </div>
             </Card>
+            </>
+            )}
+
+            {faView === 'retired' && (() => {
+              const retired = players
+                .filter(p => p.retired)
+                .sort((a, b) => b.ratings.overall - a.ratings.overall);
+              const usedThisSeason = (retiredSigningsThisSeason ?? 0) >= 1;
+              const handleBringBack = (id: string) => {
+                const err = unretirePlayer(id);
+                setRetiredError(err || null);
+              };
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Retired Players</CardTitle>
+                    <span className="text-xs text-[var(--text-sec)]">
+                      {usedThisSeason ? 'Un-retire used this season' : 'Bring one back per season'}
+                    </span>
+                  </CardHeader>
+                  <div className="px-4 pb-2 text-xs text-[var(--text-sec)]">
+                    Sign a retired player back on a 1-year, ${LEAGUE_MINIMUM_SALARY}M minimum deal. Limit: 1 per season.
+                  </div>
+                  {retiredError && (
+                    <div className="mx-4 mb-3 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                      {retiredError}
+                    </div>
+                  )}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-[var(--text-sec)] border-b border-[var(--border)]">
+                          <th className="pb-2 pl-4">Player</th>
+                          <th className="pb-2 text-center">Pos</th>
+                          <th className="pb-2 text-center">Age</th>
+                          <th className="pb-2 text-center">OVR</th>
+                          <th className="pb-2 pr-4 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {retired.length === 0 && (
+                          <tr><td colSpan={5} className="py-6 text-center text-[var(--text-sec)]">No retired players yet.</td></tr>
+                        )}
+                        {retired.map(p => {
+                          const posCount = players.filter(q => q.teamId === userTeamId && !q.retired && q.position === p.position).length;
+                          const rosterFull = posCount >= ROSTER_LIMITS[p.position].max;
+                          const disabled = isSpectator || usedThisSeason || rosterFull;
+                          return (
+                            <tr key={p.id} className="border-b border-[var(--border)] last:border-0">
+                              <td className="py-2 pl-4">
+                                <button className="font-medium hover:text-blue-600" onClick={() => setSelectedPlayerId(p.id)}>
+                                  {p.firstName} {p.lastName}
+                                </button>
+                              </td>
+                              <td className="py-2 text-center">{p.position}</td>
+                              <td className="py-2 text-center">{p.age}</td>
+                              <td className="py-2 text-center font-bold">{p.ratings.overall}</td>
+                              <td className="py-2 pr-4 text-right">
+                                <span title={rosterFull ? `Roster full at ${p.position}` : usedThisSeason ? 'Already un-retired a player this season' : undefined}>
+                                  <Button
+                                    size="sm"
+                                    disabled={disabled}
+                                    onClick={() => handleBringBack(p.id)}
+                                  >
+                                    Bring Back
+                                  </Button>
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              );
+            })()}
           </div>
         </div>
       </div>

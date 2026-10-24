@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
-import { droyScore, allLeagueScore } from '@/lib/engine/awards';
+import { computeSeasonAwards, allLeagueScore, droyScore } from '@/lib/engine/awards';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -544,75 +544,53 @@ export default function PlayoffsPage() {
         {/* ---- Season Awards ---- */}
         {sbDone && (() => {
           const activePlayers = players.filter(p => !p.retired && p.teamId);
-          const withGames = (pos: string[]) =>
-            activePlayers.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
-
           const awards: { award: string; icon: string; player: typeof activePlayers[0] | undefined; gameStats?: Partial<StatShape> }[] = [];
 
-          // Championship MVP — show championship game stats, not season stats
+          // Championship MVP — show championship game stats, not season stats.
+          // (Not a season award, so it stays computed here from the title game.)
           const sbMvp = finalsMvpPlayerId ? players.find(p => p.id === finalsMvpPlayerId) : null;
           const sbGame = schedule.find(g => g.id === 'championship' && g.played);
           const sbMvpGameStats = sbMvp && sbGame ? sbGame.playerStats[sbMvp.id] : undefined;
           if (sbMvp) awards.push({ award: 'Championship MVP', icon: '🏆', player: sbMvp, gameStats: sbMvpGameStats as Partial<StatShape> | undefined });
 
-          // MVP — heavily favor QBs (MVP is almost always a QB)
-          const mvpCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
-          if (mvpCandidates.length > 0) {
-            const mvp = mvpCandidates.sort((a, b) => {
-              // QBs get a massive boost: pass yards + TDs weighted heavily
-              const aScore = a.position === 'QB'
-                ? a.stats.passYards * 0.04 + a.stats.passTDs * 6 - a.stats.interceptions * 4 + a.ratings.overall * 2
-                : a.position === 'RB'
-                  ? a.stats.rushYards * 0.06 + a.stats.rushTDs * 6 + a.ratings.overall
-                  : a.stats.receivingYards * 0.06 + a.stats.receivingTDs * 6 + a.ratings.overall;
-              const bScore = b.position === 'QB'
-                ? b.stats.passYards * 0.04 + b.stats.passTDs * 6 - b.stats.interceptions * 4 + b.ratings.overall * 2
-                : b.position === 'RB'
-                  ? b.stats.rushYards * 0.06 + b.stats.rushTDs * 6 + b.ratings.overall
-                  : b.stats.receivingYards * 0.06 + b.stats.receivingTDs * 6 + b.ratings.overall;
-              return bScore - aScore;
-            })[0];
-            awards.push({ award: 'Most Valuable Player', icon: '⭐', player: mvp });
-          }
+          // Season awards — read the CANONICAL winners (the same source the
+          // History page uses) so the two screens can never disagree. This block
+          // used to recompute MVP/DPOY/OPOY/OROY/DROY inline with its own
+          // heuristics, which drifted from computeSeasonAwards and showed the
+          // wrong winner on the championship recap (obungaloo, #bug-reports).
+          // Prefer the stamped snapshot in seasonHistory; before advanceToResigning
+          // stamps it (the championship recap can render first) fall back to
+          // computeSeasonAwards, which uses the identical scoring functions — so
+          // the winners still match History once the snapshot lands.
+          const canonicalAwards =
+            seasonHistory.find(s => s.season === season)?.awards
+            ?? computeSeasonAwards(useGameStore.getState() as never);
+          const winnerFor = (key: string) => {
+            const entry = canonicalAwards.find(a => a.award === key);
+            return entry ? players.find(p => p.id === entry.playerId) : undefined;
+          };
 
-          // DPOY
-          const defPlayers = withGames(['DL', 'LB', 'CB', 'S']);
-          if (defPlayers.length > 0) {
-            const dpoy = defPlayers.sort((a, b) =>
-              (b.stats.tackles + b.stats.sacks * 5 + b.stats.defensiveINTs * 4) -
-              (a.stats.tackles + a.stats.sacks * 5 + a.stats.defensiveINTs * 4)
-            )[0];
-            awards.push({ award: 'Defensive Player of the Year', icon: '🛡️', player: dpoy });
-          }
+          const mvp = winnerFor('MVP');
+          if (mvp) awards.push({ award: 'Most Valuable Player', icon: '⭐', player: mvp });
+          const dpoy = winnerFor('Defensive POY');
+          if (dpoy) awards.push({ award: 'Defensive Player of the Year', icon: '🛡️', player: dpoy });
+          const opoy = winnerFor('Offensive POY');
+          if (opoy) awards.push({ award: 'Offensive Player of the Year', icon: '🏈', player: opoy });
+          const oroy = winnerFor('Offensive ROY');
+          if (oroy) awards.push({ award: 'Offensive Rookie of the Year', icon: '🌟', player: oroy });
+          const droy = winnerFor('Defensive ROY');
+          if (droy) awards.push({ award: 'Defensive Rookie of the Year', icon: '🌟', player: droy });
 
-          // OPOY — non-QB skill positions only. QBs win MVP; OPOY recognizes
-          // the most outstanding non-QB offensive player (RB / WR / TE). Mirrors
-          // computeSeasonAwards in src/lib/engine/awards.ts so the playoffs
-          // recap and the canonical season awards always agree.
-          const opoyPlayers = withGames(['RB', 'WR', 'TE']);
-          if (opoyPlayers.length > 0) {
-            const opoy = opoyPlayers.sort((a, b) => {
-              const aYds = a.stats.rushYards + a.stats.receivingYards;
-              const bYds = b.stats.rushYards + b.stats.receivingYards;
-              const aTds = a.stats.rushTDs + a.stats.receivingTDs;
-              const bTds = b.stats.rushTDs + b.stats.receivingTDs;
-              return (bYds + bTds * 30) - (aYds + aTds * 30);
-            })[0];
-            awards.push({ award: 'Offensive Player of the Year', icon: '🏈', player: opoy });
-          }
-
-          // OROY / DROY
+          // Rookie pools for the All-Rookie team (rendered below). Sorted
+          // best-first so the top entry seeds the All-Rookie squad at its
+          // position — unchanged from before this bug fix.
           const rookies = activePlayers.filter(p => p.draftYear === season && p.stats.gamesPlayed >= 10);
-          const offRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
-          if (offRookies.length > 0) {
-            const oroy = offRookies.sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
-            awards.push({ award: 'Offensive Rookie of the Year', icon: '🌟', player: oroy });
-          }
-          const defRookies = rookies.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position));
-          if (defRookies.length > 0) {
-            const droy = defRookies.sort((a, b) => droyScore(b) - droyScore(a))[0];
-            awards.push({ award: 'Defensive Rookie of the Year', icon: '🌟', player: droy });
-          }
+          const offRookies = rookies
+            .filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position))
+            .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));
+          const defRookies = rookies
+            .filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position))
+            .sort((a, b) => droyScore(b) - droyScore(a));
 
           // All-Pro — use the same computation as the roster star badges
           const allLeague = computeAllLeagueTeams(useGameStore.getState() as never);

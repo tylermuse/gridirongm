@@ -12,10 +12,11 @@
  * the regular sim later.
  */
 
-import type { Player, Team } from '@/types';
+import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
+import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickWeighted } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
-import { playerAvailable } from './simulate';
+import { playerAvailable, fieldGoalMakeProbability } from './simulate';
 
 export interface LiveEngineState {
   quarter: number;
@@ -34,6 +35,8 @@ export interface LiveEngineState {
   awaitingXpChoice: boolean;
   /** When true, the engine is waiting for a kickoff choice (regular vs onside) */
   awaitingKickoffChoice: boolean;
+  /** When true, the user chose to go for two and the engine is waiting for the play call (ball at the 3) */
+  awaitingTwoPointCall?: boolean;
   /** Timeouts remaining per team per half */
   homeTimeouts: number;
   awayTimeouts: number;
@@ -53,10 +56,17 @@ export interface LiveEngineState {
 export interface LiveCoachEngine {
   /** Run one play (or several if continuation like TD → XP → kickoff). Returns new events. */
   runOnePlay: (userCall?: PlayCallType) => PlayEvent[];
+  /** Charge `side` a timeout between plays (used for defensive timeouts). */
+  callTimeoutFor: (side: 'home' | 'away', elapsedRunoffSecs?: number) => PlayEvent[];
   /** True when the user team has the ball on offense AND it's a regular play (not kickoff/XP). */
   isUserOffense: () => boolean;
   isFinished: () => boolean;
   getState: () => LiveEngineState;
+  /** Per-player stats the live engine accumulated for the plays IT generated
+   *  after the live pivot. Merged onto the pre-pivot bucket stats in
+   *  buildFinalGameResult so user-coached plays appear in the final box score
+   *  (jslusser1945_25790 8/13: live-coached games recorded an empty box score). */
+  getPlayerStats: () => Record<string, Partial<PlayerStats>>;
 }
 
 // ── Helpers ──
@@ -83,11 +93,24 @@ interface KeyOff {
   wr2: Player | null;
   te: Player | null;
   k: Player | null;
+  // Position pools — used to rotate carries/targets across the depth chart
+  // instead of piling everything on the single starter (RB2/WR3/etc. would
+  // otherwise never touch the ball in a live-coached game — Tyler report:
+  // "the same players seem to always make the same plays").
+  rbs: Player[];
+  wrs: Player[];
+  tes: Player[];
 }
 interface KeyDef {
   dl1: Player | null;
   lb1: Player | null;
   cb1: Player | null;
+  // Position pools — used to rotate sacks/INTs/tackles across the depth chart
+  // instead of always crediting the single starting lineman/corner.
+  dls: Player[];
+  lbs: Player[];
+  cbs: Player[];
+  safeties: Player[];
 }
 
 // Order players at a position by the team's depth chart (the user's
@@ -116,22 +139,46 @@ function orderedAtPos(players: Player[], pos: string, depthChart?: Record<string
 function extractOff(players: Player[], depthChart?: Record<string, string[]>): KeyOff {
   const wrs = orderedAtPos(players, 'WR', depthChart);
   const rbs = orderedAtPos(players, 'RB', depthChart);
+  const tes = orderedAtPos(players, 'TE', depthChart);
   return {
     qb: orderedAtPos(players, 'QB', depthChart)[0] ?? null,
     rb: rbs[0] ?? null,
     wr1: wrs[0] ?? null,
     wr2: wrs[1] ?? null,
-    te: orderedAtPos(players, 'TE', depthChart)[0] ?? null,
+    te: tes[0] ?? null,
     k: orderedAtPos(players, 'K', depthChart)[0] ?? null,
+    rbs,
+    wrs,
+    tes,
   };
 }
 
 function extractDef(players: Player[], depthChart?: Record<string, string[]>): KeyDef {
+  const dls = orderedAtPos(players, 'DL', depthChart);
+  const lbs = orderedAtPos(players, 'LB', depthChart);
+  const cbs = orderedAtPos(players, 'CB', depthChart);
+  const safeties = orderedAtPos(players, 'S', depthChart);
   return {
-    dl1: orderedAtPos(players, 'DL', depthChart)[0] ?? null,
-    lb1: orderedAtPos(players, 'LB', depthChart)[0] ?? null,
-    cb1: orderedAtPos(players, 'CB', depthChart)[0] ?? null,
+    dl1: dls[0] ?? null,
+    lb1: lbs[0] ?? null,
+    cb1: cbs[0] ?? null,
+    dls,
+    lbs,
+    cbs,
+    safeties,
   };
+}
+
+/** Pick the tackler on a run or short completion. LBs lead, DL and safeties
+ *  contribute, corners least — weighted by tackling rating so the live-coach
+ *  box score spreads tackles the way the full sim's team tackle bucket does. */
+function pickTackler(dk: KeyDef): Player | null {
+  const pool = [...dk.lbs, ...dk.dls, ...dk.safeties, ...dk.cbs];
+  return pickWeighted(pool, p => {
+    const base = p.position === 'LB' ? 3.0 : p.position === 'DL' ? 2.0
+      : p.position === 'S' ? 1.5 : 0.6;
+    return base * (p.ratings.tackling ?? 60);
+  });
 }
 
 function rating(p: Player | null, key: keyof Player['ratings'], fallback = 70): number {
@@ -153,6 +200,10 @@ export function createLiveCoachEngine(
   initialState: LiveEngineState,
   /** Which side the user controls — needed to determine user TDs for XP choice */
   userSide: 'home' | 'away' = 'home',
+  /** True for playoff games. A playoff game must produce a winner, so when an
+   *  OT period expires still tied we start another sudden-death OT period
+   *  instead of ending the game in a tie. Regular-season ties stand. */
+  isPlayoff: boolean = false,
 ): LiveCoachEngine {
   const homeOff = extractOff(homePlayers, homeTeam.depthChart);
   const awayOff = extractOff(awayPlayers, awayTeam.depthChart);
@@ -163,6 +214,7 @@ export function createLiveCoachEngine(
     ...initialState,
     awaitingXpChoice: initialState.awaitingXpChoice ?? false,
     awaitingKickoffChoice: initialState.awaitingKickoffChoice ?? false,
+    awaitingTwoPointCall: initialState.awaitingTwoPointCall ?? false,
     homeTimeouts: initialState.homeTimeouts ?? 3,
     awayTimeouts: initialState.awayTimeouts ?? 3,
     pendingRunoff: initialState.pendingRunoff ?? 0,
@@ -170,6 +222,26 @@ export function createLiveCoachEngine(
     otPlayRunThisPossession: initialState.otPlayRunThisPossession ?? false,
   };
   let nextEventId = 100000; // start high to avoid colliding with pre-computed event ids
+
+  // Per-player stat accumulator for the plays this engine generates. Merged
+  // onto the pre-pivot bucket stats in buildFinalGameResult so plays the user
+  // actually coaches after the live pivot are reflected in the final box score.
+  // Offense + defense are both tracked: sacks (on sack events), defensive INTs
+  // (on picks), and tackles (on run stops + short completions) so live-coached
+  // defenders show up in the box score and leaderboards the same as simmed ones
+  // (diprionidian 2026-09-30: "defense stats are barely recorded when playing
+  // vs simming").
+  const playerStats: Record<string, Partial<PlayerStats>> = {};
+  function bump(player: Player | null, updates: Partial<Record<keyof PlayerStats, number>>) {
+    if (!player) return;
+    const cur = (playerStats[player.id] ?? {}) as Record<string, number>;
+    for (const key in updates) {
+      const v = updates[key as keyof PlayerStats];
+      if (typeof v === 'number') cur[key] = (cur[key] ?? 0) + v;
+    }
+    cur.gamesPlayed = 1;
+    playerStats[player.id] = cur as Partial<PlayerStats>;
+  }
 
   // ── Event constructor ──
   function makeEvent(
@@ -237,7 +309,11 @@ export function createLiveCoachEngine(
     if (state.timeSecs > 0 || state.overtime) return;
     if (state.quarter === 2) {
       events.push(makeEvent('quarter_end', 'End of the second quarter.', 0, false));
-      events.push(makeEvent('halftime', `Halftime — ${homeTeam.abbreviation} ${state.homeScore}, ${awayTeam.abbreviation} ${state.awayScore}.`, 0, false));
+      const ht = makeEvent('halftime', `Halftime — ${homeTeam.abbreviation} ${state.homeScore}, ${awayTeam.abbreviation} ${state.awayScore}.`, 0, false);
+      // Snapshot (deep copy) so the Halftime Report shows first-half numbers
+      // even when opened later in the game.
+      ht.engineStatsSnap = Object.fromEntries(Object.entries(playerStats).map(([id, st]) => [id, { ...st }]));
+      events.push(ht);
       state.quarter = 3;
       state.timeSecs = 900;
       state.twoMinWarningQ2Fired = false;
@@ -276,6 +352,21 @@ export function createLiveCoachEngine(
     ));
   }
 
+  // An OT period expired with the score still tied. In the regular season a
+  // tie is a legitimate final; in the playoffs we must keep playing, so we
+  // reset the OT clock and start another sudden-death period.
+  function endTiedOvertime(events: PlayEvent[]) {
+    if (!isPlayoff) {
+      endGame(events);
+      return;
+    }
+    state.timeSecs = 600;
+    state.otPossessionsCompleted = 0;
+    state.otPlayRunThisPossession = false;
+    events.push(makeEvent('overtime', 'Still tied — another overtime period. Both teams get a possession.', 0, false));
+    doKickoffEvents(events);
+  }
+
   function doKickoffEvents(events: PlayEvent[]) {
     // Check if user should get the onside kick option:
     // - User's team is kicking (possession is about to switch TO opponent)
@@ -295,6 +386,17 @@ export function createLiveCoachEngine(
 
     events.push(makeEvent('kickoff', 'Kickoff fielded at the 25.', 0, false, 25));
     switchPossession(25);
+    // OT sudden death: the post-score kickoff above completes the scoring team's
+    // possession. If both teams have now had a possession and the score is no
+    // longer tied, the game is over. Checked HERE (after the PAT, which every
+    // caller applies before kicking off) rather than in handleTouchdown, so the
+    // team that just scored still gets its extra-point/2-pt try before the game
+    // can end. This also ends OT promptly — without it the end check only fires
+    // on the next live play, handing the loser a phantom extra possession, which
+    // is the tail of the crypticer. OT bug.
+    if (state.overtime && !state.isGameOver && state.homeScore !== state.awayScore && (state.otPossessionsCompleted ?? 0) >= 2) {
+      endGame(events);
+    }
   }
 
   function checkTwoMinWarning(events: PlayEvent[]) {
@@ -317,17 +419,15 @@ export function createLiveCoachEngine(
     const ok = offKey();
     const dk = defKey();
     const isQb = rusherOverride === 'qb' || (!rusherOverride && Math.random() < 0.10);
-    const rusher = isQb ? ok.qb : ok.rb;
+    const rusher = isQb ? ok.qb : (pickRusher(ok.rbs) ?? ok.rb);
     const skill = isQb
       ? rating(rusher, 'speed', 60) * 0.5 + rating(rusher, 'agility', 60) * 0.3 + rating(rusher, 'carrying', 50) * 0.2
       : rating(rusher, 'carrying', 70) * 0.5 + rating(rusher, 'speed', 70) * 0.3 + rating(rusher, 'agility', 70) * 0.2;
     const defStop = rating(dk.lb1, 'tackling', 70) * 0.5 + rating(dk.dl1, 'strength', 70) * 0.5;
 
-    let yards = Math.round((skill - defStop) / 12 + gaussian(3, 2));
+    let yards = Math.round((skill - defStop) / 12 + gaussian(4, 3));
     // Big run chance
     if (Math.random() < 0.06) yards += 8 + Math.floor(Math.random() * 12);
-    // Loss chance
-    if (Math.random() < 0.12 && yards > 0) yards = -(1 + Math.floor(Math.random() * 3));
     yards = clamp(yards, -5, 60);
 
     // Goal line
@@ -350,6 +450,10 @@ export function createLiveCoachEngine(
             : `${prefix}${name} loses ${Math.abs(finalYards)} on the play.`;
 
     events.push(makeEvent('run', desc, finalYards, isTD));
+    bump(rusher, { rushAttempts: 1, rushYards: finalYards, rushTDs: isTD ? 1 : 0 });
+    // A runner who isn't scoring got tackled — credit a front-seven/secondary
+    // defender (mirrors the full sim's team tackle on every non-TD carry).
+    if (!isTD) bump(pickTackler(dk), { tackles: 1 });
 
     if (isTD) {
       handleTouchdown(events, state.possession === userSide);
@@ -367,7 +471,9 @@ export function createLiveCoachEngine(
   function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' = 'short', callPrefix = '') {
     const ok = offKey();
     const dk = defKey();
-    const target = depth === 'screen' ? ok.rb : (Math.random() < 0.6 ? ok.wr1 : (ok.wr2 ?? ok.te));
+    const target = depth === 'screen'
+      ? (pickRusher(ok.rbs) ?? ok.rb)
+      : (pickReceiver(ok.wrs, ok.tes, ok.rbs) ?? ok.wr1);
 
     // Sack chance based on depth and pass rush
     const sackChance = depth === 'deep' ? 0.10 : depth === 'short' ? 0.05 : 0.02;
@@ -376,6 +482,13 @@ export function createLiveCoachEngine(
       const sackYards = -(3 + Math.floor(Math.random() * 5));
       const qbName = nameOrFallback(ok.qb, 'the QB');
       events.push(makeEvent('sack', `${prefix}${qbName} is sacked for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
+      // Credit the sack to a pass rusher (DL-weighted, LBs contribute) so
+      // live-coached sacks reach the box score + DPOY/sack leaderboards.
+      // Sacks are tracked separately from tackles here, matching the full sim
+      // (which increments sacks, not tackles, on a sack) so simmed and
+      // live-coached box scores stay consistent.
+      const sacker = pickSacker(dk.dls, dk.lbs) ?? dk.dl1;
+      bump(sacker, { sacks: 1 });
       state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
       state.yardsToGo -= sackYards;
       if (advanceDown() === 'turnover_on_downs') {
@@ -390,9 +503,18 @@ export function createLiveCoachEngine(
     const intChance = depth === 'deep' ? 0.06 : depth === 'short' ? 0.025 : 0.015;
     if (Math.random() < intChance) {
       const qbName = nameOrFallback(ok.qb, 'the QB');
-      const cbName = nameOrFallback(dk.cb1, 'the corner');
+      const interceptor = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.cb1;
+      const cbName = nameOrFallback(interceptor, 'the corner');
       events.push(makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false));
+      bump(ok.qb, { passAttempts: 1, interceptions: 1 });
+      bump(interceptor, { defensiveINTs: 1 });
       const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
+      // In OT, the possession that just threw the INT actually ran a play, so
+      // mark it before switching — otherwise otPossessionsCompleted never counts
+      // this turn and the OT end check can't fire after the opponent scores.
+      // (crypticer. bug: game continued after the opponent scored following a
+      // user interception in OT.)
+      if (state.overtime) state.otPlayRunThisPossession = true;
       switchPossession(returnPos);
       advancePlayClock(8, 0);
       return;
@@ -425,6 +547,10 @@ export function createLiveCoachEngine(
           : `${prefix}${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
 
       events.push(makeEvent('pass_complete', desc, finalYards, isTD));
+      bump(ok.qb, { passAttempts: 1, passCompletions: 1, passYards: finalYards, passTDs: isTD ? 1 : 0 });
+      bump(target, { targets: 1, receptions: 1, receivingYards: finalYards, receivingTDs: isTD ? 1 : 0 });
+      // Receiver brought down short of the end zone — credit the tackle.
+      if (!isTD) bump(pickTackler(dk), { tackles: 1 });
 
       if (isTD) {
         handleTouchdown(events, state.possession === userSide);
@@ -441,6 +567,8 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const recName = nameOrFallback(target, 'the receiver');
       events.push(makeEvent('pass_incomplete', `${prefix}${qbName}'s pass to ${recName} falls incomplete.`, 0, false));
+      bump(ok.qb, { passAttempts: 1 });
+      bump(target, { targets: 1 });
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
         return;
@@ -450,6 +578,13 @@ export function createLiveCoachEngine(
   }
 
   function handleTouchdown(events: PlayEvent[], isUserTd = false) {
+    if (twoPointTry) { twoPointTry = false; twoPointResolved = true;
+      addScore(2);
+      const qbName = nameOrFallback(offKey().qb, 'the QB');
+      events.push(makeEvent('extra_point', `Two-point conversion is GOOD! ${qbName} and the offense punch it in.`, 0, false));
+      doKickoffEvents(events);
+      return;
+    }
     addScore(6);
     if (isUserTd) {
       // User scored — set flag so the engine pauses for XP/2PT choice
@@ -460,6 +595,7 @@ export function createLiveCoachEngine(
       const k = offKey().k;
       const epGood = Math.random() < 0.95;
       if (epGood) addScore(1);
+      bump(k, { extraPointAttempts: 1, extraPointsMade: epGood ? 1 : 0 });
       events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
       doKickoffEvents(events);
     }
@@ -469,35 +605,73 @@ export function createLiveCoachEngine(
     const k = offKey().k;
     const epGood = Math.random() < 0.95;
     if (epGood) addScore(1);
+    bump(k, { extraPointAttempts: 1, extraPointsMade: epGood ? 1 : 0 });
     events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
     state.awaitingXpChoice = false;
     doKickoffEvents(events);
   }
 
-  function runTwoPointConversion(events: PlayEvent[]) {
-    const ok = offKey();
-    const success = Math.random() < 0.48; // NFL average ~48%
-    if (success) {
-      addScore(2);
-      const qbName = nameOrFallback(ok.qb, 'the QB');
-      events.push(makeEvent('extra_point', `Two-point conversion is GOOD! ${qbName} finds the end zone!`, 0, false));
-    } else {
-      const qbName = nameOrFallback(ok.qb, 'the QB');
-      events.push(makeEvent('extra_point', `Two-point conversion FAILS. ${qbName} comes up short.`, 0, false));
-    }
+  /** Two-point try as a real snap: the user picks a play (run / pass / scramble / screen) from the 3-yard line and the
+   *  play engine decides it — a touchdown is +2, anything else is a failed try. The 3D sim animates it like any play. */
+  let twoPointTry = false;
+  let twoPointResolved = false;
+  function beginTwoPointTry() {
     state.awaitingXpChoice = false;
-    doKickoffEvents(events);
+    state.awaitingTwoPointCall = true;
+    state.fieldPos = 97; state.down = 1; state.yardsToGo = 3;
+  }
+  function runTwoPointPlay(events: PlayEvent[], userCall: PlayCallType | undefined) {
+    state.awaitingTwoPointCall = false;
+    twoPointTry = true; twoPointResolved = false;
+    const call: PlayCallType = (userCall && ['run', 'pass_short', 'pass_deep', 'qb_run', 'screen'].includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
+    const prefix = '2-PT — ' + ({ run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot', qb_run: '⚡ QB Scramble', screen: '🛡️ Screen' } as Record<string, string>)[call];
+    const clockBefore = state.timeSecs;
+    if (call === 'run') runRunPlay(events, 'rb', prefix);
+    else if (call === 'qb_run') runRunPlay(events, 'qb', prefix);
+    else if (call === 'pass_deep') runPassPlay(events, 'deep', prefix);
+    else if (call === 'screen') runPassPlay(events, 'screen', prefix);
+    else runPassPlay(events, 'short', prefix);
+    state.timeSecs = clockBefore; state.pendingRunoff = 0;   // a try is untimed
+    if (!twoPointResolved) {
+      twoPointTry = false;
+      const qbName = nameOrFallback(offKey().qb, 'the QB');
+      events.push(makeEvent('extra_point', `Two-point conversion FAILS. ${qbName} and the offense come up short.`, 0, false));
+      doKickoffEvents(events);
+    }
+    twoPointResolved = false;
   }
 
-  function callTimeout(events: PlayEvent[]) {
-    const isUser = state.possession === (initialState as LiveEngineState).possession; // approximate
-    if (state.possession === 'home' && state.homeTimeouts > 0) {
+  /** Charge `side` a timeout (defaults to the offense). Returns false when
+   *  that team has none left. Callers zero the pending runoff (stops the clock). */
+  function callTimeout(events: PlayEvent[], side: 'home' | 'away' = state.possession): boolean {
+    if (side === 'home' && state.homeTimeouts > 0) {
       state.homeTimeouts--;
       events.push(makeEvent('run', `⏱️ Timeout called by ${homeTeam.abbreviation}. (${state.homeTimeouts} remaining)`, 0, false));
-    } else if (state.possession === 'away' && state.awayTimeouts > 0) {
+      return true;
+    }
+    if (side === 'away' && state.awayTimeouts > 0) {
       state.awayTimeouts--;
       events.push(makeEvent('run', `⏱️ Timeout called by ${awayTeam.abbreviation}. (${state.awayTimeouts} remaining)`, 0, false));
+      return true;
     }
+    return false;
+  }
+
+  /** Timeout by a specific team between plays — e.g. the user on DEFENSE,
+   *  which runOnePlay('timeout') can't express (it charges the offense).
+   *  `elapsedRunoffSecs` is how much of the previous play's runoff already
+   *  ticked off the on-screen clock before the call; that part is kept and the
+   *  rest is cancelled, so the clock stops exactly where the user saw it. */
+  function callTimeoutFor(side: 'home' | 'away', elapsedRunoffSecs = 0): PlayEvent[] {
+    const events: PlayEvent[] = [];
+    if (state.isGameOver || state.awaitingXpChoice || state.awaitingKickoffChoice) return events;
+    const left = side === 'home' ? state.homeTimeouts : state.awayTimeouts;
+    if (left <= 0) return events;
+    const elapsed = Math.max(0, Math.min(Math.round(elapsedRunoffSecs), state.pendingRunoff ?? 0, state.timeSecs - 1));
+    advanceClock(elapsed);
+    state.pendingRunoff = 0;
+    callTimeout(events, side);
+    return events;
   }
 
   function runFieldGoal(events: PlayEvent[]) {
@@ -505,8 +679,8 @@ export function createLiveCoachEngine(
     const distance = (100 - state.fieldPos) + 17;
     const k = ok.k;
     const kickerRating = rating(k, 'kicking', 70);
-    const successProb = clamp(0.95 - Math.max(0, distance - 30) * 0.025 + (kickerRating - 70) / 100 * 0.15, 0.35, 0.98);
-    const good = Math.random() < successProb;
+    const good = Math.random() < fieldGoalMakeProbability(distance, kickerRating);
+    bump(k, { fieldGoalAttempts: 1, fieldGoalsMade: good ? 1 : 0 });
     const kName = nameOrFallback(k, 'the kicker');
     if (good) {
       events.push(makeEvent('field_goal_good', `🏹 Field Goal — ${kName} drills the ${distance}-yarder! ✅`, 0, true));
@@ -547,7 +721,12 @@ export function createLiveCoachEngine(
   }
 
   function handleTurnoverOnDowns(events: PlayEvent[]) {
-    const newFieldPos = Math.max(20, 100 - state.fieldPos);
+    // Defense takes over at the exact spot — flip the field. The old `20` floor
+    // (correct for kickoffs/punts) wrongly bumped a goal-line stand out to the
+    // 20; a turnover on downs respects the actual line of scrimmage, so floor at
+    // 1 only to keep the spot inside the field. (diprionidian: fail at the
+    // opponent's 5 should give the defense the ball at their own 5, not the 20.)
+    const newFieldPos = Math.max(1, 100 - state.fieldPos);
     events.push(makeEvent('run', 'Turnover on downs! The defense takes over.', 0, false));
     switchPossession(newFieldPos);
   }
@@ -588,8 +767,8 @@ export function createLiveCoachEngine(
         runExtraPoint(events);
         return events;
       } else if (userCall === 'two_point' as PlayCallType) {
-        runTwoPointConversion(events);
-        return events;
+        beginTwoPointTry();
+        return events;   // the engine now waits for the play call
       } else if (!userCall) {
         // AI auto-picks XP
         runExtraPoint(events);
@@ -597,6 +776,12 @@ export function createLiveCoachEngine(
       }
       // If user sent a different call while awaiting XP, default to XP
       runExtraPoint(events);
+      return events;
+    }
+
+    // Two-point try: the next call is the play itself
+    if (state.awaitingTwoPointCall) {
+      runTwoPointPlay(events, userCall);
       return events;
     }
 
@@ -631,6 +816,35 @@ export function createLiveCoachEngine(
       return events;
     }
 
+    // CPU auto-timeout: a trailing CPU defense late in Q4 burns its timeouts to
+    // stop the clock when the user (on offense) is running it out — e.g. the
+    // user kneeling with a lead. The engine knows the user's side, so the CPU is
+    // the other team. Previously `callTimeout()` was only reachable via the user
+    // (`userCall === 'timeout'`), so the CPU never called one. (yo46363.)
+    // Fire between plays — before the pending runoff drains below — so zeroing
+    // it actually preserves the clock for the next snap.
+    {
+      const cpuSide: 'home' | 'away' = userSide === 'home' ? 'away' : 'home';
+      const cpuTimeouts = cpuSide === 'home' ? state.homeTimeouts : state.awayTimeouts;
+      const cpuScore = cpuSide === 'home' ? state.homeScore : state.awayScore;
+      const oppScore = cpuSide === 'home' ? state.awayScore : state.homeScore;
+      if (
+        !state.overtime &&
+        state.quarter === 4 &&
+        state.timeSecs <= 90 &&
+        (state.pendingRunoff ?? 0) > 0 && // only if there's clock to save
+        state.possession !== cpuSide &&   // the user (CPU's opponent) has the ball
+        cpuScore <= oppScore &&           // CPU trailing or tied — never stop the clock while leading
+        cpuTimeouts > 0
+      ) {
+        // callTimeout zeroes nothing by itself; zero the runoff here so the
+        // drain below is a no-op and the between-plays clock is preserved.
+        if (callTimeout(events, cpuSide)) {
+          state.pendingRunoff = 0;
+        }
+      }
+    }
+
     // Consume the runoff owed by the previous play before running this one.
     // A timeout would have zeroed this out.
     if ((state.pendingRunoff ?? 0) > 0) {
@@ -638,6 +852,36 @@ export function createLiveCoachEngine(
       state.pendingRunoff = 0;
       checkTwoMinWarning(events);
       if (state.timeSecs <= 0) {
+        checkQuarterEnd(events);
+        return events;
+      }
+    }
+
+    // End-of-half / end-of-game field goal awareness for auto (CPU) decisions.
+    // Ported from the sim engine (playByPlay.ts): when the clock is about to
+    // expire and the possessing team is in FG range while tied or trailing,
+    // kick the field goal instead of going for it or punting. Runs regardless
+    // of down and only when there is no explicit user call. (#1 voted football
+    // feature — AI 4th-down clock awareness.)
+    if (!userCall) {
+      const distToGoal = 100 - state.fieldPos;
+      const fgDist = distToGoal + 17;
+      const inFGRange = fgDist <= 58; // reasonable FG range
+      const offScoreDiff = state.possession === 'home'
+        ? state.homeScore - state.awayScore
+        : state.awayScore - state.homeScore;
+      const isEndOfHalf = (state.quarter === 2 && state.timeSecs <= 10) ||
+                          (state.quarter >= 4 && state.timeSecs <= 10);
+      const isLateAndClose = state.quarter >= 4 && state.timeSecs <= 30 && state.down >= 2;
+      // Kick if: in range AND (time expiring, tied/trailing) OR (late Q4, within a FG of tying/winning)
+      const shouldKickNow = inFGRange && (
+        (isEndOfHalf && offScoreDiff <= 0) ||
+        (isLateAndClose && offScoreDiff >= -3 && offScoreDiff <= 0)
+      );
+      if (shouldKickNow) {
+        runFieldGoal(events);
+        if (state.overtime) state.otPlayRunThisPossession = true;
+        checkTwoMinWarning(events);
         checkQuarterEnd(events);
         return events;
       }
@@ -672,6 +916,7 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(offKey().qb, 'the QB');
       const loss = 1 + Math.floor(Math.random() * 2); // -1 or -2
       events.push(makeEvent('run', `🧎 ${qbName} takes a knee.`, -loss, false));
+      bump(offKey().qb, { rushAttempts: 1, rushYards: -loss });
       state.fieldPos = Math.max(1, state.fieldPos - loss);
       state.yardsToGo += loss;
       advancePlayClock(40, 0);
@@ -682,7 +927,7 @@ export function createLiveCoachEngine(
       // OT end checks — sudden-death ending only after both teams completed a
       // possession (real NFL playoff OT rules).
       if (state.overtime && state.homeScore !== state.awayScore && (state.otPossessionsCompleted ?? 0) >= 2) endGame(events);
-      if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) endGame(events);
+      if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) endTiedOvertime(events);
       if (!state.overtime && !state.isGameOver && state.quarter === 4 && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
         state.overtime = true; state.timeSecs = 600; state.quarter = 5;
         state.otPossessionsCompleted = 0;
@@ -718,7 +963,8 @@ export function createLiveCoachEngine(
     const callPrefix = userCall ? (CALL_ICONS[playType] ?? '') : '';
 
     // Execute the play
-    if (playType === 'run') runRunPlay(events, undefined, callPrefix);
+    // a called Run always goes to the back: the 10% QB keeper made 'Run' play out as a QB scramble (that's its own call)
+    if (playType === 'run') runRunPlay(events, userCall === 'run' ? 'rb' : undefined, callPrefix);
     else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix);
     else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix);
     else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix);
@@ -733,8 +979,8 @@ export function createLiveCoachEngine(
       endGame(events);
     }
     if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
-      // Regular season tie after OT
-      endGame(events);
+      // OT period expired tied: regular-season tie stands, playoff game continues.
+      endTiedOvertime(events);
     }
 
     // Safety: if Q4 is over with tied score and OT wasn't triggered, force it
@@ -752,8 +998,10 @@ export function createLiveCoachEngine(
 
   return {
     runOnePlay,
+    callTimeoutFor,
     isUserOffense: () => false, // caller knows; this is here for completeness
     isFinished: () => state.isGameOver,
     getState: () => ({ ...state }),
+    getPlayerStats: () => playerStats,
   };
 }

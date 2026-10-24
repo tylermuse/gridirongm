@@ -182,6 +182,30 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
+// League-average (kicking 75) make rate by distance, NFL benchmarks:
+// <30 ≈ 99%, 30-39 ≈ 92%, 40-49 ≈ 78%, 50+ ≈ 65%.
+const FG_BASE_CURVE: [number, number][] = [
+  [18, 0.995], [25, 0.985], [30, 0.96], [35, 0.91], [40, 0.85],
+  [45, 0.77], [50, 0.69], [55, 0.60], [60, 0.48], [65, 0.35],
+];
+
+/** FG make probability. Kicking rating shifts the base curve in logit space
+ *  (≈65 → 78%, 75 → 86%, 85 → 92% over a typical attempt mix). Shared by the
+ *  season sim, the play-by-play viewer and live coach mode. */
+export function fieldGoalMakeProbability(distanceYards: number, kicking: number): number {
+  let base = FG_BASE_CURVE[FG_BASE_CURVE.length - 1][1];
+  if (distanceYards <= FG_BASE_CURVE[0][0]) base = FG_BASE_CURVE[0][1];
+  else {
+    for (let i = 1; i < FG_BASE_CURVE.length; i++) {
+      const [d0, p0] = FG_BASE_CURVE[i - 1];
+      const [d1, p1] = FG_BASE_CURVE[i];
+      if (distanceYards <= d1) { base = p0 + (p1 - p0) * (distanceYards - d0) / (d1 - d0); break; }
+    }
+  }
+  const logit = Math.log(base / (1 - base)) + (kicking - 76) * 0.07;
+  return clamp(1 / (1 + Math.exp(-logit)), 0.05, 0.995);
+}
+
 /** Weighted random pick — higher weight = higher chance */
 function weightedPick<T>(items: T[], weights: number[]): T {
   const total = weights.reduce((s, w) => s + w, 0);
@@ -591,7 +615,7 @@ function simulatePlay(
     const rushRatingMult = 0.9 + (rusher.ratings.carrying / 100) * 0.3;
     const rushRedZoneBonus = fieldPosition >= 80 ? 0.5 : 0;
     let yards = Math.round(
-      ((rushSkill - defRushPower) / 42 + 3.0 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
+      ((rushSkill - defRushPower) / 42 + 3.2 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
     );
 
     // Big rush chance (~1.5%) — breakaway runs
@@ -599,8 +623,9 @@ function simulatePlay(
       yards += 7 + Math.floor(Math.random() * 10);
     }
 
-    // Negative play chance (~17% of rushes go for loss)
-    const isNegative = Math.random() < 0.17;
+    // Negative play chance (~12% of rushes go for loss). Tuned down from 17%
+    // — users felt the run game was too punishing (#football-strategy, #general).
+    const isNegative = Math.random() < 0.12;
     if (isNegative) {
       yards = -(1 + Math.floor(Math.random() * 4));
     }
@@ -667,6 +692,9 @@ function simulatePlay(
 interface DriveResult {
   points: number;
   plays: PlayResult[];
+  /** True when the offense was tackled/pinned in their own end zone — the
+   *  DEFENSE scores 2, not the offense. `points` stays 0 for the offense. */
+  safety?: boolean;
 }
 
 function simulateDrive(
@@ -729,12 +757,7 @@ function simulateDrive(
       // Field goal range?
       const fgDistance = 100 - fieldPosition + 17;
       if (fgDistance <= 52 && kicker) {
-        // NFL FG%: ~97% under 30yd, ~90% 30-39, ~83% 40-49, ~65% 50+
-        const fgChance = clamp(
-          0.97 - Math.max(0, fgDistance - 30) * 0.012 + (kicker.ratings.kicking / 100) * 0.06,
-          0.25, 0.98,
-        );
-        const made = Math.random() < fgChance;
+        const made = Math.random() < fieldGoalMakeProbability(fgDistance, kicker.ratings.kicking);
         plays.push({
           type: 'fieldGoal', yards: fgDistance, touchdown: false, turnover: false,
           kicker, fieldGoalMade: made,
@@ -753,9 +776,14 @@ function simulateDrive(
       return { points: 0, plays };
     }
 
-    // Safety check
+    // Safety — offense tackled/pinned in their own end zone. Previously this
+    // just ended the drive with 0 points for everyone, silently dropping the
+    // 2 points the DEFENSE should score — the game could never produce a
+    // safety, which left every score a sum of only {3,6,7}: no real low/odd
+    // totals (2, 5, 8, 9, 11, ...) could ever occur (Tyler report: scores
+    // look "weird" / too formulaic).
     if (fieldPosition <= 0) {
-      return { points: 0, plays };
+      return { points: 0, plays, safety: true };
     }
   }
 
@@ -763,11 +791,7 @@ function simulateDrive(
   if (kicker) {
     const fgDistance = 100 - fieldPosition + 17;
     if (fgDistance <= 55) {
-      const fgChance = clamp(
-        0.92 - (fgDistance - 20) * 0.018 + (kicker.ratings.kicking / 100) * 0.08,
-        0.15, 0.95,
-      );
-      const made = Math.random() < fgChance;
+      const made = Math.random() < fieldGoalMakeProbability(fgDistance, kicker.ratings.kicking);
       plays.push({
         type: 'fieldGoal', yards: fgDistance, touchdown: false, turnover: false,
         kicker, fieldGoalMade: made,
@@ -927,6 +951,32 @@ export function simulateGame(
     return { away: runningAway, home: runningHome };
   }
 
+  /** Record a safety — 2 points to the team on DEFENSE (i.e. NOT the team
+   *  that was pinned in its own end zone). */
+  function recordSafety(defenseTeamId: string, quarter: number, runningAway: number, runningHome: number): { away: number; home: number } {
+    const isHomeDefense = defenseTeamId === game.homeTeamId;
+    const runAway = isHomeDefense ? runningAway : runningAway + 2;
+    const runHome = isHomeDefense ? runningHome + 2 : runningHome;
+
+    quarterScoringIndex[quarter] = (quarterScoringIndex[quarter] ?? 0) + 1;
+    const idx = quarterScoringIndex[quarter];
+    const minutesBase = quarter <= 4 ? 15 : 10;
+    const minutesLeft = Math.max(0, minutesBase - Math.floor(idx * (minutesBase / 5) + Math.random() * 3));
+    const secondsLeft = Math.floor(Math.random() * 60);
+    const timeLeft = `${minutesLeft}:${secondsLeft.toString().padStart(2, '0')}`;
+
+    scoringPlays.push({
+      quarter,
+      timeLeft,
+      teamId: defenseTeamId,
+      points: 2,
+      description: 'Safety',
+      score: [runAway, runHome],
+    });
+
+    return { away: runAway, home: runHome };
+  }
+
   let runAway = 0;
   let runHome = 0;
 
@@ -962,9 +1012,16 @@ export function simulateGame(
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
     allHomePlays.push(...homeDrive.plays);
-    const afterHome = describeScoring({ ...homeDrive, points: homePoints }, game.homeTeamId, quarter, runAway, runHome);
-    runAway = afterHome.away;
-    runHome = afterHome.home;
+    if (homeDrive.safety) {
+      awayScore += 2;
+      const afterSafety = recordSafety(game.awayTeamId, quarter, runAway, runHome);
+      runAway = afterSafety.away;
+      runHome = afterSafety.home;
+    } else {
+      const afterHome = describeScoring({ ...homeDrive, points: homePoints }, game.homeTeamId, quarter, runAway, runHome);
+      runAway = afterHome.away;
+      runHome = afterHome.home;
+    }
 
     // Away offense drives — same scoring fatigue
     const awayPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
@@ -974,9 +1031,16 @@ export function simulateGame(
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;
     allAwayPlays.push(...awayDrive.plays);
-    const afterAway = describeScoring({ ...awayDrive, points: awayPoints }, game.awayTeamId, quarter, runAway, runHome);
-    runAway = afterAway.away;
-    runHome = afterAway.home;
+    if (awayDrive.safety) {
+      homeScore += 2;
+      const afterSafety = recordSafety(game.homeTeamId, quarter, runAway, runHome);
+      runAway = afterSafety.away;
+      runHome = afterSafety.home;
+    } else {
+      const afterAway = describeScoring({ ...awayDrive, points: awayPoints }, game.awayTeamId, quarter, runAway, runHome);
+      runAway = afterAway.away;
+      runHome = afterAway.home;
+    }
   }
 
   // Break ties with OT — rare chance of a tie (~1.5% of all games, ~15% of games that go to OT)

@@ -6,7 +6,8 @@ interface TeamLogoProps {
   abbreviation: string;
   primaryColor: string;
   secondaryColor: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  /** 'fill': fills its parent (e.g. broadcast graphics sized in em). */
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'fill';
   className?: string;
   /** External logo image URL (from imported league files) */
   logoUrl?: string;
@@ -18,9 +19,11 @@ const SIZE_CLASSES: Record<string, string> = {
   md: 'w-8 h-8 min-w-8 min-h-8 max-w-8 max-h-8',
   lg: 'w-10 h-10 min-w-10 min-h-10 max-w-10 max-h-10',
   xl: 'w-16 h-16 min-w-16 min-h-16 max-w-16 max-h-16',
+  fill: 'w-full h-full',
 };
 
-const PADDING: Record<string, number> = {
+const PADDING: Record<string, number | string> = {
+  fill: '12%',
   xs: 1,
   sm: 2,
   md: 3,
@@ -34,6 +37,7 @@ const FONT_SIZES: Record<string, string> = {
   md: 'text-[10px]',
   lg: 'text-xs',
   xl: 'text-base',
+  fill: 'text-[1em]',
 };
 
 /* ─── SVG Icon Renderers ─── */

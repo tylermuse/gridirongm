@@ -11,7 +11,7 @@
  * Uses seeded randomization for deterministic output per week.
  */
 
-import type { RecapSegmentData, Team, Player, Position, PlayoffMatchup, DraftSelection } from '@/types';
+import type { RecapSegmentData, Team, Player, Position, PlayoffMatchup, DraftSelection, PlayerStats } from '@/types';
 
 /* ─── Types ─── */
 
@@ -902,8 +902,32 @@ export function generateTeamSpotlight(
   });
   const confRank = confSorted.findIndex(t => t.id === team.id) + 1;
 
+  // Offseason (re-signing → free agency): the record is last season's final
+  // mark, but player season stats have already rolled over (zeros). Talk
+  // about the season that ended — never in-season stats, standings races,
+  // streaks or "the rest of the way".
+  const offseasonPhase = ctx.phase === 'resigning' || ctx.phase === 'draft' || ctx.phase === 'freeAgency';
+  if (offseasonPhase && gamesPlayed > 0) {
+    const finish = winPct >= 0.6 ? 'a winning season' : winPct <= 0.4 ? 'a losing season' : 'a .500-ish season';
+    const diff = `${pointDiff > 0 ? '+' : ''}${pointDiff}`;
+    topics.push({
+      headline: `Last Season: ${team.record.wins}-${team.record.losses}${team.record.ties ? `-${team.record.ties}` : ''}`,
+      icon: '📼',
+      exchanges: [
+        { speakerId: 'stats', text: `The ${team.city} ${team.name} finished last season ${team.record.wins}-${team.record.losses}, ${ordinal(confRank)} in the conference, with a ${diff} point differential. That's ${finish}, and it's in the books.` },
+        { speakerId: 'hottake', text: winPct >= 0.6
+          ? `Good isn't the goal. The window is OPEN — this offseason is about turning good into a TITLE!`
+          : winPct <= 0.4
+          ? `That can't happen again. This offseason has to change the roster, not just the coaching speeches!`
+          : `Stuck in the middle is the WORST place to be. Pick a direction this offseason!` },
+      ],
+      teamIds: [team.id],
+      playerIds: [],
+    });
+  }
+
   // ─── 1. Team Overview / Record Reaction (stats-heavy) ───
-  if (gamesPlayed > 0) {
+  if (gamesPlayed > 0 && !offseasonPhase) {
     const offenseTier = ppgRank <= 8 ? 'top-tier' : ppgRank <= 16 ? 'middle-of-the-pack' : 'bottom-third';
     const defenseTier = defRank <= 8 ? 'elite' : defRank <= 16 ? 'average' : 'struggling';
 
@@ -964,7 +988,7 @@ export function generateTeamSpotlight(
   }
 
   // ─── 2. Offensive / Defensive Deep Dive (stats-first) ───
-  if (gamesPlayed > 0) {
+  if (gamesPlayed > 0 && !offseasonPhase) {
     const offenseGood = ppgRank <= totalTeams / 2;
     const defenseGood = defRank <= totalTeams / 2;
     // Find team's stat leaders for context
@@ -1084,7 +1108,7 @@ export function generateTeamSpotlight(
 
   // ─── 3. Star Player Spotlight (stats-driven) ───
   const star = [...activeRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
-  if (star && gamesPlayed > 0) {
+  if (star && gamesPlayed > 0 && !offseasonPhase) {
     const statFn = primaryStatForPosition(star);
     const posFilter = star.position === 'QB' ? allActive.filter(p => p.position === 'QB')
       : ['WR', 'TE'].includes(star.position) ? allActive.filter(p => ['WR', 'TE'].includes(p.position))
@@ -1180,7 +1204,7 @@ export function generateTeamSpotlight(
   }
 
   // ─── 6. Playoff Outlook (regular season, week 4+) ───
-  if (gamesPlayed >= 4) {
+  if (gamesPlayed >= 4 && !offseasonPhase) {
     const confLeader = confSorted[0];
     const gamesBack = confLeader && confLeader.id !== team.id
       ? ((confLeader.record.wins - team.record.wins) + (team.record.losses - confLeader.record.losses)) / 2
@@ -1217,7 +1241,7 @@ export function generateTeamSpotlight(
   }
 
   // ─── 7. Injury Report ───
-  if (injuredPlayers.length > 0) {
+  if (injuredPlayers.length > 0 && !offseasonPhase) {
     const worst = injuredPlayers[0];
     const worstStatLine = getPlayerStatLine(worst);
     const weeksOut = worst.injury?.weeksLeft ?? 0;
@@ -1296,7 +1320,7 @@ export function generateTeamSpotlight(
   // When the user elects to start an injured player, it's a strategic risk
   // worth debating — the reduced ceiling + elevated re-injury chance.
   const playThroughPlayers = activeRoster.filter(p => p.playingThroughInjury && p.injury && p.injury.weeksLeft > 0);
-  if (playThroughPlayers.length > 0) {
+  if (playThroughPlayers.length > 0 && !offseasonPhase) {
     const top = playThroughPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
     const w = top.injury!.weeksLeft;
     const penalty = w >= 3 ? 20 : w === 2 ? 12 : 5;
@@ -1332,7 +1356,7 @@ export function generateTeamSpotlight(
     n.season === season &&
     n.headline.includes('re-injured playing through')
   );
-  if (recentReInjNews.length > 0) {
+  if (recentReInjNews.length > 0 && !offseasonPhase) {
     const reInj = recentReInjNews[0];
     const player = reInj.playerIds && reInj.playerIds.length > 0
       ? allPlayers.find(p => p.id === reInj.playerIds![0])
@@ -1379,7 +1403,7 @@ export function generateTeamSpotlight(
 
   // ─── 9. Streak / Momentum ───
   const streak = team.record.streak;
-  if (streak >= 3 || streak <= -3) {
+  if ((streak >= 3 || streak <= -3) && !offseasonPhase) {
     const isWin = streak > 0;
     topics.push({
       headline: isWin ? `${streak}-Game Win Streak` : `${Math.abs(streak)}-Game Losing Streak`,
@@ -1436,7 +1460,7 @@ export function generateTeamSpotlight(
       { speakerId: 'stats' as const, text: `But you don't win them by mortgaging your future either. Balance.` },
     ],
   ];
-  topics.push({
+  if (!offseasonPhase) topics.push({
     headline: 'The Burning Question',
     icon: '🔥',
     exchanges: pick(burningQs, rng)(),
@@ -1702,4 +1726,331 @@ export function generateTeamSpotlight(
   }
 
   return topics;
+}
+
+/* ─── Halftime Breakdown ───────────────────────────────────────────────
+ * A user-opened "Halftime Report" for a live game: first-half score, the
+ * standout performers, and a short Cole/Blaze take. Same template-driven,
+ * deterministic, no-LLM approach as the debate engine. Audio is a later
+ * add-on — this returns text the game page renders in a modal.
+ */
+
+export interface HalftimeLeader {
+  playerId: string;
+  name: string;
+  teamAbbr: string;
+  category: 'Passing' | 'Rushing' | 'Receiving';
+  statLine: string;
+}
+
+export interface HalftimeBreakdown {
+  homeAbbr: string;
+  awayAbbr: string;
+  homeScore: number;
+  awayScore: number;
+  /** One-line situation summary (who leads, how much, or tied). */
+  summary: string;
+  leaders: HalftimeLeader[];
+  exchanges: DebateExchange[];
+}
+
+export function generateHalftimeBreakdown(args: {
+  homeTeam: Team;
+  awayTeam: Team;
+  homeScore: number;
+  awayScore: number;
+  /** Cumulative first-half stats keyed by player id (from livePlayerStatsAtEvent). */
+  stats: Record<string, Partial<PlayerStats>>;
+  /** Both teams' players, for name + team lookup. */
+  players: Player[];
+}): HalftimeBreakdown {
+  const { homeTeam, awayTeam, homeScore, awayScore, stats, players } = args;
+  const byId = new Map(players.map(p => [p.id, p]));
+  const abbrFor = (pid: string): string => {
+    const p = byId.get(pid);
+    return p?.teamId === homeTeam.id ? homeTeam.abbreviation
+      : p?.teamId === awayTeam.id ? awayTeam.abbreviation : '';
+  };
+  const nameFor = (pid: string): string => {
+    const p = byId.get(pid);
+    return p ? `${p.firstName} ${p.lastName}` : 'Unknown';
+  };
+
+  const entries = Object.entries(stats);
+  const leaders: HalftimeLeader[] = [];
+
+  const topPass = entries
+    .filter(([, s]) => (s.passYards ?? 0) > 0)
+    .sort((a, b) => (b[1].passYards ?? 0) - (a[1].passYards ?? 0))[0];
+  if (topPass) {
+    const s = topPass[1];
+    leaders.push({
+      playerId: topPass[0], name: nameFor(topPass[0]), teamAbbr: abbrFor(topPass[0]),
+      category: 'Passing',
+      statLine: `${s.passCompletions ?? 0}/${s.passAttempts ?? 0}, ${s.passYards ?? 0} yds, ${s.passTDs ?? 0} TD${(s.interceptions ?? 0) > 0 ? `, ${s.interceptions} INT` : ''}`,
+    });
+  }
+
+  const topRush = entries
+    .filter(([, s]) => (s.rushYards ?? 0) > 0)
+    .sort((a, b) => (b[1].rushYards ?? 0) - (a[1].rushYards ?? 0))[0];
+  if (topRush) {
+    const s = topRush[1];
+    leaders.push({
+      playerId: topRush[0], name: nameFor(topRush[0]), teamAbbr: abbrFor(topRush[0]),
+      category: 'Rushing',
+      statLine: `${s.rushAttempts ?? 0} car, ${s.rushYards ?? 0} yds, ${s.rushTDs ?? 0} TD`,
+    });
+  }
+
+  const topRec = entries
+    .filter(([, s]) => (s.receivingYards ?? 0) > 0)
+    .sort((a, b) => (b[1].receivingYards ?? 0) - (a[1].receivingYards ?? 0))[0];
+  if (topRec) {
+    const s = topRec[1];
+    leaders.push({
+      playerId: topRec[0], name: nameFor(topRec[0]), teamAbbr: abbrFor(topRec[0]),
+      category: 'Receiving',
+      statLine: `${s.receptions ?? 0} rec, ${s.receivingYards ?? 0} yds, ${s.receivingTDs ?? 0} TD`,
+    });
+  }
+
+  const margin = Math.abs(homeScore - awayScore);
+  const leaderAbbr = homeScore === awayScore ? null
+    : homeScore > awayScore ? homeTeam.abbreviation : awayTeam.abbreviation;
+  const summary = leaderAbbr === null
+    ? `All square at ${homeScore}–${awayScore} heading into the break.`
+    : `${leaderAbbr} takes a ${margin}-point lead into halftime, ${Math.max(homeScore, awayScore)}–${Math.min(homeScore, awayScore)}.`;
+
+  // Name the teams by city in the prose takes (the stat header/leaders stay
+  // abbreviated). leadCity/trailCity are null on a tie.
+  const leadCity = homeScore === awayScore ? null : homeScore > awayScore ? homeTeam.city : awayTeam.city;
+  const trailCity = homeScore === awayScore ? null : homeScore > awayScore ? awayTeam.city : homeTeam.city;
+
+  // A short two-beat take: Cole frames the numbers, Blaze reacts to the game state.
+  const star = leaders[0];
+  const starCity = star ? (star.teamAbbr === homeTeam.abbreviation ? homeTeam.city : awayTeam.city) : '';
+  const exchanges: DebateExchange[] = [];
+  if (star) {
+    exchanges.push({
+      speakerId: 'stats',
+      text: `Through two quarters the story is ${star.name} — ${star.statLine.toLowerCase()}. That's the engine of the ${starCity} offense right now.`,
+    });
+  } else {
+    exchanges.push({
+      speakerId: 'stats',
+      text: `Defenses are winning this one, Tony. Nobody's cracked the stat sheet open through two quarters.`,
+    });
+  }
+  if (leadCity === null) {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `Deadlocked at the half! I LOVE it. Whoever blinks first in the third quarter loses this game — mark my words.`,
+    });
+  } else if (margin >= 17) {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `${leadCity} is running away with it! If ${trailCity} doesn't come out of that locker room on FIRE, this one's already over.`,
+    });
+  } else if (margin <= 7) {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `One score game, baby! This is a coin flip and the second half is gonna be a STREET FIGHT. I can't look away.`,
+    });
+  } else {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `${leadCity} has the edge, but two scores is nothing. One stop, one big play, and we've got ourselves a brand new game.`,
+    });
+  }
+
+  return {
+    homeAbbr: homeTeam.abbreviation,
+    awayAbbr: awayTeam.abbreviation,
+    homeScore,
+    awayScore,
+    summary,
+    leaders,
+    exchanges,
+  };
+}
+
+/* ─── Premium: in-depth spoken halftime breakdown ──────────────────────
+ * A longer Marcus/Tony script (returned as TTS lines) that breaks down BOTH
+ * teams — who's carrying the offense, who's struggling, the defensive story —
+ * and prescribes second-half adjustments. Spoken via /api/game-audio for
+ * premium users; the text Halftime Report stays the free-tier version.
+ * Uses full city names (not abbreviations) since it's read aloud.
+ */
+
+interface HalftimeAudioLine { speaker: 'marcus' | 'tony'; text: string }
+
+interface TeamHalf {
+  passer?: [string, Partial<PlayerStats>];
+  rusher?: [string, Partial<PlayerStats>];
+  receiver?: [string, Partial<PlayerStats>];
+  defender?: [string, Partial<PlayerStats>];
+  rushYds: number;
+  ints: number;
+  sacks: number;
+}
+
+export function generateHalftimeAudioBreakdown(args: {
+  homeTeam: Team;
+  awayTeam: Team;
+  homeScore: number;
+  awayScore: number;
+  stats: Record<string, Partial<PlayerStats>>;
+  players: Player[];
+}): HalftimeAudioLine[] {
+  const { homeTeam, awayTeam, homeScore, awayScore, stats, players } = args;
+  const byId = new Map(players.map(p => [p.id, p]));
+  const last = (pid: string) => byId.get(pid)?.lastName ?? 'someone';
+
+  function analyze(teamId: string): TeamHalf {
+    const es = Object.entries(stats).filter(([pid]) => byId.get(pid)?.teamId === teamId);
+    const top = (key: keyof PlayerStats) =>
+      es.filter(([, s]) => ((s[key] as number) ?? 0) > 0)
+        .sort((a, b) => ((b[1][key] as number) ?? 0) - ((a[1][key] as number) ?? 0))[0] as [string, Partial<PlayerStats>] | undefined;
+    const defender = es
+      .filter(([, s]) => (s.sacks ?? 0) + (s.defensiveINTs ?? 0) > 0)
+      .sort((a, b) => ((b[1].sacks ?? 0) + (b[1].defensiveINTs ?? 0)) - ((a[1].sacks ?? 0) + (a[1].defensiveINTs ?? 0)))[0] as [string, Partial<PlayerStats>] | undefined;
+    const passer = top('passYards');
+    return {
+      passer, rusher: top('rushYards'), receiver: top('receivingYards'), defender,
+      rushYds: es.reduce((n, [, s]) => n + (s.rushYards ?? 0), 0),
+      ints: passer ? (passer[1].interceptions ?? 0) : 0,
+      sacks: es.reduce((n, [, s]) => n + (s.sacks ?? 0), 0),
+    };
+  }
+
+  const POS_WORD: Record<string, string> = {
+    QB: 'quarterback', RB: 'running back', WR: 'receiver', TE: 'tight end',
+    OL: 'lineman', DL: 'pass rusher', LB: 'linebacker', CB: 'cornerback',
+    S: 'safety', K: 'kicker', P: 'punter',
+  };
+
+  // Stars (high OVR) whose first-half production is missing — the guys who have
+  // to step up for the team to have a chance. Returns a name + spoken reason.
+  function underperformers(teamId: string): { player: Player; reason: string }[] {
+    const roster = players.filter(p => p.teamId === teamId);
+    const starAt = (positions: string[]) =>
+      roster.filter(p => positions.includes(p.position)).sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    const s = (pid: string): Partial<PlayerStats> => stats[pid] ?? {};
+    const out: { player: Player; reason: string }[] = [];
+
+    const wr = starAt(['WR']);
+    if (wr && wr.ratings.overall >= 75) {
+      const st = s(wr.id);
+      const yds = st.receivingYards ?? 0, tgt = st.targets ?? 0, rec = st.receptions ?? 0;
+      if (yds < 30) {
+        out.push({ player: wr, reason: tgt >= 3 && rec <= 1
+          ? `has been targeted ${tgt} times but reeled in just ${rec} — he's leaving catches on the field and has to hang on to it`
+          : `has been a total non-factor — just ${yds} yards. They can't win with their number-one option invisible` });
+      }
+    }
+    const rb = starAt(['RB']);
+    if (rb && rb.ratings.overall >= 78 && (s(rb.id).rushYards ?? 0) < 25) {
+      out.push({ player: rb, reason: `has been bottled up for ${s(rb.id).rushYards ?? 0} yards on the ground — they need him running downhill` });
+    }
+    const rush = starAt(['DL', 'LB']);
+    if (rush && rush.ratings.overall >= 78 && (s(rush.id).sacks ?? 0) === 0) {
+      out.push({ player: rush, reason: `hasn't gotten home a single time — zero pressures on the quarterback. He has to start wrecking that pocket` });
+    }
+    const db = starAt(['CB', 'S']);
+    if (db && db.ratings.overall >= 79 && (s(db.id).defensiveINTs ?? 0) === 0) {
+      out.push({ player: db, reason: `has to make a play on the football — the back end needs a stop or this gets away from them` });
+    }
+    return out;
+  }
+
+  const homeA = analyze(homeTeam.id);
+  const awayA = analyze(awayTeam.id);
+  const homeCity = homeTeam.city;
+  const awayCity = awayTeam.city;
+  const margin = Math.abs(homeScore - awayScore);
+  const homeLeads = homeScore > awayScore;
+  const tied = homeScore === awayScore;
+  const leadCity = tied ? homeCity : homeLeads ? homeCity : awayCity;
+  const trailCity = tied ? awayCity : homeLeads ? awayCity : homeCity;
+  const leadA = tied ? homeA : homeLeads ? homeA : awayA;
+  const trailA = tied ? awayA : homeLeads ? awayA : homeA;
+
+  const lines: HalftimeAudioLine[] = [];
+  const M = (t: string) => lines.push({ speaker: 'marcus', text: t });
+  const T = (t: string) => lines.push({ speaker: 'tony', text: t });
+
+  // Intro
+  M(`We're at the half. ${awayCity} ${awayScore}, ${homeCity} ${homeScore}. Tony, let's break down both sides.`);
+
+  // Leading team's engine
+  if (leadA.passer) {
+    const s = leadA.passer[1];
+    M(`${tied ? homeCity : leadCity} has leaned on ${last(leadA.passer[0])} — ${s.passCompletions ?? 0} of ${s.passAttempts ?? 0}, ${s.passYards ?? 0} yards and ${s.passTDs ?? 0} touchdowns through the air.`);
+  } else if (leadA.rusher) {
+    M(`${tied ? homeCity : leadCity} is running it down their throat — ${last(leadA.rusher[0])} already has ${leadA.rusher[1].rushYards ?? 0} yards on the ground.`);
+  } else {
+    M(`Neither offense has found much rhythm yet, but ${tied ? homeCity : leadCity} has done just enough.`);
+  }
+  if (leadA.receiver && (leadA.receiver[1].receivingYards ?? 0) >= 40) {
+    T(`And ${last(leadA.receiver[0])} is a problem — ${leadA.receiver[1].receptions ?? 0} grabs for ${leadA.receiver[1].receivingYards} yards. The other side has NO answer for him!`);
+  } else {
+    T(`They're in control and they know it. But a lead at the half means NOTHING if they let off the gas!`);
+  }
+
+  // Trailing team's bright spot + what's wrong
+  const bright = trailA.passer ?? trailA.rusher ?? trailA.receiver;
+  if (!tied && bright) {
+    M(`For ${trailCity}, the bright spot has been ${last(bright[0])} — but they're chasing the game now.`);
+  } else if (!tied) {
+    M(`${trailCity} has been held in check across the board — they need a spark.`);
+  }
+  // Adjustment for the trailing (or, if tied, the home) team
+  const fixTeam = tied ? homeA : trailA;
+  const fixCity = tied ? homeCity : trailCity;
+  if (fixTeam.ints >= 1 && fixTeam.passer) {
+    T(`Here's the adjustment: ${fixCity} has to protect the football. ${last(fixTeam.passer[0])} already has ${fixTeam.ints} pick${fixTeam.ints === 1 ? '' : 's'} — you can't win throwing it to the other team!`);
+  } else if (fixTeam.rushYds < 40) {
+    T(`${fixCity}'s got to establish the run — only ${fixTeam.rushYds} yards on the ground. Get one-dimensional and they're done.`);
+  } else {
+    T(`${fixCity} is moving it but leaving points out there. Finish the drives — that's the whole ballgame in the second half.`);
+  }
+
+  // Name the stars who have to step up for the team chasing the game.
+  const fixTeamId = tied ? homeTeam.id : (homeLeads ? awayTeam.id : homeTeam.id);
+  const need = underperformers(fixTeamId);
+  if (need.length > 0) {
+    M(`And if ${fixCity} wants a real chance in this thing, a couple of names have to show up in the second half.`);
+    const u0 = need[0];
+    T(`Start with ${u0.player.firstName} ${u0.player.lastName} — a ${u0.player.ratings.overall}-overall ${POS_WORD[u0.player.position] ?? 'player'} who ${u0.reason}. He's got to be a different guy after the break!`);
+    if (need[1]) {
+      const u1 = need[1];
+      M(`${u1.player.firstName} ${u1.player.lastName} is the other one — he ${u1.reason}. ${fixCity} needs a lot more from him.`);
+    }
+  }
+
+  // Defensive story
+  const topDef = (homeA.defender && awayA.defender)
+    ? (((homeA.defender[1].sacks ?? 0) + (homeA.defender[1].defensiveINTs ?? 0)) >= ((awayA.defender[1].sacks ?? 0) + (awayA.defender[1].defensiveINTs ?? 0)) ? homeA.defender : awayA.defender)
+    : (homeA.defender ?? awayA.defender);
+  if (topDef) {
+    const d = topDef[1];
+    const bits: string[] = [];
+    if ((d.sacks ?? 0) > 0) bits.push(`${d.sacks} sack${d.sacks === 1 ? '' : 's'}`);
+    if ((d.defensiveINTs ?? 0) > 0) bits.push(`an interception`);
+    M(`Defensively, ${last(topDef[0])} has been all over it — ${bits.join(' and ') || 'making plays'}.`);
+  }
+
+  // Close / second-half outlook
+  if (tied) {
+    T(`Dead even. Whoever makes the better halftime adjustment walks out of here with it. I can't wait!`);
+  } else if (margin <= 7) {
+    M(`One-score game. Second half comes down to who tightens up first.`);
+  } else if (margin >= 17) {
+    T(`${leadCity} is in the driver's seat — but if ${trailCity} scores first out of the break, we've got a whole new game!`);
+  } else {
+    M(`${leadCity} has the edge, but two scores is nothing in this league. Big third quarter coming.`);
+  }
+
+  return lines;
 }

@@ -1,14 +1,35 @@
 /**
- * NBA-style 82-game schedule generator.
+ * NBA-style 82-game schedule generator — generalized to 30, 31 or 32 teams.
  *
- * For each team:
- *   - 4 games vs each of 4 division rivals (4 × 4 = 16 games)
- *   - 4 games vs each of 6 other teams in the same conference, 3 games
- *     vs each of the other 4 same-conference teams (6×4 + 4×3 = 36 games)
- *   - 2 games vs each of 15 opposite-conference teams (15 × 2 = 30 games)
- *   Total: 16 + 36 + 30 = 82 games per team
+ * League shape: two conferences of 15 or 16 teams, each split into three
+ * divisions of 5 or 6 (a 16-team conference is 6/5/5).
  *
- * Home/away split is 41/41 per team.
+ * Matchup formula (per team T in a conference of size C, own division size D,
+ * opposite conference size O):
+ *   - 2 games vs each opposite-conference team            → 2·O
+ *   - in-conference budget B = 82 − 2·O, spread over the C−1 conference rivals,
+ *     each played 3 ("light") or 4 ("heavy") times:
+ *       heavy rivals H = B − 3·(C−1); every division rival is heavy (D−1 of
+ *       them), so T plays 4 games vs H−(D−1) non-division rivals and 3 vs the
+ *       rest.
+ *
+ *   30 teams (15/15, divisions 5/5/5):        O=15 → 30 cross, B=52, H=10:
+ *       4×4 div + 6×4 + 4×3 non-div + 15×2 = 82            (classic layout)
+ *   31 teams (15 + 16, the 16 is 6/5/5):
+ *       15-team conf: O=16 → 32 cross, B=50, H=8 → 4×4 div + 4×4 + 6×3 = 50
+ *       16-team conf: O=15 → 30 cross, B=52, H=7 →
+ *         6-team div: 5×4 div + 2×4 + 8×3 = 52;  5-team div: 4×4 + 3×4 + 8×3 = 52
+ *   32 teams (16/16, each 6/5/5): O=16 → 32 cross, B=50, H=5 →
+ *         6-team div: 5×4 div + 0×4 + 10×3 = 50; 5-team div: 4×4 + 1×4 + 10×3 = 50
+ *
+ * The non-division heavy pairs form a degree-constrained subgraph inside each
+ * conference (a circulant construction for all-5 divisions, a randomized
+ * Havel–Hakimi fill otherwise).
+ *
+ * Home/away: every 2- or 4-game pair splits evenly. The odd (3-game) pairs leave
+ * one "extra" game each; every team has an even number of them (82 is even and
+ * every other pair is even), so the extra-game graph is Eulerian and orienting
+ * it along closed trails gives each team exactly half — 41 home / 41 away.
  *
  * Calendar:
  *   - Regular season starts late October, ends mid-April (~170 days)
@@ -17,14 +38,10 @@
  *   - Back-to-backs allowed (real NBA averages 11-14 per team per season)
  *
  * v1 design notes:
- *   - The "3-vs-4" split for same-conference non-division opponents is
- *     pseudo-random in v1 (real NBA cycles which 6 vs 4 each year based
- *     on prior standings). v2 can wire prior-season records in.
- *   - No nationally-televised game targeting (e.g., Christmas Day games,
- *     opening night). All games are equal-priority in v1.
- *   - No arena availability constraints. Each team has a home slot every
- *     day they're scheduled at home — no concert-blocking conflicts.
- *   - No All-Star break carve-out. Schedule is uniform Oct-Apr.
+ *   - Which non-division rivals are "heavy" is pseudo-random per season (real
+ *     NBA cycles them on prior standings).
+ *   - No nationally-televised game targeting, arena constraints, or All-Star
+ *     break carve-out. Schedule is uniform Oct-Apr.
  */
 
 import type { BaseGameResult, TeamId, GameId, CompetitionId, BaseTeam } from '@bs/core/adapter';
@@ -40,13 +57,17 @@ export type BasketballTeamForSchedule = BaseTeam<BasketballRatings, BasketballSt
 const GAMES_VS_DIVISION_RIVAL = 4;
 const GAMES_VS_OPPOSITE_CONFERENCE = 2;
 
-/** Per same-conference non-division opponent. NBA actually does 3 vs 6 of
- *  them and 4 vs the other 4, totaling 18+16 = 34 same-conf non-div games.
- *  Combined with 16 division games and 30 opposite-conf games = 80.
- *  Plus 2 extra games handled via "play-in" / NBA Cup style additions.
- *  For v1 simplicity, we use 4-vs-6 and 3-vs-4 to hit exactly 82. */
+/** Per same-conference non-division opponent: "heavy" rivals 4 games, "light"
+ *  rivals 3 (see the header formula for how many of each). */
 const GAMES_VS_SAME_CONF_HEAVY = 4;
 const GAMES_VS_SAME_CONF_LIGHT = 3;
+
+/** Regular-season games per team. */
+const GAMES_PER_TEAM = 82;
+
+/** Supported league sizes. */
+export const MIN_BASKETBALL_TEAMS = 30;
+export const MAX_BASKETBALL_TEAMS = 32;
 
 /** Calendar: ~170 days. Real NBA season opens mid-October, ends mid-April. */
 const SEASON_DAYS = 170;
@@ -71,8 +92,8 @@ export function generateBasketballSchedule(
   teams: BasketballTeamForSchedule[],
   opts: ScheduleGenOptions,
 ): BaseGameResult<BasketballStats>[] {
-  if (teams.length !== 30) {
-    throw new Error(`Basketball schedule generator expects exactly 30 teams (got ${teams.length})`);
+  if (teams.length < MIN_BASKETBALL_TEAMS || teams.length > MAX_BASKETBALL_TEAMS) {
+    throw new Error(`Basketball schedule generator expects 30-32 teams (got ${teams.length})`);
   }
   validateConferenceStructure(teams);
 
@@ -126,31 +147,72 @@ function buildMatchupCounts(
 ): MatchupCount[] {
   const result: MatchupCount[] = [];
 
-  // Pre-compute the per-pair total game count.
-  // For same-conference non-division pairs we need a balanced 6-regular
-  // subgraph: each team plays 4 games vs 6 same-conf non-div opponents
-  // (heavy) and 3 games vs the other 4 (light). buildHeavyEdgeSet
-  // returns the set of heavy pairs.
+  // Which same-conference non-division pairs are "heavy" (4 games) vs "light"
+  // (3). buildHeavyEdgeSet returns the set of heavy pairs.
   const heavyEdges = buildHeavyEdgeSet(teams, rng);
 
+  // Odd-count pairs leave one "extra" game whose host is decided by the
+  // Eulerian orientation below (so every team lands on exactly 41 home games).
+  const oddPairs: { idx: number; a: TeamId; b: TeamId }[] = [];
   for (let i = 0; i < teams.length; i++) {
     for (let j = i + 1; j < teams.length; j++) {
       const a = teams[i];
       const b = teams[j];
       const totalGames = gamesBetween(a, b, heavyEdges);
-      // Home/away split: balanced when totalGames is even, otherwise alternate
-      const aHome = Math.floor(totalGames / 2) + (totalGames % 2 === 1 && rng.bool() ? 1 : 0);
-      const bHome = totalGames - aHome;
-      result.push({
-        teamA: a.id,
-        teamB: b.id,
-        aHomeCount: aHome,
-        bHomeCount: bHome,
-      });
+      const half = Math.floor(totalGames / 2);
+      if (totalGames % 2 === 1) oddPairs.push({ idx: result.length, a: a.id, b: b.id });
+      result.push({ teamA: a.id, teamB: b.id, aHomeCount: half, bHomeCount: half });
     }
   }
 
+  for (const { idx, homeIsA } of orientExtraGames(oddPairs, rng)) {
+    if (homeIsA) result[idx].aHomeCount += 1;
+    else result[idx].bHomeCount += 1;
+  }
+
   return result;
+}
+
+/**
+ * Orient the extra games so each team hosts exactly half of its own extras.
+ * Every vertex has even degree (see the header), so walking closed trails and
+ * orienting edges along the walk gives in-degree === out-degree everywhere.
+ */
+function orientExtraGames(
+  pairs: { idx: number; a: TeamId; b: TeamId }[],
+  rng: SimpleRng,
+): { idx: number; homeIsA: boolean }[] {
+  const adj = new Map<TeamId, number[]>(); // team → indices into `pairs`
+  for (let e = 0; e < pairs.length; e++) {
+    for (const t of [pairs[e].a, pairs[e].b]) {
+      if (!adj.has(t)) adj.set(t, []);
+      adj.get(t)!.push(e);
+    }
+  }
+  for (const [t, list] of adj) adj.set(t, shuffle(list, rng));
+  const used = new Array<boolean>(pairs.length).fill(false);
+  const out: { idx: number; homeIsA: boolean }[] = [];
+  const nextUnused = (t: TeamId): number => {
+    const list = adj.get(t)!;
+    while (list.length && used[list[list.length - 1]]) list.pop();
+    return list.length ? list[list.length - 1] : -1;
+  };
+  for (const start of shuffle([...adj.keys()], rng)) {
+    while (nextUnused(start) !== -1) {
+      let cur = start;
+      for (;;) {
+        const e = nextUnused(cur);
+        if (e === -1) break; // even degrees → only ever stuck back at `start`
+        used[e] = true;
+        const p = pairs[e];
+        // Travel cur → other: `cur` is the away side, `other` hosts.
+        const other = p.a === cur ? p.b : p.a;
+        out.push({ idx: p.idx, homeIsA: p.a === other });
+        cur = other;
+      }
+    }
+  }
+  return out;
 }
 
 function gamesBetween(
@@ -174,34 +236,34 @@ function pairKey(a: TeamId, b: TeamId): string {
 }
 
 /**
- * For each conference (15 teams, 3 divisions of 5), choose which
- * same-conf non-div pairs are "heavy" (4 games) vs "light" (3 games).
- * Each team must have exactly 6 heavy and 4 light opponents among its
- * 10 non-div same-conf opponents (total 6+4 = 10).
- *
- * Combinatorial constraint: we need a 6-regular subgraph on 15 nodes
- * (edges = 15*6/2 = 45) drawn from the 75 possible non-div pairs.
- *
- * Algorithm: randomized greedy with retry. For each conference:
- *   - Try up to 50 shuffles of the pair order
- *   - Greedy fill heavy edges while respecting the per-team cap of 6
- *   - If a configuration achieves all teams at exactly 6, accept
- *   - Otherwise, retry with a fresh shuffle
- * In practice valid configurations are found in < 5 attempts.
+ * For each conference choose which same-conf non-div pairs are "heavy" (4
+ * games). Each team needs exactly `target` heavy non-division rivals (from the
+ * header formula — it can differ by division size in a 16-team conference).
  */
 function buildHeavyEdgeSet(
   teams: BasketballTeamForSchedule[],
   rng: SimpleRng,
 ): Set<string> {
   const heavy = new Set<string>();
-  const conferences = new Set(teams.map(teamConference));
+  const conferences = [...new Set(teams.map(teamConference))];
 
   for (const conf of conferences) {
     const confTeams = teams.filter(t => teamConference(t) === conf);
-    if (confTeams.length !== 15) {
-      throw new Error(`Conference ${conf} has ${confTeams.length} teams (expected 15)`);
+    const opposite = teams.length - confTeams.length;
+    const budget = GAMES_PER_TEAM - GAMES_VS_OPPOSITE_CONFERENCE * opposite;
+    const heavyRivals = (budget - GAMES_VS_SAME_CONF_LIGHT * (confTeams.length - 1))
+      / (GAMES_VS_SAME_CONF_HEAVY - GAMES_VS_SAME_CONF_LIGHT);
+    const target = new Map<TeamId, number>();
+    for (const t of confTeams) {
+      const divSize = confTeams.filter(o => teamDivision(o) === teamDivision(t)).length;
+      const need = heavyRivals - (divSize - 1);
+      const nonDivOpponents = confTeams.length - divSize;
+      if (need < 0 || need > nonDivOpponents) {
+        throw new Error(`Conference ${conf}: no ${GAMES_PER_TEAM}-game layout for a ${divSize}-team division (need ${need} heavy of ${nonDivOpponents})`);
+      }
+      target.set(t.id, need);
     }
-    const subset = pickConfHeavyEdges(confTeams, rng);
+    const subset = pickConfHeavyEdges(confTeams, target, rng);
     for (const edge of subset) heavy.add(edge);
   }
 
@@ -210,9 +272,9 @@ function buildHeavyEdgeSet(
 
 function pickConfHeavyEdges(
   confTeams: BasketballTeamForSchedule[],
+  target: Map<TeamId, number>,
   rng: SimpleRng,
 ): Set<string> {
-  // Group by division (3 divisions of 5, validated upstream).
   const byDiv = new Map<string, BasketballTeamForSchedule[]>();
   for (const t of confTeams) {
     const d = teamDivision(t);
@@ -221,13 +283,17 @@ function pickConfHeavyEdges(
   }
   const divs = [...byDiv.keys()];
   const allFive = divs.length === 3 && divs.every(d => byDiv.get(d)!.length === 5);
+  const targets = new Set(target.values());
+  const perTeam = [...targets][0] ?? 0;
 
-  // Deterministic construction: between each division pair, lay down a
-  // 3-regular bipartite graph via a circulant (team a ↔ b where b ∈ {a, a+1,
-  // a+2} mod 5). Each team ends with 3 + 3 = exactly 6 heavy edges — always a
-  // valid 6-regular subgraph, so no random retries that can fail. The rng only
-  // shuffles team order within each division for season-to-season variety.
-  if (allFive) {
+  // Deterministic construction for 3×5 conferences with a uniform even target:
+  // between each division pair lay down a (target/2)-regular bipartite graph via
+  // a circulant (team a ↔ b where b ∈ {a, …, a+target/2−1} mod 5). A 30-team
+  // league uses target 6 (3 per division pair — the classic layout); a 15-team
+  // conference in a 31-team league uses 4. The rng only shuffles team order
+  // within each division for season-to-season variety.
+  if (allFive && targets.size === 1 && perTeam % 2 === 0 && perTeam / 2 <= 5) {
+    const span = perTeam / 2;
     const groups = divs.map(d => shuffle(byDiv.get(d)!, rng));
     const heavy = new Set<string>();
     for (let i = 0; i < groups.length; i++) {
@@ -235,7 +301,7 @@ function pickConfHeavyEdges(
         const A = groups[i];
         const B = groups[j];
         for (let a = 0; a < A.length; a++) {
-          for (let k = 0; k < 3; k++) {
+          for (let k = 0; k < span; k++) {
             const b = (a + k) % B.length;
             heavy.add(pairKey(A[a].id, B[b].id));
           }
@@ -245,37 +311,41 @@ function pickConfHeavyEdges(
     return heavy;
   }
 
-  // Fallback for non-standard structures: randomized greedy with retry.
-  const allPairs: { a: BasketballTeamForSchedule; b: BasketballTeamForSchedule; key: string }[] = [];
-  for (let i = 0; i < confTeams.length; i++) {
-    for (let j = i + 1; j < confTeams.length; j++) {
-      const a = confTeams[i];
-      const b = confTeams[j];
-      if (teamDivision(a) === teamDivision(b)) continue;
-      allPairs.push({ a, b, key: pairKey(a.id, b.id) });
-    }
-  }
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const shuffled = shuffle(allPairs, rng);
+  // General structures (6/5/5 divisions, mixed targets): randomized
+  // Havel–Hakimi — repeatedly satisfy the neediest team by linking it to the
+  // neediest eligible (other-division) rivals. Retries on the rare dead end.
+  const total = [...target.values()].reduce((s, n) => s + n, 0);
+  if (total % 2 !== 0) throw new Error('Heavy-edge targets have an odd sum — no valid layout');
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const remaining = new Map(target);
     const heavy = new Set<string>();
-    const heavyCount = new Map<TeamId, number>();
-    for (const t of confTeams) heavyCount.set(t.id, 0);
-    for (const p of shuffled) {
-      const aCount = heavyCount.get(p.a.id)!;
-      const bCount = heavyCount.get(p.b.id)!;
-      if (aCount < 6 && bCount < 6) {
-        heavy.add(p.key);
-        heavyCount.set(p.a.id, aCount + 1);
-        heavyCount.set(p.b.id, bCount + 1);
+    const order = shuffle(confTeams, rng);
+    let ok = true;
+    for (;;) {
+      let pickT: BasketballTeamForSchedule | null = null;
+      for (const t of order) {
+        const r = remaining.get(t.id)!;
+        if (r > 0 && (!pickT || r > remaining.get(pickT.id)!)) pickT = t;
       }
+      if (!pickT) break;
+      const cur = pickT;
+      const need = remaining.get(cur.id)!;
+      const candidates = shuffle(order, rng)
+        .filter(o => o.id !== cur.id
+          && teamDivision(o) !== teamDivision(cur)
+          && remaining.get(o.id)! > 0
+          && !heavy.has(pairKey(cur.id, o.id)))
+        .sort((x, y) => remaining.get(y.id)! - remaining.get(x.id)!);
+      if (candidates.length < need) { ok = false; break; }
+      for (const o of candidates.slice(0, need)) {
+        heavy.add(pairKey(cur.id, o.id));
+        remaining.set(o.id, remaining.get(o.id)! - 1);
+      }
+      remaining.set(cur.id, 0);
     }
-    let valid = true;
-    for (const t of confTeams) {
-      if (heavyCount.get(t.id) !== 6) { valid = false; break; }
-    }
-    if (valid) return heavy;
+    if (ok) return heavy;
   }
-  throw new Error('Could not construct 6-regular heavy-edge subgraph in 200 attempts');
+  throw new Error('Could not construct the heavy-edge subgraph in 500 attempts');
 }
 
 // ===========================================================================
@@ -446,19 +516,25 @@ function teamDivision(team: BasketballTeamForSchedule): string {
 function validateConferenceStructure(teams: BasketballTeamForSchedule[]): void {
   const conferences: Record<string, number> = {};
   const divisions: Record<string, number> = {};
+  const divsPerConf: Record<string, Set<string>> = {};
   for (const t of teams) {
     const c = teamConference(t);
     const d = teamDivision(t);
     conferences[c] = (conferences[c] ?? 0) + 1;
     divisions[`${c}/${d}`] = (divisions[`${c}/${d}`] ?? 0) + 1;
+    (divsPerConf[c] ??= new Set()).add(d);
   }
-  // 2 conferences × 15 teams each
+  if (Object.keys(conferences).length !== 2) {
+    throw new Error(`Expected 2 conferences (got ${Object.keys(conferences).length})`);
+  }
+  // 2 conferences × 15 or 16 teams, 3 divisions each
   for (const [c, n] of Object.entries(conferences)) {
-    if (n !== 15) throw new Error(`Conference ${c} has ${n} teams (expected 15)`);
+    if (n !== 15 && n !== 16) throw new Error(`Conference ${c} has ${n} teams (expected 15 or 16)`);
+    if (divsPerConf[c].size !== 3) throw new Error(`Conference ${c} has ${divsPerConf[c].size} divisions (expected 3)`);
   }
-  // 6 divisions × 5 teams each
+  // Divisions of 5 (one may be 6 inside a 16-team conference)
   for (const [cd, n] of Object.entries(divisions)) {
-    if (n !== 5) throw new Error(`Division ${cd} has ${n} teams (expected 5)`);
+    if (n !== 5 && n !== 6) throw new Error(`Division ${cd} has ${n} teams (expected 5 or 6)`);
   }
 }
 

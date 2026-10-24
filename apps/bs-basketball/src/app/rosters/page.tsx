@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -212,6 +213,9 @@ export default function RostersPage() {
                 ))}
                 <span className="text-xs text-[var(--text-sec)]">Updated {LAST_UPDATED}</span>
               </div>
+              <Link href="/rosters/2026" className="inline-block mt-3 text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+                Browse all 30 team rosters, ratings &amp; payrolls →
+              </Link>
             </div>
 
             <div className="shrink-0 flex flex-col gap-2 sm:w-52">

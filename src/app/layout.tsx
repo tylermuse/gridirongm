@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   title: 'BS Football',
   description: 'Build your dynasty. Run the franchise.',
   manifest: '/manifest.json',
+  verification: {
+    google: 'uF0bXo1i4U5gvcZAu6_dmeAl-RzfWExVckUr99OGR-A',
+  },
   appleWebApp: {
     capable: true,
     title: 'BS Football',
@@ -60,6 +63,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <RolloverErrorBeacon />
           <ExpansionTakeoverErrorBeacon />
         </Providers>
+        {/* Vercel Web Analytics — independent, bot-filtered visitor &
+            pageview counts. Serves from /_vercel/insights/script.js once
+            Web Analytics is enabled on the Vercel project. */}
+        <Script src="/_vercel/insights/script.js" strategy="afterInteractive" />
         {/* Google AdSense loader — only injected when an AdSense client ID is
             configured. Free-tier users see ads via <AdSlot />; paying tiers
             never render the slots so this script effectively no-ops for them. */}

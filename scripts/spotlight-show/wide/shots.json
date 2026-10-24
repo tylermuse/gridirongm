@@ -1,0 +1,22 @@
+{
+ "panic_open_1": "cccPpP",
+ "panic_open_2": "Pcccc",
+ "panic_verdict_1": "cP",
+ "panic_verdict_2": "cp",
+ "buysell_open_1": "pPcccP",
+ "buysell_open_2": "ccPP",
+ "contender_open_1": "ccccPP",
+ "contender_open_2": "cPPP",
+ "contender_verdict_1": "cP",
+ "signoff_1": "ccc",
+ "signoff_2": "pPP",
+ "banter_1": "pPP",
+ "banter_2": "pPP",
+ "panic_open_3": "ccccPP",
+ "contender_open_3": "ccccpP",
+ "contender_verdict_2": "cP",
+ "buysell_final_1": "cPP",
+ "banter_3": "PPP",
+ "banter_4": "pPP",
+ "signoff_3": "ccc"
+}

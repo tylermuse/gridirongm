@@ -17,6 +17,7 @@ import { POSITIONS, ROSTER_LIMITS, PRACTICE_SQUAD_LIMIT, isPracticeSquadEligible
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { PositionLink } from '@/components/ui/PositionLink';
 import { LEAGUE_MINIMUM_SALARY, estimateSalary, capInflationFactor } from '@/lib/engine/store';
+import { tradeRequestBadge } from '@/lib/engine/tradeRequests';
 
 function ratingColor(val: number): string {
   if (val >= 85) return 'text-green-600';
@@ -71,6 +72,21 @@ function getStatValues(p: Player): [string, string] {
     case 'P': return [String(s.gamesPlayed), ''];
     default: return ['', ''];
   }
+}
+
+/**
+ * Contract salary label. A deal whose future years step up — most commonly a
+ * rookie-deal extension where year 1 stays the cheap rookie number and the new
+ * money kicks in later — reads as a no-op if we only print year-1 salary. When
+ * a later year is higher, surface the peak (new-money) rate as "$7.2M→$45M" so
+ * the extension is visible. Flat contracts render unchanged ("$7.2M").
+ */
+function contractSalaryLabel(c: Player['contract']): string {
+  const cur = c.salary;
+  const peak = (c.contractYears ?? [])
+    .filter(y => !y.isVoidYear)
+    .reduce((m, y) => Math.max(m, y.baseSalary + (y.proratedBonus ?? 0)), cur);
+  return peak > cur + 0.05 ? `$${cur}M→$${Math.round(peak)}M` : `$${cur}M`;
 }
 
 /** Get mood explanation for a player */
@@ -138,10 +154,10 @@ export default function RosterPage() {
     setBaseFormation,
     reorderDepthChart, resetDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
-    autoCutToRosterLimit,
+    autoCutToRosterLimit, renameTeam,
     demoteToPracticeSquad, promoteFromPracticeSquad, cutFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
-    schedule,
+    schedule, playoffBracket,
   } = useGameStore();
   const godMode = leagueSettings?.godMode ?? false;
   const [showCreatePlayer, setShowCreatePlayer] = useState(false);
@@ -164,6 +180,12 @@ export default function RosterPage() {
   const [extendError, setExtendError] = useState<string | null>(null);
   const [viewingTeamId, setViewingTeamId] = useState<string | null>(null);
 
+  // Team relocation MVP (kodak6lack / bitter__pill): offseason-gated modal to
+  // rename/relocate the user's team — city, name, abbreviation, colors.
+  const [showRelocate, setShowRelocate] = useState(false);
+  const [relocateForm, setRelocateForm] = useState({ city: '', name: '', abbreviation: '', primaryColor: '#1e3a8a', secondaryColor: '#f59e0b' });
+  const [relocateError, setRelocateError] = useState<string | null>(null);
+
   // Sort state for the Practice Squad view. Separate from the main roster
   // sort so navigating between tabs keeps each view's sort intact.
   type PsSortKey = 'name' | 'pos' | 'ovr' | 'age' | 'yrs' | 'salary';
@@ -181,6 +203,10 @@ export default function RosterPage() {
 
   // Whether we're in an offseason phase where restructuring makes sense
   const isOffseason = phase !== 'regular';
+
+  // Team relocation is only offered during true offseason personnel phases
+  // (matches renameTeam's gating in the store). Hidden in regular/playoffs/preseason.
+  const canRelocate = (['resigning', 'draft', 'freeAgency', 'offseason'] as string[]).includes(phase);
 
   // Current season champion team (for ring indicators)
   const currentChamp = champions?.find(c => c.season === season);
@@ -607,6 +633,19 @@ export default function RosterPage() {
                   + Create Player
                 </button>
               )}
+              {!isSpectator && activeTeamId === userTeamId && canRelocate && (
+                <button
+                  onClick={() => {
+                    const t = teams.find(tm => tm.id === userTeamId);
+                    if (t) setRelocateForm({ city: t.city, name: t.name, abbreviation: t.abbreviation, primaryColor: t.primaryColor, secondaryColor: t.secondaryColor });
+                    setRelocateError(null);
+                    setShowRelocate(true);
+                  }}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 px-2 py-0.5 rounded border border-blue-300 bg-blue-50"
+                >
+                  🏟️ Rename / Relocate Team
+                </button>
+              )}
               <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>
                 ${capSpace}M cap space
               </span>
@@ -616,10 +655,16 @@ export default function RosterPage() {
                   team and only when an unplayed game exists for the current
                   week — hidden during preseason/playoffs/offseason and when
                   viewing another team's roster. */}
-              {!isSpectator && phase === 'regular' && activeTeamId === userTeamId && (() => {
-                const userGameThisWeek = schedule.find(g =>
-                  g.week === week && !g.played &&
-                  (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+              {!isSpectator && (phase === 'regular' || phase === 'playoffs') && activeTeamId === userTeamId && (() => {
+                // Regular season: this week's game. Playoffs: the user's next
+                // matchup once both teams are set.
+                const userGameThisWeek = phase === 'regular'
+                  ? schedule.find(g =>
+                    g.week === week && !g.played &&
+                    (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
+                  : playoffBracket?.find(m =>
+                    !m.winnerId && m.homeTeamId && m.awayTeamId &&
+                    (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId));
                 if (!userGameThisWeek) return null;
                 return (
                   <button
@@ -743,7 +788,7 @@ export default function RosterPage() {
                       </div>
                       <div className="flex items-center gap-3 text-[11px] text-[var(--text-sec)]">
                         <span>Age {p.age}</span>
-                        <span>${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
+                        <span>{contractSalaryLabel(p.contract)}/{p.contract.yearsLeft}yr</span>
                         {depthLabel && <span className="font-medium text-[var(--text)]">{depthLabel}</span>}
                         {p.injury && <span className="text-red-600">{p.injury.type} ({p.injury.weeksLeft}w)</span>}
                       </div>
@@ -874,7 +919,7 @@ export default function RosterPage() {
 
                         {/* Position */}
                         <td className="py-2 px-2 text-center">
-                          <span className="text-xs font-bold text-[var(--text-sec)]">{getSubPosition(p)}</span>
+                          <span className="text-xs font-bold text-[var(--text)]">{getSubPosition(p)}</span>
                         </td>
 
                         {/* Age */}
@@ -940,7 +985,7 @@ export default function RosterPage() {
 
                         {/* Contract */}
                         <td className="py-2 px-2 text-right font-mono text-xs tabular-nums">
-                          <span className="font-semibold">${p.contract.salary}M</span>
+                          <span className="font-semibold">{contractSalaryLabel(p.contract)}</span>
                           <span className={`ml-1 ${p.contract.yearsLeft <= 1 ? 'font-bold text-amber-600' : 'text-[var(--text-sec)]'}`}>
                             {p.contract.yearsLeft <= 1 ? (isStarter ? '⚠️ expiring' : 'expiring') : `${p.contract.yearsLeft}yr left`}
                           </span>
@@ -993,14 +1038,26 @@ export default function RosterPage() {
                             const color = mood >= 85 ? 'text-green-600 bg-green-50' : mood >= 75 ? 'text-blue-600 bg-blue-50' : mood >= 60 ? 'text-gray-600 bg-gray-100' : mood >= 45 ? 'text-orange-600 bg-orange-50' : 'text-red-600 bg-red-50';
                             const depthIdx = getDepthIndex(p);
                             const reason = getMoodReason(p, viewingTeam, depthIdx);
+                            const tradeReq = tradeRequestBadge(p, season);
                             return (
-                              <button
-                                onClick={() => setSelectedPlayerId(p.id)}
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer hover:ring-1 hover:ring-current transition-all ${color}`}
-                                title={reason}
-                              >
-                                {label}
-                              </button>
+                              <span className="inline-flex flex-col items-center gap-0.5">
+                                <button
+                                  onClick={() => setSelectedPlayerId(p.id)}
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer hover:ring-1 hover:ring-current transition-all ${color}`}
+                                  title={reason}
+                                >
+                                  {label}
+                                </button>
+                                {tradeReq && (
+                                  <button
+                                    onClick={() => setSelectedPlayerId(p.id)}
+                                    className={`text-[9px] font-bold px-1 py-0.5 rounded cursor-pointer inline-flex items-center gap-0.5 whitespace-nowrap ${tradeReq.className}`}
+                                    title={`${p.firstName} ${p.lastName}: ${tradeReq.label.toLowerCase()} — ${p.tradeRequest?.reason ?? ''}`}
+                                  >
+                                    <span aria-hidden>{tradeReq.emoji}</span>{tradeReq.label}
+                                  </button>
+                                )}
+                              </span>
                             );
                           })()}
                         </td>
@@ -1260,7 +1317,7 @@ export default function RosterPage() {
                       <div key={pos} className="border-t border-[var(--border)] first:border-t-0">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 py-2 px-2">
                           <div className="flex sm:flex-col items-center sm:items-start gap-1 shrink-0 sm:w-12">
-                            <span className="text-xs font-bold text-[var(--text-sec)]">{pos}</span>
+                            <span className="text-xs font-bold text-[var(--text)]">{pos}</span>
                             <ResetButton pos={pos} />
                           </div>
                           <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
@@ -1511,7 +1568,7 @@ export default function RosterPage() {
                             <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                             <td className="py-2 text-center">{p.age}</td>
                             <td className="py-2 text-center">{p.experience}</td>
-                            <td className="py-2 text-center">${p.contract.salary}M</td>
+                            <td className="py-2 text-center">{contractSalaryLabel(p.contract)}</td>
                             <td className="py-2 text-center">
                               <Button size="sm" variant="secondary" onClick={() => {
                                 const err = demoteToPracticeSquad(p.id);
@@ -1884,6 +1941,127 @@ export default function RosterPage() {
           </div>
         );
       })()}
+      {/* Rename / Relocate Team Modal */}
+      {showRelocate && (() => {
+        const t = teams.find(tm => tm.id === userTeamId);
+        if (!t) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRelocate(false)}>
+            <div className="bg-[var(--surface)] rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="p-5 border-b border-[var(--border)]">
+                <h2 className="text-lg font-bold">Rename / Relocate Team</h2>
+                <p className="text-sm text-[var(--text-sec)] mt-0.5">Currently: {t.abbreviation} — {t.city} {t.name}</p>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">City</label>
+                    <input
+                      type="text"
+                      value={relocateForm.city}
+                      maxLength={24}
+                      onChange={e => setRelocateForm(f => ({ ...f, city: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Team Name</label>
+                    <input
+                      type="text"
+                      value={relocateForm.name}
+                      maxLength={24}
+                      onChange={e => setRelocateForm(f => ({ ...f, name: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Abbreviation</label>
+                  <input
+                    type="text"
+                    value={relocateForm.abbreviation}
+                    maxLength={4}
+                    onChange={e => setRelocateForm(f => ({ ...f, abbreviation: e.target.value.toUpperCase() }))}
+                    className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm uppercase"
+                  />
+                  <div className="text-xs text-[var(--text-sec)] mt-0.5">2–4 letters, e.g. LV, KC, SF</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Primary Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={/^#[0-9a-fA-F]{6}$/.test(relocateForm.primaryColor) ? relocateForm.primaryColor : '#1e3a8a'}
+                        onChange={e => setRelocateForm(f => ({ ...f, primaryColor: e.target.value }))}
+                        className="h-9 w-12 rounded border border-[var(--border)] bg-transparent cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={relocateForm.primaryColor}
+                        maxLength={7}
+                        onChange={e => setRelocateForm(f => ({ ...f, primaryColor: e.target.value }))}
+                        className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Secondary Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={/^#[0-9a-fA-F]{6}$/.test(relocateForm.secondaryColor) ? relocateForm.secondaryColor : '#f59e0b'}
+                        onChange={e => setRelocateForm(f => ({ ...f, secondaryColor: e.target.value }))}
+                        className="h-9 w-12 rounded border border-[var(--border)] bg-transparent cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={relocateForm.secondaryColor}
+                        maxLength={7}
+                        onChange={e => setRelocateForm(f => ({ ...f, secondaryColor: e.target.value }))}
+                        className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live preview */}
+                <div
+                  className="rounded-lg p-3 flex items-center gap-3"
+                  style={{ background: relocateForm.primaryColor, color: relocateForm.secondaryColor }}
+                >
+                  <span className="font-black text-lg">{relocateForm.abbreviation || '—'}</span>
+                  <span className="font-bold">{relocateForm.city || 'City'} {relocateForm.name || 'Name'}</span>
+                </div>
+
+                {relocateError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{relocateError}</div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="p-5 border-t border-[var(--border)] flex justify-end gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setShowRelocate(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const err = renameTeam(userTeamId, relocateForm);
+                    if (err) { setRelocateError(err); return; }
+                    setShowRelocate(false);
+                  }}
+                >
+                  Confirm
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Extend Contract Modal */}
       {extendPlayerId && (() => {
         const p = roster.find(pl => pl.id === extendPlayerId);
@@ -1906,7 +2084,7 @@ export default function RosterPage() {
               <div className="px-5 py-5 space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-[var(--text-sec)]">Current deal</span>
-                  <span className="font-bold">${p.contract.salary}M/yr · {p.contract.yearsLeft}yr left</span>
+                  <span className="font-bold">{contractSalaryLabel(p.contract)}/yr · {p.contract.yearsLeft}yr left</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-[var(--text-sec)]">Market value</span>

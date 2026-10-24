@@ -41,19 +41,22 @@ import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { marketContract, hasContractForSeason } from '../league/contracts';
-import { getHeadCoach } from '../coaching/coaches';
+import { getHeadCoach, getDevCoach, devCoachMultiplier } from '../coaching/coaches';
+import { runCoachingCarousel, renewLapsedUserCoaches } from '../coaching/carousel';
 import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
-import { buildSeasonHistoryEntry } from '../history';
+import { buildSeasonHistoryEntry, buildRetireeEntry, type HistoryRetiree } from '../history';
 import { applySeasonApproval } from '../approval';
+import { developObjectivePlayerIds, ensureSeasonObjectives } from '../owner/objectives';
 import { resolveProtectedPicks, describeConveyance, pickKey, type PickProtection } from '../trade';
 import { appendTransaction } from '../transactions';
+import { getLeagueRules } from '../rules/leagueRules';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-const TARGET_ROSTER = 15;
 const MIN_LEGAL_ROSTER = 13;
-const DRAFT_CLASS_SIZE = 60;
+/** Prospects per draft class: two rounds × team count (60 in a 30-team league). */
+const draftClassSize = (teamCount: number): number => teamCount * 2;
 
 /** Minimum players to keep at each position when waiving roster overflow. Stops
  *  the OVR-only cut from stripping a team of every center (low-OVR role players
@@ -116,28 +119,67 @@ export function canAdvanceSeason(league: LeagueState): boolean {
 // ===========================================================================
 
 export function enterOffseason(input: LeagueState): LeagueState {
+  const nextSeason = input.currentSeason + 1;
+
+  // Each team's head-coach development rating drives how fast its young players
+  // grow over the offseason (parity: coaching matters for the rebuild loop),
+  // the player-development assistant adds its own ±15% for under-25s, and
+  // League Rules scale progression/regression on top. One helper so the owner
+  // objective grading and the real offseason roll are identical.
+  const teamDevRating = new Map<string, number>();
+  const teamDevCoachRating = new Map<string, number>();
+  const rules = getLeagueRules(input);
+  for (const t of input.teams) {
+    const hc = getHeadCoach(input, t.id);
+    if (hc) teamDevRating.set(t.id, hc.ratings.development);
+    const pdc = getDevCoach(input, t.id);
+    if (pdc) teamDevCoachRating.set(t.id, pdc.ratings.development);
+  }
+  const developForOffseason = (p: BasketballPlayer, saveId: string): BasketballPlayer => {
+    const teamId = p.rosterSlot?.teamId;
+    const devRating = teamId ? teamDevRating.get(teamId) : undefined;
+    const hcMult = devRating != null ? resolveBasketballPDCEffect(devRating, p.age) : undefined;
+    const pdcMult = devCoachMultiplier(teamId ? teamDevCoachRating.get(teamId) : undefined, p.age);
+    const developmentMultiplier = hcMult == null && pdcMult === 1 ? undefined : (hcMult ?? 1) * pdcMult;
+    // Seed development with the SAVE (league.id is a fresh uuid per save) so a
+    // player's boom/bust fate varies across saves of the same league — a 90-POT
+    // pick might hit in one save and bust in another (BUG-15). Without league.id
+    // the seed is just player+season, so every save replays identical outcomes.
+    return developBasketballPlayer(p, nextSeason, {
+      developmentMultiplier,
+      progressionScale: rules.progressionMult,
+      regressionScale: rules.regressionMult,
+      rngSeed: `${saveId}-${p.id}-${nextSeason}`,
+      // Career-stable boom/bust trait: per save + per player, NO season — so the
+      // prospect's development DNA is fixed for his whole career, not re-rolled
+      // each offseason.
+      devTraitSeed: `${saveId}-${p.id}`,
+    });
+  };
+
+  // "Develop a young player" owner objectives grade on the player's
+  // post-development OVR — the same deterministic roll applied below (ratings
+  // are untouched by the season snapshot, so the result is identical).
+  const developedOverall: Record<string, number> = {};
+  for (const pid of developObjectivePlayerIds(input)) {
+    const p = input.players[pid as PlayerId] as BasketballPlayer | undefined;
+    if (p) developedOverall[pid] = developForOffseason(p, input.id).ratings.overall;
+  }
+
   // End-of-season approval swing for the user team (may fire the GM, which
   // clears userTeamId). Done first, while record + bracket are intact.
-  const league = applySeasonApproval(input).league;
-  const nextSeason = league.currentSeason + 1;
+  const league = applySeasonApproval(input, { developedOverall }).league;
 
   // Snapshot the finished season into history + accumulate career stats — both
   // done BEFORE aging, so they reflect the season just played.
   const historyEntry = buildSeasonHistoryEntry(league);
   const seasonStats = computeSeasonAwards(league)?.seasonStats;
 
-  // Each team's head-coach development rating drives how fast its young players
-  // grow over the offseason (parity: coaching matters for the rebuild loop).
-  const teamDevRating = new Map<string, number>();
-  for (const t of league.teams) {
-    const hc = getHeadCoach(league, t.id);
-    if (hc) teamDevRating.set(t.id, hc.ratings.development);
-  }
-
   // Develop everyone; drop retirees (the schedule is replaced later, so nothing
   // references them once the season starts).
   const players: Record<string, BasketballPlayer> = {};
   const retired = new Set<PlayerId>();
+  const retirees: HistoryRetiree[] = [];
   for (const [id, raw] of Object.entries(league.players)) {
     const p = raw as BasketballPlayer;
     const stats = seasonStats?.get(id as PlayerId) ?? emptyBasketballStats();
@@ -168,24 +210,11 @@ export function enterOffseason(input: LeagueState): LeagueState {
       sportData: { ...p.sportData, prevRatings: p.ratings, seasonLog },
     };
 
-    const devRating = p.rosterSlot?.teamId ? teamDevRating.get(p.rosterSlot.teamId) : undefined;
-    const developmentMultiplier = devRating != null
-      ? resolveBasketballPDCEffect(devRating, p.age)
-      : undefined;
-    // Seed development with the SAVE (league.id is a fresh uuid per save) so a
-    // player's boom/bust fate varies across saves of the same league — a 90-POT
-    // pick might hit in one save and bust in another (BUG-15). Without league.id
-    // the seed is just player+season, so every save replays identical outcomes.
-    const developed = developBasketballPlayer(snapshot, nextSeason, {
-      developmentMultiplier,
-      rngSeed: `${league.id}-${id}-${nextSeason}`,
-      // Career-stable boom/bust trait: per save + per player, NO season — so the
-      // prospect's development DNA is fixed for his whole career, not re-rolled
-      // each offseason.
-      devTraitSeed: `${league.id}-${id}`,
-    });
-    if (shouldBasketballPlayerRetire(developed)) {
+    const developed = developForOffseason(snapshot, league.id);
+    if (shouldBasketballPlayerRetire(developed, { retirementAgeOffset: rules.retirementAgeOffset })) {
       retired.add(id as PlayerId);
+      // Only archive real players (skip unsigned, never-rostered prospects).
+      if (p.rosterSlot || snapshot.careerStats.gamesPlayed > 0) retirees.push(buildRetireeEntry(snapshot, developed.age));
       continue;
     }
     players[id] = developed;
@@ -229,7 +258,7 @@ export function enterOffseason(input: LeagueState): LeagueState {
   }
 
   // Generate the draft class — the pool, not auto-assigned.
-  const draftClass = generateBasketballDraftClass(nextSeason, DRAFT_CLASS_SIZE);
+  const draftClass = generateBasketballDraftClass(nextSeason, draftClassSize(league.teams.length));
   const poolIds: PlayerId[] = [];
   for (const p of draftClass) {
     players[p.id] = p;
@@ -283,7 +312,10 @@ export function enterOffseason(input: LeagueState): LeagueState {
     freeAgentIds: stalePros.size === 0
       ? interim.freeAgentIds
       : interim.freeAgentIds.filter(id => !stalePros.has(id)),
-    seasonHistory: { ...league.seasonHistory, [league.currentSeason]: historyEntry },
+    seasonHistory: {
+      ...league.seasonHistory,
+      [league.currentSeason]: { ...historyEntry, retired: retirees.sort((a, b) => b.overall - a.overall) },
+    },
     sportData: {
       ...(league.sportData as LeagueSportData),
       draft,
@@ -310,6 +342,9 @@ export function enterOffseason(input: LeagueState): LeagueState {
       detail: t.detail,
     });
   }
+  // AI coaching carousel (team records still hold the season just played).
+  // The user's staff is untouched — they decide on /staff.
+  result = runCoachingCarousel(result, historyEntry, nextSeason).league;
   return result;
 }
 
@@ -323,6 +358,14 @@ export function startNextSeason(league: LeagueState): LeagueState {
     throw new Error('The draft must be complete before starting the season.');
   }
   const season = draft.season;
+  // League Rules: the roster ceiling every team is trimmed to (stock 15).
+  const TARGET_ROSTER = getLeagueRules(league).maxRoster;
+  // An expansion (lib/expansion) runs between the draft and this rollover; it
+  // must be finished (or never started) before the year rolls.
+  const exp = (league.sportData as { expansion?: { stage?: string } } | undefined)?.expansion;
+  if (exp && exp.stage !== 'done') {
+    throw new Error('Finish the expansion draft before starting the season.');
+  }
 
   const players = { ...league.players } as Record<string, BasketballPlayer>;
   // Trim by *keep value*, not raw current overall — rookies enter deliberately
@@ -530,6 +573,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const sportData = { ...(league.sportData as LeagueSportData) };
   delete sportData.draft;
   delete sportData.playoffs;
+  delete sportData.expansion; // completed expansion (history kept in expansionHistory)
   delete sportData.pendingResign; // re-sign decisions resolved for this offseason
   delete sportData.injuries; // everyone starts the new season healthy
   sportData.freeAgentLastTeam = freeAgentLastTeam;
@@ -537,8 +581,11 @@ export function startNextSeason(league: LeagueState): LeagueState {
   sportData.seasonStarted = false; // user hasn't tipped off the regular season yet
 
   // Season history was recorded in enterOffseason (before aging) — don't
-  // overwrite it here.
-  return {
+  // overwrite it here. User coaches whose deals lapsed without a decision stay
+  // on a 1-year deal so the team is never left without staff, and the owner
+  // hands out the new season's objectives (preseason) from the rolled-over
+  // roster + last season's result.
+  return ensureSeasonObjectives(renewLapsedUserCoaches({
     ...league,
     currentSeason: season,
     currentPhase: 'preseason',
@@ -549,7 +596,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
     competitions,
     games,
     sportData,
-  };
+  }, season));
 }
 
 // ===========================================================================
@@ -558,7 +605,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
 
 export function advanceToNextSeason(league: LeagueState): LeagueState {
   const offseason = enterOffseason(league);
-  // userTeamId null → never matches a pick → auto-pick all 60.
+  // userTeamId null → never matches a pick → auto-pick the whole board.
   const drafted = autoPickUntilUser(offseason, null);
   return startNextSeason(drafted);
 }

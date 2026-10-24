@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage, getItem as idbGetItem, setItem as idbSetItem, flushPersist, flushPersistSync } from '@bs/core/storage';
+import { scheduleCloudPush } from '@bs/core/supabase/cloud-saves';
 function uuid(): string {
   return crypto.randomUUID();
 }
@@ -33,9 +34,11 @@ import { buildGmSyncPayload, syncGmStats } from './gmSync';
 import { checkDisciplineEvents, disciplineNewsItems, isPlayerSuspended, tickSuspensions } from './discipline';
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
+import { refreshTradeRequests, hasActiveTradeRequest } from './tradeRequests';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 import { clearRolloverTickInstrumentation, setAutocutSubstep, recordTickTiming, recordTickRosterSize } from '@/lib/instrumentation/rolloverTickTimings';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
+import { trackEvent } from '@bs/core/analytics/track';
 
 const SAVE_VERSION = 36;
 
@@ -59,6 +62,8 @@ export function pickJerseyFor(
   teamId: string,
   players: Player[],
   teams: Team[],
+  /** the number he wears now: a traded / signed player keeps it when it's free on the new team (CeeDee Lamb was traded and came out #12, not #88) */
+  current?: number,
 ): number {
   const taken = new Set<number>();
   for (const p of players) {
@@ -66,6 +71,7 @@ export function pickJerseyFor(
   }
   const team = teams.find(t => t.id === teamId);
   const retired = new Set<number>((team?.retiredNumbers ?? []).map(r => r.number));
+  if (typeof current === 'number' && Number.isInteger(current) && current >= 0 && current <= 99 && !taken.has(current) && !retired.has(current)) return current;
   return assignJerseyNumber(position, taken, retired);
 }
 
@@ -100,6 +106,11 @@ interface GameStore extends LeagueState {
     coverage?: 'man' | 'zone' | 'balanced';
     tempo?: 'fast' | 'normal' | 'slow';
   } | null) => void;
+  /** Rename / relocate an existing team's identity — city, name, abbreviation,
+   *  and colors — updating the team in place. Offseason-gated. Returns '' on
+   *  success or a human-readable error reason. No SAVE_VERSION bump: every
+   *  field already exists on the Team shape. */
+  renameTeam: (teamId: string, config: { city: string; name: string; abbreviation: string; primaryColor: string; secondaryColor: string }) => string;
   /** Generate the draft class preview if it doesn't already exist for the current season. */
   ensureDraftClassPreview: () => void;
   simWeek: () => void;
@@ -132,6 +143,10 @@ interface GameStore extends LeagueState {
   /** Returns empty string on success, or a specific error reason. Use `!!result`
    *  to check for failure; the string contents are suitable for display. */
   signFreeAgent: (playerId: string, salary: number, years: number) => string;
+  /** Bring a retired player back onto the user's roster on a minimum deal.
+   *  Returns empty string on success, or a display-suitable error reason.
+   *  Capped at 1 un-retire per season. */
+  unretirePlayer: (playerId: string) => string;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
   /** Cut all teams (or one team if id supplied) down to the 53-man roster
@@ -242,6 +257,11 @@ interface GameStore extends LeagueState {
   resetDepthChart: (position: Position) => void;
   simAllStarGame: () => void;
   commitLiveGame: (result: GameResult, matchupId?: string) => void;
+  /** Pre-simulate the non-user games of the current week and stash them for the
+   *  live Around-the-League scoreboard + halftime updates. No-op outside the
+   *  regular season. The stash is consumed + cleared by simulateOneWeek so the
+   *  scoreboard's finals match the committed weekly results. */
+  initLiveScoreboard: (excludeGameId: string) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   /** God Mode: edit any player's attributes */
   editPlayer: (playerId: string, updates: Partial<Player>) => void;
@@ -271,7 +291,12 @@ interface GameStore extends LeagueState {
 // ---------------------------------------------------------------------------
 
 function addStats(target: PlayerStats, source: Partial<PlayerStats>): PlayerStats {
-  const result = { ...target };
+  // Baseline every field to a numeric 0 before accumulation. Old saves created
+  // before newer stat keys were added lack those keys on target; without this
+  // `undefined += n` yields NaN, which fails the `> 0` display guard and blanks
+  // out passing stats on the player profile / box score. Purely additive; no
+  // save-version bump needed.
+  const result = { ...emptyStats(), ...target };
   for (const key of Object.keys(source) as (keyof PlayerStats)[]) {
     (result[key] as number) += (source[key] as number) ?? 0;
   }
@@ -330,7 +355,7 @@ function sortRosterByDepthChart(
 // ---------------------------------------------------------------------------
 
 function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | undefined {
-  const totalPicks = state.teams.length * 7;
+  const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
@@ -436,12 +461,30 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       // Previous curve was too stingy once a team had a 78+ OVR starter;
       // real NFL teams still draft dev/bridge QBs behind capable starters.
       if (prospect.position === 'QB') {
-        const bestQB = roster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+        const qbs = roster.filter(p => p.position === 'QB');
+        const bestQB = qbs.slice().sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
         const qbOvr = bestQB?.ratings.overall ?? 0;
-        if (count === 0) {
+        // A young, high-potential QB already on the roster satisfies the
+        // future-QB need even while his current OVR is still low. Without this,
+        // a freshly drafted dev rookie keeps reading as "terrible QB, must
+        // upgrade" and the team stacks a second (then third) QB in the SAME
+        // draft. Treat such a QB as addressing the need.
+        const hasDevQB = qbs.some(p => (p.experience ?? 0) <= 1 && (p.potential ?? 0) >= 80);
+        if (count >= 2) {
+          // QB-saturated: two arms is plenty. Suppress the low-OVR upgrade
+          // bonuses entirely so a team never stacks a 3rd QB purely because
+          // current overalls are low. The position-max penalty (count >= max)
+          // still guards the hard roster cap.
+          // (no QB bonus)
+        } else if (count === 0) {
           score += 250; // No QB on roster — must draft one
+        } else if (hasDevQB) {
+          // Already invested a pick in a high-upside young QB — the future is
+          // covered, so don't let his low current OVR re-trigger the QB chase.
+          // Only a genuine blue-chip prospect is worth a modest nudge.
+          score += prospect.potential >= 90 ? 20 : 0;
         } else if (qbOvr < 60) {
-          score += 180; // Terrible QB — strong upgrade motivation
+          score += 180; // Terrible veteran QB — strong upgrade motivation
         } else if (qbOvr < 68) {
           score += 130; // Bad QB — still a priority
         } else if (qbOvr < 75) {
@@ -1039,7 +1082,11 @@ export function generateDraftClassPreview(season: number): { season: number; gro
 
 /** Pick value based on estimated overall pick number.
  *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 2200, #20 ≈ 1600, #32 ≈ 1100, #64 ≈ 400. */
-export function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
+export function pickTradeValue(pick: DraftPick, teams?: Team[], draftPickOrder?: string[]): number {
+  if (draftPickOrder && draftPickOrder.length > 0) {
+    const idx = draftPickOrder.indexOf(pick.id);
+    if (idx >= 0) return draftPickPointValue(idx + 1);
+  }
   if (teams && teams.length > 0) {
     const overallPick = estimateOverallPick(pick.round, teams, pick.originalTeamId);
     return draftPickPointValue(overallPick);
@@ -1385,6 +1432,8 @@ function computeResigningEntry(player: Player, team: Team, teamRoster?: Player[]
   // K/P salary caps — scale with cap inflation
   if (player.position === 'K') askingSalary = Math.min(askingSalary, 4.0 * ci);
   if (player.position === 'P') askingSalary = Math.min(askingSalary, 2.5 * ci);
+  // Re-round after the K/P caps: 2.5 * 1.07 = 2.6750000000000003 leaked into the UI.
+  askingSalary = Math.round(askingSalary * 10) / 10;
   // Players want long-term security — asking for multi-year deals
   // makes the 1-year franchise tag a meaningful strategic trade-off
   const askingYears = player.age >= 34 ? 2
@@ -1761,10 +1810,20 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     .filter(p => p.teamId === state.userTeamId && !TRADE_EXCLUDED_POSITIONS.has(p.position));
   if (userPlayers.length === 0) return [];
 
+  // Trade-request loop (Phase 1): a user player who has formally filed a trade
+  // request is "more available" — AI teams circle him first so the request
+  // actually surfaces offers, even if he isn't the top-OVR name. Contained
+  // weighting only (deeper ask-discounting is Phase 2).
+  const requestingUserPlayers = userPlayers
+    .filter(p => hasActiveTradeRequest(p, state.season))
+    .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
   // Each AI team has a 5% chance per week of proposing a trade (15% if active rumor)
   for (const aiTeam of aiTeams) {
     const hasActiveRumor = (state.tradeRumors ?? []).some(r => r.teamId === aiTeam.id && !r.resolved && r._accurate);
-    const tradeChance = hasActiveRumor ? 0.15 : 0.05;
+    // A disgruntled star who wants out draws league-wide calls — bump the odds
+    // this AI team comes knocking so offers actually materialize for him.
+    const tradeChance = requestingUserPlayers.length > 0 ? 0.2 : hasActiveRumor ? 0.15 : 0.05;
     if (Math.random() > tradeChance) continue;
     if (state.tradeProposals.filter(p => p.proposingTeamId === aiTeam.id && p.status === 'pending').length > 0) continue;
 
@@ -1780,7 +1839,14 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     const aiNeedPos = aiNeeds.length > 0 ? aiNeeds[Math.floor(Math.random() * aiNeeds.length)] : null;
 
     let targetPlayer: Player | undefined;
-    if (aiNeedPos) {
+    // Requesting players are shopped first: prefer one at the AI's need
+    // position, else the most valuable player who has asked out.
+    if (requestingUserPlayers.length > 0 && Math.random() < 0.7) {
+      targetPlayer =
+        (aiNeedPos ? requestingUserPlayers.find(p => p.position === aiNeedPos) : undefined) ??
+        requestingUserPlayers[0];
+    }
+    if (!targetPlayer && aiNeedPos) {
       // Target best user player at that position
       const candidates = userPlayers
         .filter(p => p.position === aiNeedPos)
@@ -1889,6 +1955,9 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
       }
     }
 
+    // Floor total offered value — AI should never propose less than 60% of the target's value
+    if (offeredValue < targetValue * 0.60) continue;
+
     // Cap total offered value — AI should never overpay by more than 15%
     if (offeredValue > targetValue * 1.15) continue;
 
@@ -1988,6 +2057,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   firedState: null,
   expansionDraft: null,
   extensionsUsedThisSeason: 0,
+  retiredSigningsThisSeason: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -2260,15 +2330,19 @@ function generatePreseasonSchedule(teams: Team[], numGames: number, season: numb
 // Pure function: simulate one week of games (no store dependency)
 // Returns state patch + whether season is over, or null if nothing to sim
 // ---------------------------------------------------------------------------
-function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; isSeasonOver: boolean } | null {
-  if (state.phase !== 'regular') return null;
+// ---------------------------------------------------------------------------
+// Around-the-League scoreboard helpers (feature: live other-game scores +
+// halftime updates). simulateScheduledGame is the single source of truth for
+// simming one scheduled regular-season game, shared by simulateOneWeek and the
+// initLiveScoreboard pre-sim so the live scoreboard's finals equal the
+// committed weekly results.
+// ---------------------------------------------------------------------------
 
-  const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
-  if (weekGames.length === 0) return null;
-
-  // Auto-resort AI teams' depth charts by OVR each week.
-  // User team depth chart is NOT touched — the user controls it via drag-reorder.
-  const resortedTeams = state.teams.map(t => {
+/** AI teams auto-resort their depth charts by OVR each week; the user's team
+ *  keeps its manual order. Extracted so the live-scoreboard pre-sim uses the
+ *  exact same lineups simulateOneWeek would. */
+function resortAiDepthCharts(state: LeagueState): Team[] {
+  return state.teams.map(t => {
     if (t.id === state.userTeamId) return t; // preserve user's manual depth chart
     const newDepthChart = { ...t.depthChart };
     for (const pos of POSITIONS) {
@@ -2283,7 +2357,11 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     }
     return { ...t, depthChart: newDepthChart };
   });
-  const updatedGames = weekGames.map(game => {
+}
+
+/** Simulate one scheduled regular-season game and enrich it with the betting
+ *  line + ATS/total results, exactly as simulateOneWeek does per game. */
+export function simulateScheduledGame(state: LeagueState, resortedTeams: Team[], game: GameResult): GameResult {
     const homeTeam = resortedTeams.find(t => t.id === game.homeTeamId);
     const awayTeam = resortedTeams.find(t => t.id === game.awayTeamId);
     // Exclude suspended players from the game roster (shared helper keeps
@@ -2356,8 +2434,124 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       adjustedDiff > 0 ? 'home' : adjustedDiff < 0 ? 'away' : 'push';
     const totalPoints = result.homeScore + result.awayScore;
     const overHit = totalPoints > bettingLine.overUnder;
-
     return { ...result, bettingLine, spreadCover, overHit };
+}
+
+/** Deterministic per-quarter cumulative score split (index 0..3 = end of
+ *  Q1..Q4; index 3 === total). Seeded by the game id so the same game shows a
+ *  stable progression across re-renders. Purely cosmetic — for the live
+ *  scoreboard's in-progress + halftime numbers. */
+export function splitScoreByQuarter(seedStr: string, home: number, away: number): { home: number[]; away: number[] } {
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); }
+  let seed = h >>> 0;
+  const rand = () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  // Decompose a final score into a plausible sequence of real scoring plays
+  // (TD+XP=7, TD no XP=6, FG=3, safety=2) instead of treating the total as an
+  // arbitrary number to slice proportionally. The old approach rounded a
+  // random proportional split of the total, which could land a cumulative
+  // "through Q2" checkpoint on a number like 4 or 5 — a value no real
+  // football score can ever sit at, at ANY point in a game (Tyler report:
+  // Around-the-League halftime scores looked "weird", e.g. "5 to 4").
+  const PLAY_VALUES = [7, 6, 3, 2];
+  const PLAY_WEIGHTS: Record<number, number> = { 7: 5, 3: 3, 6: 1, 2: 0.4 };
+  function decomposeIntoPlays(total: number): number[] {
+    if (total <= 0) return [];
+    const reachable: boolean[] = new Array(total + 1).fill(false);
+    reachable[0] = true;
+    for (let n = 1; n <= total; n++) {
+      for (const v of PLAY_VALUES) if (v <= n && reachable[n - v]) { reachable[n] = true; break; }
+    }
+    if (!reachable[total]) return [total]; // unreachable total (shouldn't happen) — single lump play
+    const plays: number[] = [];
+    let remaining = total;
+    while (remaining > 0) {
+      const options = PLAY_VALUES.filter(v => v <= remaining && reachable[remaining - v]);
+      const wsum = options.reduce((s, v) => s + PLAY_WEIGHTS[v], 0);
+      let r = rand() * wsum;
+      let chosen = options[options.length - 1];
+      for (const v of options) { r -= PLAY_WEIGHTS[v]; if (r <= 0) { chosen = v; break; } }
+      plays.push(chosen);
+      remaining -= chosen;
+    }
+    return plays;
+  }
+  const dist = (total: number): number[] => {
+    const plays = decomposeIntoPlays(total);
+    const cum = [0, 0, 0, 0];
+    if (plays.length === 0) return cum;
+    // One shared per-team weight vector biases which quarters this team
+    // tends to score in; each individual scoring play then lands in a
+    // quarter drawn from that bias, so every cumulative checkpoint below is
+    // a genuine sum of real scoring plays.
+    const w = [rand() + 0.15, rand() + 0.15, rand() + 0.15, rand() + 0.15];
+    const wsum = w[0] + w[1] + w[2] + w[3];
+    for (const pts of plays) {
+      let r = rand() * wsum;
+      let q = 3;
+      for (let i = 0; i < 4; i++) { r -= w[i]; if (r <= 0) { q = i; break; } }
+      cum[q] += pts;
+    }
+    for (let i = 1; i < 4; i++) cum[i] += cum[i - 1];
+    return cum;
+  };
+  return { home: dist(home), away: dist(away) };
+}
+
+/** Per-quarter cumulative splits from the sim's actual scoring-play log
+ *  (index 0..3 = end of Q1..Q4; OT folds into index 3 so it equals the final).
+ *  Falls back to the synthetic `splitScoreByQuarter` only when the log is
+ *  missing or doesn't reconcile with the final score. Using the real plays
+ *  keeps halftime numbers to what actually happened in the sim instead of a
+ *  random re-decomposition (which over-produced safeties: halftime 2s/4s/5s). */
+export function splitsFromResult(r: Pick<GameResult, 'id' | 'homeTeamId' | 'awayTeamId' | 'homeScore' | 'awayScore' | 'scoringPlays'>): { home: number[]; away: number[] } {
+  const plays = r.scoringPlays ?? [];
+  if (plays.length > 0 || (r.homeScore === 0 && r.awayScore === 0)) {
+    const home = [0, 0, 0, 0];
+    const away = [0, 0, 0, 0];
+    for (const p of plays) {
+      const q = Math.min(4, Math.max(1, p.quarter)) - 1;
+      if (p.teamId === r.homeTeamId) home[q] += p.points;
+      else if (p.teamId === r.awayTeamId) away[q] += p.points;
+    }
+    for (let i = 1; i < 4; i++) { home[i] += home[i - 1]; away[i] += away[i - 1]; }
+    if (home[3] === r.homeScore && away[3] === r.awayScore) return { home, away };
+  }
+  return splitScoreByQuarter(r.id, r.homeScore, r.awayScore);
+}
+
+/** Return the stashed pre-sim result for a game if the live scoreboard covers
+ *  the current week, else undefined. Keeps simulateOneWeek and its test in
+ *  lockstep on the reuse rule. */
+export function resolveWeekGameResult(
+  liveScoreboard: LeagueState['liveScoreboard'],
+  week: number,
+  gameId: string,
+): GameResult | undefined {
+  if (!liveScoreboard || liveScoreboard.week !== week) return undefined;
+  return liveScoreboard.results[gameId];
+}
+
+// ---------------------------------------------------------------------------
+function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; isSeasonOver: boolean } | null {
+  if (state.phase !== 'regular') return null;
+
+  const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
+  if (weekGames.length === 0) return null;
+
+  // Auto-resort AI teams' depth charts by OVR each week (user team untouched).
+  const resortedTeams = resortAiDepthCharts(state);
+  const updatedGames = weekGames.map(game => {
+    // Reuse the live Around-the-League pre-sim (if the user just watched this
+    // week live) so the scoreboard's finals equal the committed results.
+    const stashed = resolveWeekGameResult(state.liveScoreboard, state.week, game.id);
+    if (stashed) return stashed;
+    return simulateScheduledGame(state, resortedTeams, game);
   });
 
   const newSchedule = state.schedule.map(g => {
@@ -2494,6 +2688,29 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     ? generateAITradeProposals({ ...state, teams: newTeams, players: injuredPlayers })
     : [];
 
+  // Rivalry mood swing (feature #8): beating a rival lifts the whole roster's
+  // mood, losing to one stings — more so on a blowout. Precompute per-team once so
+  // the per-player loop below is a cheap lookup. Rival = intensity >= 40 (a real
+  // rivalry, matching the approval hook's spirit).
+  const RIVALRY_MOOD_THRESHOLD = 40;
+  const rivalryMoodByTeam = new Map<string, number>();
+  for (const game of updatedGames) {
+    if (!game.played) continue;
+    for (const teamId of [game.homeTeamId, game.awayTeamId]) {
+      const oppId = teamId === game.homeTeamId ? game.awayTeamId : game.homeTeamId;
+      const isRival = (state.rivalries ?? []).some(r => r.intensity >= RIVALRY_MOOD_THRESHOLD &&
+        ((r.team1Id === teamId && r.team2Id === oppId) || (r.team2Id === teamId && r.team1Id === oppId)));
+      if (!isRival) continue;
+      const teamScore = teamId === game.homeTeamId ? game.homeScore : game.awayScore;
+      const oppScore = teamId === game.homeTeamId ? game.awayScore : game.homeScore;
+      const blowout = Math.abs(teamScore - oppScore) >= 21;
+      let delta = 0;
+      if (teamScore > oppScore) delta = blowout ? 5 : 3;       // beat the rival
+      else if (teamScore < oppScore) delta = blowout ? -5 : -3; // lost to the rival
+      rivalryMoodByTeam.set(teamId, delta);
+    }
+  }
+
   const moodUpdatedPlayers = injuredPlayers.map(p => {
     if (!p.teamId) return p;
     const team = newTeams.find(t => t.id === p.teamId);
@@ -2517,12 +2734,26 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     if (p.contract.salary < marketSalary * 0.7) moodDelta -= 1;
     if (team.record.streak >= 3) moodDelta += 1;
     if (team.record.streak <= -3) moodDelta -= 1;
+    moodDelta += rivalryMoodByTeam.get(p.teamId) ?? 0; // rivalry result (feature #8)
     const newMood = Math.max(0, Math.min(100, (p.mood ?? 70) + moodDelta));
     return { ...p, mood: newMood };
   });
 
+  // Trade requests / refuse-to-play (Phase 1): sustained-discontent players
+  // file a formal trade request — persisted on the player, kept separate from
+  // the contract holdout. Newly-filed requests seed the rumor feed below and
+  // (via hasActiveTradeRequest) make the player more available to AI offers.
+  // Pure + deterministic: reads the mood just recomputed above, no RNG.
+  const { players: requestUpdatedPlayers, rumors: requestRumors } = refreshTradeRequests({
+    players: moodUpdatedPlayers,
+    teams: newTeams,
+    season: state.season,
+    week: state.week,
+    userTeamId: state.userTeamId,
+  });
+
   // Trade rumors
-  const newRumors = generateTradeRumors(state);
+  const newRumors = [...generateTradeRumors(state), ...requestRumors];
   const rumorNews: NewsItem[] = newRumors.map(r => makeNews({
     season: state.season, week: state.week, type: 'rumor',
     headline: r.headline, body: r.detail,
@@ -2543,7 +2774,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     patch: {
       schedule: newSchedule,
       teams: newTeams,
-      players: moodUpdatedPlayers,
+      players: requestUpdatedPlayers,
       week: isSeasonOver ? state.week : nextWeek,
       phase: isSeasonOver ? 'playoffs' : 'regular',
       newsItems: [...state.newsItems, ...weekNews, ...ewingNews, ...rumorNews, ...rumorResolutionNews, ...rivalryNews, ...reInjResult.news],
@@ -2551,6 +2782,8 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       tradeRumors: resolvedRumors,
       rivalries: updatedRivalries,
       socialPosts: [...(state.socialPosts ?? []), ...weekSocialPosts],
+      // Live scoreboard consumed — clear the transient overlay.
+      liveScoreboard: null,
     },
     isSeasonOver,
   };
@@ -2760,12 +2993,20 @@ export const useGameStore = create<GameStore>()(
             firedState: null,
             expansionDraft: null,
             extensionsUsedThisSeason: 0,
+            retiredSigningsThisSeason: 0,
           });
           // Retrofit cut + cap-compliance for imported FBGM rosters. The
           // raw JSON snapshots ship with ~90-player rosters and team
           // payrolls well above cap; without this call every AI team
           // would carry that overage into Week 1 (.akrav 5/10).
           get().initializeFreshLeagueRosters();
+          trackEvent('league_created', {
+            source: 'import',
+            roster_file: leagueFileUrl.split('/').pop()?.split('?')[0] ?? null,
+            team: isSpectator ? null : userTeam.abbreviation,
+            start_mode: isSpectator ? 'spectator' : isRegularStart ? 'regular' : 'offseason',
+            season: imported.season,
+          });
           return;
         } catch (error) {
           console.warn('Failed to import league data, falling back to generated league.', error);
@@ -2930,12 +3171,22 @@ export const useGameStore = create<GameStore>()(
           firedState: null,
           expansionDraft: null,
           extensionsUsedThisSeason: 0,
+          retiredSigningsThisSeason: 0,
         });
         // Trim AI teams to 53 + enforce cap-compliance for synthetic
         // generation too. generateRoster intentionally over-builds so
         // teams have draft-class flex; without this call AI teams would
         // hit Week 1 still padded.
         get().initializeFreshLeagueRosters();
+        trackEvent('league_created', {
+          source: 'generated',
+          // Generated leagues are only reached when the import above threw.
+          import_failed: !!leagueFileUrl,
+          roster_file: leagueFileUrl?.split('/').pop()?.split('?')[0] ?? null,
+          team: isSpectator ? null : userTeam.abbreviation,
+          start_mode: isSpectator ? 'spectator' : 'offseason',
+          season: 2026,
+        });
       },
 
       resetLeague: () => {
@@ -2944,6 +3195,45 @@ export const useGameStore = create<GameStore>()(
 
       setNextGamePlan: (plan) => {
         set({ nextGamePlan: plan ?? undefined });
+      },
+
+      renameTeam: (teamId, config) => {
+        const state = get();
+        // Only allowed in true offseason personnel phases — relocating a team
+        // mid-season (or during playoffs) would be disruptive. Matches the
+        // button gating on the roster page.
+        const OFFSEASON_PHASES = ['resigning', 'draft', 'freeAgency', 'offseason'];
+        if (!OFFSEASON_PHASES.includes(state.phase)) {
+          return 'Team relocation is only available during the offseason.';
+        }
+        const team = state.teams.find(t => t.id === teamId);
+        if (!team) return 'Team not found.';
+
+        const city = config.city.trim();
+        const name = config.name.trim();
+        const abbreviation = config.abbreviation.trim().toUpperCase();
+        const primaryColor = config.primaryColor.trim();
+        const secondaryColor = config.secondaryColor.trim();
+
+        if (city.length < 2 || city.length > 24) return 'City must be 2–24 characters.';
+        if (name.length < 2 || name.length > 24) return 'Team name must be 2–24 characters.';
+        if (!/^[A-Z]{2,4}$/.test(abbreviation)) return 'Abbreviation must be 2–4 letters (A–Z).';
+        const hex = /^#[0-9a-fA-F]{6}$/;
+        if (!hex.test(primaryColor)) return 'Primary color must be a 6-digit hex value like #0A2342.';
+        if (!hex.test(secondaryColor)) return 'Secondary color must be a 6-digit hex value like #0A2342.';
+
+        // Abbreviation is used as a display/market key — keep it unique.
+        const clash = state.teams.some(t => t.id !== teamId && t.abbreviation.toUpperCase() === abbreviation);
+        if (clash) return `Abbreviation ${abbreviation} is already in use by another team.`;
+
+        set({
+          teams: state.teams.map(t =>
+            t.id === teamId
+              ? { ...t, city, name, abbreviation, primaryColor, secondaryColor }
+              : t
+          ),
+        });
+        return '';
       },
 
       ensureDraftClassPreview: () => {
@@ -3027,6 +3317,17 @@ export const useGameStore = create<GameStore>()(
         const weekGames = (result.patch.schedule as GameResult[]).filter(g => g.week === simmedWeek && g.played);
         const recap = generateWeeklyRecap(weekGames, result.patch.teams as Team[], result.patch.players as Player[], state.season, simmedWeek, result.patch.newsItems as import('@/types').NewsItem[]);
         const weeklyRecaps = [...state.weeklyRecaps, recap];
+
+        // Main-loop telemetry. seasons_completed === 0 && week === 1 is the
+        // "first sim" onboarding milestone — no separate event needed.
+        trackEvent('week_simmed', {
+          mode: 'week',
+          season: state.season,
+          week: simmedWeek,
+          weeks: 1,
+          seasons_completed: state.seasonHistory.length,
+          spectator: !!state.isSpectator,
+        });
 
         if (result.isSeasonOver) {
           const teams = result.patch.teams as Team[];
@@ -3221,6 +3522,18 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        if (week > current.week) {
+          trackEvent('week_simmed', {
+            mode: 'to_week',
+            season: current.season,
+            week: current.week,
+            to_week: week,
+            weeks: week - current.week,
+            seasons_completed: current.seasonHistory.length,
+            spectator: !!current.isSpectator,
+          });
+        }
+
         if (isSeasonOver) {
           // Compute playoff bracket here in the same set() call to avoid stale get()
           const seeds = computePlayoffSeeds(teams);
@@ -3295,7 +3608,7 @@ export const useGameStore = create<GameStore>()(
         }
 
         const winnerId =
-          result.homeScore >= result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
+          result.homeScore > result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
 
         let updatedBracket = state.playoffBracket.map(m =>
           m.id === matchupId
@@ -3650,6 +3963,7 @@ export const useGameStore = create<GameStore>()(
         // started making offseason decisions.
         const userApprovalVal = userTeam?.approval?.ownerApproval ?? 50;
         if (userApprovalVal <= 0) {
+          trackEvent('gm_fired', { season: state.season, seasons_completed: state.seasonHistory.length });
           set({
             firedState: {
               fired: true,
@@ -3848,6 +4162,14 @@ export const useGameStore = create<GameStore>()(
           };
 
           updatedSeasonHistory = [...state.seasonHistory, seasonSummary];
+          trackEvent('season_completed', {
+            season: state.season,
+            seasons_completed: updatedSeasonHistory.length,
+            wins: seasonSummary.userRecord.wins,
+            losses: seasonSummary.userRecord.losses,
+            playoff_result: seasonSummary.userPlayoffResult,
+            spectator: !!state.isSpectator,
+          });
         }
 
         // Process end-of-season approval for user team
@@ -3907,6 +4229,7 @@ export const useGameStore = create<GameStore>()(
         });
 
         if (postUpdateFiredApproval) {
+          trackEvent('gm_fired', { season: state.season, seasons_completed: updatedSeasonHistory.length });
           set({
             firedState: {
               fired: true,
@@ -4830,14 +5153,16 @@ export const useGameStore = create<GameStore>()(
 
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const overallPick = totalPicks - state.draftOrder.length + 1;
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
 
         // Rookie salary scale based on draft position (league-style exponential decay)
         // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
-        const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
+        // Scale with cap growth so rookie deals keep pace with an inflating cap (floor $0.8M kept).
+        const rookieCapFactor = capInflationFactor(state.teams.find(t => t.id === currentPickTeamId)?.salaryCap ?? DEFAULT_LEAGUE_SETTINGS.salaryCap);
+        const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * rookieCapFactor * 10) / 10);
 
         const pickingTeam = state.teams.find(t => t.id === currentPickTeamId);
         if (pickingTeam && currentPickTeamId === state.userTeamId) {
@@ -4968,7 +5293,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
@@ -5013,7 +5338,9 @@ export const useGameStore = create<GameStore>()(
           const round = Math.ceil(overallPick / state.teams.length);
           // Rookie salary scale based on draft position (league-style exponential decay)
           // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
-          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
+          // Scale with cap growth so rookie deals keep pace with an inflating cap (floor $0.8M kept).
+          const rookieCapFactor = capInflationFactor(teams.find(t => t.id === pickTeam)?.salaryCap ?? DEFAULT_LEAGUE_SETTINGS.salaryCap);
+          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * rookieCapFactor * 10) / 10);
 
           players = players.map(p =>
             p.id === pid
@@ -5067,7 +5394,7 @@ export const useGameStore = create<GameStore>()(
         let teams = [...state.teams];
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
-        const totalPicks = state.teams.length * 7;
+        const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
@@ -5111,7 +5438,9 @@ export const useGameStore = create<GameStore>()(
           const round = Math.ceil(overallPick / state.teams.length);
           // Rookie salary scale based on draft position (league-style exponential decay)
           // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
-          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
+          // Scale with cap growth so rookie deals keep pace with an inflating cap (floor $0.8M kept).
+          const rookieCapFactor = capInflationFactor(teams.find(t => t.id === pickTeam)?.salaryCap ?? DEFAULT_LEAGUE_SETTINGS.salaryCap);
+          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * rookieCapFactor * 10) / 10);
 
           players = players.map(p =>
             p.id === pid
@@ -5251,7 +5580,7 @@ export const useGameStore = create<GameStore>()(
           });
 
           // AI teams use franchise tag on their best expiring player (OVR >= 70)
-          const aiTeamsForTag = preTeams.filter(t => t.id !== state.userTeamId && !t.franchiseTagUsed);
+          const aiTeamsForTag = preTeams.filter(t => (state.isSpectator || t.id !== state.userTeamId) && !t.franchiseTagUsed);
           for (const aiTeam of aiTeamsForTag) {
             const expiring = prePlayers
               .filter(p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired)
@@ -5275,7 +5604,7 @@ export const useGameStore = create<GameStore>()(
 
           // AI teams auto-resign their own expiring players.
           // Re-sign probability scales with player quality — elite players almost never walk.
-          const aiTeams = preTeams.filter(t => t.id !== state.userTeamId);
+          const aiTeams = preTeams.filter(t => state.isSpectator || t.id !== state.userTeamId);
           for (const aiTeam of aiTeams) {
             const expiringFromAI = prePlayers.filter(
               p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
@@ -5298,10 +5627,22 @@ export const useGameStore = create<GameStore>()(
               const ci = capInflationFactor(aiTeam.salaryCap);
               const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
               const capSpace = aiTeam.salaryCap - aiTeamPayroll;
-              const resignProb = player.ratings.overall >= 85 ? 0.98
+              // Base re-sign probability scales with player quality — elite players almost never walk.
+              let resignProb = player.ratings.overall >= 85 ? 0.98
                 : player.ratings.overall >= 75 ? 0.90
                 : player.ratings.overall >= 65 ? 0.75
                 : 0.55;
+              // Need- and cap-aware retention: a team that can comfortably afford a
+              // starter-caliber expiring player should keep him rather than dump him into FA.
+              // Good starters only reach free agency when the team is genuinely capped out
+              // or already has a surplus at the position (>= roster min).
+              const posMin = ROSTER_LIMITS[player.position]?.min ?? 1;
+              const isPositionOfNeed = currentCount < posMin;
+              const isStarterCaliber = player.ratings.overall >= 65;
+              const comfortablyAffordable = capSpace >= marketSalary;
+              if (comfortablyAffordable && isStarterCaliber) {
+                resignProb = isPositionOfNeed ? 0.99 : Math.max(resignProb, 0.95);
+              }
               // Teams will stretch to keep elite players (up to 15% over cap, like a restructure)
               const canAfford = capSpace >= marketSalary || (player.ratings.overall >= 80 && capSpace >= marketSalary * -0.15);
               if (canAfford && Math.random() < resignProb) {
@@ -5554,7 +5895,7 @@ export const useGameStore = create<GameStore>()(
 
           currentPlayers = currentPlayers.map(p =>
             p.id === target.id
-              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true }, jerseyNumber: pickJerseyFor(p.position, aiTeamId, currentPlayers, currentTeams) }
+              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true }, jerseyNumber: pickJerseyFor(p.position, aiTeamId, currentPlayers, currentTeams, p.jerseyNumber) }
               : p,
           );
           currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
@@ -5754,7 +6095,7 @@ export const useGameStore = create<GameStore>()(
         const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
         let currentPlayers = state.players.map(p =>
           p.id === playerId
-            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, acquiredSeason: state.season, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) }, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams) }
+            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, acquiredSeason: state.season, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) }, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams, p.jerseyNumber) }
             : p,
         );
         let currentTeams = state.teams.map(t => {
@@ -5869,6 +6210,78 @@ export const useGameStore = create<GameStore>()(
         if (state.phase === 'freeAgency') {
           get().advanceFADay();
         }
+
+        return ''; // success
+      },
+
+      /** Bring a retired player back onto the user's roster (feature: un-retire
+       *  a player, 3 votes on the football feature board). Retired players have
+       *  retired: true and teamId: null and are invisible in free agency. This
+       *  signs one back on a 1-year minimum deal. Capped at 1 per season. */
+      unretirePlayer: (playerId: string) => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return 'No active team.';
+
+        if ((state.retiredSigningsThisSeason ?? 0) >= 1) {
+          return 'You can only un-retire one player per season. Try again next season.';
+        }
+
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return 'Player not found.';
+        if (!player.retired) return `${player.firstName} ${player.lastName} is not retired.`;
+
+        // Roster-space guard: don't let a position blow past its max.
+        const posCount = state.players.filter(
+          p => p.teamId === state.userTeamId && !p.retired && p.position === player.position,
+        ).length;
+        if (posCount >= ROSTER_LIMITS[player.position].max) {
+          return `Your roster is full at ${player.position} (${posCount}/${ROSTER_LIMITS[player.position].max}). Cut someone first.`;
+        }
+
+        const salary = LEAGUE_MINIMUM_SALARY;
+        const years = 1;
+        const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
+
+        const currentPlayers = state.players.map(p =>
+          p.id === playerId
+            ? {
+                ...p,
+                retired: false,
+                teamId: state.userTeamId,
+                acquiredVia: 'free-agency' as const,
+                acquiredSeason: state.season,
+                contract: {
+                  salary,
+                  yearsLeft: years,
+                  guaranteed: generateGuaranteed(salary, years),
+                  totalYears: years,
+                  ...(isOffseason ? { offseasonSigned: true } : {}),
+                },
+                jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams, p.jerseyNumber),
+              }
+            : p,
+        );
+
+        const currentTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const chart = insertIntoDepthChart(t.depthChart, player.position, playerId, currentPlayers);
+          return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + salary, depthChart: chart };
+        });
+
+        const news = makeNews({
+          season: state.season, week: state.week, type: 'signing',
+          teamId: state.userTeamId, playerIds: [playerId],
+          headline: `You brought ${player.firstName} ${player.lastName} (${player.position}, ${player.ratings.overall} OVR) out of retirement on a 1-year, $${salary}M deal.`,
+          isUserTeam: true,
+        });
+
+        set({
+          players: currentPlayers,
+          teams: currentTeams,
+          newsItems: [...state.newsItems, news],
+          retiredSigningsThisSeason: (state.retiredSigningsThisSeason ?? 0) + 1,
+        });
 
         return ''; // success
       },
@@ -6493,7 +6906,7 @@ export const useGameStore = create<GameStore>()(
                     guaranteed: 0,
                     totalYears: 1,
                   },
-                  jerseyNumber: pickJerseyFor(p.position, state.userTeamId!, state.players, state.teams),
+                  jerseyNumber: pickJerseyFor(p.position, state.userTeamId!, state.players, state.teams, p.jerseyNumber),
                 }
               : p,
           ),
@@ -6825,7 +7238,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? aiValueOf(p) : 0);
         }, 0) + offeredPickIds.reduce((sum, id) => {
           const pick = userTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams, state.draftPickOrder) : 0);
         }, 0);
 
         const receivedValue = receivedPlayerIds.reduce((sum, id) => {
@@ -6833,7 +7246,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? aiValueOf(p) : 0);
         }, 0) + receivedPickIds.reduce((sum, id) => {
           const pick = aiTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams, state.draftPickOrder) : 0);
         }, 0);
 
         // AI accepts if within 5% value (skip for AI-initiated proposals or God Mode force)
@@ -6868,6 +7281,25 @@ export const useGameStore = create<GameStore>()(
         const receivedPlayerIdsSet = new Set(receivedPlayerIds);
         const offeredPickIdsSet = new Set(offeredPickIds);
         const receivedPickIdsSet = new Set(receivedPickIds);
+
+        // Roster-integrity guard (P1, reported by tofftanaut): every player id in
+        // a trade must resolve to exactly ONE player. If a corrupted save contains
+        // two players sharing an id, the id-based roster mutations below would pull
+        // an unrelated rostered player along with the intended one — the reporter's
+        // "put Diggs on the block, lost Milroe instead" bug. Fail safe rather than
+        // silently moving a player the user never agreed to trade.
+        const involvedPlayerIds = [...offeredPlayerIds, ...receivedPlayerIds];
+        if (involvedPlayerIds.length > 0) {
+          const involvedIdSet = new Set(involvedPlayerIds);
+          const idOccurrences = new Map<string, number>();
+          for (const p of state.players) {
+            if (involvedIdSet.has(p.id)) idOccurrences.set(p.id, (idOccurrences.get(p.id) ?? 0) + 1);
+          }
+          const ambiguousId = involvedPlayerIds.find(id => (idOccurrences.get(id) ?? 0) > 1);
+          if (ambiguousId) {
+            return { success: false, reason: 'Roster data error: a player in this trade could not be uniquely identified. Trade blocked to protect your roster.' };
+          }
+        }
 
         // Calculate dead money from restructured players being traded away
         // When trading a restructured player, the sending team eats the unamortized bonus as dead cap
@@ -6923,7 +7355,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, counterpartTeamId, state.players, state.teams) };
+            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, counterpartTeamId, state.players, state.teams, p.jerseyNumber) };
           }
           if (receivedPlayerIdsSet.has(p.id)) {
             const cleanContract = p.contract.contractYears
@@ -6938,7 +7370,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams) };
+            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams, p.jerseyNumber) };
           }
           return p;
         });
@@ -8627,6 +9059,16 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const newSeason = state.season + 1;
         const previouslyRetiredIds = new Set(state.players.filter(p => p.retired).map(p => p.id));
+        // Players the user (or AI) just signed this offseason must not retire
+        // in this same rollover — they were signed FOR the upcoming season, so
+        // retiring them before they play a down is the "I sign players just
+        // for them to leave" bug (jslusser1945_25790). The offseasonSigned
+        // flag is cleared during contract-advancement below, so capture the
+        // ids now; the exemption lasts exactly one season, after which normal
+        // age-based retirement resumes.
+        const freshlySignedIds = new Set(
+          state.players.filter(p => p.contract?.offseasonSigned && p.teamId !== null).map(p => p.id),
+        );
 
         setStep("awards-stamping");
         // Prefer the awards already written by advanceToResigning for this
@@ -8892,6 +9334,13 @@ export const useGameStore = create<GameStore>()(
           devSettings.progressionRate / 100,
           devSettings.regressionRate / 100,
           coachDevMultipliers,
+        ).map(p =>
+          // Guard: a just-signed free agent should survive to week 1 of the
+          // season they were signed for. If this rollover's aging pass retired
+          // one, reverse it (only for players not already retired coming in).
+          p.retired && !previouslyRetiredIds.has(p.id) && freshlySignedIds.has(p.id)
+            ? { ...p, retired: false }
+            : p,
         );
 
         const retirementNews: NewsItem[] = developedPlayers
@@ -9061,7 +9510,7 @@ export const useGameStore = create<GameStore>()(
             // owner's array but still exist in the league, so we skip regen.
             draftPicks: [
               ...t.draftPicks,
-              ...[newSeason, newSeason + 1].flatMap(yr =>
+              ...[newSeason, newSeason + 1, newSeason + 2].flatMap(yr =>
                 [1, 2, 3, 4, 5, 6, 7]
                   .filter(round => !existingPickKeys.has(`${t.id}|${yr}|${round}`))
                   .map(round => ({
@@ -9403,6 +9852,7 @@ export const useGameStore = create<GameStore>()(
           socialPosts: (state.socialPosts ?? []).filter(p => state.season - p.timestamp.season <= 2),
           rivalries: decayRivalries(state.rivalries ?? []),
           extensionsUsedThisSeason: 0,
+          retiredSigningsThisSeason: 0,
           // BS Mode: compute QB tiers at season start
           ...(state.leagueSettings?.bsMode ? {
             qbTiers: computeLeagueQBTiers(grownTeams, allPlayersForNewSeason),
@@ -9707,6 +10157,31 @@ export const useGameStore = create<GameStore>()(
         set({ leagueSettings: newSettings, teams: updatedTeams, players: updatedPlayers });
       },
 
+      initLiveScoreboard: (excludeGameId: string) => {
+        const state = get();
+        if (state.phase !== 'regular') return;
+        const weekGames = state.schedule.filter(
+          g => g.week === state.week && !g.played && g.id !== excludeGameId,
+        );
+        if (weekGames.length === 0) {
+          if (state.liveScoreboard) set({ liveScoreboard: null });
+          return;
+        }
+        // Idempotent: keep an existing stash for this exact week so scores stay
+        // stable while the user watches (don't reshuffle on every re-render).
+        const existing = state.liveScoreboard;
+        if (existing && existing.week === state.week && weekGames.every(g => existing.results[g.id])) return;
+        const resortedTeams = resortAiDepthCharts(state);
+        const results: Record<string, GameResult> = {};
+        const splits: Record<string, { home: number[]; away: number[] }> = {};
+        for (const game of weekGames) {
+          const r = simulateScheduledGame(state, resortedTeams, game);
+          results[game.id] = { ...r, played: true };
+          splits[game.id] = splitsFromResult({ ...r, id: game.id });
+        }
+        set({ liveScoreboard: { week: state.week, results, splits } });
+      },
+
       commitLiveGame: (result: GameResult, matchupId?: string) => {
         const state = get();
 
@@ -9867,6 +10342,14 @@ export const useGameStore = create<GameStore>()(
             if (!playerStats) return p;
             return { ...p, stats: addStats(p.stats, playerStats) };
           });
+          // P1 diagnostic — yo46363 passing stats bug. Remove when resolved.
+          const qbWithStats = newPlayers.find(p => p.position === 'QB' && (result.playerStats?.[p.id]?.passAttempts ?? 0) > 0);
+          if (qbWithStats) {
+            console.log('[commitLiveGame] QB stats committed:', { id: qbWithStats.id, name: `${qbWithStats.firstName} ${qbWithStats.lastName}`, ...result.playerStats?.[qbWithStats.id] });
+          } else {
+            const anyQB = newPlayers.find(p => p.position === 'QB' && (result.homeTeamId === p.teamId || result.awayTeamId === p.teamId));
+            console.warn('[commitLiveGame] No QB passAttempts in playerStats — possible blank stats bug', { gameId: result.id, qbId: anyQB?.id, rawStats: anyQB ? result.playerStats?.[anyQB.id] : undefined });
+          }
           set({ schedule: newSchedule, teams: newTeams, players: newPlayers });
         }
       },
@@ -10238,7 +10721,7 @@ export const useGameStore = create<GameStore>()(
         // Drop sim telemetry from the persisted payload — it's runtime-only
         // dev data, not save state, and we don't want it eating IndexedDB.
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { initialized, simTelemetry: _simTelemetry, ...rest } = state;
+        const { initialized, simTelemetry: _simTelemetry, liveScoreboard: _liveScoreboard, ...rest } = state;
         return {
           ...rest,
           schedule: slimSchedule,
@@ -10250,6 +10733,24 @@ export const useGameStore = create<GameStore>()(
         // Auto-set initialized if we have a saved game
         if (state && state.userTeamId && state.teams && state.teams.length > 0) {
           useGameStore.setState({ initialized: true });
+        }
+        // Heal legacy saves whose imported players carried a non-string
+        // injury.type — some FBGM/ESPN exports store it as a status object
+        // ({id,name,description,abbreviation}). Rendering that object as a React
+        // child crashes the dashboard (React #31), which stranded users who
+        // started a league from such a roster. Coerce to a readable string in
+        // place. Idempotent; runs every rehydrate; no save-version bump.
+        if (state && Array.isArray(state.players)) {
+          let healed = false;
+          for (const p of state.players) {
+            const rawType: unknown = p?.injury?.type;
+            if (rawType && typeof rawType === 'object') {
+              const o = rawType as { description?: string; name?: string; abbreviation?: string };
+              p.injury!.type = String(o.description ?? o.name ?? o.abbreviation ?? 'Injured');
+              healed = true;
+            }
+          }
+          if (healed) useGameStore.setState({ players: state.players });
         }
         // Un-stick any scouting/intel allocations that were frozen at free-tier
         // values before the subscription tier resolved. No-op unless the module
@@ -11046,6 +11547,9 @@ export async function flushToStorage(): Promise<void> {
   const partialized = partialize(state);
   const serialized = JSON.stringify({ state: partialized, version: SAVE_VERSION });
   await flushPersist(serialized);
+  // Mirror the autosave to the user's account when cloud sync is on (no-op
+  // otherwise). Fire-and-forget + debounced so it never blocks the local save.
+  scheduleCloudPush('gridiron-gm-autosave', serialized);
 }
 
 /**

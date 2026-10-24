@@ -11,7 +11,7 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { generateCoachEvaluation, generateRosterEvaluation, type CoachEvaluation, type RosterEvaluation } from '@/lib/engine/personnelReport';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { getSubPosition, calcPasserRating } from '@/types';
+import { getSubPosition, calcPasserRating, SUB_POSITION_PIN_OPTIONS } from '@/types';
 import type { Position, PlayerRatings } from '@/types';
 import { getCapHit, getUnamortizedBonus } from '@/types';
 
@@ -69,7 +69,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
       <GameShell>
         <div className="max-w-4xl mx-auto text-center py-20">
           <h2 className="text-2xl font-black mb-4">Player Not Found</h2>
-          <p className="text-[var(--text-sec)]">This player doesn't exist or has been removed.</p>
+          <p className="text-[var(--text-sec)]">This player doesn&apos;t exist or has been removed.</p>
         </div>
       </GameShell>
     );
@@ -78,6 +78,8 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
   const team = player.teamId ? teams.find(t => t.id === player.teamId) : null;
   const isOnUserTeam = player.teamId === userTeamId;
   const relevantRatings = POSITION_RELEVANT_RATINGS[player.position] ?? [];
+  // Which detailed sub-positions this player can be manually pinned to (OL/DL/LB/S).
+  const pinOptions = SUB_POSITION_PIN_OPTIONS[player.position];
 
   // Generate personnel evaluations for rostered players
   const userTeam = teams.find(t => t.id === userTeamId);
@@ -120,13 +122,15 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)]/70">({player.subPosition})</span>
                 )}
               </div>
-              {/* Manual sub-position pin — OT/OG at launch. Owner-only, on the
-                  unified OL group (bryangrove/tofftanaut 5/30, launcher_18 6/21).
-                  Writes subPositionOverride so it survives the load backfill. */}
-              {isOnUserTeam && !player.retired && player.position === 'OL' && (
+              {/* Manual sub-position pin. Owner-only. OL launched with OT/OG
+                  (bryangrove/tofftanaut 5/30, launcher_18 6/21); DL (EDGE/DT) and
+                  LB (MLB/OLB) added 8/17; S (FS/SS) added 8/19. Options come from
+                  SUB_POSITION_PIN_OPTIONS. Writes subPositionOverride so it
+                  survives the load backfill. */}
+              {isOnUserTeam && !player.retired && pinOptions && (
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-bold text-[var(--text-sec)]">Position:</span>
-                  {(['OT', 'OG'] as const).map(sp => (
+                  {pinOptions.map(sp => (
                     <button
                       key={sp}
                       type="button"
@@ -153,10 +157,10 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   )}
                 </div>
               )}
-              {/* Off-roster viewers see why there's no OT/OG control (the pin is
-                  owner-only). Answers "the button is hidden" reports from testers
-                  looking at an OL they don't own. */}
-              {!isOnUserTeam && !player.retired && player.position === 'OL' && (
+              {/* Off-roster viewers see why there's no pin control (owner-only).
+                  Answers "the button is hidden" reports from testers looking at a
+                  pinnable player (OL/DL/LB/S) they don't own. */}
+              {!isOnUserTeam && !player.retired && pinOptions && (
                 <div className="text-[10px] text-[var(--text-sec)]/70">(Owner controls only)</div>
               )}
             </div>
@@ -618,34 +622,49 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
         {/* Career Awards */}
         {(() => {
           const playerAwards: { label: string; count: number; icon: string }[] = [];
+          const iconFor = (award: string) =>
+            award === 'MVP' ? '⭐'
+              : award.includes('Defensive') ? '🛡️'
+              : award.includes('Offensive') ? '⚡'
+              : award.includes('Rookie') ? '🌟'
+              : award === 'Championship MVP' ? '🏆'
+              : '🏅';
+          // 2026-09-22 (obungaloo, #general): OPOY/DPOY/ROY often missing from
+          // this page while All-League badges show. Root cause: this page read
+          // only seasonHistory[].awards, which is empty on older saves that
+          // predate the awards field / weren't backfilled. player.awards (what
+          // PlayerModal reads) is populated on all saves. Fix: collect from
+          // seasonHistory first, then supplement with player.awards, deduping
+          // by label+season so nothing double-counts. Mirrors PlayerModal.
+          const seen = new Set<string>();
+          const add = (label: string, season: number | null, icon: string) => {
+            if (season != null) {
+              const key = `${label}|${season}`;
+              if (seen.has(key)) return;
+              seen.add(key);
+            }
+            const existing = playerAwards.find(pa => pa.label === label);
+            if (existing) existing.count++;
+            else playerAwards.push({ label, count: 1, icon });
+          };
           // Collect from seasonHistory
           for (const sh of (seasonHistory ?? [])) {
             // Individual awards (MVP, OPOY, DPOY, ROY)
             for (const a of (sh.awards ?? [])) {
-              if (a.playerId === player.id) {
-                const existing = playerAwards.find(pa => pa.label === a.award);
-                if (existing) existing.count++;
-                else playerAwards.push({ label: a.award, count: 1, icon: a.award === 'MVP' ? '⭐' : a.award.includes('Defensive') ? '🛡️' : a.award.includes('Offensive') ? '⚡' : a.award.includes('Rookie') ? '🌟' : a.award === 'Championship MVP' ? '🏆' : '🏅' });
-              }
+              if (a.playerId === player.id) add(a.award, sh.season, iconFor(a.award));
             }
             // Championship MVP
-            if (sh.finalsMvpId === player.id) {
-              const existing = playerAwards.find(pa => pa.label === 'Championship MVP');
-              if (existing) existing.count++;
-              else playerAwards.push({ label: 'Championship MVP', count: 1, icon: '🏆' });
-            }
+            if (sh.finalsMvpId === player.id) add('Championship MVP', sh.season, '🏆');
             // All-Pro 1st Team
-            if ((sh.allLeagueFirst ?? []).some(e => e.playerId === player.id)) {
-              const existing = playerAwards.find(pa => pa.label === 'All-Pro 1st Team');
-              if (existing) existing.count++;
-              else playerAwards.push({ label: 'All-Pro 1st Team', count: 1, icon: '🥇' });
-            }
+            if ((sh.allLeagueFirst ?? []).some(e => e.playerId === player.id)) add('All-Pro 1st Team', sh.season, '🥇');
             // All-Pro 2nd Team
-            if ((sh.allLeagueSecond ?? []).some(e => e.playerId === player.id)) {
-              const existing = playerAwards.find(pa => pa.label === 'All-Pro 2nd Team');
-              if (existing) existing.count++;
-              else playerAwards.push({ label: 'All-Pro 2nd Team', count: 1, icon: '🥈' });
-            }
+            if ((sh.allLeagueSecond ?? []).some(e => e.playerId === player.id)) add('All-Pro 2nd Team', sh.season, '🥈');
+          }
+          // Fallback for older/pre-backfill saves: player.awards holds the
+          // individual awards (MVP/OPOY/DPOY/ROY, and Championship MVP) with the
+          // season they were won. Deduped against the seasonHistory pass above.
+          for (const a of (player.awards ?? [])) {
+            add(a.award, a.season, iconFor(a.award));
           }
           if (playerAwards.length === 0) return null;
           return (

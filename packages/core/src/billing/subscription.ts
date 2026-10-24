@@ -63,8 +63,20 @@ export function getScoutingAllocations(tier: Tier, isFounder: boolean): Scouting
 /** How many monthly Spotlight podcast credits the tier gets. */
 export const PODCAST_CREDITS_PER_MONTH: Record<Tier, number> = {
   free: 0,
-  premium: 3,
+  // ~$0.30–0.40 per new episode (ElevenLabs v3 + script writer); replays are free.
+  premium: 5,
 };
+
+/**
+ * Episode pack: extra Team Spotlight episodes for Premium subscribers who've
+ * used the month's included ones. A one-time Stripe price; set
+ * NEXT_PUBLIC_STRIPE_EPISODE_PACK_PRICE_ID once it exists in the dashboard.
+ */
+export const EPISODE_PACK = {
+  credits: 5,
+  priceLabel: '$2.99',
+  priceId: process.env.NEXT_PUBLIC_STRIPE_EPISODE_PACK_PRICE_ID ?? '',
+} as const;
 
 /**
  * Stripe price ID for the $4.99/mo Premium tier.

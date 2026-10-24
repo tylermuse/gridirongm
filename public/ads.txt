@@ -1,0 +1,2 @@
+# ads.txt — authorizes Google AdSense to serve ads on bs-football.com
+google.com, pub-8640017151069165, DIRECT, f08c47fec0942fa0

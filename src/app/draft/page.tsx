@@ -109,11 +109,24 @@ function ProspectCard({
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white"
-            style={{ backgroundColor: teamColor }}
-          >
-            {player.position}
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white"
+              style={{ backgroundColor: teamColor }}
+            >
+              {player.position}
+            </div>
+            {/* Scouted sub-position (e.g. OT, EDGE, SS) — only when it refines
+                the base position, so users can tell a tackle from a guard, an
+                edge rusher from an interior lineman, etc. Pure display. */}
+            {player.subPosition && player.subPosition !== player.position && (
+              <span
+                className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] border border-[var(--border)] text-[9px] font-bold text-[var(--text-sec)] uppercase tracking-wide leading-none"
+                title="Scouted sub-position"
+              >
+                {player.subPosition}
+              </span>
+            )}
           </div>
           <div className="text-center">
             <div className="text-lg font-black">{posRank}</div>
@@ -167,6 +180,7 @@ function OnTheClockSection({
   onDraft,
   onPlayerClick,
   onTradePick,
+  onStartSeason,
 }: {
   currentTeam: Team | undefined;
   currentRound: number;
@@ -191,6 +205,7 @@ function OnTheClockSection({
   onDraft?: (playerId: string) => void;
   onPlayerClick?: (playerId: string) => void;
   onTradePick?: () => void;
+  onStartSeason?: () => void;
 }) {
   const canSimulate = !draftComplete;
 
@@ -416,6 +431,19 @@ function OnTheClockSection({
         <div className="rounded-b-xl border border-[var(--border)] px-5 py-4 bg-[var(--surface)]">
           <div className="text-center flex flex-wrap items-center justify-center gap-3">
             <span className="font-bold text-green-600">Draft Complete!</span>
+            {/* Escape hatch: if a user is stuck on the draft page after the draft
+                completes (e.g. prospect pool exhausted mid-draft), give them a
+                direct 'Start Season' action so they can always advance to the
+                next season instead of being trapped. rossthehunted, #bug-reports
+                2026-09-29. */}
+            {onStartSeason && (
+              <button
+                onClick={onStartSeason}
+                className="text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-1.5"
+              >
+                Start Season →
+              </button>
+            )}
             <Link href="/draft-recap" className="text-sm font-medium text-blue-600 hover:underline">
               View Draft Recap →
             </Link>
@@ -1090,6 +1118,7 @@ export default function DraftPage() {
     players,
     freeAgents,
     draftOrder,
+    draftPickOrder,
     draftResults,
     userTeamId,
     teams,
@@ -1107,6 +1136,7 @@ export default function DraftPage() {
     nflMockDraft,
     importDraftClass,
     currentDraftYear,
+    startNewSeason,
   } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const draftYear = currentDraftYear ?? season;
@@ -1179,8 +1209,8 @@ export default function DraftPage() {
              "The draft hasn't started yet."}
           </p>
           <div className="flex gap-3 justify-center items-center">
-            <a href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</a>
-            <a href="/standings" className="text-sm text-blue-600 hover:underline">View Schedule</a>
+            <Link href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</Link>
+            <Link href="/standings" className="text-sm text-blue-600 hover:underline">View Schedule</Link>
             <button
               onClick={() => setShowImportModal(true)}
               className="text-sm font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1"
@@ -1202,7 +1232,7 @@ export default function DraftPage() {
 
   const totalRounds = 7;
   const picksPerRound = teams.length;
-  const totalPicks = picksPerRound * totalRounds;
+  const totalPicks = draftPickOrder?.length || picksPerRound * totalRounds;
   const currentPickTeamId = draftOrder[0];
   const isUserPick = currentPickTeamId === userTeamId;
   const prospectCount = freeAgents.filter(id => {
@@ -1210,7 +1240,13 @@ export default function DraftPage() {
     return p && p.experience === 0;
   }).length;
   const draftComplete = draftOrder.length === 0 || prospectCount === 0;
-  const currentOverallPick = draftComplete ? totalPicks : Math.min(totalPicks, totalPicks - draftOrder.length + 1);
+  // Older (1999-era) save formats can carry a draftOrder longer than totalPicks,
+  // which drives `totalPicks - draftOrder.length + 1` to 0 or below and shows the
+  // draft starting at pick #0. Floor at 1 so the overall pick is always a valid,
+  // 1-indexed slot.
+  const currentOverallPick = draftComplete
+    ? totalPicks
+    : Math.max(1, Math.min(totalPicks, totalPicks - draftOrder.length + 1));
   const currentRound = Math.min(totalRounds, Math.max(1, Math.ceil(currentOverallPick / picksPerRound)));
   const currentPickInRound = Math.min(picksPerRound, ((currentOverallPick - 1) % picksPerRound) + 1);
 
@@ -1517,6 +1553,24 @@ export default function DraftPage() {
           onDraft={(playerId) => draftPlayer(playerId)}
           onPlayerClick={(playerId) => setExpandedProspectId(playerId)}
           onTradePick={() => setShowTradeModal(true)}
+          onStartSeason={phase === 'draft' ? async () => {
+            // Mirror the vetted draft-recap flow: over-53 rosters route through
+            // post-draft-cuts; otherwise roll the season over defensively and
+            // land on /roster even if startNewSeason throws.
+            const userTeam = teams.find(t => t.id === userTeamId);
+            const overCap = (userTeam?.roster.length ?? 0) > 53;
+            if (overCap) {
+              router.push('/post-draft-cuts');
+              return;
+            }
+            try {
+              startNewSeason();
+            } catch (err) {
+              console.error('[draft] startNewSeason escaped its own catch:', err);
+            }
+            try { await flushToStorage(); } catch (err) { console.error('[draft] flushToStorage failed', err); }
+            router.push('/roster');
+          } : undefined}
         />
 
         {/* Mock Draft button + dropdown */}
@@ -1573,7 +1627,7 @@ export default function DraftPage() {
         <ImportDraftClassPanel season={season} />
 
         {/* Free-tier ad slot above the draft board. Hidden for premium. */}
-        <AdSlot size="leaderboard" slotId="draft-top" />
+        <AdSlot size="leaderboard" slotId="5378648863" />
 
         <div className="grid grid-cols-12 gap-4">
           {/* Top Prospects */}

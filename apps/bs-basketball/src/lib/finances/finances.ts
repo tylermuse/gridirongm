@@ -16,8 +16,9 @@ import {
 } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
-import { getHeadCoach, coachSalary } from '@/lib/coaching/coaches';
-import { teamDeadCap } from '@/lib/roster/release';
+import { getHeadCoach, getDevCoach } from '../coaching/coaches';
+import { coachSalaryFor, coachContractSeason, teamCoachDeadMoney } from '../coaching/contracts';
+import { teamDeadCap } from '../roster/deadCap';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -25,7 +26,16 @@ const NATIONAL_TV = 110_000_000; // league-shared national TV money, flat per te
 
 export interface TeamFinances {
   revenue: { nationalTv: number; localTv: number; gate: number; merch: number; total: number };
-  expenses: { payroll: number; coaching: number; luxuryTax: number; deadCap: number; total: number };
+  expenses: {
+    payroll: number;
+    /** Head coach + dev coach salaries (owner expense, not cap). */
+    coaching: number;
+    /** Salary still owed to fired coaches this season (owner expense, not cap). */
+    coachDeadMoney: number;
+    luxuryTax: number;
+    deadCap: number;
+    total: number;
+  };
   profit: number;
   cap: TeamCapStatus;
   byPosition: Record<BasketballPosition, number>;
@@ -69,14 +79,20 @@ export function teamFinances(league: LeagueState, team: BasketballTeam): TeamFin
   const merch = Math.round((20_000_000 + 30_000_000 * winPct) * mkt * (0.8 + Math.max(0, starOvr - 75) / 50));
   const revTotal = NATIONAL_TV + localTv + gate + merch;
 
+  // Coaching staff is an owner expense — it never touches the player cap.
+  // Priced for the contract season (the upcoming one during the offseason).
+  const staffSeason = coachContractSeason(league);
   const hc = getHeadCoach(league, team.id);
-  const coaching = hc ? coachSalary(hc) : 0;
+  const pdc = getDevCoach(league, team.id);
+  const coaching = (hc ? coachSalaryFor(hc, staffSeason) : 0) + (pdc ? coachSalaryFor(pdc, staffSeason) : 0);
+  const coachDeadMoney = teamCoachDeadMoney(team, staffSeason);
   const expenses = {
     payroll: cap.payroll - deadCap, // player salaries only (dead cap is its own row)
     coaching,
+    coachDeadMoney,
     luxuryTax: cap.taxBill,
     deadCap,
-    total: cap.payroll + cap.taxBill + coaching, // cap.payroll already includes deadCap
+    total: cap.payroll + cap.taxBill + coaching + coachDeadMoney, // cap.payroll already includes deadCap
   };
 
   const byPosition: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };

@@ -19,6 +19,23 @@ interface AnalyticsData {
   signupsByDay: Record<string, number>;
   topPages: { path: string; count: number }[];
   recentEvents: { event: string; properties: Record<string, unknown>; created_at: string; user_id: string | null }[];
+  activeUsersRolling: ActiveUsersRolling | null;
+  hoopsActiveUsersRolling: ActiveUsersRolling | null;
+  sim3dCohorts: Sim3dCohorts | null;
+}
+
+interface Sim3dCohort { devices: number; sessions: number; sessionsPerDevice: number; medianMinutes: number; meanMinutes: number; pctMultiDay: number; pctReturned7d: number }
+interface Sim3dCohorts { since: string; cohorts: { on?: Sim3dCohort; off?: Sim3dCohort }; toggles: { on: number; off: number } }
+
+interface ActiveUsersRolling {
+  dau: number;
+  wau: number;
+  mau: number;
+  engagedDau: number;
+  engagedWau: number;
+  engagedMau: number;
+  returningMau: number;
+  dailyActive: { day: string; all: number; engaged: number }[];
 }
 
 type Period = '7d' | '30d' | '90d';
@@ -154,6 +171,14 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
 
+            {/* Rolling DAU/WAU/MAU — fixed windows, ignore the period selector. */}
+            {data.activeUsersRolling && (
+              <ActiveUsersSection title="BS Football" a={data.activeUsersRolling} />
+            )}
+            {data.hoopsActiveUsersRolling && data.hoopsActiveUsersRolling.mau > 0 && (
+              <ActiveUsersSection title="BS Hoops" a={data.hoopsActiveUsersRolling} />
+            )}
+
             {/* Windowed — these all respect the period selector. */}
             <div>
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Last {period}</h2>
@@ -163,7 +188,7 @@ export default function AdminAnalyticsPage() {
                 <MetricCard
                   label="Unique Devices"
                   value={data.uniqueDevices || '—'}
-                  sub="incl. anonymous · upper bound"
+                  sub="any event · incl. crawlers · upper bound"
                 />
                 <MetricCard label="Sessions" value={data.sessions} />
                 <MetricCard label="Page Views" value={data.pageViews} />
@@ -174,6 +199,9 @@ export default function AdminAnalyticsPage() {
                 />
               </div>
             </div>
+
+            {/* 3D live sim launch experiment (free for everyone from 2026-10-23; decide ~2026-11-06) */}
+            {data.sim3dCohorts && <Sim3dSection c={data.sim3dCohorts} period={period} />}
 
             {/* Signups chart + Top pages side by side */}
             <div className="grid lg:grid-cols-2 gap-6">
@@ -277,6 +305,91 @@ export default function AdminAnalyticsPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function ActiveUsersSection({ title, a }: { title: string; a: ActiveUsersRolling }) {
+  const stickiness = a.engagedMau > 0 ? a.engagedDau / a.engagedMau : 0;
+  const series = a.dailyActive.slice(-30);
+  const max = Math.max(1, ...series.map((d) => d.all));
+  return (
+    <div>
+      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{title} · active users · rolling</h2>
+      <p className="text-xs text-gray-400 mb-3">
+        Engaged = device with 2+ page views in the window. Raw device counts include crawlers and one-page bounces.
+      </p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard label="DAU (24h)" value={a.engagedDau} sub={`${a.dau.toLocaleString()} raw devices`} />
+        <MetricCard label="WAU (7d)" value={a.engagedWau} sub={`${a.wau.toLocaleString()} raw devices`} />
+        <MetricCard label="MAU (30d)" value={a.engagedMau} sub={`${a.returningMau.toLocaleString()} returned on 2+ days · ${a.mau.toLocaleString()} raw`} />
+        <MetricCard label="Stickiness" value={`${(stickiness * 100).toFixed(0)}%`} sub="engaged DAU / MAU" />
+      </div>
+      {series.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-900">{title} daily active devices (30d)</h3>
+            <div className="flex gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600" />Engaged</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100" />Raw</span>
+            </div>
+          </div>
+          <div className="flex items-end gap-[3px] h-32">
+            {series.map((d) => (
+              <div
+                key={d.day}
+                className="relative flex-1 h-full flex items-end"
+                title={`${d.day}: ${d.engaged} engaged / ${d.all} raw`}
+              >
+                <div className="absolute bottom-0 w-full rounded-t-sm bg-blue-100" style={{ height: `${(d.all / max) * 100}%` }} />
+                <div className="relative w-full rounded-t-sm bg-blue-600" style={{ height: `${(d.engaged / max) * 100}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between mt-1.5 text-[10px] text-gray-400">
+            <span>{series[0].day.slice(5)}</span>
+            <span>{series[series.length - 1].day.slice(5)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Sim3dSection({ c, period }: { c: Sim3dCohorts; period: string }) {
+  const on = c.cohorts.on, off = c.cohorts.off;
+  const rows: { label: string; key: keyof Sim3dCohort; fmt: (v: number) => string; help: string }[] = [
+    { label: 'Devices', key: 'devices', fmt: v => String(v), help: 'game-watching devices in the cohort' },
+    { label: 'Sessions / device', key: 'sessionsPerDevice', fmt: v => v.toFixed(2), help: '30-min gap sessions' },
+    { label: 'Median session', key: 'medianMinutes', fmt: v => `${v} min`, help: 'first to last event; a floor' },
+    { label: 'Mean session', key: 'meanMinutes', fmt: v => `${v} min`, help: '' },
+    { label: 'Active 2+ days', key: 'pctMultiDay', fmt: v => `${v}%`, help: 'share of devices' },
+    { label: 'Returned after 7+ days', key: 'pctReturned7d', fmt: v => `${v}%`, help: 'share of devices; needs a week of data' },
+  ];
+  const better = (k: keyof Sim3dCohort) => (on && off && on[k] !== off[k] ? (on[k] > off[k] ? 'on' : 'off') : null);
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-baseline justify-between mb-1">
+        <h2 className="text-sm font-bold">3D Live Sim — launch experiment</h2>
+        <span className="text-xs text-gray-500">last {period} · {c.toggles.on} toggled on · {c.toggles.off} off</span>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">
+        Free for everyone since Oct 23. Devices that opened a game page, split by whether the 3D sim was ever on. Decide Premium vs free around Nov 6: if the “on” column is clearly ahead on session length and return rate, 3D is a retention feature — keep it free and upsell inside it. If the columns look alike, gate it (flip SIM3D_FREE_FOR_ALL).
+      </p>
+      {!on && !off ? <div className="text-sm text-gray-500">No game-page events yet in this window.</div> : (
+        <table className="w-full text-sm">
+          <thead><tr className="text-xs text-gray-500"><th className="text-left font-medium pb-2">Metric</th><th className="text-right font-medium pb-2">3D on</th><th className="text-right font-medium pb-2">3D off</th></tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.key} className="border-t border-gray-100">
+                <td className="py-1.5">{r.label}{r.help && <span className="block text-[11px] text-gray-400">{r.help}</span>}</td>
+                <td className={`py-1.5 text-right tabular-nums ${better(r.key) === 'on' ? 'font-bold text-emerald-700' : ''}`}>{on ? r.fmt(on[r.key]) : '—'}</td>
+                <td className={`py-1.5 text-right tabular-nums ${better(r.key) === 'off' ? 'font-bold text-emerald-700' : ''}`}>{off ? r.fmt(off[r.key]) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

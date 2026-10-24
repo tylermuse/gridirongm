@@ -130,7 +130,7 @@ export function SortableTradeTable({
                 })()}
                 <td className="text-right tabular-nums text-[var(--text-sec)]">{money(salary)}</td>
                 <td className="text-center tabular-nums text-[var(--text-sec)]">{yrs || '—'}</td>
-                <td className="text-right pr-2 font-bold tabular-nums" style={{ color: 'var(--accent)' }}>~{pts}</td>
+                <td className="text-right pr-2 font-bold tabular-nums" style={{ color: 'var(--accent)' }}>{pts}</td>
               </tr>
             );
           })}

@@ -49,6 +49,23 @@ export function isValidSubPositionForPosition(position: Position, sub: SubPositi
   return (SUB_POSITION_CLUSTERS[position] ?? []).includes(sub);
 }
 
+/** Owner-facing manual sub-position pin options, by broad position. A strict
+ *  subset of SUB_POSITION_CLUSTERS: only positions where an owner picks between
+ *  meaningful roles are pinnable. OL exposes OT/OG/C so owners can manually
+ *  designate their Center — the store's OL stopgap only auto-pins a center when
+ *  a *different* lineman is pinned to OT/OG, so a manual C pin is honored (C
+ *  restored per jslusser1945 8/24; #394 had dropped it). DL (EDGE/DT) and LB
+ *  (MLB/OLB) added per jslusser1945 (8/17); S (FS/SS) added per jslusser1945 +
+ *  tofftanaut (8/19), completing the position-pin family. Shared by
+ *  /player/[id] and the roster PlayerModal so both surfaces expose the exact
+ *  same control. */
+export const SUB_POSITION_PIN_OPTIONS: Partial<Record<Position, readonly SubPosition[]>> = {
+  OL: ['OT', 'OG', 'C'],
+  DL: ['EDGE', 'DT'],
+  LB: ['MLB', 'OLB'],
+  S: ['FS', 'SS'],
+};
+
 /** Derive a player's detailed sub-position from their broad Position +
  *  ratings. Pure function — used both at generation time (to seed the
  *  Player.subPosition field) and as a backfill for older saves. */
@@ -521,6 +538,26 @@ export interface ImportedProspect {
   ratings?: Partial<PlayerRatings>;
 }
 
+/** An open trade request ("trade me") a disgruntled player has filed — the
+ *  football trade-request / refuse-to-play loop (Phase 1). Absent = content.
+ *  Advanced once per simmed week by `refreshTradeRequests`, stored on the player
+ *  so it persists on the normal save cadence and travels through trades. Kept
+ *  deliberately SEPARATE from the contract `holdout` (a money dispute). Optional
+ *  and defaulted-absent on read, so adding it needs no `SAVE_VERSION` bump. */
+export interface TradeRequest {
+  /** Escalation stage. Phase 1 ships `unhappy` (clock ticking) and `requested`
+   *  (formally filed); `refusing` (refuse-to-play) is reserved for Phase 2. */
+  stage: 'unhappy' | 'requested' | 'refusing';
+  /** Week-of-season the current stage began — the escalation clock. */
+  since: number;
+  /** Week-of-season the formal request was filed (set on reaching `requested`). */
+  requestedWeek?: number;
+  /** Human-readable trigger, derived from the mood model. */
+  reason: string;
+  /** Season the request belongs to; cleared across a season rollover. */
+  season: number;
+}
+
 export interface Player {
   id: string;
   firstName: string;
@@ -582,6 +619,10 @@ export interface Player {
    * Low sentiment → holdouts, locker room problems, unlikely to re-sign.
    */
   mood: number;
+  /** Open trade request ("trade me") / refuse-to-play state. Absent = content.
+   *  Advanced weekly by `refreshTradeRequests`; optional so old saves default it
+   *  absent with no migration. Distinct from the contract `holdout` above. */
+  tradeRequest?: TradeRequest;
   /** Season when the player last had their contract restructured (prevents repeat restructures) */
   lastRestructuredSeason?: number;
   /** Optional photo URL (populated from imported league files) */
@@ -699,13 +740,21 @@ export function reconcileJerseys(players: Player[], teams: Team[]): Player[] {
       if (ap !== bp) return ap - bp;
       return a.lastName.localeCompare(b.lastName);
     });
-    for (const p of sorted) {
+    // Two passes: everyone whose number is valid keeps it first (on a duplicate, the
+    // better player keeps it — a starter keeps his real number from an imported
+    // roster), and only then do the missing / conflicting ones get a new number.
+    // One pass let a backup without a number take a starter's real one before
+    // the starter came up in the order (Dak Prescott #4 → #8).
+    const keepOrder = [...sorted].sort((a, b) => (b.ratings?.overall ?? 0) - (a.ratings?.overall ?? 0));
+    const needs: Player[] = [];
+    for (const p of keepOrder) {
       const num = p.jerseyNumber;
-      if (typeof num === 'number' && !taken.has(num) && !retired.has(num)) {
-        // Existing number is still unique + not retired — keep it.
-        taken.add(num);
-        continue;
-      }
+      if (typeof num === 'number' && !taken.has(num) && !retired.has(num)) taken.add(num);
+      else needs.push(p);
+    }
+    const needIds = new Set(needs.map(p => p.id));
+    for (const p of sorted) {
+      if (!needIds.has(p.id)) continue;
       const n = assignJerseyNumber(p.position, taken, retired);
       patches.set(p.id, n);
       taken.add(n);
@@ -1225,7 +1274,7 @@ export interface LeagueSettings {
   mcafeeMode: boolean;       // McAfee Mode: special teams matter
   /** Chaos Draft mode: top picks bust, late picks boom (JaMarcus Russell / Brock Purdy League) */
   chaosDraft: boolean;
-  /** Use Claude AI to generate unique Team Spotlight commentary */
+  /** AI-written Spotlight + weekly recap (Premium only; see spotlightAccess.aiCommentaryEnabled). Missing = ON. */
   aiCommentary: boolean;
   /** God Mode: full commissioner control — edit players, force trades, etc. */
   godMode: boolean;
@@ -1292,6 +1341,17 @@ export interface LeagueState {
   teams: Team[];
   players: Player[];
   schedule: GameResult[];
+  /** Transient runtime-only overlay (excluded from persistence): pre-simulated
+   *  results for the non-user games of the week the user is currently playing
+   *  live, plus per-quarter cumulative score splits used by the Around-the-League
+   *  scoreboard + halftime updates. Set on live regular-season game mount;
+   *  consumed and cleared by simulateOneWeek so the live scoreboard's finals
+   *  equal the committed weekly results. */
+  liveScoreboard?: {
+    week: number;
+    results: Record<string, GameResult>;
+    splits: Record<string, { home: number[]; away: number[] }>;
+  } | null;
   /** Preseason schedule (separate from regular season) */
   preseasonSchedule?: GameResult[];
   /** Current preseason game number (1-based, 0 = not in preseason) */
@@ -1423,6 +1483,8 @@ export interface LeagueState {
   expansionDraft: ExpansionDraftState | null;
   /** Number of contract extensions used this season (max 3) */
   extensionsUsedThisSeason?: number;
+  /** Number of retired players un-retired this season (max 1) */
+  retiredSigningsThisSeason?: number;
   /** Free agency intel report pursuit state */
   pursuitState?: {
     pursuitPoints: number;
@@ -1492,11 +1554,29 @@ export interface RivalryEvent {
   type: 'blowout' | 'comeback' | 'upset' | 'playoff_elimination' | 'trade_steal' | 'sweep';
 }
 
+/** Intensity at/above which a matchup is surfaced as a rivalry in the UI. */
+export const RIVALRY_UI_THRESHOLD = 40;
+
+/** Returns the rivalry between two teams if it meets the UI intensity threshold, else undefined. */
+export function findRivalry(
+  rivalries: Rivalry[] | undefined,
+  teamAId: string,
+  teamBId: string,
+  minIntensity: number = RIVALRY_UI_THRESHOLD
+): Rivalry | undefined {
+  return (rivalries ?? []).find(
+    r =>
+      r.intensity >= minIntensity &&
+      ((r.team1Id === teamAId && r.team2Id === teamBId) ||
+        (r.team1Id === teamBId && r.team2Id === teamAId))
+  );
+}
+
 export interface TradeRumor {
   id: string;
   season: number;
   week: number;
-  type: 'star_available' | 'shopping_pick' | 'position_need' | 'blockbuster' | 'deadline_buzz';
+  type: 'star_available' | 'shopping_pick' | 'position_need' | 'blockbuster' | 'deadline_buzz' | 'trade_request';
   teamId: string;
   targetTeamId?: string;
   playerIds: string[];

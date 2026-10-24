@@ -1,53 +1,5 @@
-import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { createClient } from '@bs/core/supabase/server';
+import { createTrackHandler } from '@bs/core/analytics/server';
 
-function getServiceClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { cookies: { getAll: () => [], setAll: () => {} } },
-  );
-}
-
-export async function POST(request: Request) {
-  try {
-    const { event, properties, deviceId } = await request.json();
-
-    if (!event || typeof event !== 'string') {
-      return NextResponse.json({ error: 'Missing event' }, { status: 400 });
-    }
-
-    const service = getServiceClient();
-    if (!service) {
-      return NextResponse.json({ ok: true }); // Supabase not configured, silently skip
-    }
-
-    // Try to get user from session (optional — anonymous events are fine)
-    let userId: string | null = null;
-    try {
-      const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      userId = user?.id ?? null;
-    } catch {
-      // No session — that's ok
-    }
-
-    // Store device_id in properties for anonymous user tracking
-    const enrichedProperties = {
-      ...(properties ?? {}),
-      ...(deviceId ? { device_id: deviceId } : {}),
-    };
-
-    await service.from('analytics_events').insert({
-      user_id: userId,
-      event,
-      properties: enrichedProperties,
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: true }); // Never fail on analytics
-  }
-}
+// Batched + legacy payloads, bot filtering, and the app tag all live in the
+// shared handler (packages/core/src/analytics/server.ts).
+export const POST = createTrackHandler('bs-football');

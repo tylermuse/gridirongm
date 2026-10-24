@@ -48,6 +48,10 @@ export interface RookieContractOptions {
   capForSeason?: number;
   /** Year the contract begins (e.g., 2026 for the 2026-27 season). */
   signedSeason: number;
+  /** Picks per round (= league team count). Default 30. Expanded leagues
+   *  (31-32 teams) push round 1 to 31-32 picks; those extra first-rounders get
+   *  the bottom of the scale (the #30 slot's share, decayed 1% per pick). */
+  teamsPerRound?: number;
 }
 
 /**
@@ -60,17 +64,22 @@ export function rookieScaleContract(
   overallPick: number,
   opts: RookieContractOptions,
 ): BaseContract {
-  if (overallPick < 1 || overallPick > 60) {
-    throw new Error(`Rookie scale only defined for picks 1-60 (got ${overallPick})`);
+  const perRound = Math.max(30, Math.min(32, opts.teamsPerRound ?? 30));
+  if (overallPick < 1 || overallPick > perRound * 2) {
+    throw new Error(`Rookie scale only defined for picks 1-${perRound * 2} (got ${overallPick})`);
   }
-  const isRound1 = overallPick <= 30;
+  const isRound1 = overallPick <= perRound;
   const cap = opts.capForSeason ?? DEFAULT_CAP_REFERENCE;
 
   const years: ContractYear[] = [];
   let guaranteedTotal = 0;
 
   if (isRound1) {
-    const year1Salary = Math.round(cap * R1_PCT_OF_CAP_BY_PICK[overallPick - 1]);
+    const last = R1_PCT_OF_CAP_BY_PICK.length;
+    const pct = overallPick <= last
+      ? R1_PCT_OF_CAP_BY_PICK[overallPick - 1]
+      : R1_PCT_OF_CAP_BY_PICK[last - 1] * Math.pow(0.99, overallPick - last);
+    const year1Salary = Math.round(cap * pct);
     let salary = year1Salary;
     for (let i = 0; i < 4; i++) {
       const guaranteed = i < 2; // first 2 years guaranteed, 3+4 are team options

@@ -21,7 +21,11 @@ interface ProfileRow {
   is_admin: boolean | null;
   podcast_credits_used: number | null;
   podcast_credits_reset_at: string | null;
+  /** Bought episode packs (never expire). */
+  podcast_bonus_credits: number | null;
 }
+
+const PROFILE_COLS = 'is_admin, podcast_credits_used, podcast_credits_reset_at, podcast_bonus_credits';
 
 interface SubscriptionRow {
   tier: Tier | null;
@@ -33,10 +37,12 @@ interface CreditState {
   tier: Tier;
   isAdmin: boolean;
   isFounder: boolean;
-  /** Credits remaining this period. -1 means uncapped (admins). */
+  /** Credits remaining: this period's plus any bought. -1 means uncapped (admins). */
   remaining: number;
   /** Limit per period for the resolved tier. -1 for admins. */
   limit: number;
+  /** Of `remaining`, the bought (never-expiring) episodes. */
+  bonus: number;
   /** ISO timestamp when the period resets. Null if never tracked. */
   resetAt: string | null;
 }
@@ -103,7 +109,7 @@ export async function readCredits(
 ): Promise<CreditState> {
   const { data } = await service
     .from('profiles')
-    .select('is_admin, podcast_credits_used, podcast_credits_reset_at')
+    .select(PROFILE_COLS)
     .eq('id', userId)
     .maybeSingle();
   const profile = (data ?? null) as ProfileRow | null;
@@ -111,16 +117,18 @@ export async function readCredits(
   const { tier, isAdmin, isFounder } = await resolveTier(service, userId, createdAt, profile);
 
   if (isAdmin) {
-    return { tier, isAdmin, isFounder, remaining: -1, limit: -1, resetAt: null };
+    return { tier, isAdmin, isFounder, remaining: -1, limit: -1, bonus: 0, resetAt: null };
   }
 
   const limit = PODCAST_CREDITS_PER_MONTH[tier];
   const resetAt = profile?.podcast_credits_reset_at ?? null;
   const expired = !resetAt || new Date(resetAt).getTime() <= Date.now();
   const used = expired ? 0 : (profile?.podcast_credits_used ?? 0);
-  const remaining = Math.max(0, limit - used);
+  // Bought episodes only count for Premium (the show itself is Premium).
+  const bonus = tier === 'premium' ? Math.max(0, profile?.podcast_bonus_credits ?? 0) : 0;
+  const remaining = Math.max(0, limit - used) + bonus;
 
-  return { tier, isAdmin, isFounder, remaining, limit, resetAt };
+  return { tier, isAdmin, isFounder, remaining, limit, bonus, resetAt };
 }
 
 /**
@@ -128,7 +136,7 @@ export async function readCredits(
  * a status code when the user is ineligible (free tier) or out of credits.
  *
  * Admins bypass the cap entirely. Founders are charged credits but at the
- * Premium limit (3/month).
+ * Premium limit (5/month).
  */
 export async function consumePodcastCredit(
   service: SupabaseClient,
@@ -137,7 +145,7 @@ export async function consumePodcastCredit(
 ): Promise<ConsumeResult> {
   const { data } = await service
     .from('profiles')
-    .select('is_admin, podcast_credits_used, podcast_credits_reset_at')
+    .select(PROFILE_COLS)
     .eq('id', userId)
     .maybeSingle();
   const profile = (data ?? null) as ProfileRow | null;
@@ -148,7 +156,7 @@ export async function consumePodcastCredit(
     // Admins are uncapped — record nothing, return ok.
     return {
       ok: true,
-      state: { tier, isAdmin, isFounder, remaining: -1, limit: -1, resetAt: null },
+      state: { tier, isAdmin, isFounder, remaining: -1, limit: -1, bonus: 0, resetAt: null },
     };
   }
 
@@ -163,6 +171,7 @@ export async function consumePodcastCredit(
         isFounder,
         remaining: 0,
         limit: PODCAST_CREDITS_PER_MONTH[tier],
+        bonus: 0,
         resetAt: profile?.podcast_credits_reset_at ?? null,
       },
     };
@@ -175,8 +184,9 @@ export async function consumePodcastCredit(
     : null;
   const expired = !currentResetAt || currentResetAt.getTime() <= now.getTime();
   const used = expired ? 0 : (profile?.podcast_credits_used ?? 0);
+  const bonus = Math.max(0, profile?.podcast_bonus_credits ?? 0);
 
-  if (used >= limit) {
+  if (used >= limit && bonus <= 0) {
     return {
       ok: false,
       status: 402,
@@ -187,12 +197,16 @@ export async function consumePodcastCredit(
         isFounder,
         remaining: 0,
         limit,
+        bonus: 0,
         resetAt: currentResetAt?.toISOString() ?? null,
       },
     };
   }
 
-  const newUsed = used + 1;
+  // The month's included episodes first; bought ones once those are gone.
+  const fromBonus = used >= limit;
+  const newUsed = fromBonus ? used : used + 1;
+  const newBonus = fromBonus ? bonus - 1 : bonus;
   const newResetAt = expired ? nextMonthStartUtc(now) : currentResetAt!;
 
   const { error: updateErr } = await service
@@ -200,6 +214,7 @@ export async function consumePodcastCredit(
     .update({
       podcast_credits_used: newUsed,
       podcast_credits_reset_at: newResetAt.toISOString(),
+      podcast_bonus_credits: newBonus,
     })
     .eq('id', userId);
 
@@ -217,9 +232,41 @@ export async function consumePodcastCredit(
       tier,
       isAdmin,
       isFounder,
-      remaining: Math.max(0, limit - newUsed),
+      remaining: Math.max(0, limit - newUsed) + newBonus,
       limit,
+      bonus: newBonus,
       resetAt: newResetAt.toISOString(),
     },
   };
+}
+
+/**
+ * Grant a bought episode pack, exactly once per Stripe Checkout session:
+ * the purchase row is the idempotency key, so the webhook, its retries and
+ * the success-page sync can all call this safely. Returns whether this call
+ * was the one that granted it.
+ */
+export async function grantEpisodePack(
+  service: SupabaseClient,
+  userId: string,
+  sessionId: string,
+  credits: number,
+): Promise<boolean> {
+  if (!Number.isInteger(credits) || credits <= 0) return false;
+  const { error: insertErr } = await service
+    .from('podcast_credit_purchases')
+    .insert({ session_id: sessionId, user_id: userId, credits });
+  if (insertErr) {
+    // 23505 = unique violation: already granted.
+    if ((insertErr as { code?: string }).code === '23505') return false;
+    throw new Error(`episode pack purchase insert failed: ${insertErr.message}`);
+  }
+  const { data } = await service.from('profiles').select('podcast_bonus_credits').eq('id', userId).maybeSingle();
+  const current = Math.max(0, (data as { podcast_bonus_credits: number | null } | null)?.podcast_bonus_credits ?? 0);
+  const { error: updateErr } = await service
+    .from('profiles')
+    .update({ podcast_bonus_credits: current + credits })
+    .eq('id', userId);
+  if (updateErr) throw new Error(`episode pack grant failed: ${updateErr.message}`);
+  return true;
 }

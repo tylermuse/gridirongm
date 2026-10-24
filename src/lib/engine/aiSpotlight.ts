@@ -13,6 +13,7 @@
  *  - weekly: standard weekly analysis (default)
  */
 
+import { computeTradeNeeds } from '@/lib/spotlight/tradeNeeds';
 import type { Team, Player, NewsItem, PlayoffMatchup, DraftSelection } from '@/types';
 
 export type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
@@ -336,15 +337,9 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
       .map(n => n.headline);
     teamData.tradesThisSeason = seasonTrades;
 
-    // Roster needs: find weakest position groups
-    const posGroups: Record<string, Player[]> = {};
-    for (const p of activeRoster) {
-      (posGroups[p.position] ??= []).push(p);
-    }
-    const groupAvgs = Object.entries(posGroups).map(([pos, players]) => ({
-      pos, avgOvr: Math.round(players.reduce((s, p) => s + p.ratings.overall, 0) / players.length), count: players.length,
-    })).sort((a, b) => a.avgOvr - b.avgOvr);
-    teamData.positionGroupStrength = groupAvgs;
+    // Roster needs: where each starting group ranks in the league, and real
+    // players on non-contenders who'd be an upgrade at the biggest holes.
+    teamData.tradeNeeds = computeTradeNeeds(team, allTeams, allPlayers);
   }
 
   if (narrative === 'playoffsStart') {
@@ -402,6 +397,26 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
         nextRound: stageLabel,
         winsSoFar: userPlayoffWins,
       };
+
+      // The actual game they just won — opponent + score. Without it the model
+      // only knew "Wild Card" and invented the opponent (named the Raiders
+      // after a win over the Bills).
+      const lastWin = opts.playoffBracket
+        .filter(m => m.winnerId === team.id && m.homeScore != null && m.awayScore != null)
+        .sort((a, b) => b.round - a.round)[0];
+      if (lastWin) {
+        const isHome = lastWin.homeTeamId === team.id;
+        const opp = allTeams.find(t => t.id === (isHome ? lastWin.awayTeamId : lastWin.homeTeamId));
+        const us = isHome ? lastWin.homeScore! : lastWin.awayScore!;
+        const them = isHome ? lastWin.awayScore! : lastWin.homeScore!;
+        if (opp) {
+          teamData.lastPlayoffWin = {
+            round: ROUND_LABELS[lastWin.round] ?? `Round ${lastWin.round}`,
+            opponent: `${opp.city} ${opp.name}`,
+            score: `${team.city} ${us}, ${opp.city} ${them}`,
+          };
+        }
+      }
 
       // Surface the upcoming opponent so the AI talks about THIS matchup,
       // not the wild-card opener anymore. Prefer the explicit nextOpponentId

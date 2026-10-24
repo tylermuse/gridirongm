@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { portraitFor } from '@/lib/portraits/portraitPool';
 
 // Switched from DiceBear's "adventurer" style to "avataaars". The adventurer
 // style has intentionally oversized heads + small features that read as
@@ -9,7 +10,9 @@ import { useState } from 'react';
 // proportioned heads and masculine-leaning hair / facial-hair options.
 const DICEBEAR_PARAMS = [
   'backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf',
-  'top=shortHairShortFlat,shortHairShortCurly,shortHairShortRound,shortHairShortWaved,shortHairSides,shortHairTheCaesar,shortHairFrizzle,shortHairDreads01,shortHairDreads02',
+  // DiceBear 9.x names (the old 7.x "shortHair…" names now 400, which
+  // silently dropped every generated portrait to the initials fallback).
+  'top=shortFlat,shortCurly,shortRound,shortWaved,sides,theCaesar,frizzle,dreads01,dreads02',
   'facialHairProbability=40',
   'accessoriesProbability=0',
 ].join('&');
@@ -20,7 +23,8 @@ function getDiceBearUrl(seed: string): string {
 
 interface PlayerAvatarProps {
   player: { id?: string; firstName: string; lastName: string; photoUrl?: string; portraitSeedOverride?: string; position: string };
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  /** 'fill': fills its parent (e.g. broadcast graphics sized in em). */
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'fill';
   teamColor?: string;
   className?: string;
 }
@@ -31,6 +35,7 @@ const sizeClasses: Record<string, string> = {
   md: 'w-10 h-10 text-xs',
   lg: 'w-16 h-16 text-lg',
   xl: 'w-24 h-24 text-2xl',
+  fill: 'w-full h-full text-[1em]',
 };
 
 const sizePx: Record<string, number> = { xs: 16, sm: 24, md: 40, lg: 64, xl: 96 };
@@ -39,7 +44,10 @@ export function PlayerAvatar({ player, size = 'md', teamColor = '#555', classNam
   const [imgError, setImgError] = useState(false);
 
   const seed = player.portraitSeedOverride ?? player.id;
-  const imgSrc = player.photoUrl || (seed ? getDiceBearUrl(seed) : null);
+  // Real players: their photo. Fictional players: a photoreal headshot from
+  // the pool (by position), falling back to the DiceBear cartoon.
+  const pooled = !player.photoUrl && seed ? portraitFor(seed, player.position) : null;
+  const imgSrc = player.photoUrl || pooled || (seed ? getDiceBearUrl(seed) : null);
 
   if (imgSrc && !imgError) {
     return (

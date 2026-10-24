@@ -9,7 +9,7 @@ import { AwardRaceCard } from '@/components/awards/AwardRaceCard';
 import { RankingsTabs } from '@/components/awards/RankingsTabs';
 
 export default function AwardsPage() {
-  const { teams, players, season, week, phase, schedule } = useGameStore();
+  const { teams, players, season, week, phase, schedule, seasonHistory } = useGameStore();
   const races = useMemo(
     () => computeAwardRaces({ teams, players, season, week, phase, schedule } as never),
     [teams, players, season, week, phase, schedule],
@@ -22,6 +22,19 @@ export default function AwardsPage() {
   // Award winners are decided when the regular season ends. Past then,
   // surface the crown on the leader of each card.
   const isPostRegularSeason = phase === 'playoffs' || phase === 'resigning' || phase === 'draft' || phase === 'freeAgency' || phase === 'offseason';
+
+  // Official season awards are frozen at the end of the regular season and
+  // stored in seasonHistory (same source the /history tab reads). The live
+  // award-race leaderboard keeps moving as playoff stats come in, so its #1
+  // can diverge from the official winner. Once the season is decided, crown
+  // the official winner on each card so /awards agrees with /history.
+  const officialWinners = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!isPostRegularSeason) return map;
+    const summary = seasonHistory.find(s => s.season === season);
+    summary?.awards.forEach(a => map.set(a.award, a.playerId));
+    return map;
+  }, [isPostRegularSeason, seasonHistory, season]);
 
   return (
     <GameShell>
@@ -46,17 +59,22 @@ export default function AwardsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <AwardRaceCard emoji="🏆" title="MVP" subtitle="Most Valuable Player"
-              entries={races.mvp} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
+              entries={races.mvp} teams={teams} players={players} showWinnerCrown={isPostRegularSeason}
+              officialWinnerId={officialWinners.get('MVP')} />
             <AwardRaceCard emoji="🎩" title="Coach of the Year" subtitle="Head Coach award"
               entries={races.coachOfTheYear} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
             <AwardRaceCard emoji="🏅" title="Offensive Player of the Year" subtitle="Top non-QB skill player"
-              entries={races.opoy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
+              entries={races.opoy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason}
+              officialWinnerId={officialWinners.get('Offensive POY')} />
             <AwardRaceCard emoji="🛡️" title="Defensive Player of the Year" subtitle="Defensive playmakers"
-              entries={races.dpoy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
+              entries={races.dpoy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason}
+              officialWinnerId={officialWinners.get('Defensive POY')} />
             <AwardRaceCard emoji="🌱" title="Offensive Rookie of the Year" subtitle="First-year offensive players"
-              entries={races.oroy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
+              entries={races.oroy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason}
+              officialWinnerId={officialWinners.get('Offensive ROY')} />
             <AwardRaceCard emoji="🌱" title="Defensive Rookie of the Year" subtitle="First-year defensive players"
-              entries={races.droy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
+              entries={races.droy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason}
+              officialWinnerId={officialWinners.get('Defensive ROY')} />
           </div>
         )}
         <p className="text-[10px] text-[var(--text-sec)] mt-4 text-center">

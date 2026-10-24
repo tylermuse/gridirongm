@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getStripe, tierFromPriceId } from '@bs/core/billing';
-import { createServerClient } from '@supabase/ssr';
+import { getStripe } from '@bs/core/billing';
 import Stripe from 'stripe';
-
-// Service-role Supabase client for webhook writes (bypasses RLS)
-function getServiceClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { cookies: { getAll: () => [], setAll: () => {} } },
-  );
-}
+import { grantEpisodePack } from '@bs/core/podcast';
+import {
+  getServiceClient,
+  resolveUserId,
+  saveCustomerId,
+  upsertSubscription,
+} from '@/lib/server/stripeSync';
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -28,77 +25,70 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  const supabase = getServiceClient();
-
-  switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.mode === 'subscription' && session.subscription) {
-        const sub = await getStripe().subscriptions.retrieve(session.subscription as string) as unknown as Stripe.Subscription;
-        const priceId = sub.items.data[0]?.price.id;
-        const userId = session.metadata?.supabase_user_id;
-
-        if (userId && priceId) {
-          await supabase.from('subscriptions').upsert({
-            id: sub.id,
-            user_id: userId,
-            status: sub.status,
-            tier: tierFromPriceId(priceId),
-            current_period_end: new Date((sub as unknown as Record<string, unknown>).current_period_end as number * 1000).toISOString(),
-            cancel_at_period_end: (sub as unknown as Record<string, unknown>).cancel_at_period_end as boolean,
-            updated_at: new Date().toISOString(),
-          });
+  // Any failure below returns 500 so Stripe retries the event (for up to
+  // 3 days). Previously Supabase errors were ignored and we returned 200,
+  // which silently dropped the write and left paying users without Premium.
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        // Episode pack (one-time payment): grant the episodes, once.
+        const packCredits = Number(session.metadata?.episode_pack ?? 0);
+        if (session.mode === 'payment' && packCredits > 0 && session.payment_status === 'paid') {
+          const userId = session.metadata?.supabase_user_id;
+          if (userId) await grantEpisodePack(getServiceClient(), userId, session.id, packCredits);
+          else console.error(`[stripe webhook] no user for episode pack session ${session.id}`);
         }
+        if (session.mode === 'subscription' && session.subscription) {
+          const sub = await getStripe().subscriptions.retrieve(session.subscription as string);
+          const userId = session.metadata?.supabase_user_id ?? (await resolveUserId(sub));
+          if (userId) {
+            await upsertSubscription(sub, userId);
+            if (typeof session.customer === 'string') {
+              await saveCustomerId(userId, session.customer);
+            }
+          } else {
+            console.error(`[stripe webhook] no user for subscription ${sub.id}`);
+          }
+        }
+        break;
       }
-      break;
-    }
 
-    case 'customer.subscription.updated': {
-      const sub = event.data.object as unknown as Record<string, unknown>;
-      const items = sub.items as { data: Array<{ price: { id: string } }> };
-      const priceId = items?.data[0]?.price.id;
-
-      if (priceId) {
-        await supabase
-          .from('subscriptions')
-          .update({
-            status: sub.status as string,
-            tier: tierFromPriceId(priceId),
-            current_period_end: new Date((sub.current_period_end as number) * 1000).toISOString(),
-            cancel_at_period_end: sub.cancel_at_period_end as boolean,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', sub.id as string);
+      // Upsert (not update) so a subscription whose checkout event was missed
+      // still gets a row the next time anything happens to it (e.g. renewal).
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as Stripe.Subscription;
+        const userId = await resolveUserId(sub);
+        if (userId) {
+          await upsertSubscription(sub, userId);
+        } else {
+          console.error(`[stripe webhook] no user for subscription ${sub.id}`);
+        }
+        break;
       }
-      break;
-    }
 
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object as Stripe.Subscription;
-      await supabase
-        .from('subscriptions')
-        .update({
-          status: 'canceled',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', subscription.id);
-      break;
-    }
-
-    case 'invoice.payment_failed': {
-      const invoice = event.data.object as unknown as Record<string, unknown>;
-      const subscriptionId = invoice.subscription as string | null;
-      if (subscriptionId) {
-        await supabase
-          .from('subscriptions')
-          .update({
-            status: 'past_due',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', subscriptionId);
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as unknown as Record<string, unknown>;
+        const parent = invoice.parent as
+          | { subscription_details?: { subscription?: string } }
+          | undefined;
+        const subscriptionId =
+          (invoice.subscription as string | null) ?? parent?.subscription_details?.subscription ?? null;
+        if (subscriptionId) {
+          const { error } = await getServiceClient()
+            .from('subscriptions')
+            .update({ status: 'past_due', updated_at: new Date().toISOString() })
+            .eq('id', subscriptionId);
+          if (error) throw new Error(`past_due update failed for ${subscriptionId}: ${error.message}`);
+        }
+        break;
       }
-      break;
     }
+  } catch (err) {
+    console.error(`[stripe webhook] ${event.type} ${event.id} failed:`, err);
+    return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { requirePremium } from '@/lib/server/requirePremium';
 
 // ── Persistent cache via Supabase ──────────────────────────────────────────
 // Falls back to in-memory Map if Supabase isn't configured.
@@ -164,6 +165,20 @@ class TopicStreamParser {
   }
 }
 
+// gemini-2.5-flash "thinks" by default and those tokens count against
+// maxOutputTokens. With a large team-data prompt the thinking ate most of the
+// old 3000-token budget, so the JSON was cut off after the first (fast opener)
+// topic — and that one-topic result was cached for 7 days. Thinking off +
+// a real budget. (thinkingConfig isn't in SDK 0.24's types; it's passed through.)
+const GEMINI_GEN_CONFIG = {
+  maxOutputTokens: 8192,
+  responseMimeType: 'application/json',
+  thinkingConfig: { thinkingBudget: 0 },
+} as GenerationConfig;
+
+/** A full spotlight has 4-6 topics; fewer than this means the output was cut off. */
+const MIN_COMPLETE_TOPICS = 3;
+
 type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
 
 function buildNarrativePrompt(narrative: NarrativeMoment): string {
@@ -180,22 +195,28 @@ Reference how players were acquired naturally, e.g. "They signed [player] in fre
 Generate 4-5 topics.`;
 
     case 'tradeDeadline':
-      return `This is the TRADE DEADLINE episode — a critical midseason inflection point. Focus on:
-- Midseason assessment: are they buyers, sellers, or standing pat? Use their record and rankings to make the case
-- If they've made trades this season, evaluate them — were they worth it?
-- Identify 1-2 position groups that are holding the team back (use the position group strength data)
-- What kind of player should they target? Be specific about positions and role
-- Cap space implications of any potential moves
+      return `This is the TRADE DEADLINE episode. It is about what this team needs and who they should go get — NOT about the game they just played (the show covers that separately in one quick segment). Do not recap last week's game or any single game.
 
-Reference how existing players were acquired where relevant, e.g. "The trade for [player] earlier this season is already paying dividends" or "That free agency signing hasn't lived up to the contract."
+Use "tradeNeeds" — it is the real data for this episode:
+- tradeNeeds.stance: buyer, seller, or bubble (from the record). Make the call on what they should do and defend it.
+- tradeNeeds.needs: the starting groups that rank worst in the league (rank of N), and the weakest starter at each. Name the hole and the guy a move would replace.
+- tradeNeeds.needs[].targets: real players on teams that are out of it — name them, with OVR, age, contract, and whether they're a rental (expiring) or have term left, and whether the salary fits tradeNeeds.capSpace.
+- tradeNeeds.strengths: what NOT to spend on.
+- tradeNeeds.sellCandidates (sellers): veterans a contender would pay for.
+- tradesThisSeason: grade any trade they already made.
 
-Generate 4-5 topics.`;
+Topics (4-5), each about needs and moves:
+1. Buy, sell, or stand pat — the call, using the record and stance.
+2-3. One topic per biggest need: why that group holds them back, the PROFILE of player they need (position, role — e.g. "a true X receiver who wins outside", "an edge rusher, not another run-stuffer" — age, rental vs. long-term piece, price), then the specific names from targets.
+4. The cost: cap space, what they'd give up, whether it's worth it for this team's window. For sellers: who goes and what they should ask for.
+Marcus and Tony should disagree on at least one move (which target, or whether to buy at all).`;
 
     case 'playoffsStart':
       return `Check the "playoffStage" and "nextPlayoffOpponent" fields FIRST — they tell you exactly where in the playoffs the team is.
 
 IF playoffStage.winsSoFar >= 1 (the team JUST WON A PLAYOFF GAME):
 - This is a POST-WIN, NEXT-ROUND PREVIEW. Lead with celebrating the win they just got (playoffStage.roundJustWon).
+- The game they just won is in "lastPlayoffWin" (opponent + final score). Name THAT opponent and use THAT score — never guess or substitute a different team.
 - Pivot to the next matchup: use nextPlayoffOpponent.name, .record, .star. Their strengths vs the opponent's weaknesses.
 - Do NOT pretend it's still the wild-card preview. They've moved on.
 - Which players from this team rose to the moment? Who needs to keep producing?
@@ -215,7 +236,8 @@ Generate 4-5 topics.`;
 
     case 'seasonOver':
       return `This is the END OF SEASON episode — the season is OVER. Focus on:
-- If they won the championship: celebrate it! Dynasty talk if multiple titles. MVP performance. How the roster was built — which acquisitions (drafts, trades, FA signings) were the key moves?
+- If they won the championship: celebrate it! Dynasty talk if multiple titles. MVP performance.
+- seasonResult.championshipCount counts titles won in THIS league only (it includes this season). Don't call it the franchise's "first title" or put a year on its history ("first title in 2028") — real-world history doesn't apply here. If championshipCount > 1, it's a repeat / back-to-back / dynasty. How the roster was built — which acquisitions (drafts, trades, FA signings) were the key moves?
 - If they were eliminated: what went wrong in the loss? Was it a successful season despite the ending? Grade the season overall.
 - Looking ahead: key free agents who might leave (short contract years), draft needs, whether the window is open or closing
 - Grade the key acquisitions — did drafted/traded/signed players live up to expectations?
@@ -305,11 +327,15 @@ function stripPlayerSignoff(text: string): string {
   // capitalized name (1-3 tokens), with optional trailing emojis/whitespace.
   // Examples matched:
   //   "...next grind! — Jordan Love"        -> "...next grind!"
-  //   "Built different. -- Mike Smith 🔥"  -> "Built different. 🔥"
+  //   "Built different. -- Mike Smith 🔥"   -> "Built different."
   // Examples NOT matched (mid-sentence dashes):
-  //   "Tough night — but we'll bounce back" (no name follows the dash at end)
-  const trailingEmojis = '(?:[\s\p{Extended_Pictographic}\p{Emoji_Presentation}]*)';
-  const re = new RegExp(`\s*[—-]{1,2}\s+[A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}${trailingEmojis}\s*$`, 'u');
+  //   "Tough night — but we'll bounce back" (lowercase word after dash, not a name)
+  //
+  // IMPORTANT: this MUST be a regex literal, not `new RegExp(\`...\`)`. In a
+  // template string every "\s" / "\p{...}" collapses to a bare "s" / "p{...}"
+  // (invalid-escape rule), which silently produced a regex that matched nothing
+  // — that's the bug that let sign-offs leak back into player posts (2026-10-01).
+  const re = /\s*[—-]{1,2}\s+[A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}[\s\p{Extended_Pictographic}\p{Emoji_Presentation}]*$/u;
   return text.replace(re, '').trim();
 }
 
@@ -361,7 +387,7 @@ async function generateTopicsNonStreaming(
       const result = await model.generateContent({
         systemInstruction: systemPrompt,
         contents: [{ role: 'user', parts: [{ text: userContent }] }],
-        generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+        generationConfig: GEMINI_GEN_CONFIG,
       });
       raw = result.response.text();
     } catch (geminiErr) {
@@ -377,7 +403,7 @@ async function generateTopicsNonStreaming(
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
-        max_tokens: 3000,
+        max_tokens: 8000,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
@@ -432,6 +458,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
     }
 
+    // Premium only — checked before the cache so free users can't read paid output.
+    const denied = await requirePremium('AI Spotlight commentary');
+    if (denied) return denied;
+
     const url = new URL(request.url);
     const wantStream = url.searchParams.get('stream') === '1';
     const { teamData, narrative = 'weekly' } = await request.json();
@@ -469,7 +499,7 @@ export async function POST(request: Request) {
             const result = await model.generateContentStream({
               systemInstruction: systemPrompt,
               contents: [{ role: 'user', parts: [{ text: userContent }] }],
-              generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+              generationConfig: GEMINI_GEN_CONFIG,
             });
             const parser = new TopicStreamParser();
             for await (const chunk of result.stream) {
@@ -494,7 +524,7 @@ export async function POST(request: Request) {
             const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
             const stream = await openai.chat.completions.create({
               model: 'gpt-4o-mini',
-              max_tokens: 3000,
+              max_tokens: 8000,
               stream: true,
               response_format: { type: 'json_object' },
               messages: [
@@ -516,6 +546,19 @@ export async function POST(request: Request) {
             const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr);
             streamErrors.openai = msg;
             console.warn('Spotlight stream: GPT-4o-mini also failed:', msg);
+          }
+        }
+
+        // 2b) Truncated stream (e.g. token cap hit mid-JSON): the opener
+        // arrived but the rest didn't. Top up from the buffered path, skipping
+        // the topics already shown.
+        if (collected.length > 0 && collected.length < MIN_COMPLETE_TOPICS) {
+          console.warn(`Spotlight stream: only ${collected.length} topic(s) streamed — topping up from non-streaming`);
+          const fb = await generateTopicsNonStreaming(systemPrompt, userContent);
+          for (const topic of (fb.topics ?? []).slice(collected.length)) {
+            const scrubbed = scrubTopicSignoffs(topic);
+            collected.push(scrubbed);
+            emit({ type: 'topic', data: scrubbed });
           }
         }
 
@@ -551,7 +594,9 @@ export async function POST(request: Request) {
           return;
         }
         emit({ type: 'done' });
-        // Cache the full result so subsequent (streaming or not) calls return instantly.
+        // Cache the full result so subsequent (streaming or not) calls return
+        // instantly — but never cache a cut-off show, or it sticks for 7 days.
+        if (collected.length < MIN_COMPLETE_TOPICS) return;
         try {
           await setCache(key, collected);
         } catch (cacheErr) {
@@ -572,9 +617,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Cache the result persistently
+    // Cache the result persistently (complete shows only)
     const scrubbedTopics = topics.map(scrubTopicSignoffs);
-    await setCache(key, scrubbedTopics);
+    if (scrubbedTopics.length >= MIN_COMPLETE_TOPICS) await setCache(key, scrubbedTopics);
 
     return NextResponse.json({ topics: scrubbedTopics });
   } catch (err) {

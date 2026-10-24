@@ -4,6 +4,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Button } from '@/components/ui/Button';
 import { ProspectCard } from '@/components/draft/ProspectCard';
 import { currentSlot, recommendedProspectId } from '@/lib/draft';
+import { scoutSaveSeed } from '@/lib/scouting';
 import { positionNeeds, needBonus } from '@/lib/draft/needs';
 import { getContrastText } from '@/lib/ui/ratingColor';
 import type { DraftState } from '@/lib/draft';
@@ -76,7 +77,7 @@ export function OnTheClockSection({
 
   const card = (label: string, subtitle: string | undefined, p: BasketballPlayer, color: string) => (
     <ProspectCard
-      label={label} subtitle={subtitle} prospect={p} draft={draft} teamColor={color}
+      label={label} subtitle={subtitle} prospect={p} draft={draft} saveSeed={scoutSaveSeed(league)} teamColor={color}
       projRank={projRank.get(p.id) ?? board.length} posRank={posRank.get(p.id) ?? 0}
       canDraft={userOnClock} onOpen={() => onSelectProspect(p.id)} onDraft={() => onDraftProspect(p.id)}
     />

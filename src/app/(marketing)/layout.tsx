@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 const NAV_ITEMS = [
+  { label: 'NFL Playoff Odds', href: '/predictions' },
   { label: 'Blog', href: '/blog' },
   { label: 'vs Competitors', href: '/vs/football-gm' },
   { label: 'Best Of', href: '/best/football-gm-games' },
@@ -27,6 +28,8 @@ const FOOTER_COLS = [
   {
     title: 'Learn',
     links: [
+      { label: 'NFL Playoff Odds', href: '/predictions' },
+      { label: '2026 Team Rosters', href: '/rosters/2026' },
       { label: 'Blog', href: '/blog' },
       { label: 'Draft Strategy Guide', href: '/blog/draft-strategy-guide' },
       { label: 'Salary Cap Tips', href: '/blog/salary-cap-management-tips' },
@@ -40,6 +43,15 @@ const FOOTER_COLS = [
       { label: 'Madden Alternative', href: '/alternatives/madden-franchise-mode' },
       { label: 'For Draft Fans', href: '/for/nfl-draft-fans' },
       { label: 'For Fantasy Players', href: '/for/fantasy-football-players' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'About', href: '/about' },
+      { label: 'Contact', href: '/contact' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
     ],
   },
 ];
@@ -84,7 +96,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white mt-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
             {FOOTER_COLS.map(col => (
               <div key={col.title}>
                 <h3 className="text-sm font-bold text-gray-900 mb-3">{col.title}</h3>

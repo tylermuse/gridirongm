@@ -1,21 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
 type AdSize = 'banner' | 'leaderboard' | 'rectangle' | 'sidebar';
 
 interface AdSlotProps {
-  /** Pre-defined sizes. Real provider integration lives behind these. */
   size?: AdSize;
-  /**
-   * AdSense ad-unit slot ID for THIS placement. When NEXT_PUBLIC_ADSENSE_CLIENT_ID
-   * is set, this is required for the slot to render real ads.
-   * (Without it the slot stays in placeholder mode.)
-   */
   slotId?: string;
-  /** Optional className applied to the outer wrapper. */
   className?: string;
 }
 
@@ -28,7 +21,13 @@ const SIZES: Record<AdSize, { width: string; height: string; label: string }> = 
 
 const ADSENSE_CLIENT_ID = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
 
-// Minimal type extension so we can call window.adsbygoogle.push without `any`.
+// How long to wait for AdSense to fill a slot before falling back to the
+// upgrade prompt. AdSense collapses unfilled <ins> elements to height 0;
+// the ResizeObserver catches that immediately, but the timeout covers cases
+// where the observer fires late or not at all (e.g. during AdSense account
+// approval / no inventory for this slot).
+const FILL_TIMEOUT_MS = 2000;
+
 declare global {
   interface Window {
     adsbygoogle?: Array<Record<string, unknown>>;
@@ -38,79 +37,93 @@ declare global {
 /**
  * Free-tier ad placement. Renders nothing for Premium / Founder / Admin users.
  *
- * Provider: Google AdSense. To activate real ads:
- *   1. Get your AdSense publisher ID (`ca-pub-XXXXXXXXXXXXXXXX`).
- *   2. Set `NEXT_PUBLIC_ADSENSE_CLIENT_ID` in Vercel env vars.
- *   3. Make sure the AdSense script is loaded once globally — see
- *      src/app/layout.tsx (it's wired via next/script).
- *   4. For each AdSlot placement in the codebase, create a corresponding
- *      ad unit in AdSense and pass its slot ID here as `slotId`.
- *
- * When `NEXT_PUBLIC_ADSENSE_CLIENT_ID` is unset, the slot renders a
- * placeholder block so layouts stay correct during development and during
- * the AdSense approval window.
+ * Falls back to the upgrade prompt when AdSense hasn't filled the slot
+ * (pending account approval, no inventory) so the space is never blank.
  */
 export function AdSlot({ size = 'leaderboard', slotId, className }: AdSlotProps) {
   const { hasFeature, loading } = useSubscription();
   const insRef = useRef<HTMLModElement | null>(null);
+  const [adFilled, setAdFilled] = useState(false);
 
-  // Push to AdSense queue once the ins element is mounted. Re-runs if size
-  // or slotId changes (uncommon, but defensive).
   useEffect(() => {
     if (!ADSENSE_CLIENT_ID || !slotId || !insRef.current) return;
+
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch (err) {
       console.error('[AdSlot] adsbygoogle push failed:', err);
     }
+
+    const el = insRef.current;
+    let filled = false;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.height > 0) {
+          filled = true;
+          setAdFilled(true);
+        }
+      }
+    });
+    observer.observe(el);
+
+    const timeout = setTimeout(() => {
+      if (!filled) setAdFilled(false);
+    }, FILL_TIMEOUT_MS);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timeout);
+    };
   }, [size, slotId]);
 
-  // Don't flash an ad on initial load while subscription state resolves.
   if (loading) return null;
-  // Premium / Founder / Admin → no ads.
   if (hasFeature('ad_free')) return null;
 
   const dims = SIZES[size];
 
-  // Real AdSense ad unit (when fully configured).
   if (ADSENSE_CLIENT_ID && slotId) {
     return (
-      <div
-        data-ad-slot={slotId}
-        className={`mx-auto my-4 ${className ?? ''}`}
-        style={{ width: dims.width, maxWidth: '100%' }}
-      >
+      <div className={`mx-auto my-4 ${className ?? ''}`} style={{ width: dims.width, maxWidth: '100%' }}>
+        {/* The <ins> is always rendered so AdSense can request a fill.
+            It is hidden behind the visible slot until fill is confirmed. */}
         <ins
           ref={insRef}
           className="adsbygoogle"
-          style={{ display: 'block', width: dims.width, height: dims.height, maxWidth: '100%' }}
+          style={{
+            display: 'block',
+            width: dims.width,
+            height: adFilled ? dims.height : '0px',
+            maxWidth: '100%',
+            overflow: 'hidden',
+          }}
           data-ad-client={ADSENSE_CLIENT_ID}
           data-ad-slot={slotId}
           data-ad-format="auto"
           data-full-width-responsive="true"
         />
+        {/* Upgrade prompt shown until AdSense confirms a fill. */}
+        {!adFilled && <UpgradePromptInner dims={dims} />}
       </div>
     );
   }
 
-  // No AdSense client ID yet (or no slot ID for this placement).
-  //
-  // This used to render a grey dashed box reading "Ad Slot · 728×90" — internal
-  // scaffolding that was shipping to every free user on three pages. Instead we
-  // use the reserved space for an actual upgrade prompt: same footprint, so
-  // layouts stay correct and swapping in real ads later shifts nothing, but the
-  // slot now does something useful while AdSense is unconfigured.
   return (
     <div
       data-ad-slot={slotId ?? size}
-      className={`mx-auto my-4 flex items-center justify-center gap-4 px-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 ${
-        className ?? ''
-      }`}
-      style={{
-        width: dims.width,
-        maxWidth: '100%',
-        height: dims.height,
-      }}
+      className={`mx-auto my-4 flex items-center justify-center gap-4 px-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 ${className ?? ''}`}
+      style={{ width: dims.width, maxWidth: '100%', height: dims.height }}
+    >
+      <UpgradePromptInner dims={dims} />
+    </div>
+  );
+}
+
+function UpgradePromptInner({ dims }: { dims: { width: string; height: string; label: string } }) {
+  return (
+    <div
+      className="flex items-center justify-center gap-4 px-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50"
+      style={{ width: '100%', height: dims.height }}
     >
       <div className="min-w-0 text-left">
         <div className="text-sm font-bold text-[var(--text,#111827)] truncate">

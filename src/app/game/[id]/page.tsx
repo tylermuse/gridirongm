@@ -1,7 +1,8 @@
 'use client';
 
-import { use, useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { use, useRef, useEffect, useState, useCallback, useMemo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
@@ -12,11 +13,52 @@ import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetr
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
+import { LiveSim3D, useSim3DMode, readSim3DPref } from '@/components/game/LiveSim3D';
+import { clockSeconds } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
+import { buildMatchupMetrics, rankForMetric } from '@/lib/engine/matchupRanks';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
-import type { Player, Position, GameResult } from '@/types';
+import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
+import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
+import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { trackEvent } from '@bs/core/analytics/track';
+import type { Player, Position, GameResult, Team, PlayerStats } from '@/types';
+
+/** Merge two player-stat maps by summing numeric fields. Used to combine the
+ *  pre-pivot bucket stats (plays the pre-sim ran before the user took over)
+ *  with the live engine's own stats (plays the user coached after the pivot).
+ *  The two sources cover disjoint plays, so summation is additive.
+ *  gamesPlayed is pinned to 1 rather than summed. */
+function mergePlayerStats(
+  base: Record<string, Partial<PlayerStats>>,
+  extra: Record<string, Partial<PlayerStats>>,
+): Record<string, Partial<PlayerStats>> {
+  const out: Record<string, Partial<PlayerStats>> = {};
+  for (const [pid, st] of Object.entries(base)) out[pid] = { ...st };
+  for (const [pid, st] of Object.entries(extra)) {
+    const cur = (out[pid] ? { ...out[pid] } : {}) as Record<string, number>;
+    for (const key in st) {
+      const v = (st as Record<string, number>)[key];
+      if (typeof v !== 'number') continue;
+      cur[key] = key === 'gamesPlayed' ? 1 : (cur[key] ?? 0) + v;
+    }
+    cur.gamesPlayed = 1;
+    out[pid] = cur as Partial<PlayerStats>;
+  }
+  return out;
+}
+
+// Audio play-by-play broadcast. In prod it's a Premium feature (gated on tier
+// below + server-side in /api/game-audio). This env flag is only a local-dev
+// override so it can be tested on localhost without a premium account.
+const GAME_AUDIO_DEV_OVERRIDE = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
+/** 3D live sim free for everyone (launch window from 2026-10-23; decide with /admin/analytics → 3D Sim cohorts around 2026-11-06). */
+const SIM3D_FREE_FOR_ALL = true;
+/** A 50ms silent MP3: played inside the tap to unlock audio on phones. */
+const HALFTIME_UNLOCK_AUDIO = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwwAAAAAAAAAAAAEluZm8AAAAPAAAABAAAAlgAenp6enp6enp6enp6enp6enp6enp6enp6pqampqampqampqampqampqampqampqamptPT09PT09PT09PT09PT09PT09PT09PT09P/////////////////////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQCcQAAAAAAAAJY+/rsqgAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -40,6 +82,92 @@ function clamp(val: number, min: number, max: number) {
   return Math.max(min, Math.min(max, val));
 }
 
+// ---------------------------------------------------------------------------
+// Fatigue-based auto-subs (display-only overlay — closes the gojostyttt
+// live-game bundle). Derives each offensive skill starter's snap/usage load
+// from the cumulative per-play stat bucket already carried on every PlayEvent,
+// converts it to an effective energy (stamina minus usage scaled by position),
+// and — when Auto-subs is ON — rotates in the next depth-chart player once a
+// starter gasses out. Purely presentational: no sim-engine change, no
+// playerStats mutation, no SAVE_VERSION bump.
+// ---------------------------------------------------------------------------
+
+// How fast each skill position drains per unit of usage (carry / target /
+// dropback). RBs take the most punishment, so they gas out first.
+const FATIGUE_RATE: Partial<Record<Position, number>> = {
+  RB: 4.0,
+  WR: 2.4,
+  TE: 2.4,
+  QB: 0.4,
+};
+
+// Skill slots shown on the field, in display order, with how many start.
+const FATIGUE_SLOTS: { pos: Position; starters: number }[] = [
+  { pos: 'QB', starters: 1 },
+  { pos: 'RB', starters: 1 },
+  { pos: 'WR', starters: 2 },
+  { pos: 'TE', starters: 1 },
+];
+
+// Below this effective energy a gassed starter is pulled for the next man up.
+const FATIGUE_SUB_THRESHOLD = 40;
+
+interface FieldSlot {
+  pos: Position;
+  active: Player;
+  resting: Player | null;   // the gassed starter, when a sub is on the field
+  energy: number;           // 0-99 effective energy of the ACTIVE player
+  subbed: boolean;
+}
+
+// Effective energy of a player given their accumulated usage this game.
+function fatigueEnergy(p: Player, load: number): number {
+  const rate = FATIGUE_RATE[p.position] ?? 1.5;
+  return clamp(Math.round((p.ratings?.stamina ?? 70) - load * rate), 0, 99);
+}
+
+// Build the current on-field skill lineup for the possessing offense, applying
+// auto-subs when enabled. `sidePlayers` is expected in depth-chart order.
+function computeFatigueLineup(
+  event: PlayEvent | null,
+  homePlayers: Player[],
+  awayPlayers: Player[],
+  autoSubsOn: boolean,
+): FieldSlot[] {
+  if (!event) return [];
+  const bucket = event.possession === 'home' ? event.homeBucketSnap : event.awayBucketSnap;
+  const sidePlayers = event.possession === 'home' ? homePlayers : awayPlayers;
+  // Usage (a proxy for snaps) per player id, from the cumulative bucket snapshot.
+  const usage: Record<string, number> = {};
+  if (bucket) {
+    for (const [pid, r] of Object.entries(bucket.perRusher)) usage[pid] = (usage[pid] ?? 0) + r.attempts;
+    for (const [pid, rc] of Object.entries(bucket.perReceiver)) usage[pid] = (usage[pid] ?? 0) + rc.targets;
+  }
+  const slots: FieldSlot[] = [];
+  for (const { pos, starters } of FATIGUE_SLOTS) {
+    const depth = sidePlayers.filter(p => p.position === pos);
+    for (let i = 0; i < starters; i++) {
+      const starter = depth[i];
+      if (!starter) continue;
+      const starterEnergy = fatigueEnergy(starter, usage[starter.id] ?? 0);
+      // The QB never rotates on fatigue; only skill runners/receivers do.
+      const backup = pos === 'QB' ? undefined : depth[starters + i];
+      if (autoSubsOn && backup && starterEnergy < FATIGUE_SUB_THRESHOLD) {
+        slots.push({
+          pos,
+          active: backup,
+          resting: starter,
+          energy: fatigueEnergy(backup, usage[backup.id] ?? 0),
+          subbed: true,
+        });
+      } else {
+        slots.push({ pos, active: starter, resting: null, energy: starterEnergy, subbed: false });
+      }
+    }
+  }
+  return slots;
+}
+
 function isSeparator(type: PlayEvent['type']): boolean {
   return ['quarter_end', 'halftime', 'two_minute_warning', 'overtime', 'final', 'timeout'].includes(type);
 }
@@ -48,6 +176,22 @@ function downLabel(down: number, yardsToGo: number): string {
   if (down < 1 || down > 4) return '';
   const ordinals = ['1st', '2nd', '3rd', '4th'];
   return `${ordinals[down - 1]} & ${yardsToGo <= 0 ? 'Goal' : yardsToGo}`;
+}
+
+/** Line of scrimmage as an NFL-style spot, e.g. "SF 35", "50", "KC 12".
+ *  fieldPos = yards from the possessing team's own end zone. */
+function ballOnLabel(
+  fieldPos: number | undefined,
+  possession: 'home' | 'away',
+  homeAbbr: string,
+  awayAbbr: string,
+): string {
+  if (fieldPos == null || !Number.isFinite(fieldPos)) return '';
+  const fp = Math.round(fieldPos);
+  if (fp === 50) return '50';
+  const offAbbr = possession === 'home' ? homeAbbr : awayAbbr;
+  const defAbbr = possession === 'home' ? awayAbbr : homeAbbr;
+  return fp < 50 ? `${offAbbr} ${fp}` : `${defAbbr} ${100 - fp}`;
 }
 
 
@@ -431,6 +575,80 @@ function WinProbabilityChart({
 }
 
 // ---------------------------------------------------------------------------
+// Pre-matchup team stat rankings (read-only; reuses standings/stats aggregates)
+// ---------------------------------------------------------------------------
+function ordinalRank(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
+/**
+ * Compact pre-game card showing where both teams rank league-wide in four key
+ * categories: points/game, passing yards/game, rushing yards/game, and points
+ * allowed/game. Read-only: it reuses the exact aggregates from the Standings page
+ * (record.pointsFor / record.pointsAgainst) and the Stats page (team passing +
+ * rushing yards per game), so ranks match those pages exactly. No engine changes.
+ */
+function MatchupRankings({ homeTeam, awayTeam, teams, players }: {
+  homeTeam: Team;
+  awayTeam: Team;
+  teams: Team[];
+  players: Player[];
+}) {
+  const anyGames = teams.some(t => t.record.wins + t.record.losses + t.record.ties > 0);
+  if (!anyGames) return null;
+
+  // Four ranked pre-matchup categories (PPG, Pass Y/G, Rush Y/G, Pts Allowed/G),
+  // computed from the same aggregates as the Standings + Stats pages. See
+  // buildMatchupMetrics for the math; kept in a shared util so it's unit-tested.
+  const metrics = buildMatchupMetrics(players);
+  const rankOf = (t: Team, m: (typeof metrics)[number]) => rankForMetric(t, m, teams);
+
+  const rankColor = (rank: number) => {
+    const third = teams.length / 3;
+    if (rank <= third) return 'text-green-600';
+    if (rank > teams.length - third) return 'text-red-500';
+    return 'text-[var(--text)]';
+  };
+
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)] text-center mb-2">
+        League Ranks
+      </div>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-1">
+        <div className="text-xs font-bold text-[var(--text)] text-left truncate">{awayTeam.abbreviation}</div>
+        <div />
+        <div className="text-xs font-bold text-[var(--text)] text-right truncate">{homeTeam.abbreviation}</div>
+        {metrics.map(m => {
+          const ar = rankOf(awayTeam, m);
+          const hr = rankOf(homeTeam, m);
+          return (
+            <Fragment key={m.key}>
+              <div className="flex items-baseline justify-start gap-1.5 text-xs">
+                <span className={`tabular-nums font-bold ${rankColor(ar)}`}>{ordinalRank(ar)}</span>
+                <span className="tabular-nums text-[var(--text-sec)]">{m.fmt(m.value(awayTeam))}</span>
+              </div>
+              <div className="text-[10px] text-[var(--text-sec)] whitespace-nowrap text-center px-1">{m.label}</div>
+              <div className="flex items-baseline justify-end gap-1.5 text-xs">
+                <span className="tabular-nums text-[var(--text-sec)]">{m.fmt(m.value(homeTeam))}</span>
+                <span className={`tabular-nums font-bold ${rankColor(hr)}`}>{ordinalRank(hr)}</span>
+              </div>
+            </Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
 
@@ -440,6 +658,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   const {
     schedule, teams, players, phase, userTeamId, commitLiveGame, playoffBracket, season,
+    initLiveScoreboard, liveScoreboard,
   } = useGameStore();
 
   // Try schedule first, then check playoff bracket for unplayed matchups
@@ -454,6 +673,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     };
   }
   const isPlayoffGame = !!playoffMatchup || !!playoffBracket?.find(m => m.id === id);
+
+  // Around-the-League scoreboard: pre-sim the week's other games once on mount
+  // (regular season only) so their scores can progress alongside the user's
+  // live game + surface at halftime. Idempotent per week in the store.
+  useEffect(() => {
+    if (phase === 'regular' && !isPlayoffGame) initLiveScoreboard(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, phase, isPlayoffGame]);
   const homeTeam = game ? teams.find(t => t.id === game.homeTeamId) ?? null : null;
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
   const homePlayers = useMemo(() => {
@@ -489,12 +716,43 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     : game.awayTeamId === userTeamId ? 'away'
     : null;
 
-  // Game plan modal state — only relevant when the user is in this game
-  const [gamePlanReady, setGamePlanReady] = useState(!userInGame);
+  // Pregame Show open state (declared early: every playback loop below is
+  // held while it's up, so nothing sims behind the modal before Kick Off).
+  const pregameSeenKey = `bsfb-pregame-seen-${id}`;
+  const PREGAME_AUTO_OFF_KEY = 'bsfb-pregame-auto-off';
+  const [pregameOpen, setPregameOpen] = useState(userInGame && !!game && !game.played);
+  const [pregameAutoOff, setPregameAutoOff] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const autoOff = window.localStorage.getItem(PREGAME_AUTO_OFF_KEY) === '1';
+      setPregameAutoOff(autoOff);
+      if (autoOff || window.sessionStorage.getItem(pregameSeenKey)) setPregameOpen(false);
+    } catch { /* storage unavailable — keep default */ }
+  }, [pregameSeenKey]);
+
+  // Game plan is no longer a gate before the live sim — the sim starts
+  // immediately (default plan) and the user opens the Game Plan modal from the
+  // in-sim button if they want to adjust. Kept as always-true so the sim-init
+  // guard below still reads cleanly.
+  const [gamePlanReady, setGamePlanReady] = useState(true);
   const [livePlan, setLivePlan] = useState<LiveGamePlan | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
   // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
   const [showMidGamePlan, setShowMidGamePlan] = useState(false);
+  const [showHalftimeReport, setShowHalftimeReport] = useState(false);
+  // Whether closing the Halftime Report should resume playback (true when it
+  // auto-opened mid-game or was opened while the game was playing).
+  const resumeAfterHalftimeRef = useRef(false);
+  // Premium spoken halftime breakdown (Marcus + Tony).
+  const [htAudio, setHtAudio] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
+  const htAudioRef = useRef<HTMLAudioElement | null>(null);
+  // The rendered breakdown for this game's half (object URL): replays are
+  // instant and never regenerate.
+  const htUrlRef = useRef<string | null>(null);
+  // False once the report is closed, so a breakdown that finishes rendering
+  // after the user left doesn't start talking.
+  const htWantedRef = useRef(false);
 
   // Persist the confirmed game plan across a mobile back-nav remount. Without it,
   // gamePlanReady + livePlan (ephemeral React state) reset to the modal's defaults
@@ -560,11 +818,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [revealedCount, setRevealedCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [speed, setSpeed] = useState<Speed>('1x');
+  // Fatigue-based auto-subs — display-only mid-game rotation. Default ON.
+  const [autoSubsOn, setAutoSubsOn] = useState(true);
   const [committed, setCommitted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('gamecast');
   // Live Coach mode — when on, the playback pauses before each user offensive
   // snap and shows the play call menu. Toggleable at any time during the game.
-  const [liveCoachOn, setLiveCoachOn] = useState(false);
+  // Defaults ON only for games the user is actively managing (userTeamSide set);
+  // spectator / sim-past-weeks games start OFF so they simulate without pausing.
+  const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null);
   const [liveCoachPaused, setLiveCoachPaused] = useState(false);
   // Live Coach engine — generates events one-at-a-time after takeover
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
@@ -580,6 +842,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // field animation has finished. ScoreBug shows previous event's numbers
   // until this becomes true.
   const [animationComplete, setAnimationComplete] = useState(true);
+  // 3D live sim: while a play is animating in the sim the page holds its advance (same idea as the broadcast gate)
+  const [sim3dPref, setSim3dOn] = useSim3DMode();   // the browser's saved choice; sim3dOn (below) also requires Premium
+  const [sim3dActive, setSim3dActive] = useState(false);
 
   // Combined event stream — use pre-computed events up to the pivot,
   // then engine-generated events after Live Coach took over.
@@ -597,8 +862,335 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const currentEvent = allEvents[revealedCount - 1] ?? null;
   const previousEvent = revealedCount >= 2 ? (allEvents[revealedCount - 2] ?? null) : null;
   const revealedEvents = allEvents.slice(0, revealedCount);
-  const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
+
+  // Seed and activate the live-coach engine, pivoting from the pre-computed
+  // sim at the most recently revealed event. Idempotent (no-op once the
+  // engine exists). Previously this logic lived only inline in the toggle
+  // button's onClick, so it only ever ran on a manual OFF→ON click — when
+  // PR #400 made liveCoachOn default to true, the toggle rendered green
+  // but the engine was never created, so the play-call modal (gated on
+  // liveEngineRef.current) never rendered and the pre-computed sim kept
+  // auto-picking every play.
+  // Live Coach telemetry — one record per game-page mount. Answers "do people
+  // actually call plays, and how many before they bail?" Events:
+  //   live_coach_started        engine created (trigger: default | toggle)
+  //   live_coach_play_called    one per user snap decision
+  //   live_coach_auto_sim       "Auto-sim rest" from the play-call menu
+  //   live_coach_off / _on      toggled from the menu or toolbar
+  //   live_coach_game_finished  game reached final with Live Coach having been used
+  // A started game with no _finished row = the user left mid-game.
+  const lcTelemetryRef = useRef({
+    started: false,
+    finishedSent: false,
+    playsCalled: 0,
+    quartersSkipped: 0,
+    endedBy: null as null | 'auto_sim' | 'off' | 'end_game',
+  });
+  const trackLiveCoach = useCallback((event: string, extra?: Record<string, unknown>) => {
+    const es = liveEngineRef.current?.getState();
+    const userScore = es ? (userTeamSide === 'away' ? es.awayScore : es.homeScore) : null;
+    const oppScore = es ? (userTeamSide === 'away' ? es.homeScore : es.awayScore) : null;
+    trackEvent(event, {
+      game_id: id,
+      playoff: isPlayoffGame,
+      plays_called: lcTelemetryRef.current.playsCalled,
+      quarter: es ? (es.overtime && es.quarter < 5 ? 5 : es.quarter) : null,
+      score_diff: userScore !== null && oppScore !== null ? userScore - oppScore : null,
+      ...extra,
+    });
+  }, [id, isPlayoffGame, userTeamSide]);
+  const trackPlayCall = useCallback((playCall: PlayCallType) => {
+    const es = liveEngineRef.current?.getState();
+    lcTelemetryRef.current.playsCalled += 1;
+    trackLiveCoach('live_coach_play_called', {
+      play: playCall,
+      down: es?.down ?? null,
+      distance: es?.yardsToGo ?? null,
+      field_pos: es?.fieldPos ?? null,
+    });
+  }, [trackLiveCoach]);
+
+  const activateLiveEngine = useCallback((trigger: 'default' | 'toggle') => {
+    if (liveEngineRef.current !== null || !homeTeam || !awayTeam) return;
+    const seedEvent = allEvents[revealedCount - 1] ?? allEvents[0];
+    if (!seedEvent) return;
+    liveEngineRef.current = createLiveCoachEngine(
+      homeTeam, awayTeam, homePlayers, awayPlayers,
+      {
+        quarter: seedEvent.quarter,
+        timeSecs: parseInt(seedEvent.timeStr.split(':')[0], 10) * 60 + parseInt(seedEvent.timeStr.split(':')[1] ?? '0', 10),
+        possession: seedEvent.possession,
+        fieldPos: seedEvent.fieldPos,
+        down: Math.max(1, seedEvent.down),
+        yardsToGo: Math.max(1, seedEvent.yardsToGo),
+        homeScore: seedEvent.homeScore,
+        awayScore: seedEvent.awayScore,
+        isGameOver: false,
+        twoMinWarningQ2Fired: seedEvent.quarter > 2 || (seedEvent.quarter === 2 && seedEvent.timeStr <= '2:00'),
+        twoMinWarningQ4Fired: seedEvent.quarter > 4 || (seedEvent.quarter === 4 && seedEvent.timeStr <= '2:00'),
+        overtime: seedEvent.quarter > 4,
+        awaitingXpChoice: false,
+        awaitingKickoffChoice: false,
+        homeTimeouts: 3,
+        awayTimeouts: 3,
+      },
+      userTeamSide ?? 'home',
+      isPlayoffGame,
+    );
+    // Pivot right AFTER the seed event so the kept pre-sim slice always
+    // includes it. When this runs at kickoff (revealedCount 0) the auto-start
+    // reveals event 1 in the same commit; pivoting at 0 left revealedCount one
+    // past the end of the event list, so currentEvent was undefined and the
+    // field/clock sat frozen for the opening plays until something resynced.
+    setLiveEnginePivotIdx(Math.max(1, revealedCount));
+    setLiveExtraEvents([]);
+    if (!lcTelemetryRef.current.started) {
+      lcTelemetryRef.current.started = true;
+      trackLiveCoach('live_coach_started', { trigger });
+    }
+  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide, isPlayoffGame, trackLiveCoach]);
+
+  // Auto-activate as soon as the game is ready when Live Coach defaults ON
+  // (managed games) — mirrors what a manual toggle-click already did, so a
+  // default-on toggle actually gates play selection instead of just
+  // showing green.
+  useEffect(() => {
+    if (pregameOpen) return; // hold until Kick Off
+    if (liveCoachOn && userTeamSide !== null && liveEngineRef.current === null && totalEvents > 0) {
+      activateLiveEngine('default');
+    }
+  }, [liveCoachOn, userTeamSide, totalEvents, activateLiveEngine, pregameOpen]);
+
+  // Close out the Live Coach record once the game reaches its final.
+  useEffect(() => {
+    const t = lcTelemetryRef.current;
+    if (!isFinished || !t.started || t.finishedSent) return;
+    t.finishedSent = true;
+    trackLiveCoach('live_coach_game_finished', {
+      ended_by: t.endedBy ?? 'played',
+      quarters_skipped: t.quartersSkipped,
+    });
+  }, [isFinished, trackLiveCoach]);
+
+  // Halftime Report (feature #9): a user-opened breakdown of the first half —
+  // leaders + a Cole/Blaze take. Available once playback passes the halftime
+  // whistle. The halftime PlayEvent carries the cumulative first-half stat
+  // snapshot (addEvent attaches it), so we read straight from it.
+  const halftimeEventIdx = useMemo(() => allEvents.findIndex(e => e.type === 'halftime'), [allEvents]);
+  const halftimeReached = halftimeEventIdx >= 0 && revealedCount > halftimeEventIdx;
+  // First-half player stats. Pre-computed halftime events carry bucket
+  // snapshots; when Live Coach took over before the half, the engine's halftime
+  // event instead carries its own stats, merged onto the pre-pivot stats the
+  // same way buildFinalGameResult builds the final box score.
+  const halftimeStatsFor = useCallback((ev: PlayEvent): Record<string, Partial<PlayerStats>> => {
+    if (!ev.engineStatsSnap) return livePlayerStatsAtEvent(ev, homePlayers, awayPlayers);
+    const pre = liveResult?.events ?? [];
+    const lastBucketEvent = liveEnginePivotIdx !== null && liveEnginePivotIdx > 0 ? pre[liveEnginePivotIdx - 1] : undefined;
+    const preStats = lastBucketEvent ? livePlayerStatsAtEvent(lastBucketEvent, homePlayers, awayPlayers) : {};
+    return mergePlayerStats(preStats, ev.engineStatsSnap);
+  }, [homePlayers, awayPlayers, liveResult, liveEnginePivotIdx]);
+  const halftimeBreakdown = useMemo(() => {
+    if (!halftimeReached || !homeTeam || !awayTeam) return null;
+    const ev = allEvents[halftimeEventIdx];
+    if (!ev) return null;
+    const stats = halftimeStatsFor(ev);
+    return generateHalftimeBreakdown({
+      homeTeam, awayTeam,
+      homeScore: ev.homeScore, awayScore: ev.awayScore,
+      stats, players: [...homePlayers, ...awayPlayers],
+    });
+  }, [halftimeReached, halftimeEventIdx, allEvents, homeTeam, awayTeam, homePlayers, awayPlayers, halftimeStatsFor]);
+
+  // Auto-open the Halftime Report the moment playback crosses the half (once),
+  // and pause so the user can read/listen instead of having to hunt for the
+  // button. Only fires on the live transition — not when loading a game that's
+  // already past halftime.
+  // Skipped when the crossing lands on a finished game (End Game / max speed
+  // jump straight past the half) — the report would just sit on top of the
+  // final score. The Halftime Report button still opens it on demand.
+  const prevHalftimeReachedRef = useRef(halftimeReached);
+  useEffect(() => {
+    if (halftimeReached && !prevHalftimeReachedRef.current && !isFinished) {
+      resumeAfterHalftimeRef.current = true;
+      setShowHalftimeReport(true);
+      setIsPlaying(false);
+    }
+    prevHalftimeReachedRef.current = halftimeReached;
+  }, [halftimeReached, isFinished]);
+
+  // Premium: generate + play the in-depth spoken halftime breakdown.
+  // Phones only let audio start inside the tap itself; the old version started
+  // it after the (slow) generation request, so the first tap or two were
+  // silently blocked. Now the tap starts (unlocks) the audio element right
+  // away with a tiny silent clip, and the same element plays the breakdown
+  // when it arrives.
+  const playHalftimeAudio = useCallback(async () => {
+    const audio = htAudioRef.current ?? (htAudioRef.current = new Audio());
+    if (htAudio === 'playing') { audio.pause(); setHtAudio('idle'); return; }
+    if (htAudio === 'loading') return;
+    htWantedRef.current = true;
+    if (htUrlRef.current) {
+      audio.src = htUrlRef.current;
+      audio.currentTime = 0;
+      audio.play().then(() => setHtAudio('playing')).catch(() => setHtAudio('error'));
+      return;
+    }
+    audio.src = HALFTIME_UNLOCK_AUDIO;
+    audio.play().catch(() => { /* unlock only */ });
+    const ev = allEvents[halftimeEventIdx];
+    if (!ev || !homeTeam || !awayTeam) return;
+    setHtAudio('loading');
+    try {
+      const stats = halftimeStatsFor(ev);
+      const lines = generateHalftimeAudioBreakdown({
+        homeTeam, awayTeam,
+        homeScore: ev.homeScore, awayScore: ev.awayScore,
+        stats, players: [...homePlayers, ...awayPlayers],
+      });
+      const res = await fetch('/api/halftime-audio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lines }),
+      });
+      if (!res.ok) { setHtAudio('error'); return; }
+      const url = URL.createObjectURL(await res.blob());
+      htUrlRef.current = url;
+      audio.onended = () => setHtAudio('idle');
+      if (!htWantedRef.current) { setHtAudio('idle'); return; }
+      audio.src = url;
+      await audio.play();
+      setHtAudio('playing');
+    } catch { setHtAudio('error'); }
+  }, [htAudio, allEvents, halftimeEventIdx, homeTeam, awayTeam, homePlayers, awayPlayers, halftimeStatsFor]);
+  useEffect(() => () => {
+    htAudioRef.current?.pause();
+    if (htUrlRef.current) URL.revokeObjectURL(htUrlRef.current);
+  }, []); // stop on unmount
+  const closeHalftimeReport = () => {
+    setShowHalftimeReport(false);
+    htWantedRef.current = false;
+    if (htAudio === 'playing') { htAudioRef.current?.pause(); setHtAudio('idle'); }
+    if (resumeAfterHalftimeRef.current && !isFinished) setIsPlaying(true);
+    resumeAfterHalftimeRef.current = false;
+  };
+
+  // Audio broadcast (Phase 2, flag-gated). Per-play, audio-driven: the spoken
+  // call reveals each play and gates the advance, so the voice stays in sync
+  // with the on-screen action. Narrates from the current play forward.
+  // Live audio broadcast is a Premium feature (founders + admins grandfathered).
+  // The dev override lets it be tested on localhost without a premium account.
+  const { tier: subTier, isAdmin: subIsAdmin, isFoundingMember } = useSubscription();
+  const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || subTier === 'premium' || subIsAdmin || isFoundingMember;
+  const isPremium = subTier === 'premium' || subIsAdmin || isFoundingMember;
+  // 3D live sim access. Launch experiment from 2026-10-23: free for everyone for ~2 weeks while /admin/analytics
+  // compares session length + return visits for devices with 3D on vs off (admin_sim3d_cohorts). Flip
+  // SIM3D_FREE_FOR_ALL to false to make it Premium-only again (founders + admins keep it either way).
+  const sim3dAllowed = SIM3D_FREE_FOR_ALL || isPremium;
+  const sim3dOn = sim3dPref && sim3dAllowed;
+
+  // Pregame Show: Marcus + Tony break down the matchup before kickoff. Opens
+  // automatically for the user's own games and holds the auto-start until the
+  // user kicks off. Free = templated banter; Premium = LLM-written via
+  // /api/pregame (falls back to the template on any failure). Shown once per
+  // game per session; users can opt out of the auto-open.
+  const pregameFacts = useMemo(() => {
+    if (!pregameOpen || !game || !homeTeam || !awayTeam) return null;
+    return buildPregameFacts({
+      gameId: game.id, season: game.season, week: game.week, isPlayoff: isPlayoffGame,
+      homeTeam, awayTeam, homePlayers, awayPlayers, teams, players, playoffBracket,
+    });
+    // Built once when the show opens; roster churn mid-show shouldn't reshuffle it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pregameOpen, game?.id]);
+  const templatedPregame = useMemo(() => (pregameFacts ? generateTemplatedPregame(pregameFacts) : null), [pregameFacts]);
+  const [aiPregame, setAiPregame] = useState<PregameShow | null>(null);
+  const [aiPregameLoading, setAiPregameLoading] = useState(false);
+  useEffect(() => {
+    if (!pregameFacts || !isPremium) return;
+    let cancelled = false;
+    setAiPregameLoading(true);
+    fetch('/api/pregame', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ facts: pregameFacts }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d?.show) setAiPregame(d.show as PregameShow); })
+      .catch(() => { /* template stays up */ })
+      .finally(() => { if (!cancelled) setAiPregameLoading(false); });
+    return () => { cancelled = true; };
+  }, [pregameFacts, isPremium]);
+  const pregameShow = aiPregame ?? templatedPregame;
+  const closePregame = useCallback(() => {
+    setPregameOpen(false);
+    try { window.sessionStorage.setItem(pregameSeenKey, '1'); } catch { /* ignore */ }
+  }, [pregameSeenKey]);
+  const togglePregameAutoOff = useCallback(() => {
+    setPregameAutoOff(prev => {
+      const next = !prev;
+      try {
+        if (next) window.localStorage.setItem(PREGAME_AUTO_OFF_KEY, '1');
+        else window.localStorage.removeItem(PREGAME_AUTO_OFF_KEY);
+      } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  const broadcast = useGameBroadcast();
+  const broadcastOn = broadcast.status !== 'idle';
+  // Live speed ref so the broadcast can read the current speed for inter-call
+  // dwell without restarting. Slower speed = longer gaps; the call is never cut.
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+  const toggleBroadcast = useCallback(() => {
+    if (broadcastOn) { broadcast.stop(); return; }
+    if (!homeTeam || !awayTeam) return;
+    setIsPlaying(true);
+    const fromIndex = Math.max(0, revealedCount - 1);
+    const BROADCAST_DWELL: Record<Speed, number> = { '0.5x': 4000, '1x': 2000, '2x': 800, '5x': 200, 'max': 0 };
+    broadcast.start({
+      events: allEvents,
+      fromIndex,
+      homeAbbr: homeTeam.abbreviation,
+      awayAbbr: awayTeam.abbreviation,
+      homeName: homeTeam.city,
+      awayName: awayTeam.city,
+      // The broadcast is the clock — it reveals each play as its call begins.
+      onShowPlay: (i) => setRevealedCount(prev => Math.max(prev, i + 1)),
+      postClipDelayMs: () => BROADCAST_DWELL[speedRef.current] ?? 0,
+    });
+  }, [broadcastOn, broadcast, homeTeam, awayTeam, allEvents, revealedCount]);
+
+  // While the broadcast drives the reveal, mirror the game's play/pause onto
+  // the audio so the Pause button stops the call too.
+  useEffect(() => {
+    if (!broadcastOn) return;
+    if (isPlaying) broadcast.resume(); else broadcast.pause();
+  }, [isPlaying, broadcastOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // While the 3D sim is still running a play, its line isn't news yet: keep it out of the feed and the bug until the snap is over
+  // While the 3D sim plays a snap its text is held back (no spoilers); it shows at the whistle, before the sim's result callout.
+  const [sim3dDeadId, setSim3dDeadId] = useState<number | null>(null);
+  // Launch experiment telemetry: one row per game-page visit saying whether 3D was on (device cohort for admin_sim3d_cohorts)
+  const sim3dViewSentRef = useRef(false);
+  useEffect(() => {
+    if (sim3dViewSentRef.current || !game) return;
+    sim3dViewSentRef.current = true;
+    // read the saved choice directly: the hook's own read lands a render later than this first effect
+    trackEvent('sim3d_game_view', { game_id: id, on: sim3dAllowed && readSim3DPref(), allowed: sim3dAllowed, premium: isPremium });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per visit
+  }, [game]);
+  const [tabHidden, setTabHidden] = useState(false);
+  useEffect(() => {
+    const on = () => setTabHidden(document.visibilityState === 'hidden');
+    on(); document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
+  const simLastId = revealedEvents[revealedEvents.length - 1]?.id ?? null;
+  const simHoldId = sim3dOn && sim3dActive && simLastId !== sim3dDeadId ? simLastId : null;
+  const displayEvents = useMemo(() => [...revealedEvents].reverse().filter(e => e.id !== simHoldId), [revealedEvents, simHoldId]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
+  // Current on-field skill lineup w/ energy + auto-subs, from the revealed event.
+  const fatigueLineup = useMemo(
+    () => computeFatigueLineup(allEvents[revealedCount - 1] ?? null, homePlayers, awayPlayers, autoSubsOn),
+    [allEvents, revealedCount, homePlayers, awayPlayers, autoSubsOn],
+  );
 
   // Compute current drive stats
   const currentDrive = useMemo(() => {
@@ -634,6 +1226,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // ── Live Coach: when engine is active, auto-run AI plays as needed ──
   // Fires when we run out of events to reveal AND the engine is still going.
   useEffect(() => {
+    if (broadcastOn) return; // broadcast drives the reveal; don't auto-run plays
+    if (pregameOpen) return; // nothing plays behind the Pregame Show
+    if (sim3dActive) return; // the 3D sim is still showing the last play
     if (liveEngineRef.current === null) return;
     if (liveEngineRef.current.isFinished()) return;
     if (liveCoachPaused) return;
@@ -642,8 +1237,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // Check if next play is user offensive OR awaiting XP/2PT choice
     const engineState = liveEngineRef.current.getState();
     const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
-    const needsUserInput = isUserOffenseNow || engineState.awaitingXpChoice || engineState.awaitingKickoffChoice;
+    const needsUserInput = isUserOffenseNow || engineState.awaitingXpChoice || engineState.awaitingKickoffChoice || !!engineState.awaitingTwoPointCall;
     if (liveCoachOn && needsUserInput) {
+      // Let the play that was just revealed finish animating first. Pausing
+      // swaps the field to the static engine snapshot (id -1), which cancelled
+      // every user-called play's animation mid-flight — the whole opening drive
+      // looked frozen until the opponent got the ball.
+      // (Only when a revealed play is actually on the field — at kickoff the
+      // engine pivots before anything is shown, and nothing would ever report
+      // completion.)
+      if (!animationComplete && !tabHidden && speed !== 'max' && allEvents[revealedCount - 1]) return;
       setLiveCoachPaused(true);
       setIsPlaying(false);
       return;
@@ -691,7 +1294,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents, sim3dActive, tabHidden]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -713,7 +1316,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // When animation completes and we're playing, schedule the next play reveal
   useEffect(() => {
     clearNextPlayTimer();
-    if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
+    // When the broadcast is driving, the audio gates the advance — skip the
+    // speed-timer path entirely so the two don't race.
+    if (broadcastOn) return;
+    if (pregameOpen) return; // hold until Kick Off
+    // a background tab never fires the 2D field's animation frames: don't wait on them there, or the CPU's drive freezes
+    if ((!animationComplete && !tabHidden) || !isPlaying || isFinished || speed === 'max') return;
+    if (sim3dActive) return; // wait for the 3D sim to finish the play
     // Live Coach pause: stop here, surface the play call menu instead of advancing
     if (shouldPauseForLiveCoach) {
       setLiveCoachPaused(true);
@@ -732,7 +1341,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       currentEvent?.type === 'field_goal_good' ||
       currentEvent?.type === 'punt' ||
       currentEvent?.isScoring === true;
-    const pause = PAUSE_MS[speed] + (isBigMoment ? TURNOVER_EXTRA[speed] : 0);
+    // the 3D sim already holds on a score / kick (celebration, ref signal, result banner): no second dwell on top (Tyler: FG/PAT ran twice as long as it should)
+    const pause = PAUSE_MS[speed] + (isBigMoment && !sim3dOn ? TURNOVER_EXTRA[speed] : 0);
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
         if (prev >= totalEvents) {
@@ -749,12 +1359,63 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen, sim3dActive, tabHidden, sim3dOn]);
+
+  // ── Live game clock: tick the scorebug clock down between play reveals ──
+  // 2026-09-20/21 spec (gojostyttt, 4 votes on #football-feature-vote). Each
+  // PlayEvent carries the real in-game clock (timeStr, e.g. "12:34"). Between
+  // reveals we tick that value down 1s at a time toward the NEXT event's time
+  // so the scorebug reads Q1 15:00 -> Q4 0:00 like a live broadcast.
+  //
+  // This was pulled from PR #416 because the first attempt interpolated the
+  // clock continuously off a changing events identity and froze it at 15:00 in
+  // watch mode. The fix: key the effect to revealedCount so it RESETS and snaps
+  // to the current event's true time on every reveal, and floor the countdown
+  // at the next event's clock so it can never race ahead of what happened.
+  const [clockSecs, setClockSecs] = useState<number | null>(null);
+  useEffect(() => {
+    const parseClock = (t: string) => {
+      const [m, sec] = t.split(':');
+      return (parseInt(m, 10) || 0) * 60 + (parseInt(sec ?? '0', 10) || 0);
+    };
+    // When Live Coach is paused for user input the scorebug shows the engine's
+    // own exact clock, so don't run the ticking countdown then.
+    if (currentEvent == null || liveCoachPaused) {
+      setClockSecs(null);
+      return;
+    }
+    const startSecs = parseClock(currentEvent.timeStr);
+    setClockSecs(startSecs);
+    // Only tick while actively watching the pre-computed stream.
+    if (!isPlaying || isFinished || speed === 'max' || broadcastOn) return;
+    // Floor at the next event's clock within the same quarter (or 0:00 at a
+    // quarter boundary) so the ticking clock never passes the next real snap.
+    const nextEv = allEvents[revealedCount];
+    let floorSecs = nextEv && nextEv.quarter === currentEvent.quarter
+      ? parseClock(nextEv.timeStr)
+      : 0;
+    // Live Coach engine generates plays lazily, so there's no next event to
+    // floor at. Use the engine's authoritative clock instead: the next snap
+    // happens at timeSecs minus the pending runoff — zero runoff (timeout,
+    // incompletion, out of bounds) means the clock is stopped, so no ticking.
+    if (!nextEv && liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      const es = liveEngineRef.current.getState();
+      if (es.quarter === currentEvent.quarter) floorSecs = Math.max(0, es.timeSecs - (es.pendingRunoff ?? 0));
+    }
+    if (startSecs <= floorSecs) return;
+    const TICK_MS: Record<Speed, number> = { '0.5x': 1500, '1x': 1000, '2x': 550, '5x': 250, 'max': 0 };
+    const tickMs = TICK_MS[speed] || 1000;
+    const iv = setInterval(() => {
+      setClockSecs(prev => (prev == null || prev <= floorSecs ? prev : prev - 1));
+    }, tickMs);
+    return () => clearInterval(iv);
+  }, [revealedCount, isPlaying, isFinished, speed, liveCoachPaused, broadcastOn, currentEvent, allEvents]);
 
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
     // If the live engine is active, run it to completion first
     if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      lcTelemetryRef.current.endedBy = 'end_game';
       const allRest: PlayEvent[] = [];
       let safety = 0;
       while (!liveEngineRef.current.isFinished() && safety < 500) {
@@ -780,14 +1441,59 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     setIsPlaying(false);
   }, [totalEvents, clearNextPlayTimer, liveEnginePivotIdx]);
 
+  // Skip to the start of the next quarter. Community ask (idontknow01754) for a
+  // fast-forward-by-quarter control. Reuses the existing reveal path — it just
+  // jumps revealedCount to the first pre-computed event of a later quarter (or
+  // finalizes the game at Q4/OT end). Only available on the pre-computed event
+  // stream; while the Live Coach engine is generating plays lazily we leave it
+  // to End Game, so there is no new sim path here.
+  const skipToNextQuarter = useCallback(() => {
+    if (isFinished) return;
+    clearNextPlayTimer();
+
+    // Live Coach engine active: advance it play-by-play (auto-resolving snaps,
+    // exactly like End Game) until the quarter ticks over or the game ends,
+    // then reveal through the opening of the new quarter. Reuses the engine's
+    // existing runOnePlay path — no new sim logic.
+    if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      lcTelemetryRef.current.quartersSkipped += 1;
+      const startQ = liveEngineRef.current.getState().quarter;
+      const collected: PlayEvent[] = [];
+      let safety = 0;
+      while (!liveEngineRef.current.isFinished() && safety < 500) {
+        collected.push(...liveEngineRef.current.runOnePlay());
+        safety++;
+        if (liveEngineRef.current.getState().quarter > startQ) break;
+      }
+      if (collected.length > 0) {
+        setLiveExtraEvents(prev => {
+          const updated = [...prev, ...collected];
+          setRevealedCount((liveEnginePivotIdx ?? 0) + updated.length);
+          return updated;
+        });
+      }
+      setLiveCoachPaused(false);
+      setAnimationComplete(true);
+      return;
+    }
+
+    // Pre-computed event stream: jump to the first event of a later quarter
+    // (or finalize the game if we are already in the last quarter / OT).
+    const curIdx = Math.max(0, revealedCount - 1);
+    const curQuarter = allEvents[curIdx]?.quarter ?? 1;
+    const nextIdx = allEvents.findIndex(ev => ev.quarter > curQuarter);
+    setRevealedCount(nextIdx === -1 ? totalEvents : nextIdx + 1);
+    setAnimationComplete(true);
+  }, [isFinished, clearNextPlayTimer, revealedCount, allEvents, totalEvents, liveEnginePivotIdx]);
+
   useEffect(() => {
-    if (speed === 'max' && isPlaying && !isFinished) {
+    if (speed === 'max' && isPlaying && !isFinished && !pregameOpen) {
       clearNextPlayTimer();
       setRevealedCount(totalEvents);
       setAnimationComplete(true);
       setIsPlaying(false);
     }
-  }, [speed, isPlaying, isFinished, totalEvents, clearNextPlayTimer]);
+  }, [speed, isPlaying, isFinished, totalEvents, clearNextPlayTimer, pregameOpen]);
 
   // Add play-type icon to event descriptions that don't already have one
   // (Live Coach events already have icons; this covers CPU/pre-computed events)
@@ -864,14 +1570,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     outcomeTimerRef.current = setTimeout(() => setOutcomeChip(null), chipDuration);
   }, [revealedCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-start: reveal first play when game starts
+  // Auto-start: reveal first play when game starts (held while the Pregame
+  // Show is up — "Kick Off" closes it and this fires).
   useEffect(() => {
-    if (liveResult && totalEvents > 0 && revealedCount === 0) {
+    if (liveResult && totalEvents > 0 && revealedCount === 0 && !pregameOpen) {
       setIsPlaying(true);
       setRevealedCount(1);
       setAnimationComplete(false);
     }
-  }, [liveResult, totalEvents, revealedCount]);
+  }, [liveResult, totalEvents, revealedCount, pregameOpen]);
 
   // Build the game result from whichever source has the final score:
   // the live engine if it was active, otherwise the pre-computed sim.
@@ -890,17 +1597,25 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       const events: PlayEvent[] = pivotIdx !== null
         ? [...(liveResult?.events ?? []).slice(0, pivotIdx), ...liveExtraEvents]
         : (liveResult?.events ?? []);
-      // Per-player stats come from the bucket snapshot on the LAST pre-sim
-      // event before pivot (the playByPlay engine accumulates them there).
-      // Live engine events don't carry bucket snapshots, so plays after
-      // pivot won't appear in the box score — but that's strictly better
-      // than carrying pre-sim ghost plays the user replaced.
+      // Per-player stats = pre-pivot bucket stats (from the last pre-sim event
+      // before the pivot, where the playByPlay engine accumulates them) MERGED
+      // with the live engine's own per-play stats for everything the user
+      // coached after the pivot. Live engine events carry no bucket snapshots,
+      // so previously every coached play was dropped from the box score
+      // (jslusser1945_25790 8/13 + Commish 8/15: live-coached games recorded 0
+      // player stats). Merging fixes that without re-introducing the pre-sim
+      // ghost plays the user replaced (lakerfan21_32127 5/12).
+      // Coached from the first play (pivot 0 — Live Coach defaults on for
+      // managed games): nothing from the pre-sim counts. Falling back to the
+      // pre-sim's final bucket here added a whole simulated game on top of
+      // the coached one, doubling every stat line (62/87, 702 yds).
       const lastBucketEvent = pivotIdx !== null && pivotIdx > 0
         ? (liveResult?.events ?? [])[pivotIdx - 1]
-        : (liveResult?.events ?? []).slice(-1)[0];
-      const stats = lastBucketEvent
+        : undefined;
+      const preStats = lastBucketEvent
         ? livePlayerStatsAtEvent(lastBucketEvent, homePlayers, awayPlayers)
-        : (liveResult?.playerStats ?? {});
+        : {};
+      const stats = mergePlayerStats(preStats, liveEngineRef.current.getPlayerStats());
       return {
         ...game,
         homeScore: es.homeScore,
@@ -1064,33 +1779,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       </GameShell>
     );
   }
-  // Show the Game Plan modal if user is in this game and hasn't set one yet.
-  // Must run BEFORE the !liveResult guard, because gamePlanReady=false intentionally
-  // blocks sim creation until the user submits a plan.
-  if (userInGame && !gamePlanReady) {
-    const opponentTeam = userTeamSide === 'home' ? awayTeam : homeTeam;
-    const opponentName = opponentTeam ? `${opponentTeam.city} ${opponentTeam.name}` : 'Opponent';
-    return (
-      <GameShell>
-        <GamePlanModal
-          opponentName={opponentName}
-          onConfirm={(plan) => {
-            const lp = userTeamSide ? { ...plan, userTeamSide } : null;
-            setLivePlan(lp);
-            setGamePlanReady(true);
-            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: lp })); } catch { /* storage unavailable */ }
-          }}
-          onCancel={() => {
-            // Skip the plan — sim with default behavior
-            setLivePlan(null);
-            setGamePlanReady(true);
-            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: null })); } catch { /* storage unavailable */ }
-          }}
-        />
-      </GameShell>
-    );
-  }
-
   if (!liveResult) {
     const reason = simError
       ? simError
@@ -1145,6 +1833,31 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // When Live Coach is paused for user input, show the ENGINE state on the
   // field/scorebug (which is ahead of the last revealed pre-computed event).
   const engineSnapshot = liveCoachPaused && liveEngineRef.current ? liveEngineRef.current.getState() : null;
+
+  // Defensive timeout: while Live Coach runs and the opponent has the ball, the
+  // user can stop the clock between the AI's snaps (offensive timeouts live in
+  // the play-call menu). Read fresh engine state each render — every reveal re-renders.
+  const liveEngineState = liveCoachOn && liveEngineRef.current && !isFinished ? liveEngineRef.current.getState() : null;
+  const userOnDefense = !!liveEngineState && !!userTeamSide && !liveEngineState.isGameOver
+    && liveEngineState.possession !== userTeamSide
+    && !liveEngineState.awaitingXpChoice && !liveEngineState.awaitingKickoffChoice;
+  const userTimeoutsLeft = liveEngineState && userTeamSide
+    ? (userTeamSide === 'home' ? liveEngineState.homeTimeouts : liveEngineState.awayTimeouts) : 0;
+  const defensiveTimeoutSaves = liveEngineState?.pendingRunoff ?? 0;
+  const callDefensiveTimeout = () => {
+    const eng = liveEngineRef.current;
+    if (!eng || !userTeamSide) return;
+    // Keep whatever runoff already ticked off the on-screen clock; the engine
+    // cancels the rest, so the clock freezes where the user sees it.
+    const es = eng.getState();
+    const elapsed = clockSecs != null ? Math.max(0, es.timeSecs - clockSecs) : 0;
+    const evs = eng.callTimeoutFor(userTeamSide, elapsed);
+    if (evs.length === 0) return;
+    // Reveal through the timeout immediately so the scorebug snaps to it.
+    const newTotal = allEvents.length + evs.length;
+    setLiveExtraEvents(prev => [...prev, ...evs]);
+    setRevealedCount(newTotal);
+  };
   const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
   const liveAwayScore = engineSnapshot?.awayScore ?? currentEvent?.awayScore ?? 0;
   // Derive effective quarter — if the engine is in overtime but its quarter
@@ -1155,12 +1868,26 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const liveTime = engineSnapshot
     ? `${Math.floor(engineSnapshot.timeSecs / 60)}:${String(engineSnapshot.timeSecs % 60).padStart(2, '0')}`
     : currentEvent?.timeStr ?? '15:00';
+  // Ticking scorebug clock (1-sec live countdown, gojostyttt feature). Use the
+  // second-by-second value while watching the pre-computed stream; fall back to
+  // the exact engine/event time when paused for input, finished, or idle.
+  const tickingTime = (!engineSnapshot && clockSecs != null && !isFinished)
+    ? `${Math.floor(clockSecs / 60)}:${String(clockSecs % 60).padStart(2, '0')}`
+    : liveTime;
   const livePoss = engineSnapshot?.possession ?? currentEvent?.possession ?? 'home';
   const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
   const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
   const liveYtg = engineSnapshot?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
-  const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
-  const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
+  // Between a touchdown and its try the spot is still the pre-TD snap (e.g. 1st & 10 at the 23): the 3D sim lined the offense up there.
+  // While the user picks XP / go-for-2, or the CPU's XP is the next event, it should show the kick unit at the 15 instead.
+  const nextEvForSim = engineSnapshot ? null : (allEvents[revealedCount] ?? null);
+  const xpPending = !!engineSnapshot?.awaitingXpChoice
+    || (!!nextEvForSim && nextEvForSim.type === 'extra_point' && !/^2-PT|two-point/i.test(nextEvForSim.description));
+  // Same after the PAT / a field goal: the kickoff is next, so the kicking team lines up at its 35 (onside kicks too)
+  const kickoffPending = !xpPending && (!!engineSnapshot?.awaitingKickoffChoice || (!!nextEvForSim && nextEvForSim.type === 'kickoff'));
+  const kickTeam: 'home' | 'away' = engineSnapshot?.awaitingKickoffChoice ? engineSnapshot.possession : (nextEvForSim?.possession ?? livePoss);
+  const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? liveEngineState?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
+  const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? liveEngineState?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'gamecast', label: 'Gamecast' },
@@ -1183,8 +1910,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               setLivePlan(newPlan);
               // Persist for the next game too
               useGameStore.getState().setNextGamePlan(plan);
-              // Persist for the next game too
-              useGameStore.getState().setNextGamePlan(plan);
               setShowMidGamePlan(false);
             }}
             onCancel={() => setShowMidGamePlan(false)}
@@ -1196,7 +1921,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           mobile (between controls and tabs) and in the sticky sidebar on
           desktop. See renderPlayCallPanel below. */}
 
-      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-start gap-4">
+      <div className={`${sim3dOn && !pregameOpen ? 'max-w-7xl' : 'max-w-6xl'} mx-auto flex flex-col lg:flex-row items-start gap-4`}>
       {/* Main game content */}
       <div className="flex-1 min-w-0 space-y-3">
 
@@ -1262,7 +1987,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           homeScore={liveHomeScore}
           awayScore={liveAwayScore}
           quarter={liveQuarter}
-          timeStr={liveTime}
+          timeStr={tickingTime}
           possession={livePoss}
           down={liveDown}
           yardsToGo={liveYtg}
@@ -1276,23 +2001,29 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           lastPlayDescription={(() => {
             // Show the most recent non-separator play description.
             // Check currentEvent first, then fall back to the last engine event.
-            if (currentEvent && !isSeparator(currentEvent.type)) return addPlayTypeIcon(currentEvent);
+            if (currentEvent && !isSeparator(currentEvent.type) && currentEvent.id !== simHoldId) return addPlayTypeIcon(currentEvent);
             // When paused for Live Coach, currentEvent might be a separator/old event.
             // Search backwards through revealed events for the most recent play.
             for (let i = revealedCount - 1; i >= 0; i--) {
               const ev = allEvents[i];
-              if (ev && !isSeparator(ev.type)) return addPlayTypeIcon(ev);
+              if (ev && !isSeparator(ev.type) && ev.id !== simHoldId) return addPlayTypeIcon(ev);
             }
             return null;
           })()}
         />
 
+        {/* Pre-game league-rank card — shown before kickoff (read-only). */}
+        {revealedCount === 0 && !isFinished && homeTeam && awayTeam && (
+          <MatchupRankings homeTeam={homeTeam} awayTeam={awayTeam} teams={teams} players={players} />
+        )}
+
         {/* Big-play alert banner removed — the overlay chip on the field is
             enough. Having a second banner above the field was pushing the
             Call the Play panel down each play. */}
 
-        {/* Animated field + outcome chip overlay */}
-        <div className="relative">
+        {/* Animated field + outcome chip overlay. While the 3D sim is on (desktop) the box is 16:9 so the
+            sim gets a real broadcast frame instead of the field's wide, short box. */}
+        <div className={`relative ${sim3dOn && !pregameOpen ? 'aspect-square sm:aspect-[4/3] md:aspect-video' : ''}`}>   {/* phones get a square frame: the field's short box left the 3D sim a letterbox strip */}
           <AnimatedField
             event={engineSnapshot ? {
               id: -1,
@@ -1322,8 +2053,26 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             userSide={userTeamSide ?? 'home'}
           />
 
+          {/* 3D live sim over the field (every scrimmage / special-teams play while it is on) */}
+          <LiveSim3D
+            enabled={sim3dOn && !pregameOpen}
+            event={currentEvent}
+            nextEvent={engineSnapshot ? null : (allEvents[revealedCount] ?? null)}
+            disabled={speed === 'max' || broadcastOn}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            homePlayers={homePlayers}
+            awayPlayers={awayPlayers}
+            clock={{ secs: clockSeconds(tickingTime), quarter: liveQuarter }}
+            state={{ possession: kickoffPending ? kickTeam : livePoss, fieldPos: xpPending ? 85 : kickoffPending ? 35 : liveFieldPos, down: xpPending || kickoffPending ? 1 : liveDown, toGo: xpPending ? 15 : kickoffPending ? 10 : liveYtg, quarter: liveQuarter,
+              clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore,
+              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : {}) }}
+            onActiveChange={setSim3dActive}
+            onPlayDead={setSim3dDeadId}
+          />
+
           {/* Post-play outcome chip */}
-          {outcomeChip && (
+          {outcomeChip && !(sim3dOn && !pregameOpen) && (   /* the 3D sim calls the result itself, after the play — the chip would announce it at the snap */
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 animate-bounce-in">
               <div className={`${outcomeChip.color} text-white font-black text-sm px-4 py-1.5 rounded-full shadow-lg`}>
                 {outcomeChip.text}
@@ -1331,6 +2080,102 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
         </div>
+        {sim3dOn && !pregameOpen && (
+          <p className="-mt-1 text-right text-[10px] text-[var(--text-sec)]">
+            3D player model: “American Football Player” by Stuffed Dog Digital,{' '}
+            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="underline">CC BY 4.0</a>
+          </p>
+        )}
+
+        {/* ================================================================
+            CALL THE PLAY — mobile only, directly under the field / 3D sim so
+            the call and its result are on one screen (no scroll between them).
+            Desktop shows it in the sticky sidebar on the right (below).
+        ================================================================ */}
+        {liveEngineRef.current && liveCoachPaused && (() => {
+          const es = liveEngineRef.current!.getState();
+          const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
+          const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
+          const fp = es.fieldPos;
+          const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+          return (
+            <div className="lg:hidden">
+              <PlayCallMenu
+                state={{
+                  quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
+                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+                  homeScore: es.homeScore,
+                  awayScore: es.awayScore,
+                  homeAbbr: homeAbbr2,
+                  awayAbbr: awayAbbr2,
+                  down: es.down,
+                  yardsToGo: es.yardsToGo,
+                  fieldPos: es.fieldPos,
+                  fieldDescription,
+                }}
+                isFourthDown={es.down === 4}
+                awaitingXpChoice={es.awaitingXpChoice}
+                awaitingTwoPointCall={!!es.awaitingTwoPointCall}
+                awaitingKickoffChoice={es.awaitingKickoffChoice}
+                timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
+                pendingRunoff={es.pendingRunoff ?? 0}
+                onPlayCall={(playCall) => {
+                  trackPlayCall(playCall);
+                  setOutcomeChip(null);
+                  if (liveEngineRef.current) {
+                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
+                    if (newEvents.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
+                      setRevealedCount(prev => prev + 1);
+                      setAnimationComplete(false);
+                      const lastEv = newEvents[newEvents.length - 1];
+                      const isBig = lastEv && (
+                        lastEv.type === 'interception' || lastEv.type === 'fumble' ||
+                        lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
+                        lastEv.isScoring || lastEv.type === 'field_goal_good' ||
+                        lastEv.type === 'field_goal_miss'
+                      );
+                      if (isBig) {
+                        pendingAutoPlayRef.current = true;
+                        const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
+                        setTimeout(() => {
+                          pendingAutoPlayRef.current = false;
+                          setAutoRunTick(t => t + 1);
+                        }, extraMs);
+                      }
+                    }
+                  }
+                  setLiveCoachPaused(false);
+                  setIsPlaying(true);
+                }}
+                onAutoSimRest={() => {
+                  lcTelemetryRef.current.endedBy = 'auto_sim';
+                  trackLiveCoach('live_coach_auto_sim');
+                  if (liveEngineRef.current) {
+                    const allRest: PlayEvent[] = [];
+                    let safety = 0;
+                    while (!liveEngineRef.current.isFinished() && safety < 500) {
+                      const evs = liveEngineRef.current.runOnePlay();
+                      allRest.push(...evs);
+                      safety++;
+                    }
+                    if (allRest.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...allRest]);
+                    }
+                  }
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+                onToggleOff={() => {
+                  lcTelemetryRef.current.endedBy = 'off';
+                  trackLiveCoach('live_coach_off', { source: 'menu' });
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+              />
+            </div>
+          );
+        })()}
 
         {/* Drive summary ribbon — uses the same live* vars as the scorebug
             so it always matches (including engine state during Live Coach) */}
@@ -1372,73 +2217,93 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* ================================================================
             CONTROLS BAR (speed + play/pause)
         ================================================================ */}
-        <div className="flex flex-col sm:flex-row sm:items-center bg-[var(--surface)] border border-[var(--border)] rounded-xl px-2 sm:px-4 py-2 sm:py-2.5 gap-2 sm:gap-3">
-          {/* Row 1 (mobile) / left group (desktop): speed + play/pause + end */}
-          <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
-              {(['0.5x', '1x', '2x', '5x', 'max'] as Speed[]).map(s => (
-                <button
-                  key={s}
-                  onClick={() => setSpeed(s)}
-                  className={`px-2 sm:px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                    speed === s
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-
-            <div className="hidden sm:block w-px h-6 bg-[var(--border)]" />
-
-            {/* Play/Pause */}
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-2 sm:px-4 py-2 sm:py-2.5 space-y-2">
+          {/* Row 1: transport (play / skip / end) on the left, speed on the right.
+              Uniform h-8 buttons on desktop; 44px touch target for Play on phones. */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => { if (!isFinished) setIsPlaying(p => !p); }}
               disabled={isFinished}
               aria-label={isFinished ? 'Game complete' : isPlaying ? 'Pause' : 'Play'}
-              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:h-8 sm:min-w-[5.5rem] px-2 sm:px-4 rounded-md text-xs font-bold bg-[var(--text)] text-[var(--surface)] hover:opacity-90 disabled:opacity-40 transition-all"
             >
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
             </button>
-            {/* End Game (always paired with row 1 on mobile) */}
+            {/* Skip Quarter — jump to the start of the next quarter (works in
+                both spectate and Live Coach modes). */}
+            <button
+              onClick={skipToNextQuarter}
+              disabled={isFinished}
+              title="Skip to the start of the next quarter"
+              className="inline-flex items-center h-8 px-2 sm:px-3 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+            >
+              ⏩<span className="hidden sm:inline ml-1">Skip Qtr</span>
+            </button>
             <button
               onClick={skipToEnd}
               disabled={isFinished}
-              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all sm:order-last"
+              className="inline-flex items-center h-8 px-2 sm:px-3 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
             >
               ⏭<span className="hidden sm:inline ml-1">End Game</span>
             </button>
 
-            {/* Playback progress — hidden during Live Coach (meaningless once
-                engine is generating new plays). */}
-            {!liveCoachOn && (
-              <div className="flex-1 flex items-center gap-2 sm:ml-2 min-w-[80px]">
-                <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-blue-500 transition-all duration-150"
-                    style={{ width: `${totalEvents > 0 ? (revealedCount / totalEvents) * 100 : 0}%` }}
-                  />
-                </div>
-                <span className="text-[10px] text-[var(--text-sec)] tabular-nums whitespace-nowrap">
-                  {revealedCount}/{totalEvents}
-                </span>
+            {/* Speed — one segmented control, pushed right. */}
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="hidden sm:inline text-[10px] font-semibold text-[var(--text-sec)] uppercase">Speed</span>
+              <div className="inline-flex items-center rounded-lg bg-[var(--surface-2)] p-0.5">
+                {(['0.5x', '1x', '2x', '5x', 'max'] as Speed[]).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSpeed(s)}
+                    aria-pressed={speed === s}
+                    className={`h-7 px-2 sm:px-2.5 rounded-md text-xs font-semibold transition-all ${
+                      speed === s
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Row 2 (mobile) / inline-right (desktop): Game Plan + Live Coach.
-              Text labels visible on both viewports — two-row layout gives
-              enough width on phones to show them instead of bare icons. */}
-          <div className="flex items-center gap-2 sm:contents">
+          {/* Row 2: game toggles, left-aligned under a divider. On phones each
+              button keeps its label on one line and the row wraps, with the
+              buttons stretching to fill each line (the defensive Timeout makes
+              five, which didn't fit one row and clipped the labels); natural
+              width on desktop. Hidden when empty. */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border)] empty:hidden">
+          {/* 3D live sim toggle — plays every snap in the three.js chase-cam sim */}
+          {!isFinished && !sim3dAllowed && (
+            <Link
+              href="/pricing"
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]"
+              title="Watch every play in 3D — a Premium feature"
+            >
+              🎥 3D Sim <span className="ml-1 rounded bg-amber-400 px-1 text-[10px] font-bold text-black">✨ Premium</span>
+            </Link>
+          )}
+          {!isFinished && sim3dAllowed && (
+            <button
+              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium }); setSim3dOn(!sim3dOn); }}
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+                sim3dOn
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Watch every play in the 3D sim (loads a 10 MB player model once)"
+            >
+              🎥 3D Sim {sim3dOn ? 'ON' : 'OFF'}
+            </button>
+          )}
           {/* Game Plan — only when user is in this game and game isn't done */}
           {userInGame && !isFinished && (
             <button
               onClick={() => { setIsPlaying(false); setShowMidGamePlan(true); }}
-              className="flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
               title="Adjust your game plan (pauses the game)"
             >
               📋 Game Plan
@@ -1451,39 +2316,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 const turningOn = !liveCoachOn;
                 setLiveCoachOn(turningOn);
                 setLiveCoachPaused(false);
-                // First-time activation: seed the live engine from the current state
-                if (turningOn && liveEngineRef.current === null && homeTeam && awayTeam) {
-                  // Use the LAST revealed event as the starting state, or default kickoff state
-                  const seedEvent = allEvents[revealedCount - 1] ?? allEvents[0];
-                  if (seedEvent) {
-                    liveEngineRef.current = createLiveCoachEngine(
-                      homeTeam, awayTeam, homePlayers, awayPlayers,
-                      {
-                        quarter: seedEvent.quarter,
-                        timeSecs: parseInt(seedEvent.timeStr.split(':')[0], 10) * 60 + parseInt(seedEvent.timeStr.split(':')[1] ?? '0', 10),
-                        possession: seedEvent.possession,
-                        fieldPos: seedEvent.fieldPos,
-                        down: Math.max(1, seedEvent.down),
-                        yardsToGo: Math.max(1, seedEvent.yardsToGo),
-                        homeScore: seedEvent.homeScore,
-                        awayScore: seedEvent.awayScore,
-                        isGameOver: false,
-                        twoMinWarningQ2Fired: seedEvent.quarter > 2 || (seedEvent.quarter === 2 && seedEvent.timeStr <= '2:00'),
-                        twoMinWarningQ4Fired: seedEvent.quarter > 4 || (seedEvent.quarter === 4 && seedEvent.timeStr <= '2:00'),
-                        overtime: seedEvent.quarter > 4,
-                        awaitingXpChoice: false,
-                        awaitingKickoffChoice: false,
-                        homeTimeouts: 3,
-                        awayTimeouts: 3,
-                      },
-                      userTeamSide ?? 'home',
-                    );
-                    setLiveEnginePivotIdx(revealedCount);
-                    setLiveExtraEvents([]);
-                  }
+                if (turningOn && liveEngineRef.current) {
+                  lcTelemetryRef.current.endedBy = null;
+                  trackLiveCoach('live_coach_on', { source: 'toolbar' });
+                } else if (turningOn) {
+                  activateLiveEngine('toggle');
+                } else if (liveEngineRef.current) {
+                  lcTelemetryRef.current.endedBy = 'off';
+                  trackLiveCoach('live_coach_off', { source: 'toolbar' });
                 }
               }}
-              className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 liveCoachOn
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
@@ -1493,91 +2336,77 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
             </button>
           )}
+          {/* Defensive timeout — Live Coach on, opponent has the ball. */}
+          {userOnDefense && (
+            <button
+              onClick={callDefensiveTimeout}
+              disabled={userTimeoutsLeft <= 0}
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-all"
+              title={userTimeoutsLeft <= 0 ? 'No timeouts left this half'
+                : defensiveTimeoutSaves > 0 ? `Stop the clock — saves ${defensiveTimeoutSaves}s of runoff`
+                : 'Clock is already stopped — a timeout won\'t save time right now'}
+            >
+              ⏱️ Timeout ({userTimeoutsLeft})
+            </button>
+          )}
+          {/* Auto-subs (fatigue) toggle — display-only mid-game rotation. Shown
+              for watchers and coaches alike; default ON. */}
+          {!isFinished && (
+            <button
+              onClick={() => setAutoSubsOn(v => !v)}
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+                autoSubsOn
+                  ? 'bg-teal-600 text-white hover:bg-teal-700'
+                  : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Automatically rotate in fresh backups as skill-position starters tire (display only)"
+            >
+              🔄 Auto-subs {autoSubsOn ? 'ON' : 'OFF'}
+            </button>
+          )}
+          {/* Halftime Report — appears once the game passes the half. Available
+              to spectators too (not gated on userInGame). */}
+          {halftimeReached && (
+            <button
+              onClick={() => { resumeAfterHalftimeRef.current = isPlaying; setIsPlaying(false); setShowHalftimeReport(true); }}
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-all"
+              title="First-half leaders + the Gridiron Debate take (pauses the game)"
+            >
+              📻 Halftime Report
+            </button>
+          )}
+          {/* Audio Broadcast — Phase 1 spike, hidden unless the flag is on. */}
+          {canBroadcast && (
+            <button
+              onClick={toggleBroadcast}
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+                broadcastOn ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Audio play-by-play broadcast (beta — the call drives the play reveal)"
+            >
+              {broadcastOn
+                ? (broadcast.status === 'buffering' ? '🔊 Buffering…'
+                  : broadcast.status === 'blocked' ? '🔊 Tap to Start'
+                  : broadcast.status === 'error' ? '🔊 Error'
+                  : broadcast.status === 'done' ? '🔊 Broadcast ✓'
+                  : '🔊 On')
+                : '🔊 Broadcast'}
+            </button>
+          )}
           </div>
         </div>
+        {canBroadcast && broadcast.status === 'blocked' && (
+          <button
+            onClick={broadcast.resume}
+            className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-all"
+          >
+            ▶ Tap to start the audio broadcast
+          </button>
+        )}
+        {canBroadcast && broadcast.status === 'error' && broadcast.error && (
+          <div className="text-xs text-red-500 px-1">Broadcast error: {broadcast.error}</div>
+        )}
 
-        {/* ================================================================
-            CALL THE PLAY — mobile only, between controls and tabs.
-            Desktop shows it in the sticky sidebar on the right (below).
-        ================================================================ */}
-        {liveEngineRef.current && liveCoachPaused && (() => {
-          const es = liveEngineRef.current!.getState();
-          const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
-          const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
-          const fp = es.fieldPos;
-          const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
-          return (
-            <div className="lg:hidden">
-              <PlayCallMenu
-                state={{
-                  quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
-                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
-                  homeScore: es.homeScore,
-                  awayScore: es.awayScore,
-                  homeAbbr: homeAbbr2,
-                  awayAbbr: awayAbbr2,
-                  down: es.down,
-                  yardsToGo: es.yardsToGo,
-                  fieldPos: es.fieldPos,
-                  fieldDescription,
-                }}
-                isFourthDown={es.down === 4}
-                awaitingXpChoice={es.awaitingXpChoice}
-                awaitingKickoffChoice={es.awaitingKickoffChoice}
-                timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
-                pendingRunoff={es.pendingRunoff ?? 0}
-                onPlayCall={(playCall) => {
-                  setOutcomeChip(null);
-                  if (liveEngineRef.current) {
-                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
-                    if (newEvents.length > 0) {
-                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
-                      setRevealedCount(prev => prev + 1);
-                      setAnimationComplete(false);
-                      const lastEv = newEvents[newEvents.length - 1];
-                      const isBig = lastEv && (
-                        lastEv.type === 'interception' || lastEv.type === 'fumble' ||
-                        lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
-                        lastEv.isScoring || lastEv.type === 'field_goal_good' ||
-                        lastEv.type === 'field_goal_miss'
-                      );
-                      if (isBig) {
-                        pendingAutoPlayRef.current = true;
-                        const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
-                        setTimeout(() => {
-                          pendingAutoPlayRef.current = false;
-                          setAutoRunTick(t => t + 1);
-                        }, extraMs);
-                      }
-                    }
-                  }
-                  setLiveCoachPaused(false);
-                  setIsPlaying(true);
-                }}
-                onAutoSimRest={() => {
-                  if (liveEngineRef.current) {
-                    const allRest: PlayEvent[] = [];
-                    let safety = 0;
-                    while (!liveEngineRef.current.isFinished() && safety < 500) {
-                      const evs = liveEngineRef.current.runOnePlay();
-                      allRest.push(...evs);
-                      safety++;
-                    }
-                    if (allRest.length > 0) {
-                      setLiveExtraEvents(prev => [...prev, ...allRest]);
-                    }
-                  }
-                  setLiveCoachOn(false);
-                  setLiveCoachPaused(false);
-                }}
-                onToggleOff={() => {
-                  setLiveCoachOn(false);
-                  setLiveCoachPaused(false);
-                }}
-              />
-            </div>
-          );
-        })()}
 
         {/* ================================================================
             WIN PROBABILITY — desktop only. Mobile copy lives after tabs.
@@ -1622,8 +2451,52 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {activeTab === 'gamecast' && (
             <div className="space-y-3">
 
+              {/* On the Field — skill-position stamina + fatigue auto-subs.
+                  Display-only overlay derived from the revealed play stream. */}
+              {!isFinished && fatigueLineup.length > 0 && (
+                <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 border-b border-[var(--border)] bg-[var(--surface-2)] flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[var(--text-sec)] uppercase tracking-wider">
+                      On the Field · {livePoss === 'home' ? homeAbbr : awayAbbr} Offense
+                    </span>
+                    <span className="text-[10px] text-[var(--text-sec)]">
+                      {autoSubsOn ? 'Auto-subs ON' : 'Auto-subs OFF'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-[var(--border)]">
+                    {fatigueLineup.map((slot, idx) => {
+                      const barColor = slot.energy >= 66 ? 'bg-green-500' : slot.energy >= 40 ? 'bg-amber-500' : 'bg-red-500';
+                      return (
+                        <div key={`${slot.pos}-${idx}`} className="bg-[var(--surface)] px-3 py-2">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)]">{slot.pos}</span>
+                            {slot.subbed && (
+                              <span className="text-[9px] font-bold uppercase text-teal-600">🔄 Sub</span>
+                            )}
+                          </div>
+                          <div className="text-xs font-semibold text-[var(--text)] truncate" title={`${slot.active.firstName} ${slot.active.lastName}`}>
+                            {slot.active.firstName?.[0] ?? ''}. {slot.active.lastName}
+                          </div>
+                          <div className="mt-1 h-1.5 w-full rounded-full bg-[var(--surface-2)] overflow-hidden">
+                            <div className={`h-full ${barColor} transition-all`} style={{ width: `${slot.energy}%` }} />
+                          </div>
+                          <div className="mt-0.5 flex items-center justify-between">
+                            <span className="text-[9px] text-[var(--text-sec)] tabular-nums">{slot.energy}%</span>
+                            {slot.resting && (
+                              <span className="text-[9px] text-[var(--text-sec)] truncate" title={`${slot.resting.firstName} ${slot.resting.lastName} resting`}>
+                                {slot.resting.lastName} 💤
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Turnover alert banner */}
-              {currentEvent && isTurnover(currentEvent.type) && (
+              {currentEvent && isTurnover(currentEvent.type) && currentEvent.id !== simHoldId && (
                 <div className="bg-red-600 text-white rounded-lg px-5 py-3 flex items-center gap-3 animate-pulse shadow-lg shadow-red-200">
                   <span className="text-2xl">🚨</span>
                   <div className="flex-1">
@@ -1732,12 +2605,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                             <div className="text-xs text-[var(--text-sec)] font-mono">{ev.timeStr}</div>
                           </div>
                           {ev.down >= 1 && ev.down <= 4 && (
-                            <Badge
-                              variant={ev.down === 4 ? 'red' : ev.down === 3 ? 'amber' : 'default'}
-                              size="sm"
-                            >
-                              {downLabel(ev.down, ev.yardsToGo)}
-                            </Badge>
+                            <div className="w-[68px] shrink-0 flex flex-col items-center gap-0.5">
+                              <Badge
+                                variant={ev.down === 4 ? 'red' : ev.down === 3 ? 'amber' : 'default'}
+                                size="sm"
+                              >
+                                {downLabel(ev.down, ev.yardsToGo)}
+                              </Badge>
+                              {ballOnLabel(ev.fieldPos, ev.possession, homeAbbr, awayAbbr) && (
+                                <span
+                                  className="text-[10px] font-mono text-[var(--text-sec)] whitespace-nowrap"
+                                  title="Line of scrimmage"
+                                >
+                                  {ballOnLabel(ev.fieldPos, ev.possession, homeAbbr, awayAbbr)}
+                                </span>
+                              )}
+                            </div>
                           )}
                           <div className="flex-1">
                             <p className={`text-sm leading-snug ${playTextColor(ev.type)}`}>
@@ -1789,7 +2672,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             // simulator's final playerStats (which includes the randomized
             // tackle distribution that the per-event snapshots can't
             // deterministically produce).
-            const isGameFinishedReveal = revealedCount >= totalEvents && totalEvents > 0;
+            // Once Live Coach has taken over (liveEnginePivotIdx set), the
+            // pre-sim's final playerStats reflects a discarded hypothetical
+            // AI continuation of the game, not what the user actually
+            // coached — this is exactly the "QB shows 3 TDs / 2 INTs he
+            // never threw" bug report. Only trust the pre-sim's final bucket
+            // wholesale for pure watch-live games (buildFinalGameResult above
+            // already applies this same guard for the committed box score).
+            const isGameFinishedReveal = liveEnginePivotIdx === null && revealedCount >= totalEvents && totalEvents > 0;
             // Read the running box score from the most-recently-revealed event
             // that carries a bucket snapshot, walking the COMBINED stream
             // (allEvents) — NOT the raw pre-sim array. During a live-coached
@@ -1811,9 +2701,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               const ev = allEvents[i];
               if (ev?.homeBucketSnap && ev?.awayBucketSnap) { lastRevealedEvent = ev; break; }
             }
+            const preStats = livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
+            // Once Live Coach is active, merge in the plays it generated —
+            // those carry no bucket snapshot so preStats alone would miss
+            // every coached play (same merge buildFinalGameResult uses).
             const stats = isGameFinishedReveal
               ? liveResult.playerStats
-              : livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
+              : liveEngineRef.current
+                ? mergePlayerStats(preStats, liveEngineRef.current.getPlayerStats())
+                : preStats;
             if (!stats || Object.keys(stats).length === 0) {
               return (
                 <div className="text-center py-12 text-[var(--text-sec)]">
@@ -1827,7 +2723,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               const getS = (id: string) => stats[id] ?? {};
 
               // Find key players
-              const qb = teamPlayers.find(p => p.position === 'QB' && (getS(p.id).passAttempts ?? 0) > 0);
+              // Show the starting QB's passing line from kickoff (0/0 before the
+              // first attempt) instead of hiding it until a pass resolves. Prefer
+              // the QB the engine is tracking (has a stats entry), else the healthy
+              // starter. (yo46363, 9/20)
+              const qb = teamPlayers.find(p => p.position === 'QB' && getS(p.id).gamesPlayed)
+                ?? teamPlayers.find(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0))
+                ?? teamPlayers.find(p => p.position === 'QB');
               const rushers = teamPlayers
                 .filter(p => (getS(p.id).rushAttempts ?? 0) > 0)
                 .sort((a, b) => (getS(b.id).rushYards ?? 0) - (getS(a.id).rushYards ?? 0));
@@ -1854,7 +2756,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1">Passing</div>
                         <div className="text-sm font-medium">{qb.firstName[0]}. {qb.lastName}</div>
                         <div className="text-xs text-[var(--text-sec)]">
-                          {s.passCompletions}/{s.passAttempts}, {s.passYards} YDS, {s.passTDs} TD, {s.interceptions} INT
+                          {s.passCompletions ?? 0}/{s.passAttempts ?? 0}, {s.passYards ?? 0} YDS, {s.passTDs ?? 0} TD, {s.interceptions ?? 0} INT
                         </div>
                       </div>
                     );
@@ -1980,17 +2882,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           column above; this sidebar still shows the feed + around-the-league. */}
       <div className="w-full lg:w-72 shrink-0 space-y-2">
         <div className="lg:sticky lg:top-20 space-y-3">
-          {/* Desktop-only Live Coach play call. Min-height reservation
-              prevents content below from shifting between plays. */}
+          {/* Desktop-only Live Coach play call. It shares one fixed-height
+              slot with the Live Feed below: the menu shows on the user's snap,
+              the feed fills the slot otherwise — no layout shift between
+              plays and no empty reserved gap while the opponent has the ball. */}
           <div className="hidden lg:block">
-          {liveEngineRef.current && (() => {
+          {liveEngineRef.current && liveCoachPaused && (() => {
             const es = liveEngineRef.current!.getState();
             const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
             const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
             const fp = es.fieldPos;
             const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
             return (
-              <div className={`min-h-[22rem] ${liveCoachPaused ? '' : 'invisible pointer-events-none'}`}>
+              <div className="min-h-[22rem]">
               <PlayCallMenu
                 state={{
                   quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
@@ -2006,10 +2910,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 }}
                 isFourthDown={es.down === 4}
                 awaitingXpChoice={es.awaitingXpChoice}
+                awaitingTwoPointCall={!!es.awaitingTwoPointCall}
                 awaitingKickoffChoice={es.awaitingKickoffChoice}
                 timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
                 pendingRunoff={es.pendingRunoff ?? 0}
                 onPlayCall={(playCall) => {
+                  trackPlayCall(playCall);
                   setOutcomeChip(null);
                   if (liveEngineRef.current) {
                     const newEvents = liveEngineRef.current.runOnePlay(playCall);
@@ -2038,6 +2944,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setIsPlaying(true);
                 }}
                 onAutoSimRest={() => {
+                  lcTelemetryRef.current.endedBy = 'auto_sim';
+                  trackLiveCoach('live_coach_auto_sim');
                   if (liveEngineRef.current) {
                     const allRest: PlayEvent[] = [];
                     let safety = 0;
@@ -2054,6 +2962,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setLiveCoachPaused(false);
                 }}
                 onToggleOff={() => {
+                  lcTelemetryRef.current.endedBy = 'off';
+                  trackLiveCoach('live_coach_off', { source: 'menu' });
                   setLiveCoachOn(false);
                   setLiveCoachPaused(false);
                 }}
@@ -2062,11 +2972,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             );
           })()}
           </div>
-          {/* Live play-by-play feed — visible alongside the field */}
+          {/* Live play-by-play feed — visible alongside the field. On desktop
+              with Live Coach active it occupies the play-call slot (same
+              height) and yields it to the menu on the user's snap. */}
           {displayEvents.length > 0 && (
-            <div className="mb-3">
+            <div className={`mb-3 ${liveEngineRef.current ? (liveCoachPaused ? 'lg:hidden' : 'lg:min-h-[22rem]') : ''}`}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Live Feed</h3>
-              <div className="space-y-1 max-h-64 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+              <div className={`space-y-1 max-h-64 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] ${liveEngineRef.current ? 'lg:max-h-[20rem]' : ''}`}>
                 {displayEvents.slice(0, 15).map(ev => (
                   !isSeparator(ev.type) ? (
                     <div key={ev.id} className={`px-2.5 py-1.5 text-[10px] border-b border-[var(--border)] last:border-0 ${ev.isScoring ? 'bg-amber-50' : isTurnover(ev.type) ? 'bg-red-50' : ''}`}>
@@ -2092,7 +3004,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
           <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
-            {schedule
+            {(() => {
+              // Reveal the other games' scores in step with the user's game clock:
+              // by the user's current quarter (or FINAL once their game ends).
+              const sb = liveScoreboard && liveScoreboard.week === game.week ? liveScoreboard : null;
+              const userQ = isFinished ? 4 : Math.min(Math.max(currentEvent?.quarter ?? 1, 1), 4);
+              const qLabel = isFinished ? 'FINAL' : userQ >= 4 ? '4TH QTR' : userQ === 3 ? '3RD QTR' : userQ === 2 ? '2ND QTR' : '1ST QTR';
+              return schedule
               .filter(g => g.week === game.week && g.id !== game.id)
               .map(g => {
                 const ht = teams.find(t => t.id === g.homeTeamId);
@@ -2102,6 +3020,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   && ht.division === teams.find(t => t.id === userTeamId)?.division
                   || at.conference === teams.find(t => t.id === userTeamId)?.conference
                   && at.division === teams.find(t => t.id === userTeamId)?.division;
+                const sp = sb?.splits[g.id];
+                // A stashed game is shown "live" until the real weekly sim marks it played.
+                const showLive = !!sp && !g.played;
+                const awayShown = g.played ? g.awayScore : showLive ? sp!.away[userQ - 1] : null;
+                const homeShown = g.played ? g.homeScore : showLive ? sp!.home[userQ - 1] : null;
                 return (
                   <div key={g.id} className={`rounded-lg border px-3 py-2 text-xs ${
                     isDiv ? 'border-blue-300 bg-blue-50/50' : 'border-[var(--border)] bg-[var(--surface)]'
@@ -2111,30 +3034,258 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: at.primaryColor }} />
                         <span className="font-medium">{at.abbreviation}</span>
                       </div>
-                      <span className="font-mono font-bold">{g.played ? g.awayScore : ''}</span>
+                      <span className="font-mono font-bold">{awayShown ?? ''}</span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: ht.primaryColor }} />
                         <span className="font-medium">{ht.abbreviation}</span>
                       </div>
-                      <span className="font-mono font-bold">{g.played ? g.homeScore : ''}</span>
+                      <span className="font-mono font-bold">{homeShown ?? ''}</span>
                     </div>
-                    {g.played && (
+                    {g.played ? (
                       <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">FINAL</div>
-                    )}
-                    {!g.played && (
+                    ) : showLive ? (
+                      <div className="text-[10px] mt-0.5 text-center flex items-center justify-center gap-1">
+                        {!isFinished && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+                        <span className={isFinished ? 'text-[var(--text-sec)]' : 'text-red-500 font-bold'}>{qLabel}</span>
+                      </div>
+                    ) : (
                       <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">
                         {g.bettingLine ? `${g.bettingLine.spread > 0 ? at.abbreviation : ht.abbreviation} ${Math.abs(g.bettingLine.spread).toFixed(1)}` : '—'}
                       </div>
                     )}
                   </div>
                 );
-              })}
+              });
+            })()}
           </div>
         </div>
       </div>
       </div>
+
+      {/* Pregame Show modal — Marcus + Tony preview the matchup before kickoff.
+          Wide layout (ranks + picks side by side) with Kick Off pinned in the
+          footer so it's reachable without scrolling the whole show. */}
+      {pregameOpen && pregameShow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xl">🎙️</span>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-black leading-tight">Pregame Show</h2>
+                  <div className="text-xs text-[var(--text-sec)] truncate">{pregameShow.headline}</div>
+                </div>
+              </div>
+              <button
+                onClick={closePregame}
+                aria-label="Skip pregame show"
+                className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                {homeTeam && awayTeam && (
+                  <MatchupRankings homeTeam={homeTeam} awayTeam={awayTeam} teams={teams} players={players} />
+                )}
+                <div className="grid grid-cols-2 gap-2 content-start">
+                  {(['stats', 'hottake'] as const).map(k => {
+                    const c = COMMENTATORS[k];
+                    const p = pregameShow.picks[k];
+                    return (
+                      <div key={k} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+                        <div className={`text-[10px] font-bold uppercase tracking-wider ${k === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>
+                          {c.avatar} {c.name.split(' ')[0]}&apos;s Pick
+                        </div>
+                        <div className="text-sm font-black mt-0.5">{p.abbr}</div>
+                        <div className="text-xs text-[var(--text-sec)] tabular-nums">{p.score}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {!isPremium && (
+                <Link
+                  href="/pricing"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
+                >
+                  <span className="text-xs sm:text-sm text-[var(--text)]">
+                    ✨ <span className="font-bold">Go Premium</span> for a fully AI-written, game-specific pregame show every week — plus the live audio broadcast.
+                  </span>
+                  <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
+                </Link>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">In the Booth</div>
+                  {aiPregameLoading && !aiPregame && (
+                    <div className="text-[10px] text-[var(--text-sec)] animate-pulse">Marcus &amp; Tony are going deeper…</div>
+                  )}
+                </div>
+                {pregameShow.exchanges.map((ex, i) => {
+                  const c = ex.speakerId === 'stats' ? COMMENTATORS.stats : COMMENTATORS.hottake;
+                  return (
+                    <div key={`${pregameShow.source}-${i}`} className="flex gap-2.5">
+                      <span className="text-lg shrink-0 leading-none mt-0.5">{c.avatar}</span>
+                      <div>
+                        <div className={`text-xs font-bold ${c.id === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>{c.name}</div>
+                        <div className="text-sm">{ex.text}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="shrink-0 border-t border-[var(--border)] px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-[var(--surface)]">
+              <label className="flex items-center gap-2 text-xs text-[var(--text-sec)] cursor-pointer order-2 sm:order-1">
+                <input type="checkbox" checked={pregameAutoOff} onChange={togglePregameAutoOff} />
+                Don&apos;t show automatically
+              </label>
+              <button
+                onClick={closePregame}
+                className="order-1 sm:order-2 sm:ml-auto w-full sm:w-auto sm:px-10 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all"
+              >
+                🏈 Kick Off
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Halftime Report modal (feature #9) — first-half leaders + Cole/Blaze
+          take. Text now; the disabled audio button marks the ElevenLabs hook. */}
+      {showHalftimeReport && halftimeBreakdown && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={closeHalftimeReport}
+        >
+          <div
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-y-auto shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border)]">
+              <div className="flex items-center justify-between px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📻</span>
+                  <h2 className="text-lg font-black">Halftime Report</h2>
+                </div>
+                <button
+                  onClick={closeHalftimeReport}
+                  aria-label="Close"
+                  className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+              {/* Premium breakdown CTA / audio button pinned under the title so it is visible without scrolling */}
+              <div className="px-5 pb-4">
+                {isPremium ? (
+                  <button
+                    onClick={playHalftimeAudio}
+                    disabled={htAudio === 'loading'}
+                    className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 transition-all"
+                    title="Marcus & Tony break down both teams and the second-half adjustments"
+                  >
+                    {htAudio === 'loading' ? '🔊 Marcus & Tony are recording it…'
+                      : htAudio === 'playing' ? '⏸ Stop breakdown'
+                      : htAudio === 'error' ? '🔊 Retry audio breakdown'
+                      : '🔊 Listen — in-depth breakdown'}
+                  </button>
+                ) : (
+                  <Link
+                    href="/pricing"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
+                  >
+                    <span className="text-xs sm:text-sm text-[var(--text)]">
+                      🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast.
+                    </span>
+                    <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
+                  </Link>
+                )}
+              </div>
+            </div>
+            <div className="p-5 space-y-5">
+              <div className="text-center">
+                <div className="text-2xl font-black tabular-nums">
+                  {halftimeBreakdown.awayAbbr} {halftimeBreakdown.awayScore} — {halftimeBreakdown.homeScore} {halftimeBreakdown.homeAbbr}
+                </div>
+                <div className="text-sm text-[var(--text-sec)] mt-1">{halftimeBreakdown.summary}</div>
+              </div>
+
+              {liveScoreboard && liveScoreboard.week === game.week && (() => {
+                const others = schedule.filter(g => g.week === game.week && g.id !== game.id && liveScoreboard.splits[g.id]);
+                if (others.length === 0) return null;
+                return (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Around the League — At the Half</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {others.map(g => {
+                        const at = teams.find(t => t.id === g.awayTeamId);
+                        const ht = teams.find(t => t.id === g.homeTeamId);
+                        if (!at || !ht) return null;
+                        const sp = liveScoreboard.splits[g.id];
+                        return (
+                          <div key={g.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{at.abbreviation}</span>
+                              <span className="font-mono font-bold tabular-nums">{sp.away[1]}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="font-medium">{ht.abbreviation}</span>
+                              <span className="font-mono font-bold tabular-nums">{sp.home[1]}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {halftimeBreakdown.leaders.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">First-Half Leaders</div>
+                  {halftimeBreakdown.leaders.map(l => (
+                    <div key={l.category} className="flex items-center justify-between gap-3 bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold truncate">
+                          {l.name} <span className="text-[var(--text-sec)] font-normal">{l.teamAbbr}</span>
+                        </div>
+                        <div className="text-xs text-[var(--text-sec)]">{l.category}</div>
+                      </div>
+                      <div className="text-xs font-mono text-right shrink-0">{l.statLine}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">In the Booth</div>
+                {halftimeBreakdown.exchanges.map((ex, i) => {
+                  const c = ex.speakerId === 'stats' ? COMMENTATORS.stats : COMMENTATORS.hottake;
+                  return (
+                    <div key={i} className="flex gap-2.5">
+                      <span className="text-lg shrink-0 leading-none mt-0.5">{c.avatar}</span>
+                      <div>
+                        <div className={`text-xs font-bold ${c.id === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>{c.name}</div>
+                        <div className="text-sm">{ex.text}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </GameShell>
   );
 }

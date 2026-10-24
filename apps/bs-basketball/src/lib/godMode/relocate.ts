@@ -1,12 +1,9 @@
 /**
  * God Mode: relocate / rebrand a franchise (parity 3.4, contained slice).
  *
- * A true 31/32-team expansion draft is deferred — the 30-team count is baked
- * into the schedule generator (its conference/division circulant graph), the
- * playoff bracket (8 seeds per conference, 14-team lottery), and conference
- * validation, so adding a team is a large, invasive rework. This delivers the
- * realistic franchise-churn flavor safely: rename, re-city, and recolor any team
- * while keeping the league at 30 (no invariants touched). Pure; God-Mode-gated.
+ * Rename, re-city, and recolor any team without changing the league's size.
+ * (Adding teams — 31/32 — is the separate offseason expansion flow in
+ * lib/expansion.) Pure; God-Mode-gated.
  */
 
 import type { BaseLeagueState } from '@bs/core/adapter';

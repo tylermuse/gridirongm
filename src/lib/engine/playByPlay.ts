@@ -1,5 +1,7 @@
 import type { Player, PlayerStats, GameResult, Team } from '@/types';
 import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
+import { fieldGoalMakeProbability } from './simulate';
+import { getBestReturner } from './specialTeams';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,6 +55,11 @@ export interface PlayEvent {
    *  end of game). Optional for backwards compatibility with older saves. */
   homeBucketSnap?: StatBucket;
   awayBucketSnap?: StatBucket;
+  /** Live Coach engine events carry no bucket snapshots; instead the engine
+   *  stamps its own cumulative per-player stats (plays IT ran since the pivot)
+   *  onto the halftime event, so the Halftime Report can show first-half
+   *  numbers for live-coached games. */
+  engineStatsSnap?: Record<string, Partial<PlayerStats>>;
 }
 
 export interface LiveGameResult {
@@ -229,7 +236,7 @@ function extractKeyPlayers(players: Player[], depthChart?: Record<string, string
 
 /** Pick a player from the pool weighted by a caller-provided score. Higher
  *  score → higher probability. All-zero weights degrade to uniform. */
-function pickWeighted<T>(pool: T[], weight: (p: T) => number): T | null {
+export function pickWeighted<T>(pool: T[], weight: (p: T) => number): T | null {
   if (pool.length === 0) return null;
   if (pool.length === 1) return pool[0];
   const weights = pool.map(p => Math.max(0.01, weight(p)));
@@ -245,7 +252,7 @@ function pickWeighted<T>(pool: T[], weight: (p: T) => number): T | null {
 /** Pick the rusher for a carry. RB1 still gets the lion's share (workhorse
  *  back logic) but RB2/RB3 see real touches. OVR-biased so better backs get
  *  more carries even within the pool. */
-function pickRusher(rbs: Player[]): Player | null {
+export function pickRusher(rbs: Player[]): Player | null {
   return pickWeighted(rbs, (p, i = rbs.indexOf(p)) => {
     const depthWeight = i === 0 ? 1.0 : i === 1 ? 0.35 : i === 2 ? 0.12 : 0.05;
     const ovrScale = 0.5 + p.ratings.overall / 100;
@@ -254,7 +261,7 @@ function pickRusher(rbs: Player[]): Player | null {
 }
 
 /** Pick the sacker. DL disproportionately get pressure, LBs contribute too. */
-function pickSacker(dls: Player[], lbs: Player[]): Player | null {
+export function pickSacker(dls: Player[], lbs: Player[]): Player | null {
   const pool = [...dls, ...lbs];
   return pickWeighted(pool, p => {
     const base = p.position === 'DL' ? 2.5 : 1.0;
@@ -264,7 +271,7 @@ function pickSacker(dls: Player[], lbs: Player[]): Player | null {
 }
 
 /** Pick the interceptor. CBs most likely, safeties second, LBs rare. */
-function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Player | null {
+export function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Player | null {
   const pool = [...cbs, ...safeties, ...lbs];
   return pickWeighted(pool, p => {
     const base = p.position === 'CB' ? 3.0 : p.position === 'S' ? 1.5 : 0.3;
@@ -277,7 +284,7 @@ function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Play
  *  receiving back get a fixed share. Mirrors the slot-percentage logic that
  *  existed before but uses pickWeighted so the exact same player isn't
  *  targeted every single play — variety within the WR pool is now real. */
-function pickReceiver(wrs: Player[], tes: Player[], rbs: Player[]): Player | null {
+export function pickReceiver(wrs: Player[], tes: Player[], rbs: Player[]): Player | null {
   const entries: { p: Player; w: number }[] = [];
   const depthWeights = [1.0, 0.75, 0.50, 0.15];
   wrs.slice(0, 4).forEach((p, i) => {
@@ -809,9 +816,30 @@ export function simulatePlayByPlay(
       return;
     }
 
-    addEvent('kickoff', descKickoff(), 0, false, 25);
-    // receiving team starts at own 25
-    switchPossession(25);
+    // Standard-mode kick return (ported from mcafeeMode): receiving team gets
+    // a variable return scaled by its best returner instead of a flat own-25.
+    const receivingRoster = state.possession === 'home' ? awayPlayers : homePlayers;
+    const returner = getBestReturner(receivingRoster);
+    const returnerRating = returner
+      ? (returner.ratings.speed * 2 + returner.ratings.agility) / 3
+      : 50;
+    // Base 18-28, plus up to ~7 yards scaled by how far the returner is above
+    // a 50-OVR baseline. Clamped so standard field position stays ~18-35.
+    const baseReturn = 18 + Math.floor(Math.random() * 11); // 18-28
+    const ratingBonus = Math.round(Math.max(0, (returnerRating - 50) / 50) * 7 * Math.random());
+    const returnYards = Math.min(35, baseReturn + ratingBonus);
+
+    // Rare kick return TD (~0.5%).
+    if (Math.random() < 0.005) {
+      addEvent('kickoff', 'Kick return TOUCHDOWN! Taken all the way back!', 100, true);
+      if (state.possession === 'home') state.awayScore += 7;
+      else state.homeScore += 7;
+      doKickoff(); // re-kick after the return TD
+      return;
+    }
+
+    addEvent('kickoff', `${descKickoff()} Kick returned to the ${returnYards}.`, 0, false, returnYards);
+    switchPossession(returnYards);
   }
 
   function shiftMomentum(amount: number) {
@@ -886,9 +914,7 @@ export function simulatePlayByPlay(
   function doFieldGoal(distanceYards: number) {
     const ok = offKey();
     const kickerRating = rating(ok.k, 'kicking', 70);
-    // Success probability: base 95% from 20yd, decreasing by ~2% per yard beyond 30
-    const successProb = clamp(0.95 - Math.max(0, distanceYards - 30) * 0.025 + (kickerRating - 70) / 100 * 0.15, 0.35, 0.98);
-    const good = Math.random() < successProb;
+    const good = Math.random() < fieldGoalMakeProbability(distanceYards, kickerRating);
     offBucket().fieldGoalAttempts += 1;
     if (good) {
       offBucket().fieldGoalsMade += 1;
@@ -1886,32 +1912,36 @@ export function deriveScoringPlaysFromEvents(
   const out: import('@/types').ScoringPlay[] = [];
   let prevHome = 0;
   let prevAway = 0;
+  // The engine snapshots a scoring play's score BEFORE applying its points
+  // (e.g. addEvent('touchdown', …, true) then homeScore += 6), so the point
+  // bump surfaces on the FOLLOWING event. Conversion events (XP / two-point)
+  // bump the score first and are flagged isScoring:false. To handle both
+  // consistently we watch for every positive score delta between consecutive
+  // events and attribute it to the most recent scoring-flagged play (falling
+  // back to the current event). This guarantees the derived points always
+  // reconcile to the final score — the previous version diffed only on the
+  // scoring event itself and therefore recorded nothing for live games.
+  let pending: PlayEvent | null = null;
   for (const ev of events) {
-    if (!ev.isScoring) {
-      // Score still tracks even if event isn't flagged scoring — so the next
-      // scoring event gets the correct delta even if there are skipped flags.
-      prevHome = ev.homeScore;
-      prevAway = ev.awayScore;
-      continue;
-    }
     const homeDelta = ev.homeScore - prevHome;
     const awayDelta = ev.awayScore - prevAway;
     const points = homeDelta + awayDelta;
-    if (points <= 0) {
-      // Defensive guard against duplicate-flagged or zero-delta events.
-      prevHome = ev.homeScore;
-      prevAway = ev.awayScore;
-      continue;
+    if (points > 0) {
+      const src = pending ?? ev;
+      const teamId = homeDelta > 0 ? homeTeamId : awayTeamId;
+      out.push({
+        quarter: src.quarter,
+        timeLeft: src.timeStr,
+        teamId,
+        points,
+        description: src.description,
+        score: [ev.awayScore, ev.homeScore],
+      });
+      pending = null;
+    } else if (ev.isScoring) {
+      // Remember the play that will bump the score on a following event.
+      pending = ev;
     }
-    const teamId = homeDelta > 0 ? homeTeamId : awayTeamId;
-    out.push({
-      quarter: ev.quarter,
-      timeLeft: ev.timeStr,
-      teamId,
-      points,
-      description: ev.description,
-      score: [ev.awayScore, ev.homeScore],
-    });
     prevHome = ev.homeScore;
     prevAway = ev.awayScore;
   }
@@ -1951,7 +1981,10 @@ export function livePlayerStatsAtEvent(
   function applySide(bucket: StatBucket, sidePlayers: Player[]) {
     const qb = sidePlayers.find(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0))
       ?? sidePlayers.find(p => p.position === 'QB');
-    if (qb && (bucket.passAttempts > 0 || bucket.qbRushAttempts > 0)) {
+    // Always surface the starting QB's passing line (0/0 before the first
+    // attempt) so the live box-score panel shows it from kickoff rather than
+    // hiding the block until the first pass resolves. (yo46363, 9/20)
+    if (qb) {
       out[qb.id] = {
         gamesPlayed: 1,
         passAttempts: bucket.passAttempts,

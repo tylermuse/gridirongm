@@ -6,6 +6,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { useGameStore } from '@/lib/engine/store';
 
 interface CareerData {
   userId: string;
@@ -97,6 +98,19 @@ export default function GmProfilePage({ params }: { params: Promise<{ userId: st
   const isMe = user?.id === userId;
   const isHallOfFame = (data?.career.championships ?? 0) >= 3;
 
+  // Owner Objectives for the current season live in the local game save
+  // (team.approval.objectives), not in the backend profile. They're only
+  // meaningful for the GM viewing their own hub, so gate on isMe and surface
+  // the active save's current-season objectives. Degrades to nothing when
+  // there's no active save, no approval state, or no objectives for the season
+  // (e.g. a save created before objectives shipped).
+  const { teams, userTeamId, season } = useGameStore();
+  const liveObjectives = (() => {
+    if (!isMe || !userTeamId) return [];
+    const userTeam = teams.find(t => t.id === userTeamId);
+    return (userTeam?.approval?.objectives ?? []).filter(o => o.season === season);
+  })();
+
   return (
     <GameShell>
       <div className="max-w-4xl mx-auto space-y-4">
@@ -138,6 +152,33 @@ export default function GmProfilePage({ params }: { params: Promise<{ userId: st
                 <Stat label="Avg Draft" value={data.career.draftsCompleted > 0 ? data.career.avgDraftScore.toFixed(1) : '—'} />
               </div>
             </Card>
+
+            {/* Owner Objectives — current-season goals from the owner, pulled
+                from the live save. Only shown on your own hub when the active
+                save has objectives for the current season. */}
+            {liveObjectives.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle>Owner Objectives</CardTitle></CardHeader>
+                <p className="text-xs text-[var(--text-sec)] mb-3">
+                  What ownership expects from you this season ({season}).
+                </p>
+                <div className="flex flex-col gap-2">
+                  {liveObjectives.map(obj => (
+                    <div key={obj.id} className="flex items-center gap-2 text-sm">
+                      <span className="text-base">
+                        {obj.status === 'completed' ? '✅' : obj.status === 'failed' ? '❌' : '⏳'}
+                      </span>
+                      <span className={obj.status === 'failed' ? 'text-red-600 line-through' : obj.status === 'completed' ? 'text-green-600' : ''}>
+                        {obj.description}
+                      </span>
+                      <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--text-sec)]">
+                        {obj.status === 'completed' ? 'Met' : obj.status === 'failed' ? 'Failed' : 'Active'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
 
             {/* Trophy case */}
             <Card>

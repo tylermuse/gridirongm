@@ -81,6 +81,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const nextPlayoffGame = playoffBracket
     ?.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
     .sort((a, b) => a.round - b.round)[0];
+  // The user's next playoff game, once both teams are set — the playoff
+  // counterpart of this week's regular-season game for Watch Live.
+  const userPlayoffGame = playoffBracket?.find(m =>
+    !m.winnerId && m.homeTeamId && m.awayTeamId &&
+    (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId));
 
   const userTeam = teams.find(t => t.id === userTeamId);
   const maxWeek = schedule.length > 0 ? Math.max(...schedule.map(g => g.week)) : 18;
@@ -311,6 +316,16 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
               <>
                 {!superBowlDone && !pathname.startsWith('/game/') && (
                   <>
+                    {!isSpectator && userPlayoffGame && (
+                      <Button
+                        onClick={() => router.push(`/game/${userPlayoffGame.id}`)}
+                        size="sm"
+                        className="active:scale-95 transition-transform bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse mr-1.5 align-middle" />
+                        Watch Live
+                      </Button>
+                    )}
                     <Button
                       onClick={simNextPlayoffGame}
                       size="sm"
