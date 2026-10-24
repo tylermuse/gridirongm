@@ -31,7 +31,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b17i';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b17j';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -55,16 +55,20 @@ function useSimView(): [{ cam: SimCam; lighting: SimLighting }, (v: Partial<{ ca
   return [view, setView];
 }
 
+/** The browser's saved 3D choice (or the ?sim3d= override). Client only. */
+export function readSim3DPref(): boolean {
+  if (typeof window === 'undefined') return false;
+  const q = new URLSearchParams(window.location.search).get('sim3d');
+  if (q !== null) return q === '1' || q === 'on';
+  try { return window.localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
+}
+
 export function useSim3DMode(): [boolean, (on: boolean) => void] {
   const [on, setOnState] = useState(false);
   useEffect(() => {
     // effect-gated read of URL / localStorage so SSR and the first client render agree (no hydration mismatch)
-    const q = new URLSearchParams(window.location.search).get('sim3d');
-    let v = false;
-    if (q !== null) v = q === '1' || q === 'on';
-    else { try { v = window.localStorage.getItem(STORAGE_KEY) === '1'; } catch { /* storage blocked */ } }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from browser state on mount
-    setOnState(v);
+    setOnState(readSim3DPref());
   }, []);
   const setOn = useCallback((v: boolean) => {
     setOnState(v);
@@ -108,6 +112,16 @@ export function LiveSim3D({
   /** the play is dead in 3D (whistle): the page can show its play-by-play line now, before the result callout */
   onPlayDead?: (eventId: number) => void;
 }) {
+  // A background tab stops requestAnimationFrame, so the sim can't finish a play and the page sat waiting on it — the CPU's
+  // drive froze until you came back. While the tab is hidden the sim steps aside (the game advances as without 3D) and
+  // re-forms at the current situation when you return.
+  const [tabHidden, setTabHidden] = useState(false);
+  useEffect(() => {
+    const on = () => setTabHidden(document.visibilityState === 'hidden');
+    on(); document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
+  const off = !!disabled || tabHidden;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -186,10 +200,11 @@ export function LiveSim3D({
   const lastPlayPreRef = useRef('');
   useEffect(() => {
     if (!enabled || !ready || !state || active) return;
+    if (tabHidden) return;
     if (stateKey === lastPlayPreRef.current) return;   // still the situation of the play just shown: the sim already moved on to its result
     const { possession, form, ...pre } = state;
     post({ type: 'bsgm:state', possession, pre, ...(form ? { form } : {}) } satisfies SimStateMessage);
-  }, [enabled, ready, stateKey, active, post]);   // eslint-disable-line react-hooks/exhaustive-deps -- state is keyed by stateKey
+  }, [enabled, ready, stateKey, active, post, tabHidden]);   // eslint-disable-line react-hooks/exhaustive-deps -- state is keyed by stateKey
 
   // Game clock → 3D scorebug, always (the page's clock runs during the play; without this the 3D bug sat at the snap time)
   const clockKey = clock ? `${clock.quarter}:${clock.secs}` : '';
@@ -200,7 +215,8 @@ export function LiveSim3D({
 
   // New event → send it to the sim and hold the game until it reports done
   useEffect(() => {
-    if (!enabled || !event || disabled || !ready || failed) return;
+    if (!enabled || !event || !ready || failed) return;
+    if (off) { lastIdRef.current = event.id; return; }   // skipped while hidden / at max speed: never replay it later
     if (lastIdRef.current === event.id) return;
     lastIdRef.current = event.id;
     const play = toSimPlay(event, { home: homePlayers ?? [], away: awayPlayers ?? [], photoSkins }, nextEvent);
@@ -210,12 +226,12 @@ export function LiveSim3D({
     post(play);
     setActiveBoth(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rosters/skins only label the play; a change must not re-send it
-  }, [enabled, event, disabled, ready, failed, post, setActiveBoth]);
+  }, [enabled, event, off, ready, failed, post, setActiveBoth]);
 
   // Bail out if playback gets disabled mid-play (skip to end / max speed) or the mode is switched off
   useEffect(() => {
-    if ((disabled || !enabled) && activeRef.current) { post({ type: 'bsgm:skip' }); activeIdRef.current = null; setActiveBoth(false); }
-  }, [disabled, enabled, post, setActiveBoth]);
+    if ((off || !enabled) && activeRef.current) { post({ type: 'bsgm:skip' }); activeIdRef.current = null; setActiveBoth(false); }
+  }, [off, enabled, post, setActiveBoth]);
 
   // Unmount → never leave the page held
   useEffect(() => () => { if (activeRef.current) onActiveChange(false); }, [onActiveChange]);

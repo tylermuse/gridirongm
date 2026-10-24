@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17i'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17j'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -769,7 +769,7 @@ function setupFormation(kind){
     [...D.dl, ...D.lb, D.cbL, D.cbR].forEach((a,i)=>{ a.x=-20+i*5; a.z=zr+(i%2? 3.2 : 0); a.face=Math.PI; a.stance='two'; });
     D.sL.x=-5; D.sL.z=Math.min(z0+58, 46); D.sR.x=5; D.sR.z=Math.min(z0+59, 47); [D.sL,D.sR].forEach(a=>{ a.face=Math.PI; a.stance='two'; });
   }
-  actors.forEach(a=>{ a.behav=null; a.fall=0; a.mocapFall=null; a.mocapAct=null; a.mocapActive=false; a.truck=null; a.truckT=null; a.knock=null; a.behind=null; a.whiff=false; a.celebAt=null; a.kickT=null; a.puntHold=false; if(kind!=='fg') a.hold=false; place(a); });
+  actors.forEach(a=>{ a.reach=false; a.behav=null; a.fall=0; a.mocapFall=null; a.mocapAct=null; a.mocapActive=false; a.truck=null; a.truckT=null; a.knock=null; a.behind=null; a.whiff=false; a.celebAt=null; a.kickT=null; a.puntHold=false; if(kind!=='fg') a.hold=false; place(a); });
   if((window.__mxStance ?? true) && BOT && BOT.animations.some(c=>c.name==='mx_stance')){ // second level: the captured pre-snap stance (hands on knees, weight forward) held until the snap, then released into the clip blend
     [D.cbL,D.cbR,D.sL,D.sR,...D.lb].forEach(a=>{ if(a.stance==='db' || a.stance==='two') a.mocapAct = {clip:'mx_stance', t0:-.15, start:2.0, end:2.45}; }); }
   ballPlan = [{t0:-1, t1:1e9, held:O.ol[2], off:[0,.25,.45]}];
@@ -789,9 +789,9 @@ function updateBall(t){
     else if(a.carrying && a.bones){ a.model.updateMatrixWorld(true);
       const throwingNow = a.throwT0!=null && t>=a.throwT0;
       a.bones.RightHand.getWorldPosition(ball.position);
-      if(!throwingNow){ const fr=frameOf(a); a.bones.Spine2.getWorldPosition(_b); _b.addScaledVector(fr.F,.17).addScaledVector(fr.R,.07); _b.y -= .1; ball.position.lerp(_b,.45); }
+      if(!throwingNow && !(a.reach && a.down!=null)){ const fr=frameOf(a); a.bones.Spine2.getWorldPosition(_b); _b.addScaledVector(fr.F,.17).addScaledVector(fr.R,.07); _b.y -= .1; ball.position.lerp(_b,.45); }
       if(throwingNow){ const q=qbPhase(a,t); const k = q<.35? q/.35 : q<.5? 1 : Math.max(0,1-(q-.5)/.14); ball.rotation.set(-.5-1.1*k, a.face, .4*k); }
-      else ball.rotation.set(-.5,a.face,0); }
+      else ball.rotation.set(a.reach && a.down!=null? -.1 : -.5,a.face,0); }
     else { ball.position.set(a.x + c*o[0] + s*o[2], o[1]+fallLift+a.y, a.z - s*o[0] + c*o[2]); ball.rotation.set(0,a.face,0); } }
   else if(seg.flight){ if(seg.captureBall){ Object.assign(seg.flight,{x0:ball.position.x,y0:ball.position.y,z0:ball.position.z}); delete seg.captureBall; } if(seg.captureHand){seg.captureHand.model.updateMatrixWorld(true);seg.captureHand.bones.RightHand.getWorldPosition(_b);Object.assign(seg.flight,{x0:_b.x,y0:_b.y,z0:_b.z});delete seg.captureHand;} const f=seg.flight, u=Math.min(1,Math.max(0,(t-seg.t0)/(seg.t1-seg.t0)));
     ball.position.set(f.x0+(f.x1-f.x0)*u, f.y0+(f.y1-f.y0)*u + f.h*4*u*(1-u), f.z0+(f.z1-f.z0)*u);
@@ -978,7 +978,7 @@ function choreograph(res){
       D.cbR.behav = P([snap,D.cbR.x,D.cbR.z],[snap+.6,7.4,z0-2.0],[tKick+.1,4.6,z0-4.6],[tKick+.7,2.4,z0-3.4],[tKick+1.4,1.4,z0-2.2]);
       [D.sL,D.sR].forEach(a=>{ a.behav = P([snap,a.x,a.z],[tKick-.15,a.x*.8,z0+.2]); a.jumpT = tKick+.05; a.faceLock={angle:Math.PI, until:99}; });
       [O.slot,O.wrR].forEach(a=>{ a.faceLock={angle:0, until:99}; a.behav = P([snap,a.x,a.z],[snap+.4,a.x*.95,a.z-.6],[tKick+.5,a.x*.9,a.z-1.1]); });
-      tEnd = tKick+(good? 3.2 : 4.4); carrier=null; tackler=null; endPos=[xEnd,zLand]; res.good=good; res.refT = tKick+1.72;
+      tEnd = tKick+(good? 1.95 : 2.5); carrier=null;   /* was 3.2 / 4.4 s after the kick: an XP ran ~6 s (Tyler: cut it in half) */ tackler=null; endPos=[xEnd,zLand]; res.good=good; res.refT = tKick+1.72;
       ev(tKick+1.1, ()=>{ // the kick is in the air: everyone turns to watch it
         actors.forEach(a=>{ if(a!==K && a!==H) a.faceLock={angle:0, until:99}; }); });
       ev(tKick+1.75, ()=>{ (O.refs||[]).forEach(r=>{ r.signal = good? 'good' : 'no'; r.t0 = playT; });
@@ -1377,6 +1377,9 @@ function choreograph(res){
       // capture itself carries the drag, the wrap and the fall — nothing procedural in between. A head-on hit keeps the procedural back fall.
       const pair = carrier.fallDir > 0, S = (window.__pairStart ?? .2); const drag = 0;
       carrier.down = playT;
+      { /* close to the sticks: he reaches the ball out for the line to gain as he goes down (Tyler) — not at the goal line, where a reach would picture a score the game didn't give */
+        const ltg = z0 + Math.min(G.toGo, toGoal), d = ltg - carrier.z;
+        if((res.kind==='run' || res.kind==='complete') && !td && G.toGo < toGoal && d > -1.0 && d < 1.9 && (z0+toGoal) - carrier.z > 2.2) carrier.reach = true; }
       if(pair){ const cs=Math.hypot(carrier.vx||0,carrier.vz||0)||1, ux=(carrier.vx||0)/cs, uz=(carrier.vz||0)/cs;
         const sdx=Math.cos(carrier.face), sdz=-Math.sin(carrier.face); const lx=(tackler.x-carrier.x)*sdx+(tackler.z-carrier.z)*sdz;
         const back=(window.__behindD??1.06), side=Math.max(-.2,Math.min(.2,lx));
@@ -1445,7 +1448,7 @@ function choreograph(res){
       play.tEnd = Math.max(play.tEnd, tLand+1.7); play.whistleT = Math.max(play.whistleT ?? 0, tLand+1.7); };
   }
   if(td && carrier){ ev(tEnd, ()=>{ carrier.celebrate = playT;
-      carrier.celebStyle = 'mocap';   /* captured end-zone celebration (the procedural hand poses read wrong on this rig) */
+      carrier.celebStyle = window.__tdStyle || pickTdStyle();   /* Tyler: more TD celebrations — the captured spike most of the time, mixed with the hand-built ones that hold up on this rig */
       const scoredByD = D.all.includes(carrier), mates = scoredByD? D.all : O.all, foes = scoredByD? O.all : D.all, slowMates = scoredByD? D.dl : O.ol;
       foes.forEach(d=>{ if(d.down!=null) return; d.wrap=null; d.engage=null; d.faceLock=null; d.behav={type:'coast', vx:(d.vx||0)*.6, vz:(d.vz||0)*.6, t0:playT}; });
       const bx=carrier.x, bz=carrier.z, fx=Math.sin(carrier.face), fz=Math.cos(carrier.face), st=carrier.celebStyle;
@@ -1821,7 +1824,9 @@ function stepActor(a, t, dt){
   if(a.carrying || throwing || celeb || catching || wrapping || engaged || dejected || a.down!=null || readyArms || dirtHand){
     a.model.updateMatrixWorld(true); const fr = frameOf(a);
     if(a.down!=null && a.mocapActive){ const mf=a.mocapFall, k=mf? t-mf.t0 : 0;
-      if(a.carrying){ const tf=torsoFrame(a); poseArm(a,'R',torsoPose(tf,POSE.tuck,1),tf, mf&&mf.mx? .5 : .9);   /* captured face-down fall: a lighter tuck, or the ball arm drives through the turf and props him up */
+      if(a.carrying && a.reach){ const w=smooth01(k/.3), B=a.bones; _t1.set(Math.sin(a.face)*.97+Math.cos(a.face)*.12, -.22, Math.cos(a.face)*.97-Math.sin(a.face)*.12).normalize();
+        aimBone(B.RightArm, B.RightForeArm, _t1, w); aimBone(B.RightForeArm, B.RightHand, _t1, w); }   /* stretching the ball out for the marker */
+      else if(a.carrying){ const tf=torsoFrame(a); poseArm(a,'R',torsoPose(tf,POSE.tuck,1),tf, mf&&mf.mx? .5 : .9);   /* captured face-down fall: a lighter tuck, or the ball arm drives through the turf and props him up */
         if(mf && mf.pair && !mf.mx){ const w=smooth01(k/.18); poseArm(a,'L',torsoPose(tf,(window.__bracePose||[[.75,.35,-.45],[.85,.05,-.5]]),-1),tf,w); } }   /* ridden down from behind: the free arm goes out to brace, not up in the air (the solo capture has him throwing both hands up) */
       else if(mf && mf.pair && a.behind){ const c=a.behind.of; c.bones.Hips.getWorldPosition(_t1); _t1.y+=.05; const w=smooth01(k/.15)*(1-smooth01((k-(mf.mx? .4 : 1.4))/.4)); if(w>0) armsAt(a,_t1,_t1,w,.3,-.6); } }   /* the tackler's arms stay wrapped around the runner's hips through the ride and the fall */
     else if(a.mocapActive && a.mocapAct){ /* captured catch / kick / hold owns the arms */ }
@@ -2118,6 +2123,9 @@ function sndThump(force=1, bright=.5){ if(!SND.ctx) return; if(sndPlay(bright>.8
   const o=C.createOscillator(); o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(45,t+.18); const og=C.createGain(); og.gain.setValueAtTime(.5*force,t); og.gain.exponentialRampToValueAtTime(.001,t+.22); o.connect(og); og.connect(SND.master); o.start(t); o.stop(t+.25); }
 function sndSay(text){ if(!SND.pa || !SND.on || !window.speechSynthesis) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.rate=.95; u.pitch=.85; u.volume=.9; speechSynthesis.speak(u); }catch(e){} }
 /* the play is dead: tell the page now (it shows the play-by-play line), the post-play beat + result banner follow */
+/* scorer's celebration: the captured spike stays the most common; the rest are the procedural routines (checked on the fp27 rig) */
+const TD_STYLES = [['mocap',4],['heisman',1],['bowling',1],['golf',1],['archer',1],['dance',1],['kneel',.6]];
+function pickTdStyle(){ const tot=TD_STYLES.reduce((a,[,w])=>a+w,0); let r=Math.random()*tot; for(const [st,w] of TD_STYLES){ if((r-=w)<0) return st; } return 'mocap'; }
 function playDead(){ if(play && !play.deadSent){ play.deadSent=true; if(window.__onDead) window.__onDead(); } }
 function blowWhistle(){ playDead(); // ball over the plane when the play is dead = touchdown, whatever yardage the sim had planned (the fall can carry it across)
   if(!play.td && play.carrier && play.carrier.down!=null && play.res && (play.res.kind==='run' || play.res.kind==='complete') && !play.res.lock && play.goalZ!=null && ball.position.z >= play.goalZ-.03){ play.td=true; play.res.yards = Math.round(play.goalZ - (G.fieldPos-50)); }
