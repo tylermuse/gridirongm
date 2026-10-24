@@ -1,77 +1,342 @@
 {
  "panic_open_1": [
-  ["marcus","Alright. You know what time it is."],
-  ["tony","[excited] Oh, it's time. It's Panic Mode."],
-  ["marcus","Rules, for anybody new. I make the case this team's in trouble, Tony makes the case it isn't—"],
-  ["tony","—or the other way around, depending how I feel."],
-  ["marcus","And at the end, we both put a number on it. One, totally fine. Ten, hit the button."],
-  ["tony","And for the record, I've never gone below a six in my life."]
+  [
+   "marcus",
+   "Alright. You know what time it is."
+  ],
+  [
+   "tony",
+   "[excited] Oh, it's time. It's Panic Mode."
+  ],
+  [
+   "marcus",
+   "Rules, for anybody new. I make the case this team's in trouble, Tony makes the case it isn't—"
+  ],
+  [
+   "tony",
+   "—or the other way around, depending how I feel."
+  ],
+  [
+   "marcus",
+   "And at the end, we both put a number on it. One, totally fine. Ten, hit the button."
+  ],
+  [
+   "tony",
+   "And for the record, I've never gone below a six in my life."
+  ]
  ],
  "panic_open_2": [
-  ["tony","Marcus. I've got my hand over the button."],
-  ["marcus","[sighs] Of course you do. Welcome to Panic Mode, everybody."],
-  ["tony","Simple game. Is it time to panic on this team, or is everybody overreacting?"],
-  ["marcus","We argue it out, then we each give it a number. One to ten. Ten means blow the whole thing up."],
-  ["tony","One means relax, go make a sandwich, you're fine."]
+  [
+   "tony",
+   "Marcus. I've got my hand over the button."
+  ],
+  [
+   "marcus",
+   "[sighs] Of course you do. Welcome to Panic Mode, everybody."
+  ],
+  [
+   "tony",
+   "Simple game. Is it time to panic on this team, or is everybody overreacting?"
+  ],
+  [
+   "marcus",
+   "We argue it out, then we each give it a number. One to ten. Ten means blow the whole thing up."
+  ],
+  [
+   "tony",
+   "One means relax, go make a sandwich, you're fine."
+  ]
  ],
  "panic_verdict_1": [
-  ["marcus","Alright. Panic meter. One to ten, where are you?"],
-  ["tony","Oh, I've had my number ready for ten minutes."]
+  [
+   "marcus",
+   "Alright. Panic meter. One to ten, where are you?"
+  ],
+  [
+   "tony",
+   "Oh, I've had my number ready for ten minutes."
+  ]
  ],
  "panic_verdict_2": [
-  ["tony","Okay, Marcus. Number on the board. How scared are we?"],
-  ["marcus","[exhales] Let me think about this for a second."]
+  [
+   "tony",
+   "Okay, Marcus. Number on the board. How scared are we?"
+  ],
+  [
+   "marcus",
+   "[exhales] Let me think about this for a second."
+  ]
  ],
  "buysell_open_1": [
-  ["marcus","Time for Buy or Sell."],
-  ["tony","My favorite game. I've been buying since breakfast."],
-  ["marcus","Here's how it works. I put something on the board. A player, a number, a take that's going around—"],
-  ["tony","—and we tell you if we're buying it, or selling it."],
-  ["marcus","And there's no hold. You have to pick a side."],
-  ["tony","Hold is for cowards, Marcus."]
+  [
+   "marcus",
+   "Time for Buy or Sell."
+  ],
+  [
+   "tony",
+   "My favorite game. I've been buying since breakfast."
+  ],
+  [
+   "marcus",
+   "Here's how it works. I put something on the board. A player, a number, a take that's going around—"
+  ],
+  [
+   "tony",
+   "—and we tell you if we're buying it, or selling it."
+  ],
+  [
+   "marcus",
+   "And there's no hold. You have to pick a side."
+  ],
+  [
+   "tony",
+   "Hold is for cowards, Marcus."
+  ]
  ],
  "buysell_open_2": [
-  ["tony","We're playing Buy or Sell today."],
-  ["marcus","Three things on the board. For each one, buy or sell. No hedging."],
-  ["tony","He says no hedging like he doesn't hedge every single week."],
-  ["marcus","[chuckles] I commit. Eventually."]
+  [
+   "tony",
+   "We're playing Buy or Sell today."
+  ],
+  [
+   "marcus",
+   "Three things on the board. For each one, buy or sell. No hedging."
+  ],
+  [
+   "tony",
+   "He says no hedging like he doesn't hedge every single week."
+  ],
+  [
+   "marcus",
+   "[chuckles] I commit. Eventually."
+  ]
  ],
  "contender_open_1": [
-  ["tony","It's Contender or Pretender, baby."],
-  ["marcus","One question. When it's January and the weather turns, is this team still standing?"],
-  ["tony","We look at what's real, and what's smoke—"],
-  ["marcus","—and at the end, we each stamp it. Contender, or pretender."],
-  ["tony","Loser buys lunch."],
-  ["marcus","You still owe me two lunches."]
+  [
+   "tony",
+   "It's Contender or Pretender, baby."
+  ],
+  [
+   "marcus",
+   "One question. When it's January and the weather turns, is this team still standing?"
+  ],
+  [
+   "tony",
+   "We look at what's real, and what's smoke—"
+  ],
+  [
+   "marcus",
+   "—and at the end, we each stamp it. Contender, or pretender."
+  ],
+  [
+   "tony",
+   "Loser buys lunch."
+  ],
+  [
+   "marcus",
+   "You still owe me two lunches."
+  ]
  ],
  "contender_open_2": [
-  ["marcus","Contender or Pretender. Here's the game. The record says one thing. We figure out if it's lying."],
-  ["tony","Records lie all the time, Marcus. Mine says I'm undefeated at karaoke."],
-  ["marcus","That's because nobody's ever let you finish a song."],
-  ["tony","[laughs] Fair. That's fair."]
+  [
+   "marcus",
+   "Contender or Pretender. Here's the game. The record says one thing. We figure out if it's lying."
+  ],
+  [
+   "tony",
+   "Records lie all the time, Marcus. Mine says I'm undefeated at karaoke."
+  ],
+  [
+   "marcus",
+   "That's because nobody's ever let you finish a song."
+  ],
+  [
+   "tony",
+   "[laughs] Fair. That's fair."
+  ]
  ],
  "contender_verdict_1": [
-  ["marcus","Okay. Stamp it. Contender, or pretender?"],
-  ["tony","You first. I don't want you copying off me."]
+  [
+   "marcus",
+   "Okay. Stamp it. Contender, or pretender?"
+  ],
+  [
+   "tony",
+   "You first. I don't want you copying off me."
+  ]
  ],
  "signoff_1": [
-  ["marcus","That's our show."],
-  ["tony","And somebody tell that front office, we're watching."],
-  ["marcus","[chuckles] We'll see you next time."]
+  [
+   "marcus",
+   "That's our show."
+  ],
+  [
+   "tony",
+   "And somebody tell that front office, we're watching."
+  ],
+  [
+   "marcus",
+   "[chuckles] We'll see you next time."
+  ]
  ],
  "signoff_2": [
-  ["tony","Alright, that's it. I'm done yelling."],
-  ["marcus","For today."],
-  ["tony","For today. We'll see you next week."]
+  [
+   "tony",
+   "Alright, that's it. I'm done yelling."
+  ],
+  [
+   "marcus",
+   "For today."
+  ],
+  [
+   "tony",
+   "For today. We'll see you next week."
+  ]
  ],
  "banter_1": [
-  ["tony","I'm writing that down, by the way."],
-  ["marcus","You've written down every take you've ever had."],
-  ["tony","And some of them were right!"]
+  [
+   "tony",
+   "I'm writing that down, by the way."
+  ],
+  [
+   "marcus",
+   "You've written down every take you've ever had."
+  ],
+  [
+   "tony",
+   "And some of them were right!"
+  ]
  ],
  "banter_2": [
-  ["marcus","See, this is where you lose me."],
-  ["tony","I lose you every week, Marcus. You keep coming back."],
-  ["marcus","[laughs] It's my job."]
+  [
+   "marcus",
+   "See, this is where you lose me."
+  ],
+  [
+   "tony",
+   "I lose you every week, Marcus. You keep coming back."
+  ],
+  [
+   "marcus",
+   "[laughs] It's my job."
+  ]
+ ],
+ "panic_open_3": [
+  [
+   "marcus",
+   "Welcome to Panic Mode."
+  ],
+  [
+   "tony",
+   "[excited] My favorite half hour of the week."
+  ],
+  [
+   "marcus",
+   "For the new folks. We go through everything this team has going on, and every piece of it either feeds the panic, or calms it down."
+  ],
+  [
+   "tony",
+   "Then we each put a number on it. One, you're fine. Ten, somebody call the owner."
+  ],
+  [
+   "marcus",
+   "And Tony has never said a number under six."
+  ],
+  [
+   "tony",
+   "Because nobody's ever earned it."
+  ]
+ ],
+ "contender_open_3": [
+  [
+   "tony",
+   "Contender or Pretender. Let's go."
+  ],
+  [
+   "marcus",
+   "The record is the record. The question is whether it holds up when the games get real."
+  ],
+  [
+   "tony",
+   "So we go through what's real and what's fake, and then we stamp it."
+  ],
+  [
+   "marcus",
+   "Contender, or pretender. One word each. No 'it depends'."
+  ],
+  [
+   "tony",
+   "I have never once said 'it depends'."
+  ],
+  [
+   "marcus",
+   "You said it twice last week."
+  ]
+ ],
+ "contender_verdict_2": [
+  [
+   "tony",
+   "Alright, stamps out. Contender or pretender. I'm going first, because I'm not scared."
+  ],
+  [
+   "marcus",
+   "You're never scared. You're just wrong a lot."
+  ]
+ ],
+ "buysell_final_1": [
+  [
+   "marcus",
+   "Board's full. Last thing. One move. If you're the GM, what's the one thing you do before the deadline?"
+  ],
+  [
+   "tony",
+   "One move? I've got four."
+  ],
+  [
+   "marcus",
+   "One."
+  ]
+ ],
+ "banter_3": [
+  [
+   "tony",
+   "[laughs] Here come the spreadsheets."
+  ],
+  [
+   "marcus",
+   "The spreadsheets are why you still have a job."
+  ],
+  [
+   "tony",
+   "The spreadsheets are why nobody invites you to parties."
+  ]
+ ],
+ "banter_4": [
+  [
+   "marcus",
+   "Take a breath."
+  ],
+  [
+   "tony",
+   "I'm breathing! This is me breathing!"
+  ],
+  [
+   "marcus",
+   "[chuckles] Okay. Okay."
+  ]
+ ],
+ "signoff_3": [
+  [
+   "marcus",
+   "That'll do it for today."
+  ],
+  [
+   "tony",
+   "If you disagree with anything I said, you're wrong, and I love you."
+  ],
+  [
+   "marcus",
+   "[laughs] See you next time, everybody."
+  ]
  ]
 }

@@ -386,6 +386,17 @@ export function createLiveCoachEngine(
 
     events.push(makeEvent('kickoff', 'Kickoff fielded at the 25.', 0, false, 25));
     switchPossession(25);
+    // OT sudden death: the post-score kickoff above completes the scoring team's
+    // possession. If both teams have now had a possession and the score is no
+    // longer tied, the game is over. Checked HERE (after the PAT, which every
+    // caller applies before kicking off) rather than in handleTouchdown, so the
+    // team that just scored still gets its extra-point/2-pt try before the game
+    // can end. This also ends OT promptly — without it the end check only fires
+    // on the next live play, handing the loser a phantom extra possession, which
+    // is the tail of the crypticer. OT bug.
+    if (state.overtime && !state.isGameOver && state.homeScore !== state.awayScore && (state.otPossessionsCompleted ?? 0) >= 2) {
+      endGame(events);
+    }
   }
 
   function checkTwoMinWarning(events: PlayEvent[]) {
@@ -498,6 +509,12 @@ export function createLiveCoachEngine(
       bump(ok.qb, { passAttempts: 1, interceptions: 1 });
       bump(interceptor, { defensiveINTs: 1 });
       const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
+      // In OT, the possession that just threw the INT actually ran a play, so
+      // mark it before switching — otherwise otPossessionsCompleted never counts
+      // this turn and the OT end check can't fire after the opponent scores.
+      // (crypticer. bug: game continued after the opponent scored following a
+      // user interception in OT.)
+      if (state.overtime) state.otPlayRunThisPossession = true;
       switchPossession(returnPos);
       advancePlayClock(8, 0);
       return;

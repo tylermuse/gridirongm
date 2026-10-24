@@ -13,7 +13,7 @@ import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetr
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
-import { LiveSim3D, useSim3DMode } from '@/components/game/LiveSim3D';
+import { LiveSim3D, useSim3DMode, readSim3DPref } from '@/components/game/LiveSim3D';
 import { clockSeconds } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
@@ -55,6 +55,8 @@ function mergePlayerStats(
 // below + server-side in /api/game-audio). This env flag is only a local-dev
 // override so it can be tested on localhost without a premium account.
 const GAME_AUDIO_DEV_OVERRIDE = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
+/** 3D live sim free for everyone (launch window from 2026-10-23; decide with /admin/analytics → 3D Sim cohorts around 2026-11-06). */
+const SIM3D_FREE_FOR_ALL = true;
 /** A 50ms silent MP3: played inside the tap to unlock audio on phones. */
 const HALFTIME_UNLOCK_AUDIO = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwwAAAAAAAAAAAAEluZm8AAAAPAAAABAAAAlgAenp6enp6enp6enp6enp6enp6enp6enp6pqampqampqampqampqampqampqampqamptPT09PT09PT09PT09PT09PT09PT09PT09P/////////////////////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQCcQAAAAAAAAJY+/rsqgAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
 
@@ -174,6 +176,22 @@ function downLabel(down: number, yardsToGo: number): string {
   if (down < 1 || down > 4) return '';
   const ordinals = ['1st', '2nd', '3rd', '4th'];
   return `${ordinals[down - 1]} & ${yardsToGo <= 0 ? 'Goal' : yardsToGo}`;
+}
+
+/** Line of scrimmage as an NFL-style spot, e.g. "SF 35", "50", "KC 12".
+ *  fieldPos = yards from the possessing team's own end zone. */
+function ballOnLabel(
+  fieldPos: number | undefined,
+  possession: 'home' | 'away',
+  homeAbbr: string,
+  awayAbbr: string,
+): string {
+  if (fieldPos == null || !Number.isFinite(fieldPos)) return '';
+  const fp = Math.round(fieldPos);
+  if (fp === 50) return '50';
+  const offAbbr = possession === 'home' ? homeAbbr : awayAbbr;
+  const defAbbr = possession === 'home' ? awayAbbr : homeAbbr;
+  return fp < 50 ? `${offAbbr} ${fp}` : `${defAbbr} ${100 - fp}`;
 }
 
 
@@ -1063,8 +1081,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const { tier: subTier, isAdmin: subIsAdmin, isFoundingMember } = useSubscription();
   const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || subTier === 'premium' || subIsAdmin || isFoundingMember;
   const isPremium = subTier === 'premium' || subIsAdmin || isFoundingMember;
-  // 3D live sim is a Premium feature (founders + admins included): free users keep the 2D field and see an upgrade button instead of the toggle.
-  const sim3dOn = sim3dPref && isPremium;
+  // 3D live sim access. Launch experiment from 2026-10-23: free for everyone for ~2 weeks while /admin/analytics
+  // compares session length + return visits for devices with 3D on vs off (admin_sim3d_cohorts). Flip
+  // SIM3D_FREE_FOR_ALL to false to make it Premium-only again (founders + admins keep it either way).
+  const sim3dAllowed = SIM3D_FREE_FOR_ALL || isPremium;
+  const sim3dOn = sim3dPref && sim3dAllowed;
 
   // Pregame Show: Marcus + Tony break down the matchup before kickoff. Opens
   // automatically for the user's own games and holds the auto-start until the
@@ -1146,6 +1167,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // While the 3D sim is still running a play, its line isn't news yet: keep it out of the feed and the bug until the snap is over
   // While the 3D sim plays a snap its text is held back (no spoilers); it shows at the whistle, before the sim's result callout.
   const [sim3dDeadId, setSim3dDeadId] = useState<number | null>(null);
+  // Launch experiment telemetry: one row per game-page visit saying whether 3D was on (device cohort for admin_sim3d_cohorts)
+  const sim3dViewSentRef = useRef(false);
+  useEffect(() => {
+    if (sim3dViewSentRef.current || !game) return;
+    sim3dViewSentRef.current = true;
+    // read the saved choice directly: the hook's own read lands a render later than this first effect
+    trackEvent('sim3d_game_view', { game_id: id, on: sim3dAllowed && readSim3DPref(), allowed: sim3dAllowed, premium: isPremium });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per visit
+  }, [game]);
+  const [tabHidden, setTabHidden] = useState(false);
+  useEffect(() => {
+    const on = () => setTabHidden(document.visibilityState === 'hidden');
+    on(); document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
   const simLastId = revealedEvents[revealedEvents.length - 1]?.id ?? null;
   const simHoldId = sim3dOn && sim3dActive && simLastId !== sim3dDeadId ? simLastId : null;
   const displayEvents = useMemo(() => [...revealedEvents].reverse().filter(e => e.id !== simHoldId), [revealedEvents, simHoldId]);
@@ -1210,7 +1246,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       // (Only when a revealed play is actually on the field — at kickoff the
       // engine pivots before anything is shown, and nothing would ever report
       // completion.)
-      if (!animationComplete && speed !== 'max' && allEvents[revealedCount - 1]) return;
+      if (!animationComplete && !tabHidden && speed !== 'max' && allEvents[revealedCount - 1]) return;
       setLiveCoachPaused(true);
       setIsPlaying(false);
       return;
@@ -1258,7 +1294,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents, sim3dActive]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents, sim3dActive, tabHidden]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -1284,7 +1320,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // speed-timer path entirely so the two don't race.
     if (broadcastOn) return;
     if (pregameOpen) return; // hold until Kick Off
-    if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
+    // a background tab never fires the 2D field's animation frames: don't wait on them there, or the CPU's drive freezes
+    if ((!animationComplete && !tabHidden) || !isPlaying || isFinished || speed === 'max') return;
     if (sim3dActive) return; // wait for the 3D sim to finish the play
     // Live Coach pause: stop here, surface the play call menu instead of advancing
     if (shouldPauseForLiveCoach) {
@@ -1304,7 +1341,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       currentEvent?.type === 'field_goal_good' ||
       currentEvent?.type === 'punt' ||
       currentEvent?.isScoring === true;
-    const pause = PAUSE_MS[speed] + (isBigMoment ? TURNOVER_EXTRA[speed] : 0);
+    // the 3D sim already holds on a score / kick (celebration, ref signal, result banner): no second dwell on top (Tyler: FG/PAT ran twice as long as it should)
+    const pause = PAUSE_MS[speed] + (isBigMoment && !sim3dOn ? TURNOVER_EXTRA[speed] : 0);
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
         if (prev >= totalEvents) {
@@ -1321,7 +1359,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen, sim3dActive]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen, sim3dActive, tabHidden, sim3dOn]);
 
   // ── Live game clock: tick the scorebug clock down between play reveals ──
   // 2026-09-20/21 spec (gojostyttt, 4 votes on #football-feature-vote). Each
@@ -2239,7 +2277,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               width on desktop. Hidden when empty. */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border)] empty:hidden">
           {/* 3D live sim toggle — plays every snap in the three.js chase-cam sim */}
-          {!isFinished && !isPremium && (
+          {!isFinished && !sim3dAllowed && (
             <Link
               href="/pricing"
               className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]"
@@ -2248,9 +2286,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               🎥 3D Sim <span className="ml-1 rounded bg-amber-400 px-1 text-[10px] font-bold text-black">✨ Premium</span>
             </Link>
           )}
-          {!isFinished && isPremium && (
+          {!isFinished && sim3dAllowed && (
             <button
-              onClick={() => setSim3dOn(!sim3dOn)}
+              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium }); setSim3dOn(!sim3dOn); }}
               className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 sim3dOn
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
@@ -2567,12 +2605,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                             <div className="text-xs text-[var(--text-sec)] font-mono">{ev.timeStr}</div>
                           </div>
                           {ev.down >= 1 && ev.down <= 4 && (
-                            <Badge
-                              variant={ev.down === 4 ? 'red' : ev.down === 3 ? 'amber' : 'default'}
-                              size="sm"
-                            >
-                              {downLabel(ev.down, ev.yardsToGo)}
-                            </Badge>
+                            <div className="w-[68px] shrink-0 flex flex-col items-center gap-0.5">
+                              <Badge
+                                variant={ev.down === 4 ? 'red' : ev.down === 3 ? 'amber' : 'default'}
+                                size="sm"
+                              >
+                                {downLabel(ev.down, ev.yardsToGo)}
+                              </Badge>
+                              {ballOnLabel(ev.fieldPos, ev.possession, homeAbbr, awayAbbr) && (
+                                <span
+                                  className="text-[10px] font-mono text-[var(--text-sec)] whitespace-nowrap"
+                                  title="Line of scrimmage"
+                                >
+                                  {ballOnLabel(ev.fieldPos, ev.possession, homeAbbr, awayAbbr)}
+                                </span>
+                              )}
+                            </div>
                           )}
                           <div className="flex-1">
                             <p className={`text-sm leading-snug ${playTextColor(ev.type)}`}>
@@ -3067,7 +3115,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
                 >
                   <span className="text-xs sm:text-sm text-[var(--text)]">
-                    ✨ <span className="font-bold">Go Premium</span> for a fully AI-written, game-specific pregame show every week — plus the live audio broadcast and every play in the 3D live sim.
+                    ✨ <span className="font-bold">Go Premium</span> for a fully AI-written, game-specific pregame show every week — plus the live audio broadcast.
                   </span>
                   <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
                 </Link>
@@ -3156,7 +3204,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
                   >
                     <span className="text-xs sm:text-sm text-[var(--text)]">
-                      🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast and every play in the 3D live sim.
+                      🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast.
                     </span>
                     <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
                   </Link>

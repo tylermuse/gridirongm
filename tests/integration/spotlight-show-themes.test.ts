@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   THEMES, WIDE_CLIPS, WIDE_BANTER, SIGNOFFS, themeFor, planTheme, verdictTopicNotes,
-  parseVerdict, parseCalls, wideLineAt, VERDICT_HEADLINE,
+  parseVerdict, parseCalls, wideLineAt, VERDICT_HEADLINE, verdictHeadline,
 } from '@/lib/spotlight/showThemes';
 import { buildShowScript, type ShowSegment, type ShowTopicInput } from '@/lib/spotlight/showScript';
 import { themePlan, writerTopics } from '@/lib/spotlight/showEpisode';
@@ -76,7 +76,13 @@ describe('verdicts and calls from the writer', () => {
     expect(parseVerdict('panic', { marcus: 0, tony: 9 })).toBeNull();
     expect(parseVerdict('panic', { marcus: 'contender', tony: 9 })).toBeNull();
     expect(parseVerdict('contender', { marcus: 'contender', tony: 'pretender' })).toEqual({ marcus: 'contender', tony: 'pretender' });
-    expect(parseVerdict('buysell', { marcus: 'buy', tony: 'sell' })).toBeNull();
+  });
+  it('Buy or Sell closes on each host\'s one move: a few words, not a number', () => {
+    expect(parseVerdict('buysell', { marcus: ' Trade for a corner ', tony: 'Sell high on the back' })).toEqual({ marcus: 'Trade for a corner', tony: 'Sell high on the back' });
+    expect(parseVerdict('buysell', { marcus: 4, tony: 'Sell' })).toBeNull();
+    expect(parseVerdict('buysell', { marcus: 'x'.repeat(41), tony: 'Sell' })).toBeNull();
+    expect(verdictHeadline('buysell')).toBe('The one move');
+    expect(verdictHeadline('panic')).toBe(VERDICT_HEADLINE);
   });
   it('Buy or Sell takes buy/sell calls only', () => {
     expect(parseCalls('buysell', { marcus: 'buy', tony: 'sell' })).toEqual({ marcus: 'buy', tony: 'sell' });
@@ -88,7 +94,9 @@ describe('verdicts and calls from the writer', () => {
     const notes = verdictTopicNotes(plan).join('\n');
     expect(notes).toContain(plan.verdictClip!.first === 'marcus' ? 'Marcus answers first' : 'Tony answers first');
     expect(notes).toContain('"verdict"');
-    expect(verdictTopicNotes(planTheme('buysell', 'seed')!)).toEqual([]);
+    const bs = verdictTopicNotes(planTheme('buysell', 'seed')!).join('\n');
+    expect(bs).toContain('Tony answers first');
+    expect(bs).toContain('one move');
   });
 });
 

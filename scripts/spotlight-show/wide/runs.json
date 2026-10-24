@@ -1,0 +1,340 @@
+{
+ "panic_open_1": {
+  "dur": 21.394286,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.0,
+    "b": 8.96,
+    "start": 0.0,
+    "id": "panic_open_1__0"
+   },
+   {
+    "kind": "p",
+    "a": 8.96,
+    "b": 21.394286,
+    "start": 8.96,
+    "id": "panic_open_1__1"
+   }
+  ]
+ },
+ "panic_open_2": {
+  "dur": 19.252245,
+  "segs": [
+   {
+    "kind": "p",
+    "a": 0.0,
+    "b": 2.24,
+    "start": 0.0,
+    "id": "panic_open_2__0"
+   },
+   {
+    "kind": "c",
+    "a": 2.24,
+    "b": 19.252245,
+    "start": 2.24,
+    "id": "panic_open_2__1"
+   }
+  ]
+ },
+ "panic_verdict_1": {
+  "dur": 5.929796,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.6,
+    "b": 3.48,
+    "start": 0.0,
+    "id": "panic_verdict_1__0"
+   },
+   {
+    "kind": "p",
+    "a": 3.48,
+    "b": 5.929796,
+    "start": 3.48,
+    "id": "panic_verdict_1__1"
+   }
+  ]
+ },
+ "panic_verdict_2": {
+  "dur": 7.000816,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.0,
+    "b": 3.9,
+    "start": 0.0,
+    "id": "panic_verdict_2__0"
+   },
+   {
+    "kind": "p",
+    "a": 3.9,
+    "b": 7.000816,
+    "start": 3.9,
+    "id": "panic_verdict_2__1"
+   }
+  ]
+ },
+ "buysell_open_1": {
+  "dur": 19.722449,
+  "segs": [
+   {
+    "kind": "p",
+    "a": 0.0,
+    "b": 5.84,
+    "start": 0.0,
+    "id": "buysell_open_1__0"
+   },
+   {
+    "kind": "c",
+    "a": 5.84,
+    "b": 17.36,
+    "start": 5.84,
+    "id": "buysell_open_1__1"
+   },
+   {
+    "kind": "p",
+    "a": 17.36,
+    "b": 19.722449,
+    "start": 17.36,
+    "id": "buysell_open_1__2"
+   }
+  ]
+ },
+ "buysell_open_2": {
+  "dur": 12.199184,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.0,
+    "b": 6.24,
+    "start": 0.0,
+    "id": "buysell_open_2__0"
+   },
+   {
+    "kind": "p",
+    "a": 6.24,
+    "b": 12.199184,
+    "start": 6.24,
+    "id": "buysell_open_2__1"
+   }
+  ]
+ },
+ "contender_open_1": {
+  "dur": 18.285714,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.0,
+    "b": 14.91,
+    "start": 0.0,
+    "id": "contender_open_1__0"
+   },
+   {
+    "kind": "p",
+    "a": 14.91,
+    "b": 18.285714,
+    "start": 14.91,
+    "id": "contender_open_1__1"
+   }
+  ]
+ },
+ "contender_open_2": {
+  "dur": 14.863673,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.0,
+    "b": 5.46,
+    "start": 0.0,
+    "id": "contender_open_2__0"
+   },
+   {
+    "kind": "p",
+    "a": 5.46,
+    "b": 14.863673,
+    "start": 5.46,
+    "id": "contender_open_2__1"
+   }
+  ]
+ },
+ "contender_verdict_1": {
+  "dur": 5.668571,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.0,
+    "b": 2.93,
+    "start": 0.0,
+    "id": "contender_verdict_1__0"
+   },
+   {
+    "kind": "p",
+    "a": 2.93,
+    "b": 5.668571,
+    "start": 2.93,
+    "id": "contender_verdict_1__1"
+   }
+  ]
+ },
+ "signoff_1": {
+  "dur": 5.250612,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.0,
+    "b": 5.250612,
+    "start": 0.0,
+    "id": "signoff_1__0"
+   }
+  ]
+ },
+ "signoff_2": {
+  "dur": 5.276735,
+  "segs": [
+   {
+    "kind": "p",
+    "a": 0.6,
+    "b": 5.276735,
+    "start": 0.0,
+    "id": "signoff_2__0"
+   }
+  ]
+ },
+ "banter_1": {
+  "dur": 6.112653,
+  "segs": [
+   {
+    "kind": "p",
+    "a": 0.0,
+    "b": 6.112653,
+    "start": 0.0,
+    "id": "banter_1__0"
+   }
+  ]
+ },
+ "banter_2": {
+  "dur": 6.373878,
+  "segs": [
+   {
+    "kind": "p",
+    "a": 0.0,
+    "b": 6.373878,
+    "start": 0.0,
+    "id": "banter_2__0"
+   }
+  ]
+ },
+ "panic_open_3": {
+  "dur": 24.163265,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.6,
+    "b": 17.895000000000003,
+    "start": 0.0,
+    "id": "panic_open_3__0"
+   },
+   {
+    "kind": "p",
+    "a": 17.895000000000003,
+    "b": 24.163265,
+    "start": 17.895000000000003,
+    "id": "panic_open_3__1"
+   }
+  ]
+ },
+ "contender_open_3": {
+  "dur": 23.510204,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.6,
+    "b": 17.44,
+    "start": 0.0,
+    "id": "contender_open_3__0"
+   },
+   {
+    "kind": "p",
+    "a": 17.44,
+    "b": 23.510204,
+    "start": 17.44,
+    "id": "contender_open_3__1"
+   }
+  ]
+ },
+ "contender_verdict_2": {
+  "dur": 7.444898,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.6,
+    "b": 4.955,
+    "start": 0.0,
+    "id": "contender_verdict_2__0"
+   },
+   {
+    "kind": "p",
+    "a": 4.955,
+    "b": 7.444898,
+    "start": 4.955,
+    "id": "contender_verdict_2__1"
+   }
+  ]
+ },
+ "buysell_final_1": {
+  "dur": 10.396735,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.6,
+    "b": 6.8,
+    "start": 0.0,
+    "id": "buysell_final_1__0"
+   },
+   {
+    "kind": "p",
+    "a": 6.8,
+    "b": 10.396735,
+    "start": 6.8,
+    "id": "buysell_final_1__1"
+   }
+  ]
+ },
+ "banter_3": {
+  "dur": 8.411429,
+  "segs": [
+   {
+    "kind": "p",
+    "a": 0.6,
+    "b": 8.411429,
+    "start": 0.0,
+    "id": "banter_3__0"
+   }
+  ]
+ },
+ "banter_4": {
+  "dur": 6.086531,
+  "segs": [
+   {
+    "kind": "p",
+    "a": 0.6,
+    "b": 6.086531,
+    "start": 0.0,
+    "id": "banter_4__0"
+   }
+  ]
+ },
+ "signoff_3": {
+  "dur": 8.071837,
+  "segs": [
+   {
+    "kind": "c",
+    "a": 0.6,
+    "b": 8.071837,
+    "start": 0.0,
+    "id": "signoff_3__0"
+   }
+  ]
+ }
+}
