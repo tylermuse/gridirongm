@@ -55,16 +55,20 @@ function useSimView(): [{ cam: SimCam; lighting: SimLighting }, (v: Partial<{ ca
   return [view, setView];
 }
 
+/** The browser's saved 3D choice (or the ?sim3d= override). Client only. */
+export function readSim3DPref(): boolean {
+  if (typeof window === 'undefined') return false;
+  const q = new URLSearchParams(window.location.search).get('sim3d');
+  if (q !== null) return q === '1' || q === 'on';
+  try { return window.localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
+}
+
 export function useSim3DMode(): [boolean, (on: boolean) => void] {
   const [on, setOnState] = useState(false);
   useEffect(() => {
     // effect-gated read of URL / localStorage so SSR and the first client render agree (no hydration mismatch)
-    const q = new URLSearchParams(window.location.search).get('sim3d');
-    let v = false;
-    if (q !== null) v = q === '1' || q === 'on';
-    else { try { v = window.localStorage.getItem(STORAGE_KEY) === '1'; } catch { /* storage blocked */ } }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from browser state on mount
-    setOnState(v);
+    setOnState(readSim3DPref());
   }, []);
   const setOn = useCallback((v: boolean) => {
     setOnState(v);

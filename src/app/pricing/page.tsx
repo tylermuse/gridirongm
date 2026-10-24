@@ -6,7 +6,6 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { PREMIUM_PRICE_ID, PODCAST_CREDITS_PER_MONTH, EPISODE_PACK } from '@bs/core/billing';
 
 const PREMIUM_FEATURES = [
-  '3D live sim — watch every play of your games in 3D, from four camera angles',
   'Ad-free experience',
   'AI commentary on every game',
   `${PODCAST_CREDITS_PER_MONTH.premium} Team Spotlight episodes a month (video show or podcast) — need more? ${EPISODE_PACK.credits} extra for ${EPISODE_PACK.priceLabel}, anytime`,
@@ -16,6 +15,7 @@ const PREMIUM_FEATURES = [
 ];
 
 const FREE_FEATURES = [
+  '3D live sim — every play of your games in 3D (free for everyone during launch)',
   'Full season simulation',
   'Draft, free agency, trades',
   'All stats, standings, history',
@@ -27,7 +27,6 @@ const FREE_FEATURES = [
 
 const FREE_LIMITATIONS = [
   'Banner ads',
-  'No 3D live sim',
   'No AI commentary',
   'No podcast generation',
 ];
