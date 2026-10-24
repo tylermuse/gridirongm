@@ -3,7 +3,7 @@
  *
  * The Spotlight topics are written as debate-show copy (punchy, a stat in
  * every line). Read aloud, that sounds like two bots trading lines. Before
- * voicing an episode, a writer model (Gemini, with Claude as the backup)
+ * voicing an episode, a writer model (GPT-5.4 mini; Gemini, then Claude as backups)
  * rewrites the topics' notes as one unscripted conversation between the
  * hosts — reacting, conceding, interrupting, calling back — using only the
  * facts in the notes. Server-only.
@@ -21,16 +21,17 @@ import { THEMES, WIDE_BANTER, parseCalls, parseVerdict, type ThemePlan } from '.
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-/** Claude, the backup writer (and the original one). */
+/** Claude, the last backup (and the original writer: best, but ~10x the price). */
 export const WRITER_MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-opus-5-5';
-/** Gemini, the main writer: about a seventh of Opus's price per episode. */
+/** Gemini, the first backup (same price class as GPT-5.4 mini). */
 export const GEMINI_WRITER_MODEL = process.env.SPOTLIGHT_SHOW_GEMINI_MODEL || 'gemini-3-flash-preview';
-/** OpenAI, the last resort. */
+/** OpenAI, the main writer: about a tenth of Opus's price per episode, and
+ *  side by side the scripts held up. */
 export const OPENAI_WRITER_MODEL = process.env.SPOTLIGHT_SHOW_OPENAI_MODEL || 'gpt-5.4-mini';
 export type WriterProvider = 'gemini' | 'claude' | 'openai';
 /** Who writes, in order: the next one takes over if one fails before
  *  writing a line (no key, outage, out of credit). */
-export const WRITERS: WriterProvider[] = (process.env.SPOTLIGHT_SHOW_WRITERS || 'gemini,claude,openai')
+export const WRITERS: WriterProvider[] = (process.env.SPOTLIGHT_SHOW_WRITERS || 'openai,gemini,claude')
   .split(',').map(w => w.trim()).filter((w): w is WriterProvider => w === 'gemini' || w === 'claude' || w === 'openai');
 const TIMEOUT_MS = 110_000;
 /** How long the model deliberates before writing (it thinks adaptively).
