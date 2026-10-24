@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
+import { SpotlightCallIn } from '@/components/game/SpotlightCallIn';
 import { SpotlightShowPlayer } from '@/components/game/SpotlightShowPlayer';
 import { episodeLabelFor } from '@/components/game/SpotlightShowPoster';
 import { buildGameTopics, gameTopicsForMoment } from '@/lib/spotlight/showGame';
@@ -696,6 +697,21 @@ function TeamSpotlightSection({
   const aiLoading = false; // never block rendering
   const topics = hasAiTopics ? aiState.topics! : templateTopics;
 
+  // Grounding for the Call-In chat — same options the episode fetch uses so
+  // Marcus & Tony argue from the same facts they used on air.
+  const callInOpts = React.useMemo(() => ({
+    team, roster, allTeams, allPlayers, season, week,
+    phase: ctx?.phase ?? 'regular',
+    narrative: currentNarrative,
+    newsItems, draftResults, playoffBracket, playoffSeeds, champions,
+    tradeDeadlineWeek: leagueSettings?.tradeDeadlineWeek ?? 12,
+    nextOpponentId: (ctx?.phase ?? 'regular') === 'playoffs'
+      ? (playoffsState.eliminated || playoffsState.championshipDone ? null : playoffsState.nextOpponentId)
+      : undefined,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [team.id, team.record.wins, team.record.losses, season, week, ctx?.phase, currentNarrative, playoffsState.nextOpponentId, roster.length]);
+  const callInWeekKey = `${team.id}-s${season}-w${week}-${ctx?.phase ?? 'regular'}-${currentNarrative}`;
+
   // Delay podcast button 8s so AI has a chance to replace templates first
   const [podcastReady, setPodcastReady] = React.useState(false);
   React.useEffect(() => {
@@ -889,6 +905,7 @@ function TeamSpotlightSection({
               );
             })}
           </div>
+          <SpotlightCallIn fetchOpts={callInOpts} episode={topics} weekKey={callInWeekKey} />
         </div>
       </Card>
     </div>

@@ -123,7 +123,7 @@ export function detectNarrativeMoment(
   return 'weekly';
 }
 
-interface FetchOptions {
+export interface FetchOptions {
   team: Team;
   roster: Player[];
   allTeams: Team[];
@@ -149,39 +149,19 @@ interface FetchOptions {
   nextOpponentId?: string | null;
 }
 
-export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
+/**
+ * Build the grounding payload Marcus & Tony see for a team. Shared by the
+ * Spotlight episode generator and the Call-In chat so both speak from the
+ * same facts.
+ */
+export function buildSpotlightTeamData(opts: FetchOptions): Record<string, unknown> {
   const { team, roster, allTeams, allPlayers, season, week, phase, narrative } = opts;
-
   const gp = team.record.wins + team.record.losses;
-  // Allow preseason (gp=0) and seasonOver
-  if (gp === 0 && narrative !== 'preseason' && narrative !== 'seasonOver') return Promise.resolve();
-
-  // During playoffs, both `narrative` (playoffsStart) and `week` (frozen at
-  // 18) are static across rounds, so without a round-aware suffix the cache
-  // would serve the wild-card preview after a divisional win. Tag the key
-  // with the user's completed playoff games so each round refetches.
-  // Also tag with the resolved next-opponent id (when supplied) so a stale
-  // prior-round cache entry can't re-render with the wrong team even if the
-  // win count happens to match — 5/22 stale-opponent guard.
-  let cacheNarrative: string = narrative;
   let userPlayoffWins = 0;
-  let userPlayoffLosses = 0;
   if (phase === 'playoffs' && opts.playoffBracket) {
     const userGames = opts.playoffBracket.filter(m => m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
     userPlayoffWins = userGames.filter(m => m.winnerId === team.id).length;
-    userPlayoffLosses = userGames.filter(m => m.winnerId && m.winnerId !== team.id).length;
-    const oppKey = opts.nextOpponentId ? `-no${opts.nextOpponentId}` : '';
-    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}${oppKey}`;
   }
-
-  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${cacheNarrative}`);
-  if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
-
-  cache.key = key;
-  cache.topics = null;
-  cache.loading = true;
-  cache.error = false;
-  notify();
 
   const activeRoster = roster.filter(p => !p.retired);
   const topPlayers = [...activeRoster].sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 10);
@@ -506,6 +486,44 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
       .map(n => n.headline);
     teamData.tradesThisSeason = seasonTrades;
   }
+  return teamData;
+}
+
+export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
+  const { team, roster, season, week, phase, narrative } = opts;
+
+  const gp = team.record.wins + team.record.losses;
+  // Allow preseason (gp=0) and seasonOver
+  if (gp === 0 && narrative !== 'preseason' && narrative !== 'seasonOver') return Promise.resolve();
+
+  // During playoffs, both `narrative` (playoffsStart) and `week` (frozen at
+  // 18) are static across rounds, so without a round-aware suffix the cache
+  // would serve the wild-card preview after a divisional win. Tag the key
+  // with the user's completed playoff games so each round refetches.
+  // Also tag with the resolved next-opponent id (when supplied) so a stale
+  // prior-round cache entry can't re-render with the wrong team even if the
+  // win count happens to match — 5/22 stale-opponent guard.
+  let cacheNarrative: string = narrative;
+  let userPlayoffWins = 0;
+  let userPlayoffLosses = 0;
+  if (phase === 'playoffs' && opts.playoffBracket) {
+    const userGames = opts.playoffBracket.filter(m => m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    userPlayoffWins = userGames.filter(m => m.winnerId === team.id).length;
+    userPlayoffLosses = userGames.filter(m => m.winnerId && m.winnerId !== team.id).length;
+    const oppKey = opts.nextOpponentId ? `-no${opts.nextOpponentId}` : '';
+    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}${oppKey}`;
+  }
+
+  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${cacheNarrative}`);
+  if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
+
+  cache.key = key;
+  cache.topics = null;
+  cache.loading = true;
+  cache.error = false;
+  notify();
+
+  const teamData = buildSpotlightTeamData(opts);
 
   // Build a pool of fallback player names from the user roster.
   // The AI sometimes forgets to set playerName on player exchanges — we
