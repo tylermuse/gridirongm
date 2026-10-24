@@ -115,7 +115,7 @@ function CallChip({ host, call, delay, ms }: { host: Host; call: 'buy' | 'sell';
   );
 }
 
-/** The closing verdict: each host's panic meter (1–10) or stamp. */
+/** The closing verdict: each host's panic meter (1–10), stamp, or one move. */
 function VerdictBoard({ verdict, ms }: { verdict: Verdict; ms: number }) {
   return (
     <div className="my-auto grid grid-cols-2 gap-[1.2em] py-[0.4em]">
@@ -140,6 +140,10 @@ function VerdictBoard({ verdict, ms }: { verdict: Verdict; ms: number }) {
                   ))}
                 </div>
               </>
+            ) : v !== 'contender' && v !== 'pretender' ? (
+              <div className="mt-[0.45em] text-center text-[1.05em] font-black uppercase leading-[1.15] tracking-[0.04em] text-[#1e3a5f]" style={{ opacity: p, transform: `translateY(${(1 - p) * 0.4}em)` }}>
+                {String(v)}
+              </div>
             ) : (
               <div
                 className={`mt-[0.45em] rounded-[0.2em] border-[0.16em] px-[0.5em] py-[0.05em] text-[1.6em] font-black uppercase tracking-[0.08em] ${v === 'contender' ? 'border-emerald-600 text-emerald-600' : 'border-red-600 text-red-600'}`}

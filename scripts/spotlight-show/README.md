@@ -67,18 +67,46 @@ one face per render, so each host is rendered on his own crop of the studio
 two-shot and both are composited back over the still:
 
 1. Add the back-and-forth to `wide/scripts.json` (`[["marcus","…"],["tony","…"]]`).
-2. Voice it: `python3 dlg.py <key>.json <key>.mp3` (ElevenLabs v3 dialogue; also
-   writes `<key>.mp3.spans.json`, each line's time span). Then give it a lead-in —
-   HeyGen's lips start late when speech begins at 0s:
-   `ffmpeg -i <key>.mp3 -af "adelay=600|600,apad=pad_dur=0.4" <key>_p.mp3` and shift
-   the spans by 0.6s; use the padded files from here on, with `speech.start: 0.35`
-   in wideClips.json.
+2. Voice it: `python3 dlg.py <key>.json <key>.mp3` (ElevenLabs v3 dialogue). It
+   writes `<key>.mp3` with a 0.6 s lead-in (HeyGen's lips start late when speech
+   begins at 0 s; use `speech.start: 0.35` in wideClips.json) and
+   `<key>.mp3.spans.json`, each line's time span. ElevenLabs' own per-line
+   timestamps tile the audio and often land mid-word, so `snap_spans.py` moves
+   each cut to the pause between the lines (the player does the same for
+   generated lines, `snapLineCuts` in loudness.ts).
 3. `python3 split_tracks.py <key>` → `<key>.marcus.mp3` / `<key>.tony.mp3`
    (the other host's turns silenced).
-4. Render each track in HeyGen Avatar 4 (Expressive) on its crop:
-   `crop_marcus.png` / `crop_tony.png` (600×600 crops of `medium.png`, the
-   1920×1080 two-shot; kept in show-assets/wide2) → `<key>.marcus.mp4` /
-   `<key>.tony.mp4`.
-5. `python3 compose_wide.py <key>` → `<key>.mp4`; copy to `public/show/wide/`,
-   add it to `src/lib/spotlight/wideClips.json` (lines + spans), and re-run
-   `measure_levels.py`.
+4. Decide the shots: in `shots.json`, one letter per line — `p` the hosts face
+   each other, `c` they face the camera (rules and welcomes to camera, jabs
+   and reactions to each other; banter stays face to face). Then
+   `python3 plan_shots.py` writes `plan.json` (the segments of each clip) and,
+   for every camera segment, an audio slice per host in `seg/` (0.6 s lead-in).
+5. Render in HeyGen Avatar 4 (Expressive, 1080p):
+   - the whole clip per host on the facing-each-other crops
+     `crop_marcus.png` / `crop_tony.png` → `<key>.marcus.mp4` / `<key>.tony.mp4`;
+   - every camera segment per host on the facing-camera crops
+     `crop_marcus_cam.png` / `crop_tony_cam.png` (cut from `medium_cam.png`,
+     the same still with both hosts turned to the lens) →
+     `<key>__<n>.marcus.cam.mp4` / `<key>__<n>.tony.cam.mp4`.
+   All crops and stills live in show-assets/wide2.
+   Face-to-face segments are rendered on the grinning still `medium_smile.png`
+   (crops `crop_marcus_smile.png` / `crop_tony_smile.png`) — those lines are
+   the jabs — and camera segments on `medium_cam.png`.
+6. `python3 compose_shots.py <key>` → `<key>.mp4` and `<key>.timing.json`:
+   at every shot change a 1 s clip of the hosts actually turning their heads
+   (`turn_pc.mp4` / `turn_cp.mp4`: a Seedance start-frame/end-frame
+   generation between the two stills, retimed, persons only composited over
+   the still; `turn_cp` is `turn_pc` reversed) is cut in at the pause, with
+   1 s of silence added to the audio, so every line after a turn moves back
+   by 1 s — `timing.json` has the lines' final spans. Every HeyGen render is
+   delayed 0.16 s (its lips run ahead of the voice by about that). Copy to
+   `public/show/wide/`, put the timing.json spans, duration and shots into
+   `src/lib/spotlight/wideClips.json`, and re-run `measure_levels.py`.
+7. Grins only where they belong: in `shots.json` a face-to-face line is `P`
+   (grinning: a joke, an insult, or the reaction to one) or `p`
+   (straight-faced: the whole-clip renders on `medium.png`). The per-segment
+   renders were made for the c/p runs saved in `runs.json`; a `P` line is cut
+   out of the pair render of the run it falls in, so re-splitting P/p needs no
+   re-render (`python3 plan_shots.py --plan-only`). p↔P is a 0.35 s crossfade
+   at the pause; c↔p turns use the straight-faced `turn_pc_n.mp4` /
+   `turn_cp_n.mp4` (Seedance, medium.png → medium_cam.png)..
