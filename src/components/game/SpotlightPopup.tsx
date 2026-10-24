@@ -4,9 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { COMMENTATORS } from '@/lib/engine/debate';
-import { fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
+import { detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { useAiCommentary } from '@/components/providers/useAiCommentary';
 import { shouldShowSpotlightPopup } from '@/lib/engine/spotlightAccess';
 
 /**
@@ -38,9 +37,8 @@ export function SpotlightPopup() {
   const pathname = usePathname();
   const {
     teams, userTeamId, season, week, phase, playoffBracket, playoffSeeds,
-    players, leagueSettings, newsItems, draftResults, champions,
+    leagueSettings,
   } = useGameStore();
-  const aiOn = useAiCommentary();
   const { hasFeature, loading: subLoading } = useSubscription();
   const isPremium = subLoading || hasFeature('ai_commentary');
 
@@ -80,23 +78,16 @@ export function SpotlightPopup() {
     // Same rule for every tier: ordinary weeks never pop up.
     if (!isMoment) return;
 
-    // Premium: warm the shared AI cache so the dashboard has topics ready.
-    if (aiOn) {
-      const roster = players.filter(p => p.teamId === userTeam.id);
-      fetchAiSpotlight({
-        team: userTeam, roster, allTeams: teams, allPlayers: players,
-        season, week, phase, narrative,
-        newsItems, draftResults, playoffBracket, playoffSeeds, champions,
-        tradeDeadlineWeek,
-      }).catch(() => { /* errors handled via cache.error subscribers */ });
-    }
+    // The Spotlight itself is written when the dashboard is opened (not
+    // here): no AI call for someone who advances past the moment without
+    // looking at it.
 
     if (lastShownKey === currentKey) return; // already shown this state
     sessionStorage.setItem(STORAGE_KEY, currentKey);
     setShouldShow(true);
     setDismissed(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentKey, userTeamId, phase, playoffGamesPlayed, aiOn]);
+  }, [currentKey, userTeamId, phase, playoffGamesPlayed]);
 
   // Slide-in animation
   useEffect(() => {

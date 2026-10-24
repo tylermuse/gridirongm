@@ -130,7 +130,7 @@ export function SpotlightShowPoster({
         >
           {busy ? (
             <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-purple-700 shadow-lg">
-              <span className="animate-pulse">📺</span> {player === 'loading' ? 'Producing your episode…' : 'Getting your episode ready…'}
+              <span className="animate-pulse">📺</span> {player === 'loading' ? 'Producing your episode…' : 'Loading this week’s Spotlight…'}
             </span>
           ) : exhausted && !gated ? (
             <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-slate-600 shadow-lg">

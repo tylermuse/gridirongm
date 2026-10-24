@@ -115,11 +115,13 @@ export async function generateSpeech(text: string, voiceId: string): Promise<Buf
 }
 
 
-// ── Dialogue (ElevenLabs v3) ──────────────────────────────────────────
-// The show voices each topic's conversation in one pass with v3's
+// ── Dialogue (ElevenLabs v4 Turbo) ────────────────────────────────────
+// The show voices each topic's conversation in one pass with
 // text-to-dialogue, so turn-taking, pace and reactions sound like two
 // people talking to each other instead of separately read lines.
-export const DIALOGUE_MODEL_ID = 'eleven_v3';
+// v4 Turbo: same delivery tags and timestamps as v3, half the price per
+// character ($0.04 vs $0.08 per 1K); side by side it sounded the same.
+export const DIALOGUE_MODEL_ID = 'eleven_v4_turbo';
 
 export interface DialogueLine { voiceId: string; text: string }
 export interface VoicedDialogue {

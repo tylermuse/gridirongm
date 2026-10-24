@@ -48,7 +48,9 @@ interface CreditState {
 }
 
 export type ConsumeResult =
-  | { ok: true; state: CreditState }
+  /** `charged`: where the episode came from (none for admins) — what a
+   *  refund puts back. */
+  | { ok: true; state: CreditState; charged?: 'month' | 'bonus' }
   | { ok: false; status: number; error: string; state?: CreditState };
 
 /**
@@ -228,6 +230,7 @@ export async function consumePodcastCredit(
 
   return {
     ok: true,
+    charged: fromBonus ? 'bonus' : 'month',
     state: {
       tier,
       isAdmin,
@@ -269,4 +272,32 @@ export async function grantEpisodePack(
     .eq('id', userId);
   if (updateErr) throw new Error(`episode pack grant failed: ${updateErr.message}`);
   return true;
+}
+
+/**
+ * Give back an episode credit that was charged for a show that couldn't be
+ * made (the script writer was down). `charged` is what consumePodcastCredit
+ * reported. Best effort: a failure is logged, never thrown.
+ */
+export async function refundPodcastCredit(
+  service: SupabaseClient,
+  userId: string,
+  charged: 'month' | 'bonus' | undefined,
+): Promise<void> {
+  if (!charged) return;
+  try {
+    const { data } = await service
+      .from('profiles')
+      .select('podcast_credits_used, podcast_bonus_credits')
+      .eq('id', userId)
+      .maybeSingle();
+    const row = (data ?? {}) as { podcast_credits_used?: number | null; podcast_bonus_credits?: number | null };
+    const patch = charged === 'bonus'
+      ? { podcast_bonus_credits: Math.max(0, row.podcast_bonus_credits ?? 0) + 1 }
+      : { podcast_credits_used: Math.max(0, (row.podcast_credits_used ?? 0) - 1) };
+    const { error } = await service.from('profiles').update(patch).eq('id', userId);
+    if (error) console.error('[podcast] refund failed:', error.message);
+  } catch (err) {
+    console.error('[podcast] refund failed:', err);
+  }
 }

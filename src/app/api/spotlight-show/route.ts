@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
-import { consumePodcastCredit, getServiceClient } from '@bs/core/podcast';
+import { consumePodcastCredit, getServiceClient, refundPodcastCredit } from '@bs/core/podcast';
 import { ELEVENLABS_API_KEY } from '@/lib/spotlight/tts';
-import { payloadPath, readPayload, streamEpisode, writeJson } from '@/lib/spotlight/showEpisode';
+import { WriterUnavailableError, payloadPath, readPayload, streamEpisode, writeJson } from '@/lib/spotlight/showEpisode';
 import { openPreview, parseEpisode, supabaseAdmin } from '@/lib/spotlight/showRequest';
 
 /**
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
 
     // Fresh episode → one podcast credit (402 exhausted / 403 free tier).
     // (Preview deployments skip this — see openPreview.)
+    let charged: 'month' | 'bonus' | undefined;
     if (!open && user) {
       const consumeResult = await consumePodcastCredit(getServiceClient(), user.id, user.created_at);
       if (!consumeResult.ok) {
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
           { status: consumeResult.status },
         );
       }
+      charged = consumeResult.charged;
     }
 
     const enc = new TextEncoder();
@@ -72,6 +74,8 @@ export async function POST(request: Request) {
           await writeJson(sb, payloadPath(episode), payload);
         } catch (err) {
           console.error('Spotlight Show stream error:', err);
+          // No show was made: the episode doesn't count against them.
+          if (err instanceof WriterUnavailableError && user) await refundPodcastCredit(getServiceClient(), user.id, charged);
           send({ type: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
         } finally {
           controller.close();
