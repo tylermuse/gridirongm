@@ -435,9 +435,14 @@
 "/show/wide/banter_2.mp4": -20.0,
 "/show/wide/banter_3.mp4": -19.0,
 "/show/wide/banter_4.mp4": -18.3,
+"/show/wide/banter_5.mp4": -17.2,
+"/show/wide/banter_6.mp4": -18.2,
+"/show/wide/banter_7.mp4": -18.7,
+"/show/wide/banter_8.mp4": -18.6,
 "/show/wide/buysell_final_1.mp4": -20.8,
 "/show/wide/buysell_open_1.mp4": -18.4,
 "/show/wide/buysell_open_2.mp4": -18.3,
+"/show/wide/buysell_open_3.mp4": -18.4,
 "/show/wide/contender_open_1.mp4": -18.5,
 "/show/wide/contender_open_2.mp4": -19.0,
 "/show/wide/contender_open_3.mp4": -18.8,
@@ -450,5 +455,6 @@
 "/show/wide/panic_verdict_2.mp4": -18.9,
 "/show/wide/signoff_1.mp4": -19.8,
 "/show/wide/signoff_2.mp4": -17.2,
-"/show/wide/signoff_3.mp4": -19.0
+"/show/wide/signoff_3.mp4": -19.0,
+"/show/wide/signoff_4.mp4": -18.4
 }

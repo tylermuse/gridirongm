@@ -10,11 +10,11 @@
   ],
   [
    "marcus",
-   "Rules, for anybody new. I make the case this team's in trouble, Tony makes the case it isn't—"
+   "Rules, for anybody new. I make the case this team's in trouble, Tony makes the case it isn't\u2014"
   ],
   [
    "tony",
-   "—or the other way around, depending how I feel."
+   "\u2014or the other way around, depending how I feel."
   ],
   [
    "marcus",
@@ -78,11 +78,11 @@
   ],
   [
    "marcus",
-   "Here's how it works. I put something on the board. A player, a number, a take that's going around—"
+   "Here's how it works. I put something on the board. A player, a number, a take that's going around\u2014"
   ],
   [
    "tony",
-   "—and we tell you if we're buying it, or selling it."
+   "\u2014and we tell you if we're buying it, or selling it."
   ],
   [
    "marcus",
@@ -122,11 +122,11 @@
   ],
   [
    "tony",
-   "We look at what's real, and what's smoke—"
+   "We look at what's real, and what's smoke\u2014"
   ],
   [
    "marcus",
-   "—and at the end, we each stamp it. Contender, or pretender."
+   "\u2014and at the end, we each stamp it. Contender, or pretender."
   ],
   [
    "tony",
@@ -337,6 +337,102 @@
   [
    "marcus",
    "[laughs] See you next time, everybody."
+  ]
+ ],
+ "banter_5": [
+  [
+   "marcus",
+   "You can't just say a player is 'him'."
+  ],
+  [
+   "tony",
+   "He's him, Marcus. Some guys are just him."
+  ],
+  [
+   "marcus",
+   "[chuckles] That's not analysis."
+  ]
+ ],
+ "banter_6": [
+  [
+   "tony",
+   "Write this down. I've never been more sure of anything."
+  ],
+  [
+   "marcus",
+   "You said that about the fullback."
+  ],
+  [
+   "tony",
+   "[laughs] We don't talk about the fullback."
+  ]
+ ],
+ "banter_7": [
+  [
+   "marcus",
+   "Let's look at the numbers."
+  ],
+  [
+   "tony",
+   "Here we go. He brought a chart."
+  ],
+  [
+   "marcus",
+   "I always bring a chart."
+  ]
+ ],
+ "banter_8": [
+  [
+   "tony",
+   "I'm not saying fire everybody."
+  ],
+  [
+   "marcus",
+   "You're saying fire most people."
+  ],
+  [
+   "tony",
+   "Most people. That's fair."
+  ]
+ ],
+ "buysell_open_3": [
+  [
+   "marcus",
+   "Buy or Sell is back."
+  ],
+  [
+   "tony",
+   "[excited] I've been waiting all week for this."
+  ],
+  [
+   "marcus",
+   "I put a take on the board, we each buy it or sell it, and we tell you why."
+  ],
+  [
+   "tony",
+   "And no fence-sitting. If you hold, you're out."
+  ],
+  [
+   "marcus",
+   "He made that rule up just now."
+  ],
+  [
+   "tony",
+   "And it's a great rule."
+  ]
+ ],
+ "signoff_4": [
+  [
+   "tony",
+   "That's the show. Go win a game, please."
+  ],
+  [
+   "marcus",
+   "We'll be watching."
+  ],
+  [
+   "tony",
+   "We're always watching."
   ]
  ]
 }
