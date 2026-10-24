@@ -16,6 +16,7 @@ import { writeConversation, WRITER_MODEL } from './showWriter';
 import { buildShowScript, type ShowSegment, type ShowTopicInput, type TimedShowSegment } from './showScript';
 import type { ShowStatLine } from './teamStats';
 import type { EpisodeMoment } from './showMoment';
+import { lipsEnabled, mp3Slice, submitLips, wantsLips, LIPS_MAX_SECONDS, type LipsRequest } from './showLips';
 import { planTheme, themeFor, verdictTopicNotes, verdictHeadline, type ThemePlan } from './showThemes';
 
 export const CACHE_BUCKET = 'spotlight-audio';
@@ -174,18 +175,21 @@ export const displaySegments = (segments: ShowSegment[]): TimedShowSegment[] =>
   segments.map(seg => (seg.kind === 'tts' ? { ...seg, text: stripCues(seg.text) } : seg));
 
 /** The complete episode (what the cache stores and a cache hit returns). */
-export function assemble(segments: ShowSegment[], blocks: VoicedBlock[]): ShowPayload {
+export function assemble(segments: ShowSegment[], blocks: VoicedBlock[], lips?: Map<number, LipsRequest>): ShowPayload {
   const timed = displaySegments(segments);
   for (const b of blocks) for (const l of b.lines) {
     timed[l.seg] = { ...timed[l.seg], audioIndex: b.index, audioStart: l.start, audioDuration: l.duration };
   }
+  for (const [i, r] of lips ?? []) if (timed[i]) timed[i] = { ...timed[i], lips: r };
   return { segments: timed, audios: blocks.map(b => b.audio) };
 }
 
 /** What the episode stream sends the player. */
 export type EpisodeMessage =
   | { type: 'script'; segments: TimedShowSegment[]; final: boolean }
-  | ({ type: 'block' } & VoicedBlock);
+  | ({ type: 'block' } & VoicedBlock)
+  /** A line's two-shot clip is being rendered (see showLips). */
+  | ({ type: 'lips'; seg: number } & LipsRequest);
 
 /**
  * Produce a fresh episode as a stream the player can start on immediately:
@@ -197,13 +201,34 @@ export type EpisodeMessage =
  * If the script was written ahead of time, it all goes out at once.
  * Returns the complete episode for the cache.
  */
-export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, send: (m: EpisodeMessage) => void): Promise<ShowPayload> {
+export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, send: (m: EpisodeMessage) => void, origin?: string): Promise<ShowPayload> {
   const t0 = Date.now();
   const log = (what: string) => console.info(`[spotlight-show] ${what} +${Date.now() - t0}ms`);
   const voiced: VoicedBlock[] = [];
   const voicing: Promise<void>[] = [];
   const started = new Set<number>(); // blocks whose voicing has begun
   let sentLen = -1;
+  // Two-shot renders queued so far (line → request), within the episode's
+  // on-camera budget.
+  const lips = new Map<number, LipsRequest>();
+  const lipsQueued: Promise<void>[] = [];
+  let lipsSeconds = 0;
+  const queueLips = (segments: ShowSegment[], v: VoicedBlock) => {
+    if (!origin || !lipsEnabled()) return;
+    const audio = Buffer.from(v.audio, 'base64');
+    for (const l of v.lines) {
+      const seg = segments[l.seg];
+      if (!seg || seg.kind !== 'tts' || !wantsLips(seg, l.duration) || lipsSeconds + l.duration > LIPS_MAX_SECONDS) continue;
+      const cut = mp3Slice(audio, l.start, l.start + l.duration);
+      if (!cut) continue;
+      lipsSeconds += l.duration;
+      lipsQueued.push(submitLips(origin, seg.speaker, cut.bytes).then(request => {
+        const r = { request, start: cut.start };
+        lips.set(l.seg, r);
+        send({ type: 'lips', seg: l.seg, ...r });
+      }, err => console.warn('[spotlight-show] lips not queued:', err instanceof Error ? err.message : err)));
+    }
+  };
 
   /** Send the script so far (if it grew) and voice every block that's
    *  complete and not voiced yet. */
@@ -220,6 +245,7 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
         voiced[index] = v;
         send({ type: 'block', ...v });
         log(`block ${index} voiced (${b.idxs.length} lines)`);
+        queueLips(segments, v);
       }));
     });
   };
@@ -263,7 +289,9 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
   }
   await Promise.all(voicing);
   log('all voiced');
-  return assemble(final, blocksOf(final).map((_, i) => voiced[i]));
+  await Promise.all(lipsQueued);
+  if (lips.size) log(`${lips.size} two-shot renders queued (${lipsSeconds.toFixed(0)}s)`);
+  return assemble(final, blocksOf(final).map((_, i) => voiced[i]), lips);
 }
 
 // ElevenLabs caps concurrent requests per account: voice a few blocks at a

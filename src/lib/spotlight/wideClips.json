@@ -668,5 +668,197 @@
    }
   ],
   "shots": "ccc"
+ },
+ "banter_5": {
+  "src": "/show/wide/banter_5.mp4",
+  "duration": 9.08,
+  "speech": {
+   "start": 0.6,
+   "end": 8.2
+  },
+  "lines": [
+   {
+    "host": "marcus",
+    "text": "You can't just say a player is 'him'.",
+    "start": 0.6,
+    "end": 2.68
+   },
+   {
+    "host": "tony",
+    "text": "He's him, Marcus. Some guys are just him.",
+    "start": 2.68,
+    "end": 6.12
+   },
+   {
+    "host": "marcus",
+    "text": "That's not analysis.",
+    "start": 6.12,
+    "end": 8.2
+   }
+  ],
+  "shots": "pPP"
+ },
+ "banter_6": {
+  "src": "/show/wide/banter_6.mp4",
+  "duration": 8.84,
+  "speech": {
+   "start": 0.6,
+   "end": 7.96
+  },
+  "lines": [
+   {
+    "host": "tony",
+    "text": "Write this down. I've never been more sure of anything.",
+    "start": 0.6,
+    "end": 4.2
+   },
+   {
+    "host": "marcus",
+    "text": "You said that about the fullback.",
+    "start": 4.2,
+    "end": 5.64
+   },
+   {
+    "host": "tony",
+    "text": "We don't talk about the fullback.",
+    "start": 5.64,
+    "end": 7.96
+   }
+  ],
+  "shots": "pPP"
+ },
+ "banter_7": {
+  "src": "/show/wide/banter_7.mp4",
+  "duration": 5.8,
+  "speech": {
+   "start": 0.6,
+   "end": 4.92
+  },
+  "lines": [
+   {
+    "host": "marcus",
+    "text": "Let's look at the numbers.",
+    "start": 0.6,
+    "end": 1.88
+   },
+   {
+    "host": "tony",
+    "text": "Here we go. He brought a chart.",
+    "start": 1.88,
+    "end": 3.64
+   },
+   {
+    "host": "marcus",
+    "text": "I always bring a chart.",
+    "start": 3.64,
+    "end": 4.92
+   }
+  ],
+  "shots": "pPP"
+ },
+ "banter_8": {
+  "src": "/show/wide/banter_8.mp4",
+  "duration": 7.88,
+  "speech": {
+   "start": 0.6,
+   "end": 7.0
+  },
+  "lines": [
+   {
+    "host": "tony",
+    "text": "I'm not saying fire everybody.",
+    "start": 0.6,
+    "end": 2.32
+   },
+   {
+    "host": "marcus",
+    "text": "You're saying fire most people.",
+    "start": 2.32,
+    "end": 3.76
+   },
+   {
+    "host": "tony",
+    "text": "Most people. That's fair.",
+    "start": 3.76,
+    "end": 7.0
+   }
+  ],
+  "shots": "pPP"
+ },
+ "buysell_open_3": {
+  "src": "/show/wide/buysell_open_3.mp4",
+  "duration": 17.32,
+  "speech": {
+   "start": 0.6,
+   "end": 16.56
+  },
+  "lines": [
+   {
+    "host": "marcus",
+    "text": "Buy or Sell is back.",
+    "start": 0.6,
+    "end": 2.53
+   },
+   {
+    "host": "tony",
+    "text": "I've been waiting all week for this.",
+    "start": 2.53,
+    "end": 5.4
+   },
+   {
+    "host": "marcus",
+    "text": "I put a take on the board, we each buy it or sell it, and we tell you why.",
+    "start": 5.4,
+    "end": 9.48
+   },
+   {
+    "host": "tony",
+    "text": "And no fence-sitting. If you hold, you're out.",
+    "start": 9.48,
+    "end": 12.36
+   },
+   {
+    "host": "marcus",
+    "text": "He made that rule up just now.",
+    "start": 13.36,
+    "end": 15.28
+   },
+   {
+    "host": "tony",
+    "text": "And it's a great rule.",
+    "start": 15.28,
+    "end": 16.56
+   }
+  ],
+  "shots": "ccccPP"
+ },
+ "signoff_4": {
+  "src": "/show/wide/signoff_4.mp4",
+  "duration": 6.68,
+  "speech": {
+   "start": 0.6,
+   "end": 5.8
+  },
+  "lines": [
+   {
+    "host": "tony",
+    "text": "That's the show. Go win a game, please.",
+    "start": 0.6,
+    "end": 3.48
+   },
+   {
+    "host": "marcus",
+    "text": "We'll be watching.",
+    "start": 3.48,
+    "end": 4.56
+   },
+   {
+    "host": "tony",
+    "text": "We're always watching.",
+    "start": 4.56,
+    "end": 5.8
+   }
+  ],
+  "shots": "ccc"
  }
 }
