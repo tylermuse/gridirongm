@@ -3,10 +3,10 @@
  *
  * The Spotlight topics are written as debate-show copy (punchy, a stat in
  * every line). Read aloud, that sounds like two bots trading lines. Before
- * voicing an episode, Claude rewrites the topics' notes as one unscripted
- * conversation between the hosts — reacting, conceding, interrupting,
- * calling back — using only the facts in the notes, and picks which of the
- * hosts' pre-recorded on-camera lines to cut to. Server-only.
+ * voicing an episode, a writer model (Gemini, with Claude as the backup)
+ * rewrites the topics' notes as one unscripted conversation between the
+ * hosts — reacting, conceding, interrupting, calling back — using only the
+ * facts in the notes. Server-only.
  *
  * Falls back to the original topics on any failure (no key, timeout, bad
  * JSON), so the show always plays.
@@ -19,10 +19,16 @@ import { PHRASES, type Phrase, type PhraseTone } from './phrases';
 import { THEMES, WIDE_BANTER, parseCalls, parseVerdict, type ThemePlan } from './showThemes';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-/** The writing is what makes the show sound human: use the strongest model.
- *  Scripts are written ahead of time (see /api/spotlight-show/script), so
- *  its latency is mostly hidden. */
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+/** Claude, the backup writer (and the original one). */
 export const WRITER_MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-opus-5-5';
+/** Gemini, the main writer: about a seventh of Opus's price per episode. */
+export const GEMINI_WRITER_MODEL = process.env.SPOTLIGHT_SHOW_GEMINI_MODEL || 'gemini-3-flash-preview';
+export type WriterProvider = 'gemini' | 'claude';
+/** Who writes, in order: the next one takes over if one fails before
+ *  writing a line (no key, outage, out of credit). */
+export const WRITERS: WriterProvider[] = (process.env.SPOTLIGHT_SHOW_WRITERS || 'gemini,claude')
+  .split(',').map(w => w.trim()).filter((w): w is WriterProvider => w === 'gemini' || w === 'claude');
 const TIMEOUT_MS = 110_000;
 /** How long the model deliberates before writing (it thinks adaptively).
  *  Low keeps the first topic arriving in seconds: the show is already
@@ -246,11 +252,12 @@ export async function writeConversation(
   moment?: EpisodeMoment,
   onProgress?: OnProgress,
   theme?: ThemePlan | null,
+  opts?: { writers?: WriterProvider[] },
 ): Promise<WrittenEpisode> {
   // No writer at all: the notes are voiced as they are, toned down
   // (no shouted ALL-CAPS words, no exclamation pile-ups).
   const original = { topics: topics.map(t => ({ ...t, exchanges: t.exchanges.map(e => ({ ...e, text: calm(e.text) })) })), written: false };
-  if (!ANTHROPIC_API_KEY) { console.warn('Spotlight show writer skipped: ANTHROPIC_API_KEY not set'); return original; }
+  if (!ANTHROPIC_API_KEY && !GEMINI_API_KEY) { console.warn('Spotlight show writer skipped: no ANTHROPIC_API_KEY or GEMINI_API_KEY'); return original; }
   const liveIdx = topics.flatMap((t, i) => (hasDebate(t) ? [i] : []));
   if (!liveIdx.length) return original;
 
@@ -340,53 +347,100 @@ export async function writeConversation(
     return { topics: out, written: true };
   };
 
+  const order = (opts?.writers ?? WRITERS).filter(w => (w === 'gemini' ? GEMINI_API_KEY : ANTHROPIC_API_KEY));
+  for (const writer of order) {
+    let text = '';
+    const onText = (delta: string) => {
+      text += delta;
+      let cut: number;
+      while ((cut = text.indexOf('\n')) >= 0) { take(text.slice(0, cut)); text = text.slice(cut + 1); }
+    };
+    try {
+      await (writer === 'gemini' ? streamGemini : streamClaude)(user, onText);
+      take(text);
+      if (!written.size) throw new Error('writer returned no lines');
+      console.info(`[spotlight-show] written by ${writer === 'gemini' ? GEMINI_WRITER_MODEL : WRITER_MODEL}`);
+      return finish();
+    } catch (err) {
+      console.warn(`Spotlight show writer failed (${writer}):`, err instanceof Error ? err.message : err);
+      // Partway through: keep what it wrote (the show is already playing it).
+      if (written.size) return finish();
+    }
+  }
+  return original;
+}
+
+/** Stream a writer's reply as text deltas. Throws on any failure. */
+type StreamWriter = (user: string, onText: (delta: string) => void) => Promise<void>;
+
+/** Read a server-sent-events body, handing each `data:` payload to `on`. */
+async function readSse(res: Response, on: (data: string) => void): Promise<void> {
+  if (!res.body) throw new Error('no body');
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let sse = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    sse += dec.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = sse.indexOf('\n')) >= 0) {
+      const ev = sse.slice(0, nl).trim();
+      sse = sse.slice(nl + 1);
+      if (ev.startsWith('data:')) on(ev.slice(5).trim());
+    }
+  }
+}
+
+const streamClaude: StreamWriter = async (user, onText) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: { 'x-api-key': ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
         model: WRITER_MODEL, max_tokens: 8000, stream: true,
         output_config: { effort: WRITER_EFFORT },
         system: WRITER_SYSTEM_PROMPT, messages: [{ role: 'user', content: user }],
       }),
     });
-    if (!res.ok || !res.body) throw new Error(`writer ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    // Server-sent events → text deltas → one spoken line per completed line.
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let sse = '';
-    let text = '';
-    try {
-      for (;;) {
-        const { value, done: end } = await reader.read();
-        if (end) break;
-        sse += dec.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = sse.indexOf('\n')) >= 0) {
-          const ev = sse.slice(0, nl).trim();
-          sse = sse.slice(nl + 1);
-          if (!ev.startsWith('data:')) continue;
-          let data: { type?: string; delta?: { type?: string; text?: string }; error?: { message?: string } };
-          try { data = JSON.parse(ev.slice(5)); } catch { continue; }
-          if (data.type === 'error') throw new Error(data.error?.message ?? 'stream error');
-          if (data.type !== 'content_block_delta' || data.delta?.type !== 'text_delta') continue;
-          text += data.delta.text ?? '';
-          let cut: number;
-          while ((cut = text.indexOf('\n')) >= 0) { take(text.slice(0, cut)); text = text.slice(cut + 1); }
-        }
-      }
-    } finally {
-      clearTimeout(timer);
-    }
-    take(text);
-    if (!written.size) throw new Error('writer returned no lines');
-    return finish();
-  } catch (err) {
-    console.warn('Spotlight show writer failed:', err instanceof Error ? err.message : err);
-    // Keep whatever it wrote; the rest keeps the original lines.
-    return written.size ? finish() : original;
+    if (!res.ok) throw new Error(`claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    await readSse(res, raw => {
+      let data: { type?: string; delta?: { type?: string; text?: string }; error?: { message?: string } };
+      try { data = JSON.parse(raw); } catch { return; }
+      if (data.type === 'error') throw new Error(data.error?.message ?? 'stream error');
+      if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta') onText(data.delta.text ?? '');
+    });
+  } finally {
+    clearTimeout(timer);
   }
-}
+};
+
+const streamGemini: StreamWriter = async (user, onText) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_WRITER_MODEL}:streamGenerateContent?alt=sse`;
+    const res = await fetch(url, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'x-goog-api-key': GEMINI_API_KEY!, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: WRITER_SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { maxOutputTokens: 8000, temperature: 1, thinkingConfig: { thinkingLevel: WRITER_EFFORT === 'high' ? 'high' : 'low' } },
+      }),
+    });
+    if (!res.ok) throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    await readSse(res, raw => {
+      let data: { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; error?: { message?: string } };
+      try { data = JSON.parse(raw); } catch { return; }
+      if (data.error) throw new Error(data.error.message ?? 'stream error');
+      for (const part of data.candidates?.[0]?.content?.parts ?? []) if (part.text && !part.thought) onText(part.text);
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+};
