@@ -20,10 +20,6 @@ const nextConfig: NextConfig = {
   // needs to compile them at consumer build time. Added during Sub-phase 1D
   // when @bs/core/analytics became the first cross-package import.
   transpilePackages: ['@bs/core', '@bs/sport-football'],
-  // Serwist injects a `webpack` config; Next 16 errors in `next dev` unless
-  // Turbopack is explicitly configured too. Serwist is disabled in dev, so
-  // an empty turbopack config is correct. `next build` still uses --webpack.
-  turbopack: {},
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   async headers() {
     return [
