@@ -1162,6 +1162,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // While the 3D sim is still running a play, its line isn't news yet: keep it out of the feed and the bug until the snap is over
   // While the 3D sim plays a snap its text is held back (no spoilers); it shows at the whistle, before the sim's result callout.
   const [sim3dDeadId, setSim3dDeadId] = useState<number | null>(null);
+  const [tabHidden, setTabHidden] = useState(false);
+  useEffect(() => {
+    const on = () => setTabHidden(document.visibilityState === 'hidden');
+    on(); document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
   const simLastId = revealedEvents[revealedEvents.length - 1]?.id ?? null;
   const simHoldId = sim3dOn && sim3dActive && simLastId !== sim3dDeadId ? simLastId : null;
   const displayEvents = useMemo(() => [...revealedEvents].reverse().filter(e => e.id !== simHoldId), [revealedEvents, simHoldId]);
@@ -1226,7 +1232,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       // (Only when a revealed play is actually on the field — at kickoff the
       // engine pivots before anything is shown, and nothing would ever report
       // completion.)
-      if (!animationComplete && speed !== 'max' && allEvents[revealedCount - 1]) return;
+      if (!animationComplete && !tabHidden && speed !== 'max' && allEvents[revealedCount - 1]) return;
       setLiveCoachPaused(true);
       setIsPlaying(false);
       return;
@@ -1274,7 +1280,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents, sim3dActive]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents, sim3dActive, tabHidden]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -1300,7 +1306,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // speed-timer path entirely so the two don't race.
     if (broadcastOn) return;
     if (pregameOpen) return; // hold until Kick Off
-    if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
+    // a background tab never fires the 2D field's animation frames: don't wait on them there, or the CPU's drive freezes
+    if ((!animationComplete && !tabHidden) || !isPlaying || isFinished || speed === 'max') return;
     if (sim3dActive) return; // wait for the 3D sim to finish the play
     // Live Coach pause: stop here, surface the play call menu instead of advancing
     if (shouldPauseForLiveCoach) {
@@ -1320,7 +1327,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       currentEvent?.type === 'field_goal_good' ||
       currentEvent?.type === 'punt' ||
       currentEvent?.isScoring === true;
-    const pause = PAUSE_MS[speed] + (isBigMoment ? TURNOVER_EXTRA[speed] : 0);
+    // the 3D sim already holds on a score / kick (celebration, ref signal, result banner): no second dwell on top (Tyler: FG/PAT ran twice as long as it should)
+    const pause = PAUSE_MS[speed] + (isBigMoment && !sim3dOn ? TURNOVER_EXTRA[speed] : 0);
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
         if (prev >= totalEvents) {
@@ -1337,7 +1345,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen, sim3dActive]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen, sim3dActive, tabHidden, sim3dOn]);
 
   // ── Live game clock: tick the scorebug clock down between play reveals ──
   // 2026-09-20/21 spec (gojostyttt, 4 votes on #football-feature-vote). Each
