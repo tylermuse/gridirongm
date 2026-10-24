@@ -7,6 +7,7 @@ import { CALL_IN_CHIPS, answerChip } from '@/lib/engine/callInTemplates';
 import { buildLeagueScoutPacket, fallbackFollowUps } from '@/lib/engine/leagueScout';
 import { useGameStore } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { useBoothStore, EMPTY_BOOTH_LOG, type BoothEpisodeTopic, type BoothHost, type BoothMsg, type BoothLog } from '@/lib/engine/boothStore';
 
 /**
  * "Call In to the Show" — the Booth. Ask Marcus Cole & Tony Blaze a question
@@ -17,12 +18,13 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
  * Signed-in:  Free tier gets 3 typed questions per in-game week (Flash-Lite).
  * Premium:    open mic, no visible cap (Flash).
  *
- * The Booth opens as a panel docked to the right edge (full screen on
- * phones). Each question + the hosts' replies is one card; older cards
+ * The Booth is a panel docked to the right edge (full screen on phones),
+ * mounted once by GlobalBooth in the GameShell so it opens from every
+ * screen. Each question + the hosts' replies is one card; older cards
  * collapse to a single line with both verdicts.
  *
- * History, votes + turn count reset when the in-game week key changes;
- * persisted in sessionStorage so a refresh doesn't wipe the call. Hosts are
+ * History, votes + turn count are kept per in-game week key in the booth
+ * store, so closing the Booth, changing pages or refreshing keeps the call. Hosts are
  * grounded on the same teamData the episode generator uses, plus the
  * rendered episode.
  */
@@ -30,18 +32,17 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 const FREE_TURNS = 3;
 const VISIBLE_CHIPS = 4;
 
-type Host = 'marcus' | 'tony';
-type Role = 'user' | Host;
-interface Msg { role: Role; text: string; verdict?: string; }
+type Host = BoothHost;
+type Msg = BoothMsg;
 interface Call { question: string; marcus?: Msg; tony?: Msg; }
 
-interface Props {
+interface BoothPanelProps {
   fetchOpts: FetchOptions;
-  episode: { headline: string; exchanges: { speakerId: string; text: string; playerName?: string }[] }[];
+  episode: BoothEpisodeTopic[];
   weekKey: string;
+  open: boolean;
+  onClose: () => void;
 }
-
-function storageKey(weekKey: string) { return `gg-callin-${weekKey}`; }
 
 const HOST_META = {
   marcus: {
@@ -65,7 +66,7 @@ function groupCalls(messages: Msg[]): Call[] {
   return calls;
 }
 
-function Avatar({ host, size = 'md' }: { host: Host; size?: 'sm' | 'md' }) {
+export function Avatar({ host, size = 'md' }: { host: Host; size?: 'sm' | 'md' }) {
   const h = HOST_META[host];
   const dims = size === 'sm' ? 'w-6 h-6 text-[10px]' : 'w-9 h-9 text-xs';
   return (
@@ -107,16 +108,20 @@ function TakeColumn({ host, msg, pending }: { host: Host; msg?: Msg; pending: bo
   );
 }
 
-export function SpotlightCallIn({ fetchOpts, episode, weekKey }: Props) {
+export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose }: BoothPanelProps) {
   const { user, hasFeature, loading: subLoading } = useSubscription();
   const { teams, players, userTeamId, freeAgents, tradeRumors, season, week, phase, champions, draftScoutingData } = useGameStore();
   const isPremium = hasFeature('ai_commentary');
   const signedIn = !!user;
 
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [votes, setVotes] = useState<Record<number, Host>>({});
-  const [turns, setTurns] = useState(0); // typed (LLM) turns only — chips are free
+  const { messages, turns, votes } = useBoothStore(s => s.logs[weekKey]) ?? EMPTY_BOOTH_LOG;
+  const updateLog = useBoothStore(s => s.updateLog);
+  // Functional updates go through the store, so replies that land after the
+  // Booth closes (or after a page change) still reach the saved log.
+  const patch = (fn: (log: BoothLog) => Partial<BoothLog>) => updateLog(weekKey, l => ({ ...l, ...fn(l) }));
+  const setMessages = (fn: (m: Msg[]) => Msg[]) => patch(l => ({ messages: fn(l.messages) }));
+  const setTurns = (n: number) => patch(() => ({ turns: n }));
+  const setVotes = (fn: (v: Record<number, Host>) => Record<number, Host>) => patch(l => ({ votes: fn(l.votes) }));
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,26 +133,6 @@ export function SpotlightCallIn({ fetchOpts, episode, weekKey }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(storageKey(weekKey));
-      if (raw) {
-        const saved = JSON.parse(raw) as { messages: Msg[]; turns: number; votes?: Record<number, Host> };
-        setMessages(saved.messages ?? []);
-        setTurns(saved.turns ?? 0);
-        setVotes(saved.votes ?? {});
-        return;
-      }
-    } catch { /* ignore */ }
-    setMessages([]);
-    setTurns(0);
-    setVotes({});
-  }, [weekKey]);
-
-  useEffect(() => {
-    try { sessionStorage.setItem(storageKey(weekKey), JSON.stringify({ messages, turns, votes })); } catch { /* ignore */ }
-  }, [messages, turns, votes, weekKey]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -226,8 +211,7 @@ export function SpotlightCallIn({ fetchOpts, episode, weekKey }: Props) {
   }
 
   function pushBack(host: Host) {
-    setInput(host === 'tony' ? "Tony, I'm not buying it. " : "Marcus, I'm not buying it. ");
-    inputRef.current?.focus();
+    send(host === 'tony' ? "Tony, I'm not buying it. Convince me." : "Marcus, I'm not buying it. Convince me.");
   }
 
   if (subLoading) return null;
@@ -236,35 +220,19 @@ export function SpotlightCallIn({ fetchOpts, episode, weekKey }: Props) {
 
   return (
     <>
-      {/* Launcher — sits where the old accordion was */}
-      <button
-        onClick={() => setOpen(true)}
-        aria-expanded={open}
-        className="mt-3 w-full flex items-center gap-3 px-3 py-2.5 text-left border border-[var(--border)] rounded-lg hover:bg-[var(--bg-hover)] transition-colors"
-      >
-        <span className="flex">
-          <Avatar host="marcus" size="sm" />
-          <span className="-ml-1.5"><Avatar host="tony" size="sm" /></span>
-        </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-sm font-bold">Call in to the show</span>
-          <span className="block text-xs text-[var(--text-sec)] truncate">Ask Marcus &amp; Tony anything. Get both takes.</span>
-        </span>
-        <span className="text-xs font-semibold text-blue-700 shrink-0">Open the booth</span>
-      </button>
-
-      {open && (
+      {/* Stays mounted while closed so an in-flight answer isn't lost. */}
         <aside
           role="dialog"
           aria-label="The Booth: call in to the show"
-          onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
-          className="fixed inset-0 z-50 flex flex-col bg-[var(--surface)] text-[var(--text)] md:left-auto md:w-[480px] md:border-l md:border-[var(--border)] md:shadow-[-8px_0_24px_rgba(18,26,43,0.08)]"
+          hidden={!open}
+          onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
+          className="fixed inset-0 z-[60] flex flex-col bg-[var(--surface)] text-[var(--text)] md:left-auto md:w-[480px] md:border-l md:border-[var(--border)] md:shadow-[-8px_0_24px_rgba(18,26,43,0.08)]"
         >
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)]">
             <span className="flex">
               <Avatar host="marcus" />
-              <span className="-ml-2.5"><Avatar host="tony" /></span>
+              <span className="-ml-1"><Avatar host="tony" /></span>
             </span>
             <div className="flex-1 min-w-0">
               <div className="text-base font-extrabold uppercase tracking-wide leading-tight">The Booth</div>
@@ -275,7 +243,7 @@ export function SpotlightCallIn({ fetchOpts, episode, weekKey }: Props) {
               : signedIn && <span className="text-[11px] text-[var(--text-sec)]">{freeLeft} question{freeLeft === 1 ? '' : 's'} left</span>}
             <button
               ref={closeRef}
-              onClick={() => setOpen(false)}
+              onClick={onClose}
               aria-label="Close the booth"
               className="w-11 h-11 -mr-2 flex items-center justify-center rounded-lg text-[var(--text-sec)] hover:bg-[var(--bg-hover)]"
             >
@@ -436,8 +404,37 @@ export function SpotlightCallIn({ fetchOpts, episode, weekKey }: Props) {
             )}
           </div>
         </aside>
-      )}
     </>
+  );
+}
+
+/**
+ * Dashboard entry point, where the old accordion was. Hands the rendered
+ * episode to the Booth so the hosts stay consistent with it, then opens it.
+ */
+export function SpotlightCallIn({ episode }: { episode: BoothEpisodeTopic[] }) {
+  const setEpisode = useBoothStore(s => s.setEpisode);
+  const setOpen = useBoothStore(s => s.setOpen);
+  const open = useBoothStore(s => s.open);
+
+  useEffect(() => { setEpisode(episode); }, [episode, setEpisode]);
+
+  return (
+    <button
+      onClick={() => setOpen(true)}
+      aria-expanded={open}
+      className="mt-3 w-full flex items-center gap-3 px-3 py-2.5 text-left border border-[var(--border)] rounded-lg hover:bg-[var(--bg-hover)] transition-colors"
+    >
+      <span className="flex">
+        <Avatar host="marcus" size="sm" />
+        <span className="-ml-0.5"><Avatar host="tony" size="sm" /></span>
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-bold">Call in to the show</span>
+        <span className="block text-xs text-[var(--text-sec)] truncate">Ask Marcus &amp; Tony anything. Get both takes.</span>
+      </span>
+      <span className="text-xs font-semibold text-blue-700 shrink-0">Open the booth</span>
+    </button>
   );
 }
 

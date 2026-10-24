@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { GamePlanModal } from './GamePlanModal';
+import { useBoothStore } from '@/lib/engine/boothStore';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
@@ -43,6 +44,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
   const [showGamePlanModal, setShowGamePlanModal] = useState(false);
+  const boothOpen = useBoothStore(s => s.open);
+  const toggleBooth = useBoothStore(s => s.toggle);
   const nextGamePlan = useGameStore(s => s.nextGamePlan);
   const setNextGamePlan = useGameStore(s => s.setNextGamePlan);
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
@@ -515,6 +518,18 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
               </>
             )}
 
+            {!pathname.startsWith('/game/') && (
+              <Button
+                onClick={toggleBooth}
+                aria-pressed={boothOpen}
+                variant="secondary"
+                size="sm"
+                className="active:scale-95 transition-transform"
+              >
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5 align-middle" />
+                Booth
+              </Button>
+            )}
           </div>
         </div>
 
