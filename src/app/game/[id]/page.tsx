@@ -176,6 +176,22 @@ function downLabel(down: number, yardsToGo: number): string {
   return `${ordinals[down - 1]} & ${yardsToGo <= 0 ? 'Goal' : yardsToGo}`;
 }
 
+/** Line of scrimmage as an NFL-style spot, e.g. "SF 35", "50", "KC 12".
+ *  fieldPos = yards from the possessing team's own end zone. */
+function ballOnLabel(
+  fieldPos: number | undefined,
+  possession: 'home' | 'away',
+  homeAbbr: string,
+  awayAbbr: string,
+): string {
+  if (fieldPos == null || !Number.isFinite(fieldPos)) return '';
+  const fp = Math.round(fieldPos);
+  if (fp === 50) return '50';
+  const offAbbr = possession === 'home' ? homeAbbr : awayAbbr;
+  const defAbbr = possession === 'home' ? awayAbbr : homeAbbr;
+  return fp < 50 ? `${offAbbr} ${fp}` : `${defAbbr} ${100 - fp}`;
+}
+
 
 
 
@@ -2575,12 +2591,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                             <div className="text-xs text-[var(--text-sec)] font-mono">{ev.timeStr}</div>
                           </div>
                           {ev.down >= 1 && ev.down <= 4 && (
-                            <Badge
-                              variant={ev.down === 4 ? 'red' : ev.down === 3 ? 'amber' : 'default'}
-                              size="sm"
-                            >
-                              {downLabel(ev.down, ev.yardsToGo)}
-                            </Badge>
+                            <div className="w-[68px] shrink-0 flex flex-col items-center gap-0.5">
+                              <Badge
+                                variant={ev.down === 4 ? 'red' : ev.down === 3 ? 'amber' : 'default'}
+                                size="sm"
+                              >
+                                {downLabel(ev.down, ev.yardsToGo)}
+                              </Badge>
+                              {ballOnLabel(ev.fieldPos, ev.possession, homeAbbr, awayAbbr) && (
+                                <span
+                                  className="text-[10px] font-mono text-[var(--text-sec)] whitespace-nowrap"
+                                  title="Line of scrimmage"
+                                >
+                                  {ballOnLabel(ev.fieldPos, ev.possession, homeAbbr, awayAbbr)}
+                                </span>
+                              )}
+                            </div>
                           )}
                           <div className="flex-1">
                             <p className={`text-sm leading-snug ${playTextColor(ev.type)}`}>
