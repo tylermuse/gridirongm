@@ -17,11 +17,13 @@
 import { v4 as uuid } from 'uuid';
 import { CHANGELOG_VERSION } from '../ui/changelog';
 import { marketContract } from './contracts';
-import { generateHeadCoach } from '../coaching/coaches';
+import { ensureCoachingStaff } from '../coaching/carousel';
 import {
   generateBasketballPlayer,
   generateBasketballSchedule,
   basketballAdapter,
+  MIN_BASKETBALL_TEAMS,
+  MAX_BASKETBALL_TEAMS,
   type BasketballPlayer,
   type BasketballPosition,
   type BasketballTeam,
@@ -217,17 +219,16 @@ export function assembleLeague(
   const { players, season } = opts;
   const displayName = opts.displayName ?? 'BS Hoops';
 
-  if (opts.teams.length !== 30) {
-    throw new Error(`Need 30 teams to assemble a league; got ${opts.teams.length}`);
+  // 30 teams normally; 31-32 after an expansion (the schedule generator
+  // validates the conference/division shape).
+  if (opts.teams.length < MIN_BASKETBALL_TEAMS || opts.teams.length > MAX_BASKETBALL_TEAMS) {
+    throw new Error(`Need 30-32 teams to assemble a league; got ${opts.teams.length}`);
   }
 
-  // Each team gets a head coach (scheme + ratings drive fit + future effects).
+  // Staff (head coach + player-development coach, each on a contract) is
+  // generated below by ensureCoachingStaff, seeded by the new league id.
   const coaches: Record<CoachId, BaseCoach> = {};
-  const teams: BasketballTeam[] = opts.teams.map(team => {
-    const headCoach = generateHeadCoach(team.id);
-    coaches[headCoach.id] = headCoach;
-    return { ...team, coachIds: [headCoach.id] };
-  });
+  const teams: BasketballTeam[] = opts.teams.map(team => ({ ...team, coachIds: [] }));
 
   // --- Schedule the 82-game regular season ---
   const scheduledGames = generateBasketballSchedule(teams, {
@@ -274,5 +275,5 @@ export function assembleLeague(
     sportData: { lastSeenChangelog: CHANGELOG_VERSION },
   };
 
-  return state;
+  return ensureCoachingStaff(state);
 }

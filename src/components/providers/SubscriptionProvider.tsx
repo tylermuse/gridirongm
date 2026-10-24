@@ -30,8 +30,10 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 const FOUNDING_MEMBER_CUTOFF = '2026-05-01T00:00:00Z';
 
 interface PodcastCredits {
-  /** Credits remaining this billing period. -1 means uncapped (admins). */
+  /** Credits remaining: this period's plus bought packs. -1 means uncapped (admins). */
   remaining: number;
+  /** Of `remaining`, bought episodes (never expire). */
+  bonus: number;
   /** Total credits the user is entitled to per period. */
   limit: number;
   /** ISO timestamp when the period resets. Null if never tracked. */
@@ -54,7 +56,7 @@ interface SubscriptionContextValue {
   signOut: () => Promise<void>;
 }
 
-const DEFAULT_CREDITS: PodcastCredits = { remaining: 0, limit: 0, resetAt: null };
+const DEFAULT_CREDITS: PodcastCredits = { remaining: 0, bonus: 0, limit: 0, resetAt: null };
 
 const SubscriptionContext = createContext<SubscriptionContextValue>({
   user: null,
@@ -81,7 +83,8 @@ async function syncCheckoutReturn(): Promise<void> {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id');
-  if (params.get('subscription') !== 'success' || !sessionId) return;
+  // Back from Checkout: a new subscription, or a bought episode pack.
+  if ((params.get('subscription') !== 'success' && params.get('episodes') !== 'success') || !sessionId) return;
   try {
     await fetch('/api/stripe/sync', {
       method: 'POST',
@@ -101,7 +104,10 @@ interface ProfileRow {
   is_admin: boolean | null;
   podcast_credits_used: number | null;
   podcast_credits_reset_at: string | null;
+  podcast_bonus_credits: number | null;
 }
+
+const PROFILE_COLS = 'is_admin, podcast_credits_used, podcast_credits_reset_at, podcast_bonus_credits';
 
 interface SubscriptionRow {
   tier: Tier | null;
@@ -154,16 +160,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const computeCredits = useCallback(
     (effectiveTier: Tier, admin: boolean, profile: ProfileRow | null): PodcastCredits => {
       if (admin) {
-        return { remaining: -1, limit: -1, resetAt: null };
+        return { remaining: -1, bonus: 0, limit: -1, resetAt: null };
       }
       const limit = PODCAST_CREDITS_PER_MONTH[effectiveTier];
       if (limit <= 0) {
-        return { remaining: 0, limit: 0, resetAt: profile?.podcast_credits_reset_at ?? null };
+        return { remaining: 0, bonus: 0, limit: 0, resetAt: profile?.podcast_credits_reset_at ?? null };
       }
       const expired = isPeriodExpired(profile?.podcast_credits_reset_at ?? null);
       const used = expired ? 0 : (profile?.podcast_credits_used ?? 0);
+      const bonus = Math.max(0, profile?.podcast_bonus_credits ?? 0);
       return {
-        remaining: Math.max(0, limit - used),
+        remaining: Math.max(0, limit - used) + bonus,
+        bonus,
         limit,
         resetAt: profile?.podcast_credits_reset_at ?? null,
       };
@@ -184,7 +192,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const [profileResult, subResult] = await Promise.all([
         supabase
           .from('profiles')
-          .select('is_admin, podcast_credits_used, podcast_credits_reset_at')
+          .select(PROFILE_COLS)
           .eq('id', userId)
           .maybeSingle(),
         supabase
@@ -228,7 +236,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!supabase || !user) return;
     const { data, error } = await supabase
       .from('profiles')
-      .select('is_admin, podcast_credits_used, podcast_credits_reset_at')
+      .select(PROFILE_COLS)
       .eq('id', user.id)
       .maybeSingle();
     if (error) {

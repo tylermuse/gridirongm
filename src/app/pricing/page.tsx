@@ -3,18 +3,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { PREMIUM_PRICE_ID, PODCAST_CREDITS_PER_MONTH } from '@bs/core/billing';
+import { PREMIUM_PRICE_ID, PODCAST_CREDITS_PER_MONTH, EPISODE_PACK } from '@bs/core/billing';
 
 const PREMIUM_FEATURES = [
   'Ad-free experience',
   'AI commentary on every game',
-  `${PODCAST_CREDITS_PER_MONTH.premium} Team Spotlight episodes a month (video show or podcast)`,
+  `${PODCAST_CREDITS_PER_MONTH.premium} Team Spotlight episodes a month (video show or podcast) — need more? ${EPISODE_PACK.credits} extra for ${EPISODE_PACK.priceLabel}, anytime`,
   '30 scout points per draft (3× the free allotment)',
   '9 free-agent intel reports (3× the free allotment)',
   'Cancel anytime — Stripe Customer Portal',
 ];
 
 const FREE_FEATURES = [
+  '3D live sim — every play of your games in 3D (free for everyone during launch)',
   'Full season simulation',
   'Draft, free agency, trades',
   'All stats, standings, history',

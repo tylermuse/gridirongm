@@ -1,7 +1,7 @@
 'use client';
 
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
-import { isScouted } from '@/lib/scouting';
+import { potentialRange, scoutLevel } from '@/lib/scouting';
 import { ratingColor, getContrastText } from '@/lib/ui/ratingColor';
 import type { DraftState } from '@/lib/draft';
 import type { BasketballPlayer } from '@bs/sport-basketball';
@@ -13,12 +13,14 @@ import type { BasketballPlayer } from '@bs/sport-basketball';
  * Draft Now button when the user is on the clock.
  */
 export function ProspectCard({
-  label, subtitle, prospect, draft, teamColor, projRank, posRank, canDraft, onOpen, onDraft,
+  label, subtitle, prospect, draft, saveSeed, teamColor, projRank, posRank, canDraft, onOpen, onDraft,
 }: {
   label: string;
   subtitle?: string;
   prospect: BasketballPlayer;
   draft: DraftState;
+  /** Per-save scouting seed (league.id) for the tiered potential range. */
+  saveSeed: string;
   teamColor: string;
   /** Overall board rank (1 = top prospect). */
   projRank: number;
@@ -29,7 +31,8 @@ export function ProspectCard({
   onDraft?: () => void;
 }) {
   const r = prospect.ratings;
-  const scouted = isScouted(draft, prospect.id);
+  const level = scoutLevel(draft, prospect.id);
+  const range = potentialRange(prospect, level, saveSeed, draft.season);
   const pos = prospect.sportData.position;
 
   return (
@@ -53,8 +56,10 @@ export function ProspectCard({
           <span className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0" style={{ background: teamColor, color: getContrastText(teamColor) }}>{pos}</span>
           <Stat caption={`${pos} Rk`} value={`#${posRank}`} />
           <Stat caption="Proj" value={`#${projRank}`} />
-          {scouted ? (
+          {level === 3 ? (
             <Stat caption="Range" value={`${r.overall}–${prospect.development.potential}`} valueClass="text-[var(--accent-alt)]" />
+          ) : level > 0 ? (
+            <Stat caption="Pot range" value={`${range.low}–${range.high}`} />
           ) : (
             <Stat caption="OVR" value={String(r.overall)} valueClass={ratingColor(r.overall)} />
           )}

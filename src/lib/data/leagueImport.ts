@@ -83,6 +83,9 @@ interface FbgmPlayer {
   firstName: string;
   lastName: string;
   imgURL?: string;
+  /** Real jersey number (FBGM keeps it as a string, e.g. "78"); also on the latest stats row */
+  jerseyNumber?: string | number;
+  stats?: Array<{ jerseyNumber?: string | number }>;
   born?: { year?: number };
   draft?: { year?: number; pick?: number; round?: number; tid?: number; originalTid?: number };
   contract?: { amount?: number; exp?: number };
@@ -92,6 +95,13 @@ interface FbgmPlayer {
   statsTids?: number[];
   /** Move history: drafts, trades, signings, godMode edits. */
   transactions?: Array<{ season?: number; phase?: number; tid?: number; type?: string; fromTid?: number }>;
+}
+
+/** The player's real number from an FBGM file (top-level, else his latest stats row); undefined when absent or not 0-99. */
+function fbgmJerseyNumber(p: FbgmPlayer): number | undefined {
+  const raw = p.jerseyNumber ?? [...(p.stats ?? [])].reverse().find(s => s.jerseyNumber != null)?.jerseyNumber;
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+  return Number.isInteger(n) && n >= 0 && n <= 99 ? n : undefined;
 }
 
 interface FbgmDraftPick {
@@ -425,6 +435,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       onIR: false,
       mood: 60 + Math.floor(Math.random() * 30),
       photoUrl: player.imgURL || undefined,
+      jerseyNumber: fbgmJerseyNumber(player),
     });
   }
 
@@ -465,6 +476,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       onIR: false,
       mood: 70,
       photoUrl: player.imgURL || undefined,
+      jerseyNumber: fbgmJerseyNumber(player),
     });
   }
 

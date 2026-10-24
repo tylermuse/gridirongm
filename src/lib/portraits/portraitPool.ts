@@ -38,9 +38,15 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-/** The headshot for a fictional player (null if the pool is empty). */
-export function portraitFor(seed: string, position: string): string | null {
+/** File name of the headshot for a fictional player (null if the pool is empty). */
+export function portraitFileFor(seed: string, position: string): string | null {
   const list = byGroup.get(GROUP[position?.toUpperCase()] ?? 'lb') ?? POOL.map(h => h.file);
   if (!list.length) return null;
-  return `/players/heads/${list[hash(seed) % list.length]}`;
+  return list[hash(seed) % list.length];
+}
+
+/** The headshot for a fictional player (null if the pool is empty). */
+export function portraitFor(seed: string, position: string): string | null {
+  const file = portraitFileFor(seed, position);
+  return file ? `/players/heads/${file}` : null;
 }

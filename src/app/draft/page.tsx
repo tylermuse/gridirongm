@@ -1118,6 +1118,7 @@ export default function DraftPage() {
     players,
     freeAgents,
     draftOrder,
+    draftPickOrder,
     draftResults,
     userTeamId,
     teams,
@@ -1231,7 +1232,7 @@ export default function DraftPage() {
 
   const totalRounds = 7;
   const picksPerRound = teams.length;
-  const totalPicks = picksPerRound * totalRounds;
+  const totalPicks = draftPickOrder?.length || picksPerRound * totalRounds;
   const currentPickTeamId = draftOrder[0];
   const isUserPick = currentPickTeamId === userTeamId;
   const prospectCount = freeAgents.filter(id => {
@@ -1239,7 +1240,13 @@ export default function DraftPage() {
     return p && p.experience === 0;
   }).length;
   const draftComplete = draftOrder.length === 0 || prospectCount === 0;
-  const currentOverallPick = draftComplete ? totalPicks : Math.min(totalPicks, totalPicks - draftOrder.length + 1);
+  // Older (1999-era) save formats can carry a draftOrder longer than totalPicks,
+  // which drives `totalPicks - draftOrder.length + 1` to 0 or below and shows the
+  // draft starting at pick #0. Floor at 1 so the overall pick is always a valid,
+  // 1-indexed slot.
+  const currentOverallPick = draftComplete
+    ? totalPicks
+    : Math.max(1, Math.min(totalPicks, totalPicks - draftOrder.length + 1));
   const currentRound = Math.min(totalRounds, Math.max(1, Math.ceil(currentOverallPick / picksPerRound)));
   const currentPickInRound = Math.min(picksPerRound, ((currentOverallPick - 1) % picksPerRound) + 1);
 

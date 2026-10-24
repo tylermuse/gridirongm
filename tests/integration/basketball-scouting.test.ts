@@ -1,8 +1,10 @@
 /**
  * Draft scouting (hidden potential) integration tests.
  *
- * Prospects start unscouted with a noisy projection grade; spending a scout
- * reveals true potential and decrements the budget; the budget is finite.
+ * Prospects start unscouted with a noisy projection grade; a full evaluation
+ * (the default scoutProspect tier) reveals true potential and spends 6 of the
+ * per-draft scouting points; the budget is finite. Tier-by-tier behaviour lives
+ * in basketball-scouting-tiers.test.ts.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -12,9 +14,9 @@ import {
   initializePlayoffs, simPlayoffDay, getBracket, isRegularSeasonComplete,
 } from '@/../apps/bs-basketball/src/lib/playoffs';
 import { enterOffseason, advanceToNextSeason } from '@/../apps/bs-basketball/src/lib/season';
-import { getDraft, SCOUTS_PER_DRAFT } from '@/../apps/bs-basketball/src/lib/draft';
+import { getDraft, SCOUT_POINTS_PER_DRAFT } from '@/../apps/bs-basketball/src/lib/draft';
 import {
-  isScouted, scoutsLeft, scoutProspect, revealedPotential, perceivedPotential, projectionGrade,
+  isScouted, scoutsLeft, scoutProspect, tierCost, revealedPotential, perceivedPotential, projectionGrade,
 } from '@/../apps/bs-basketball/src/lib/scouting';
 import type { BasketballPlayer } from '@bs/sport-basketball';
 
@@ -31,7 +33,7 @@ describe('draft scouting', () => {
   it('starts with a full scout budget and unscouted prospects', () => {
     const league = offseason('scout-init');
     const draft = getDraft(league)!;
-    expect(scoutsLeft(draft)).toBe(SCOUTS_PER_DRAFT);
+    expect(scoutsLeft(draft)).toBe(SCOUT_POINTS_PER_DRAFT);
     const first = league.players[draft.poolIds[0]] as BasketballPlayer;
     expect(isScouted(draft, first.id)).toBe(false);
     expect(revealedPotential(draft, first)).toBeNull();
@@ -43,7 +45,7 @@ describe('draft scouting', () => {
     const after = scoutProspect(league, id);
     const draft = getDraft(after)!;
     expect(isScouted(draft, id)).toBe(true);
-    expect(scoutsLeft(draft)).toBe(SCOUTS_PER_DRAFT - 1);
+    expect(scoutsLeft(draft)).toBe(SCOUT_POINTS_PER_DRAFT - tierCost(3));
     expect(revealedPotential(draft, after.players[id] as BasketballPlayer))
       .toBe((after.players[id] as BasketballPlayer).development.potential);
   });
@@ -51,12 +53,13 @@ describe('draft scouting', () => {
   it('cannot scout past the budget', () => {
     let league = offseason('scout-budget');
     const pool = getDraft(league)!.poolIds;
-    for (let i = 0; i < SCOUTS_PER_DRAFT + 3; i++) league = scoutProspect(league, pool[i]);
+    const fullEvals = Math.floor(SCOUT_POINTS_PER_DRAFT / tierCost(3));
+    for (let i = 0; i < fullEvals + 3; i++) league = scoutProspect(league, pool[i]);
     const draft = getDraft(league)!;
-    expect(scoutsLeft(draft)).toBe(0);
-    expect((draft.scoutedIds ?? []).length).toBe(SCOUTS_PER_DRAFT);
+    expect(scoutsLeft(draft)).toBe(SCOUT_POINTS_PER_DRAFT - fullEvals * tierCost(3));
+    expect(pool.filter(id => isScouted(draft, id)).length).toBe(fullEvals);
     // The (budget+1)th prospect stayed unscouted.
-    expect(isScouted(draft, pool[SCOUTS_PER_DRAFT])).toBe(false);
+    expect(isScouted(draft, pool[fullEvals])).toBe(false);
   });
 
   it('projection grade is deterministic per prospect', () => {

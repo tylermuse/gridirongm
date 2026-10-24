@@ -53,46 +53,95 @@ const FIRST_APRON_MULT = 1.267;
  *  2026-27 sheet: $221.69M on a $164.96M cap ≈ 1.344× (was 1.295, ~$8M low). */
 const SECOND_APRON_MULT = 1.344;
 
-// Commissioner override (§1.5): a league can set a flat salary cap that replaces
-// the computed one for every season. Module-level (like the tier cache in
-// football) so the pure cap function can honor it without threading league state
-// through every call site — the store sets it on league load / when it changes.
-let salaryCapOverride: number | null = null;
+// Commissioner cap rules (§1.5 + League Rules). Module-level (like the tier
+// cache in football) so the pure cap functions can honor them without threading
+// league state through every call site — the app's league store pushes the
+// active league's settings in on load / whenever they change. Every field is
+// optional; an empty config reproduces the stock NBA-style numbers exactly.
+export interface CapRulesConfig {
+  /** Flat salary cap for every season (replaces the inflation curve). */
+  salaryCap?: number | null;
+  /** Annual cap growth applied to seasons AFTER `growthAnchor.season`. */
+  growthRate?: number;
+  /** Where a custom growth rate starts compounding from (the season it was set
+   *  and that season's cap) — so a change takes effect next season instead of
+   *  rewriting the current one. Without an anchor, growthRate is ignored. */
+  growthAnchor?: { season: number; cap: number } | null;
+  /** Luxury-tax line / aprons as multiples of the cap. */
+  taxLineMult?: number;
+  firstApronMult?: number;
+  secondApronMult?: number;
+  /** Scales every luxury-tax bracket rate (1 = stock $1.50-$3.75 per $1). */
+  taxRateMult?: number;
+  /** Top-tier (10+ yr) max contract as a share of the cap; the 25/30% tiers
+   *  scale proportionally. Stock 0.35. */
+  maxContractPct?: number;
+  /** Scales the whole service-time minimum-salary table. */
+  minSalaryMult?: number;
+}
 
-/** Set (or clear, with null) the commissioner's flat salary-cap override. Called
- *  by the league store on load and whenever the setting changes. */
+let capConfig: CapRulesConfig = {};
+
+/** Replace the active cap-rules config (pass {} to restore stock rules). */
+export function setCapRulesConfig(cfg: CapRulesConfig | null | undefined): void {
+  const c: CapRulesConfig = { ...(cfg ?? {}) };
+  if (!(typeof c.salaryCap === 'number' && c.salaryCap > 0)) delete c.salaryCap;
+  capConfig = c;
+}
+
+/** The active cap-rules config (a copy). */
+export function getCapRulesConfig(): CapRulesConfig {
+  return { ...capConfig };
+}
+
+/** Set (or clear, with null) the commissioner's flat salary-cap override,
+ *  leaving the rest of the cap-rules config untouched. */
 export function setSalaryCapOverride(cap: number | null): void {
-  salaryCapOverride = typeof cap === 'number' && cap > 0 ? cap : null;
+  setCapRulesConfig({ ...capConfig, salaryCap: cap });
 }
 
 /** The current override, or null. */
 export function getSalaryCapOverride(): number | null {
-  return salaryCapOverride;
+  return capConfig.salaryCap ?? null;
 }
 
-/** Compute the salary cap for a given season. Anchored on 2026-27 = $140M, unless
- *  a commissioner override is set (then that flat value applies to all seasons). */
-export function basketballSalaryCap(season: number): number {
-  if (salaryCapOverride != null) return salaryCapOverride;
+/** The stock inflation-curve cap for a season, ignoring any config. */
+export function basketballDefaultSalaryCap(season: number): number {
   const yearsFrom2026 = season - 2026;
   const cap = BASE_CAP_2026 * Math.pow(1 + CAP_INFLATION_RATE, yearsFrom2026);
   // Round to nearest $100K for clean numbers
   return Math.round(cap / 100_000) * 100_000;
 }
 
+/** Compute the salary cap for a given season. Priority: a flat commissioner
+ *  override → a custom growth rate compounding from its anchor season → the
+ *  stock curve (anchored on 2026-27 = $165M, +7%/yr). */
+export function basketballSalaryCap(season: number): number {
+  if (capConfig.salaryCap != null) return capConfig.salaryCap;
+  const anchor = capConfig.growthAnchor;
+  if (anchor && typeof capConfig.growthRate === 'number' && season > anchor.season) {
+    const cap = anchor.cap * Math.pow(1 + capConfig.growthRate, season - anchor.season);
+    return Math.round(cap / 100_000) * 100_000;
+  }
+  return basketballDefaultSalaryCap(season);
+}
+
 /** Luxury tax threshold for a given season. */
 export function basketballTaxThreshold(season: number): number {
-  return Math.round(basketballSalaryCap(season) * TAX_THRESHOLD_MULT / 100_000) * 100_000;
+  const mult = capConfig.taxLineMult ?? TAX_THRESHOLD_MULT;
+  return Math.round(basketballSalaryCap(season) * mult / 100_000) * 100_000;
 }
 
 /** First apron threshold. */
 export function basketballFirstApron(season: number): number {
-  return Math.round(basketballSalaryCap(season) * FIRST_APRON_MULT / 100_000) * 100_000;
+  const mult = capConfig.firstApronMult ?? FIRST_APRON_MULT;
+  return Math.round(basketballSalaryCap(season) * mult / 100_000) * 100_000;
 }
 
 /** Second apron threshold. Hard cap for some teams. */
 export function basketballSecondApron(season: number): number {
-  return Math.round(basketballSalaryCap(season) * SECOND_APRON_MULT / 100_000) * 100_000;
+  const mult = capConfig.secondApronMult ?? SECOND_APRON_MULT;
+  return Math.round(basketballSalaryCap(season) * mult / 100_000) * 100_000;
 }
 
 // ===========================================================================
@@ -110,9 +159,9 @@ const MAX_CONTRACT_YEARS = 5;
  *  - 10+ years: 35% of cap
  *  Plus exceptions for Designated Player Extensions (deferred to v2). */
 export function maxStartingPctOfCap(yearsInLeague: number): number {
-  if (yearsInLeague >= 10) return 0.35;
-  if (yearsInLeague >= 7) return 0.30;
-  return 0.25;
+  const base = yearsInLeague >= 10 ? 0.35 : yearsInLeague >= 7 ? 0.30 : 0.25;
+  const top = capConfig.maxContractPct;
+  return typeof top === 'number' && top !== 0.35 ? base * (top / 0.35) : base;
 }
 
 /** The hard max starting salary (in $) a player of this service time can sign
@@ -148,6 +197,10 @@ const MINIMUM_SALARY_TABLE: readonly number[] = [
 /** The league minimum salary for a player with `yearsInLeague` of service. */
 export function minimumSalary(yearsInLeague: number): number {
   const i = Math.max(0, Math.min(MINIMUM_SALARY_TABLE.length - 1, Math.floor(yearsInLeague)));
+  const mult = capConfig.minSalaryMult;
+  if (typeof mult === 'number' && mult !== 1) {
+    return Math.round((MINIMUM_SALARY_TABLE[i] * mult) / 10_000) * 10_000;
+  }
   return MINIMUM_SALARY_TABLE[i];
 }
 
@@ -324,6 +377,7 @@ export function basketballTeamCapStatus(
 function computeLuxuryTax(payroll: number, threshold: number): number {
   const over = payroll - threshold;
   if (over <= 0) return 0;
+  const rateMult = capConfig.taxRateMult ?? 1;
   const tiers = [
     { upTo: 5_000_000, rate: 1.50 },
     { upTo: 10_000_000, rate: 1.75 },
@@ -336,13 +390,13 @@ function computeLuxuryTax(payroll: number, threshold: number): number {
   for (const tier of tiers) {
     const tierWidth = tier.upTo - prevCap;
     const amountInTier = Math.min(remaining, tierWidth);
-    tax += amountInTier * tier.rate;
+    tax += amountInTier * tier.rate * rateMult;
     remaining -= amountInTier;
     prevCap = tier.upTo;
     if (remaining <= 0) break;
   }
   // Excess beyond $20M over: $3.75 per $1
-  if (remaining > 0) tax += remaining * 3.75;
+  if (remaining > 0) tax += remaining * 3.75 * rateMult;
   return Math.round(tax);
 }
 
@@ -434,6 +488,8 @@ export {
   BASE_CAP_2026,
   CAP_INFLATION_RATE,
   TAX_THRESHOLD_MULT,
+  FIRST_APRON_MULT,
+  SECOND_APRON_MULT,
   MAX_CONTRACT_YEARS,
   MAX_YEARLY_RAISE,
   LEAGUE_MINIMUM_SALARY,

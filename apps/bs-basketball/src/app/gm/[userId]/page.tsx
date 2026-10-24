@@ -2,6 +2,10 @@
 
 import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
+import { useSupabaseUser } from '@/lib/auth/useSupabaseUser';
+import { useLeagueStore } from '@/lib/store/leagueStore';
+import { OwnerObjectivesCard } from '@/components/owner/OwnerObjectivesCard';
+import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /gm/[userId] — public Hall of Fame profile: career card, season-by-season
@@ -41,7 +45,10 @@ export default function GmProfilePage({ params }: { params: Promise<{ userId: st
       ) : error || !data ? (
         <p className="mt-4 text-sm text-[var(--text-sec)]">{error ?? 'GM not found.'}</p>
       ) : (
-        <Loaded data={data} />
+        <>
+          <Loaded data={data} />
+          <MyObjectives userId={userId} />
+        </>
       )}
     </main>
   );
@@ -98,6 +105,17 @@ function Loaded({ data }: { data: Profile }) {
       </section>
     </>
   );
+}
+
+/** Owner objectives for the active save — only on your own GM hub (they live in
+ *  the local save, not the public profile). Renders nothing otherwise. */
+function MyObjectives({ userId }: { userId: string }) {
+  const { user } = useSupabaseUser();
+  const league = useLeagueStore(s => s.league);
+  if (!user || user.id !== userId || !league?.userTeamId) return null;
+  const team = league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined;
+  if (!team) return null;
+  return <OwnerObjectivesCard league={league} team={team} className="mt-6" />;
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {

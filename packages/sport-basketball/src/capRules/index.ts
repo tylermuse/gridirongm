@@ -8,6 +8,11 @@
 export {
   basketballSalaryCap,
   setSalaryCapOverride,
+  setCapRulesConfig,
+  getCapRulesConfig,
+  basketballDefaultSalaryCap,
+  FIRST_APRON_MULT,
+  SECOND_APRON_MULT,
   getSalaryCapOverride,
   basketballTaxThreshold,
   basketballFirstApron,
@@ -29,6 +34,7 @@ export {
   basketballMaxSalary,
 } from './capRules';
 export type {
+  CapRulesConfig,
   ContractValidationResult,
   TeamCapStatus,
   RosterValidationResult,

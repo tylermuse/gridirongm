@@ -65,3 +65,52 @@ export function divisionTable(team: Team, teams: Team[]): StandingsBoard {
     cutAfter: null,
   };
 }
+
+/** One game on the schedule board. */
+export interface ScheduleRow {
+  week: number;
+  teamId: string;
+  abbreviation: string;
+  name: string;
+  record: string;
+  home: boolean;
+  /** Played: the result from the spotlight team's side. */
+  result?: { won: boolean; us: number; them: number };
+}
+
+export interface ScheduleBoard {
+  title: string;
+  rows: ScheduleRow[];
+}
+
+/**
+ * The road ahead: the team's next `ahead` games (plus the last one played,
+ * for context), with each opponent's record. Null before the schedule is
+ * known or after the regular season.
+ */
+export function upcomingSchedule(
+  team: Team, teams: Team[],
+  schedule: { week: number; season: number; homeTeamId: string; awayTeamId: string; homeScore: number; awayScore: number; played: boolean }[],
+  season: number, ahead = 4,
+): ScheduleBoard | null {
+  const mine = schedule
+    .filter(g => g.season === season && (g.homeTeamId === team.id || g.awayTeamId === team.id))
+    .sort((a, b) => a.week - b.week);
+  const next = mine.findIndex(g => !g.played);
+  if (next < 0) return null;
+  const games = mine.slice(Math.max(0, next - 1), next + ahead);
+  const rows = games.flatMap((g): ScheduleRow[] => {
+    const home = g.homeTeamId === team.id;
+    const opp = teams.find(t => t.id === (home ? g.awayTeamId : g.homeTeamId));
+    if (!opp) return [];
+    const us = home ? g.homeScore : g.awayScore, them = home ? g.awayScore : g.homeScore;
+    return [{
+      week: g.week, teamId: opp.id, abbreviation: opp.abbreviation, name: `${opp.city} ${opp.name}`, record: rec(opp), home,
+      ...(g.played ? { result: { won: us > them, us, them } } : {}),
+    }];
+  });
+  if (!rows.length) return null;
+  const road = rows.filter(r => !r.result && !r.home).length;
+  const left = rows.filter(r => !r.result).length;
+  return { title: road >= Math.ceil(left / 2) && left > 1 ? `The road ahead · ${road} of the next ${left} away` : 'The road ahead', rows };
+}

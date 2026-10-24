@@ -3,9 +3,10 @@
 import { useMemo, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import { ScoutingReportBody } from '@/components/draft/ScoutingReportBody';
+import { TieredScoutPanel, TierPips } from '@/components/draft/TieredScoutPanel';
 import { buildScoutingReport, teamFitFor } from '@/lib/scouting/scoutingReport';
-import { isScouted, scoutsLeft } from '@/lib/scouting';
-import { SCOUTS_PER_DRAFT } from '@/lib/draft';
+import { buildTieredReport, isWatched, scoutLevel, scoutPointsLeft, potentialRange, scoutSaveSeed, tierCost } from '@/lib/scouting';
+import { SCOUT_POINTS_PER_DRAFT, type ScoutLevel } from '@/lib/draft';
 import { positionNeeds, TARGET_DEPTH } from '@/lib/draft/needs';
 import { consensus2026Rank } from '@/lib/data/draft2026';
 import { ratingColor } from '@/lib/ui/ratingColor';
@@ -15,9 +16,11 @@ import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/s
 
 /**
  * Draft Board (parity §B): the rich prospect table — search + position + a
- * three-state filter (All / ⭐ Starred / Scouted), a scout-points bar with
- * auto-scout, a roster-needs snapshot, and inline row expansion that renders the
- * full scouting report. The single prospect surface.
+ * three-state filter (All / ⭐ Watchlist / Scouted), a tiered scout-points bar
+ * with auto-scout, a roster-needs snapshot, and inline row expansion that
+ * renders the tiered scouting report (and the full report once fully
+ * evaluated). The watchlist persists on the draft state. The single prospect
+ * surface.
  */
 
 const POSITIONS: (BasketballPosition | 'ALL')[] = ['ALL', 'PG', 'SG', 'SF', 'PF', 'C'];
@@ -31,7 +34,7 @@ function prospectScore(p: BasketballPlayer): number {
 }
 
 export function DraftBoardCard({
-  league, draft, pool, recommendedId, userOnClock, loading, onScout, onDraft,
+  league, draft, pool, recommendedId, userOnClock, loading, onScout, onScoutMany, onToggleWatch, onDraft,
 }: {
   league: BasketballLeagueState;
   draft: DraftState;
@@ -40,13 +43,14 @@ export function DraftBoardCard({
   recommendedId: string | null;
   userOnClock: boolean;
   loading: boolean;
-  onScout: (id: string) => void;
+  onScout: (id: string, level: Exclude<ScoutLevel, 0>) => void;
+  onScoutMany: (ids: string[], level: Exclude<ScoutLevel, 0>) => void;
+  onToggleWatch: (id: string) => void;
   onDraft: (id: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [posFilter, setPosFilter] = useState<BasketballPosition | 'ALL'>('ALL');
   const [tab, setTab] = useState<'all' | 'starred' | 'scouted'>('all');
-  const [starred, setStarred] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // Projected draft rank = position on the overall board.
@@ -62,25 +66,26 @@ export function DraftBoardCard({
 
   const rows = pool.filter(p => {
     if (posFilter !== 'ALL' && p.sportData.position !== posFilter) return false;
-    if (tab === 'starred' && !starred.has(p.id)) return false;
-    if (tab === 'scouted' && !isScouted(draft, p.id)) return false;
+    if (tab === 'starred' && !isWatched(draft, p.id)) return false;
+    if (tab === 'scouted' && scoutLevel(draft, p.id) === 0) return false;
     if (search && !`${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   }).sort((a, b) => prospectScore(b) - prospectScore(a));
 
-  const scoutsRemaining = scoutsLeft(draft);
-  const scoutPct = Math.round((scoutsRemaining / SCOUTS_PER_DRAFT) * 100);
-  const scoutBar = scoutsRemaining > SCOUTS_PER_DRAFT * 0.5 ? 'bg-blue-500' : scoutsRemaining > SCOUTS_PER_DRAFT * 0.2 ? 'bg-amber-500' : 'bg-red-500';
+  const pointsLeft = scoutPointsLeft(draft);
+  const scoutPct = Math.round((pointsLeft / SCOUT_POINTS_PER_DRAFT) * 100);
+  const scoutBar = pointsLeft > SCOUT_POINTS_PER_DRAFT * 0.5 ? 'bg-blue-500' : pointsLeft > SCOUT_POINTS_PER_DRAFT * 0.2 ? 'bg-amber-500' : 'bg-red-500';
+  const saveSeed = scoutSaveSeed(league);
 
-  function toggleStar(id: string) {
-    setStarred(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  }
   function autoScout() {
-    // Scout down the board (starred first, then rank order), spending scouts.
+    // Quick-look down the board: watchlist first, then board order. The lib
+    // stops spending once the budget runs out, so this can't overspend.
     const order = [...pool]
-      .filter(p => !isScouted(draft, p.id))
-      .sort((a, b) => (Number(starred.has(b.id)) - Number(starred.has(a.id))) || (b.ratings.overall - a.ratings.overall));
-    order.slice(0, scoutsRemaining).forEach(p => onScout(p.id));
+      .filter(p => scoutLevel(draft, p.id) === 0)
+      .sort((a, b) => (Number(isWatched(draft, b.id)) - Number(isWatched(draft, a.id))) || (prospectScore(b) - prospectScore(a)))
+      .slice(0, Math.min(10, pointsLeft))
+      .map(p => p.id);
+    if (order.length) onScoutMany(order, 1);
   }
 
   return (
@@ -94,7 +99,7 @@ export function DraftBoardCard({
             {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
           <div className="flex rounded-lg p-0.5 text-xs font-bold" style={{ background: 'var(--surface)' }}>
-            {([['all', 'All'], ['starred', '⭐'], ['scouted', 'Scouted']] as const).map(([k, label]) => (
+            {([['all', 'All'], ['starred', `★ ${(draft.watchlist ?? []).length}`], ['scouted', 'Scouted']] as const).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} className="px-2.5 py-1 rounded-md" style={tab === k ? { background: 'var(--surface-2)', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' } : { color: 'var(--text-sec)' }}>{label}</button>
             ))}
           </div>
@@ -104,8 +109,9 @@ export function DraftBoardCard({
           <div className="w-20 h-2 rounded-full bg-[var(--surface)] overflow-hidden">
             <div className={`h-full ${scoutBar}`} style={{ width: `${scoutPct}%` }} />
           </div>
-          <span className="text-xs tabular-nums text-[var(--text-sec)]">{scoutsRemaining}/{SCOUTS_PER_DRAFT}</span>
-          <button onClick={autoScout} disabled={scoutsRemaining === 0 || loading} className="ml-auto text-[11px] font-bold rounded-md px-2 py-1 disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>Auto-scout</button>
+          <span className="text-xs tabular-nums text-[var(--text-sec)]">{pointsLeft}/{SCOUT_POINTS_PER_DRAFT}</span>
+          <span className="hidden sm:inline text-[10px] text-[var(--text-sec)]">Quick look {tierCost(1)} · Workout {tierCost(2)} · Full eval {tierCost(3)}</span>
+          <button onClick={autoScout} disabled={pointsLeft === 0 || loading} title="Quick look at up to 10 unscouted prospects (watchlist first)" className="ml-auto text-[11px] font-bold rounded-md px-2 py-1 disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>Auto-scout</button>
         </div>
       </div>
 
@@ -138,15 +144,17 @@ export function DraftBoardCard({
               <th className="text-left">Player</th>
               <th className="text-center">Pos</th>
               <th className="text-center">OVR</th>
-              <th className="text-center">Scout</th>
+              <th className="text-center">Pot</th>
               <th className="text-right pr-3">Draft</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(p => {
-              const scouted = isScouted(draft, p.id);
+              const level = scoutLevel(draft, p.id);
+              const range = potentialRange(p, level, saveSeed, draft.season);
               const isOpen = expanded === p.id;
-              const affordable = scoutsRemaining > 0;
+              const watched = isWatched(draft, p.id);
+              const affordable = pointsLeft >= tierCost(1);
               const fillsNeed = needSet.has(p.sportData.position);
               return (
                 <FragmentRow key={p.id}>
@@ -159,7 +167,7 @@ export function DraftBoardCard({
                     <td className="text-center font-mono text-xs text-[var(--text-sec)]">{projRank.get(p.id)}</td>
                     <td className="py-2.5">
                       <div className="flex items-center gap-1.5">
-                        <button onClick={e => { e.stopPropagation(); toggleStar(p.id); }} className="text-sm" style={{ color: starred.has(p.id) ? '#f59e0b' : 'var(--text-sec)' }} aria-label="Star">{starred.has(p.id) ? '★' : '☆'}</button>
+                        <button onClick={e => { e.stopPropagation(); onToggleWatch(p.id); }} className="text-sm" style={{ color: watched ? '#f59e0b' : 'var(--text-sec)' }} aria-label={watched ? 'Remove from watchlist' : 'Add to watchlist'} aria-pressed={watched}>{watched ? '★' : '☆'}</button>
                         <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
                         {p.id === recommendedId && <span className="text-[9px] font-black px-1 rounded" style={{ background: 'var(--accent)', color: '#fff' }}>REC</span>}
                         {fillsNeed && <span className="text-[9px] px-1 rounded" style={{ background: 'color-mix(in srgb,#10b981 18%,transparent)', color: '#059669' }}>Need</span>}
@@ -169,9 +177,12 @@ export function DraftBoardCard({
                     <td className="text-center"><Chip>{p.sportData.position}</Chip></td>
                     <td className={`text-center font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                     <td className="text-center">
-                      {scouted
-                        ? <span className={`font-bold tabular-nums ${ratingColor(p.development.potential)}`} title="Scouted ceiling">{p.development.potential}</span>
-                        : <button onClick={e => { e.stopPropagation(); onScout(p.id); setExpanded(p.id); }} disabled={!affordable || loading} className="text-[10px] font-bold rounded border px-2 py-1 disabled:opacity-40" style={affordable ? { color: 'var(--accent)', background: 'var(--accent-glow)', borderColor: 'var(--accent)' } : { color: '#d97706', borderColor: '#d97706' }}>{affordable ? 'Scout' : '🔒'}</button>}
+                      {level === 3
+                        ? <span className={`font-bold tabular-nums ${ratingColor(p.development.potential)}`} title="Confirmed ceiling">{p.development.potential}</span>
+                        : level > 0
+                          ? <span className="text-xs tabular-nums font-semibold" title="Scouted potential range">{range.low}–{range.high}</span>
+                          : <button onClick={e => { e.stopPropagation(); onScout(p.id, 1); setExpanded(p.id); }} disabled={!affordable || loading} title={`Quick look (${tierCost(1)} pt)`} className="text-[10px] font-bold rounded border px-2 py-1 disabled:opacity-40" style={affordable ? { color: 'var(--accent)', background: 'var(--accent-glow)', borderColor: 'var(--accent)' } : { color: '#d97706', borderColor: '#d97706' }}>{affordable ? 'Scout' : '🔒'}</button>}
+                      {level > 0 && <div className="leading-none mt-0.5"><TierPips level={level} /></div>}
                     </td>
                     <td className="text-right pr-3">
                       {userOnClock
@@ -182,13 +193,23 @@ export function DraftBoardCard({
                   {isOpen && (
                     <tr style={{ background: 'var(--surface-2)' }}>
                       <td colSpan={7} className="px-4 py-3">
-                        <ScoutingReportBody
-                          player={p}
-                          report={buildScoutingReport(p, { season: draft.season, scouted })}
-                          teamFit={userTeam ? teamFitFor(userTeam.playerIds.filter(id => (league.players[id] as BasketballPlayer | undefined)?.sportData.position === p.sportData.position).length, userTeam.abbreviation) : null}
-                          onScout={() => onScout(p.id)}
-                          canScout={affordable && !loading}
+                        <TieredScoutPanel
+                          report={buildTieredReport(league, draft, p)}
+                          onScout={lvl => onScout(p.id, lvl)}
+                          disabled={loading}
                         />
+                        {level === 3 && (
+                          <details className="mt-3">
+                            <summary className="text-xs font-bold cursor-pointer" style={{ color: 'var(--accent)' }}>Full scouting report</summary>
+                            <div className="mt-3">
+                              <ScoutingReportBody
+                                player={p}
+                                report={buildScoutingReport(p, { season: draft.season, scouted: true })}
+                                teamFit={userTeam ? teamFitFor(userTeam.playerIds.filter(id => (league.players[id] as BasketballPlayer | undefined)?.sportData.position === p.sportData.position).length, userTeam.abbreviation) : null}
+                              />
+                            </div>
+                          </details>
+                        )}
                       </td>
                     </tr>
                   )}

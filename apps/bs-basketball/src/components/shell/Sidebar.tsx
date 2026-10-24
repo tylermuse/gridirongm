@@ -5,6 +5,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { SidebarFooter } from './SidebarFooter';
 import type { useLeagueStore } from '@/lib/store/leagueStore';
 import type { BasketballTeam } from '@bs/sport-basketball';
+import { pendingProposalCount } from '@/lib/trade/proposals';
 
 /**
  * Sectioned navigation rail (Tier 1.1). Persistent on desktop, a slide-out
@@ -84,6 +85,8 @@ export function Sidebar({
     ? (league?.teams.find(t => t.id === userTeamId) as BasketballTeam | undefined) ?? null
     : null;
   const sections = sectionsFor(userTeamId);
+  // Pending AI trade offers → badge on the Trade nav item.
+  const offerCount = league ? pendingProposalCount(league) : 0;
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -131,6 +134,15 @@ export function Sidebar({
                 >
                   <span className="text-base leading-none w-5 text-center" aria-hidden>{item.icon}</span>
                   {item.label}
+                  {item.href === '/trade' && offerCount > 0 && (
+                    <span
+                      className="ml-auto rounded-full px-1.5 min-w-[1.25rem] text-center text-[10px] font-bold leading-[1.125rem] tabular-nums"
+                      style={{ background: 'var(--accent)', color: '#fff' }}
+                      title={`${offerCount} pending trade offer${offerCount === 1 ? '' : 's'}`}
+                    >
+                      {offerCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
