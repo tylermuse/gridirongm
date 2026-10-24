@@ -27,6 +27,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { ShowCaption, ShowGraphic, ThemeCard, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
 import { wideLineAt, type Calls, type ShowThemeId, type Verdict } from '@/lib/spotlight/showThemes';
+import { ALL_SFX, MUSIC_LEVEL, SFX_GAIN, graphicCues, sfxSrc, type MusicId, type SfxId } from '@/lib/spotlight/showSfx';
 
 /** Over-the-shoulder listening loops (studio screens frozen, so the
  *  footage on them doesn't run backward on the loop). */
@@ -197,6 +198,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const spansRef = useRef<Map<number, { start: number; end: number; tail: number }>>(new Map());
   /** Speech loudness (dBFS) of each generated line, for leveling. */
   const levelsRef = useRef<Map<number, number | null>>(new Map());
+  /** Sound design: decoded cues, what's sounding, and which graphic cue
+   *  groups already played (once per topic). */
+  const sfxBufs = useRef<Map<string, AudioBuffer>>(new Map());
+  const sfxPlaying = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const musicRef = useRef<{ src: AudioBufferSourceNode; gain: GainNode } | null>(null);
+  const firedSfx = useRef<Set<string>>(new Set());
 
   // Only mount <video> elements for clips this episode actually uses.
   const videoSegs = useMemo(() => {
@@ -309,6 +316,67 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     return outRef.current;
   }, []);
 
+  /** One-shot effect, `delay` seconds from now. */
+  const playSfx = useCallback((id: SfxId, delay = 0) => {
+    const ctx = ctxRef.current;
+    const buf = sfxBufs.current.get(id);
+    if (!ctx || !buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = SFX_GAIN[id];
+    src.connect(g).connect(out(ctx));
+    sfxPlaying.current.add(src);
+    src.onended = () => { sfxPlaying.current.delete(src); src.disconnect(); };
+    src.start(ctx.currentTime + Math.max(0, delay));
+  }, [out]);
+
+  /** Music: one cue at a time (a new one fades the last out); it comes in
+   *  at its `start` level and settles to a bed under the voices. */
+  const playMusic = useCallback((id: MusicId) => {
+    const ctx = ctxRef.current;
+    const buf = sfxBufs.current.get(id);
+    if (!ctx || !buf) return;
+    const now = ctx.currentTime;
+    const prev = musicRef.current;
+    if (prev) {
+      prev.gain.gain.cancelScheduledValues(now);
+      prev.gain.gain.setValueAtTime(prev.gain.gain.value, now);
+      prev.gain.gain.linearRampToValueAtTime(0, now + 0.3);
+      try { prev.src.stop(now + 0.35); } catch { /* already stopped */ }
+    }
+    const lv = MUSIC_LEVEL[id];
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(lv.start, now);
+    if (lv.settle > 0) gain.gain.linearRampToValueAtTime(lv.bed, now + lv.settle + 0.4);
+    src.connect(gain).connect(out(ctx));
+    const cur = { src, gain };
+    musicRef.current = cur;
+    src.onended = () => { if (musicRef.current === cur) musicRef.current = null; src.disconnect(); };
+    src.start(now);
+  }, [out]);
+
+  /** Silence all sound design (close, seek, restart). */
+  const stopSfx = useCallback(() => {
+    for (const s of sfxPlaying.current) { try { s.stop(); } catch { /* already stopped */ } }
+    sfxPlaying.current.clear();
+    if (musicRef.current) { try { musicRef.current.src.stop(); } catch { /* already stopped */ } musicRef.current = null; }
+  }, []);
+
+  /** The graphic's effects (topic wipe, Buy/Sell chips, verdict board),
+   *  timed to its animations from the topic's start. */
+  const graphicSfx = useCallback((g: Parameters<typeof graphicCues>[0]) => {
+    const cues = graphicCues(g, firedSfx.current);
+    if (!cues.length) return;
+    // The board may come in after its topic began (a voiceover opened it):
+    // keep the stagger, start from now.
+    const t = (performance.now() - pausedTotal.current - topicStart.current) / 1000;
+    const shift = Math.min(t, ...cues.map(c => c.at));
+    for (const c of cues) playSfx(c.id, c.at - shift);
+  }, [playSfx]);
+
   const gainFor = useCallback((key: string, v: HTMLVideoElement) => {
     const ctx = ctxRef.current;
     if (!ctx) return null;
@@ -397,6 +465,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       // host) until the next lines land.
       if (!streamDone.current) { waitingFor.current = i; setBuffering(true); setHolding(true); setVisibleVideo(null); return; }
       setPhase('ended');
+      playMusic('outro');
       return;
     }
     const prev = segs[i - 1];
@@ -407,6 +476,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     setSegIdx(i);
     const advance = () => { if (tokenRef.current === token) playSegment(i + 1); };
     const ctx = ctxRef.current;
+    if (i === 0) { firedSfx.current.clear(); playMusic('open'); }
 
     if (seg.kind === 'clip' || seg.kind === 'phrase') {
       if (lowerTimer.current) clearTimeout(lowerTimer.current);
@@ -438,6 +508,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         // Topic transition: the host's line plays over the new topic's
         // graphic wiping in, rather than as a one-second shot of a host.
         enterGraphic(`graphic:${seg.voiceover.topicIdx}`, true);
+        graphicSfx({ topicIdx: seg.voiceover.topicIdx, visual: 'graphic' });
+      }
+      if (seg.kind === 'phrase' && seg.themeCard) {
+        // The theme's title card slams in over the two-shot.
+        playMusic(seg.themeCard);
+        playSfx('slam');
       }
       if (seg.kind === 'phrase') {
         if (!seg.wide && (!prev || prev.speaker !== seg.speaker || prev.kind === 'tts')) showLowerThird();
@@ -481,6 +557,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     setVisibleVideo(null);
     const onGraphic = prev && (prev.kind === 'tts' || (prev.kind === 'clip' && !!prev.voiceover));
     enterGraphic(`${seg.visual}:${seg.topicIdx}`, !onGraphic || prev.speaker !== seg.speaker);
+    graphicSfx(seg);
     const buf = buffersRef.current.get(i);
     if (!ctx) return advance();
     if (!buf) {
@@ -504,7 +581,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     src.onended = advance;
     srcRef.current = src;
     src.start(0, from, to - from);
-  }, [armClipEnd, enterGraphic, gainFor, out, showLowerThird, stopAll]);
+  }, [armClipEnd, enterGraphic, gainFor, graphicSfx, out, playMusic, playSfx, showLowerThird, stopAll]);
   // Latest sequencer and phase for callbacks that outlive a render (voices
   // arriving from the stream).
   const playSegmentRef = useRef(playSegment);
@@ -568,6 +645,13 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   /** Fetch what a (possibly grown) script needs: rank ordinals for slot
    *  phrases, and its clips — queued in play order, three at a time. */
   async function loadAssets(ctx: AudioContext, segs: TimedShowSegment[]) {
+    for (const id of ALL_SFX) {
+      if (sfxBufs.current.has(id)) continue;
+      void fetch(sfxSrc(id))
+        .then(r => (r.ok ? r.arrayBuffer() : Promise.reject()))
+        .then(b => ctx.decodeAudioData(b))
+        .then(buf => { sfxBufs.current.set(id, buf); }, () => { /* the show plays without it */ });
+    }
     await Promise.all(segs.map(async seg => {
       if (seg.kind !== 'phrase' || !seg.slot) return;
       const k = `${seg.speaker}/${seg.slot.rank}`;
@@ -740,6 +824,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   function handleClose() {
     void leaveFull();
     stopAll();
+    stopSfx();
     void ctxRef.current?.suspend();
     setPhase('idle');
     setSegIdx(0);
@@ -762,6 +847,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     if (ctx && ctx.state !== 'running') await ctx.resume();
     if (pausedAt.current != null) { pausedTotal.current += performance.now() - pausedAt.current; pausedAt.current = null; }
     // Jumping into a topic mid-way: let its graphic come in fresh.
+    stopSfx();
+    firedSfx.current.clear();
     blockKey.current = '';
     panelKey.current = '';
     phaseRef.current = 'playing';
