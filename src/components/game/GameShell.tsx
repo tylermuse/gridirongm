@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
-import { SpotlightPopup } from './SpotlightPopup';
 import { GlobalBooth } from './GlobalBooth';
 import { useGameStore, flushToStorageSync } from '@/lib/engine/store';
 import { getTeamColorVars } from '@/lib/teamColors';
@@ -71,7 +70,6 @@ export function GameShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-3 md:p-6 overflow-auto pb-20 sm:pb-6">{children}</main>
       </div>
 
-      <SpotlightPopup />
       <GlobalBooth />
     </div>
   );
