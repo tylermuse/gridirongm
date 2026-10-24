@@ -481,4 +481,7 @@ export type TimedShowSegment = ShowSegment & {
   /** Seconds inside that block. */
   audioStart?: number;
   audioDuration?: number;
+  /** Its lip-synced two-shot is rendering (fal request; where in the
+   *  block's audio the clip's sound starts). */
+  lips?: { request: string; start: number };
 };
