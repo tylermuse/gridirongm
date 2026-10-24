@@ -1073,7 +1073,7 @@ function Dashboard() {
     );
   }
 
-  // Listen for spotlight scroll requests (from SpotlightPopup in GameShell or ?spotlight=1 query)
+  // Listen for spotlight scroll requests (from the Booth's Watch buttons in GameShell or ?spotlight=1 query)
   // eslint-disable-next-line react-hooks/rules-of-hooks -- pre-existing on main; silenced only so this unrelated DraftCapitalCard edit isn't blocked by CI's whole-file lint (tech debt, not introduced here)
   useEffect(() => {
     function scrollToSpotlight() {
