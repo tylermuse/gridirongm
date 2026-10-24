@@ -20,15 +20,18 @@ import { THEMES, WIDE_BANTER, parseCalls, parseVerdict, type ThemePlan } from '.
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 /** Claude, the backup writer (and the original one). */
 export const WRITER_MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-opus-5-5';
 /** Gemini, the main writer: about a seventh of Opus's price per episode. */
 export const GEMINI_WRITER_MODEL = process.env.SPOTLIGHT_SHOW_GEMINI_MODEL || 'gemini-3-flash-preview';
-export type WriterProvider = 'gemini' | 'claude';
+/** OpenAI, the last resort. */
+export const OPENAI_WRITER_MODEL = process.env.SPOTLIGHT_SHOW_OPENAI_MODEL || 'gpt-5.4-mini';
+export type WriterProvider = 'gemini' | 'claude' | 'openai';
 /** Who writes, in order: the next one takes over if one fails before
  *  writing a line (no key, outage, out of credit). */
-export const WRITERS: WriterProvider[] = (process.env.SPOTLIGHT_SHOW_WRITERS || 'gemini,claude')
-  .split(',').map(w => w.trim()).filter((w): w is WriterProvider => w === 'gemini' || w === 'claude');
+export const WRITERS: WriterProvider[] = (process.env.SPOTLIGHT_SHOW_WRITERS || 'gemini,claude,openai')
+  .split(',').map(w => w.trim()).filter((w): w is WriterProvider => w === 'gemini' || w === 'claude' || w === 'openai');
 const TIMEOUT_MS = 110_000;
 /** How long the model deliberates before writing (it thinks adaptively).
  *  Low keeps the first topic arriving in seconds: the show is already
@@ -257,7 +260,7 @@ export async function writeConversation(
   // No writer at all: the notes are voiced as they are, toned down
   // (no shouted ALL-CAPS words, no exclamation pile-ups).
   const original = { topics: topics.map(t => ({ ...t, exchanges: t.exchanges.map(e => ({ ...e, text: calm(e.text) })) })), written: false };
-  if (!ANTHROPIC_API_KEY && !GEMINI_API_KEY) { console.warn('Spotlight show writer skipped: no ANTHROPIC_API_KEY or GEMINI_API_KEY'); return original; }
+  if (!ANTHROPIC_API_KEY && !GEMINI_API_KEY && !OPENAI_API_KEY) { console.warn('Spotlight show writer skipped: no writer API key'); return original; }
   const liveIdx = topics.flatMap((t, i) => (hasDebate(t) ? [i] : []));
   if (!liveIdx.length) return original;
 
@@ -347,7 +350,10 @@ export async function writeConversation(
     return { topics: out, written: true };
   };
 
-  const order = (opts?.writers ?? WRITERS).filter(w => (w === 'gemini' ? GEMINI_API_KEY : ANTHROPIC_API_KEY));
+  const keys: Record<WriterProvider, string | undefined> = { gemini: GEMINI_API_KEY, claude: ANTHROPIC_API_KEY, openai: OPENAI_API_KEY };
+  const streams: Record<WriterProvider, StreamWriter> = { gemini: streamGemini, claude: streamClaude, openai: streamOpenAi };
+  const models: Record<WriterProvider, string> = { gemini: GEMINI_WRITER_MODEL, claude: WRITER_MODEL, openai: OPENAI_WRITER_MODEL };
+  const order = (opts?.writers ?? WRITERS).filter(w => keys[w]);
   for (const writer of order) {
     let text = '';
     const onText = (delta: string) => {
@@ -356,10 +362,10 @@ export async function writeConversation(
       while ((cut = text.indexOf('\n')) >= 0) { take(text.slice(0, cut)); text = text.slice(cut + 1); }
     };
     try {
-      await (writer === 'gemini' ? streamGemini : streamClaude)(user, onText);
+      await streams[writer](user, onText);
       take(text);
       if (!written.size) throw new Error('writer returned no lines');
-      console.info(`[spotlight-show] written by ${writer === 'gemini' ? GEMINI_WRITER_MODEL : WRITER_MODEL}`);
+      console.info(`[spotlight-show] written by ${models[writer]}`);
       return finish();
     } catch (err) {
       console.warn(`Spotlight show writer failed (${writer}):`, err instanceof Error ? err.message : err);
@@ -439,6 +445,34 @@ const streamGemini: StreamWriter = async (user, onText) => {
       try { data = JSON.parse(raw); } catch { return; }
       if (data.error) throw new Error(data.error.message ?? 'stream error');
       for (const part of data.candidates?.[0]?.content?.parts ?? []) if (part.text && !part.thought) onText(part.text);
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const streamOpenAi: StreamWriter = async (user, onText) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { authorization: `Bearer ${OPENAI_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: OPENAI_WRITER_MODEL, stream: true, max_completion_tokens: 8000,
+        reasoning_effort: WRITER_EFFORT === 'high' ? 'high' : 'low',
+        messages: [{ role: 'system', content: WRITER_SYSTEM_PROMPT }, { role: 'user', content: user }],
+      }),
+    });
+    if (!res.ok) throw new Error(`openai ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    await readSse(res, raw => {
+      if (raw === '[DONE]') return;
+      let data: { choices?: { delta?: { content?: string } }[]; error?: { message?: string } };
+      try { data = JSON.parse(raw); } catch { return; }
+      if (data.error) throw new Error(data.error.message ?? 'stream error');
+      const delta = data.choices?.[0]?.delta?.content;
+      if (delta) onText(delta);
     });
   } finally {
     clearTimeout(timer);
