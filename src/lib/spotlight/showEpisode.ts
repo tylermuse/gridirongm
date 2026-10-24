@@ -90,6 +90,12 @@ export async function readPayload(sb: SupabaseClient | null, e: EpisodeInput): P
   return data ? data.text() : null;
 }
 
+/** The script writer (Claude) couldn't write this episode: the show is not
+ *  made and the viewer's credit is refunded. */
+export class WriterUnavailableError extends Error {
+  constructor() { super('The show writer is unavailable right now. Try again in a little while.'); this.name = 'WriterUnavailableError'; }
+}
+
 /**
  * A script being written (one per episode per server instance). Both the
  * ahead-of-time prefetch and Watch Show attach to the same session, and
@@ -114,14 +120,12 @@ function startWriting(sb: SupabaseClient | null, e: EpisodeInput): Writing {
       w.last = { sofar, done: new Set(done) };
       for (const l of w.listeners) l(sofar, done);
     }, plan);
-    // Writer unavailable: the original notes (never the verdict topic's
-    // instructions), composed the classic way.
-    const segments = ep.written
-      ? buildShowScript(ep.topics, e.teamName, e.stats, { written: true, moment: e.moment, theme: plan })
-      : buildShowScript(e.topics, e.teamName, e.stats, { moment: e.moment, theme: plan });
-    // Only cache a written script: a fallback (writer down) gets retried.
-    if (ep.written) await writeJson(sb, path, { segments });
-    return { segments, written: ep.written };
+    // Writer unavailable: no show. The notes are the writer's research
+    // (score lines, box-score dumps), not something to read on air.
+    if (!ep.written) throw new WriterUnavailableError();
+    const segments = buildShowScript(ep.topics, e.teamName, e.stats, { written: true, moment: e.moment, theme: plan });
+    await writeJson(sb, path, { segments });
+    return { segments, written: true };
   })();
   writing.set(path, w);
   w.result.finally(() => setTimeout(() => writing.delete(path), 120_000)).catch(() => {});
