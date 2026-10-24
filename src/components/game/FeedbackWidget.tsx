@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { useBoothStore } from '@/lib/engine/boothStore';
 
 export function FeedbackWidget() {
   const [open, setOpen] = useState(false);
@@ -9,6 +10,8 @@ export function FeedbackWidget() {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const pathname = usePathname();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // In-game screens put the Booth launcher in this corner instead.
+  const boothMounted = useBoothStore(s => s.mounted);
 
   useEffect(() => {
     if (open && textareaRef.current) {
@@ -46,6 +49,8 @@ export function FeedbackWidget() {
       setStatus('error');
     }
   };
+
+  if (boothMounted) return null;
 
   return (
     <>
