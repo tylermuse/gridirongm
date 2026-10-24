@@ -44,7 +44,7 @@
     "end": 22.2
    }
   ],
-  "shots": "cccppp"
+  "shots": "cccPpP"
  },
  "panic_open_2": {
   "src": "/show/wide/panic_open_2.mp4",
@@ -85,13 +85,13 @@
     "end": 20.2
    }
   ],
-  "shots": "pcccc"
+  "shots": "Pcccc"
  },
  "panic_verdict_1": {
   "src": "/show/wide/panic_verdict_1.mp4",
   "duration": 7.24,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 6.48
   },
   "lines": [
@@ -108,7 +108,7 @@
     "end": 6.48
    }
   ],
-  "shots": "cp"
+  "shots": "cP"
  },
  "panic_verdict_2": {
   "src": "/show/wide/panic_verdict_2.mp4",
@@ -178,7 +178,7 @@
     "end": 21.68
    }
   ],
-  "shots": "ppcccp"
+  "shots": "pPcccP"
  },
  "buysell_open_2": {
   "src": "/show/wide/buysell_open_2.mp4",
@@ -213,7 +213,7 @@
     "end": 13.16
    }
   ],
-  "shots": "ccpp"
+  "shots": "ccPP"
  },
  "contender_open_1": {
   "src": "/show/wide/contender_open_1.mp4",
@@ -260,7 +260,7 @@
     "end": 19.24
    }
   ],
-  "shots": "ccccpp"
+  "shots": "ccccPP"
  },
  "contender_open_2": {
   "src": "/show/wide/contender_open_2.mp4",
@@ -295,7 +295,7 @@
     "end": 15.8
    }
   ],
-  "shots": "cppp"
+  "shots": "cPPP"
  },
  "contender_verdict_1": {
   "src": "/show/wide/contender_verdict_1.mp4",
@@ -318,7 +318,7 @@
     "end": 6.2
    }
   ],
-  "shots": "cp"
+  "shots": "cP"
  },
  "signoff_1": {
   "src": "/show/wide/signoff_1.mp4",
@@ -353,7 +353,7 @@
   "src": "/show/wide/signoff_2.mp4",
   "duration": 5.72,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 4.84
   },
   "lines": [
@@ -376,7 +376,7 @@
     "end": 4.84
    }
   ],
-  "shots": "ppp"
+  "shots": "pPP"
  },
  "banter_1": {
   "src": "/show/wide/banter_1.mp4",
@@ -405,7 +405,7 @@
     "end": 5.2
    }
   ],
-  "shots": "ppp"
+  "shots": "pPP"
  },
  "banter_2": {
   "src": "/show/wide/banter_2.mp4",
@@ -434,13 +434,13 @@
     "end": 6.32
    }
   ],
-  "shots": "ppp"
+  "shots": "pPP"
  },
  "panic_open_3": {
   "src": "/show/wide/panic_open_3.mp4",
   "duration": 25.48,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 24.72
   },
   "lines": [
@@ -481,13 +481,13 @@
     "end": 24.72
    }
   ],
-  "shots": "ccccpp"
+  "shots": "ccccPP"
  },
  "contender_open_3": {
   "src": "/show/wide/contender_open_3.mp4",
   "duration": 24.84,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 24.08
   },
   "lines": [
@@ -528,13 +528,13 @@
     "end": 24.08
    }
   ],
-  "shots": "ccccpp"
+  "shots": "ccccpP"
  },
  "contender_verdict_2": {
   "src": "/show/wide/contender_verdict_2.mp4",
   "duration": 8.76,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 8.0
   },
   "lines": [
@@ -551,13 +551,13 @@
     "end": 8.0
    }
   ],
-  "shots": "cp"
+  "shots": "cP"
  },
  "buysell_final_1": {
   "src": "/show/wide/buysell_final_1.mp4",
   "duration": 11.72,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 10.96
   },
   "lines": [
@@ -580,13 +580,13 @@
     "end": 10.96
    }
   ],
-  "shots": "cpp"
+  "shots": "cPP"
  },
  "banter_3": {
   "src": "/show/wide/banter_3.mp4",
   "duration": 8.84,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 7.96
   },
   "lines": [
@@ -609,13 +609,13 @@
     "end": 7.96
    }
   ],
-  "shots": "ppp"
+  "shots": "PPP"
  },
  "banter_4": {
   "src": "/show/wide/banter_4.mp4",
   "duration": 6.52,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 5.64
   },
   "lines": [
@@ -638,13 +638,13 @@
     "end": 5.64
    }
   ],
-  "shots": "ppp"
+  "shots": "pPP"
  },
  "signoff_3": {
   "src": "/show/wide/signoff_3.mp4",
   "duration": 8.52,
   "speech": {
-   "start": 0.35,
+   "start": 0.0,
    "end": 7.64
   },
   "lines": [

@@ -102,3 +102,11 @@ two-shot and both are composited back over the still:
    delayed 0.16 s (its lips run ahead of the voice by about that). Copy to
    `public/show/wide/`, put the timing.json spans, duration and shots into
    `src/lib/spotlight/wideClips.json`, and re-run `measure_levels.py`.
+7. Grins only where they belong: in `shots.json` a face-to-face line is `P`
+   (grinning: a joke, an insult, or the reaction to one) or `p`
+   (straight-faced: the whole-clip renders on `medium.png`). The per-segment
+   renders were made for the c/p runs saved in `runs.json`; a `P` line is cut
+   out of the pair render of the run it falls in, so re-splitting P/p needs no
+   re-render (`python3 plan_shots.py --plan-only`). p↔P is a 0.35 s crossfade
+   at the pause; c↔p turns use the straight-faced `turn_pc_n.mp4` /
+   `turn_cp_n.mp4` (Seedance, medium.png → medium_cam.png)..

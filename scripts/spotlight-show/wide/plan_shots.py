@@ -1,16 +1,19 @@
-"""Turn shots.json (per clip, one letter per line: c = camera, p = each other)
+"""Turn shots.json (per clip, one letter per line: c = camera, p = each
+other straight-faced, P = each other grinning)
 into plan.json (the clip's segments on the timeline) and, for every segment,
 an audio slice per host in seg/ for HeyGen: the other host's lines muted,
 0.6 s of silence in front (HeyGen's lips start late otherwise) and 0.4 s
 after. Needs <key>.json, <key>.mp3, <key>.mp3.spans.json per clip.
 
-Usage: python3 plan_shots.py [key ...]   (default: every clip in shots.json)
+Usage: python3 plan_shots.py [--plan-only] [key ...]   (default: every clip)
+--plan-only rewrites plan.json without cutting audio slices (the renders
+were made for the c/p runs in runs.json; compose_shots.py maps to them).
 """
 import json, os, subprocess, sys
 
 LEAD, TAIL = 0.6, 0.4
 
-def main(keys):
+def main(keys, slices=True):
     shots = json.load(open('shots.json'))
     plan = json.load(open('plan.json')) if os.path.exists('plan.json') else {}
     os.makedirs('seg', exist_ok=True)
@@ -27,7 +30,7 @@ def main(keys):
         for n, sg in enumerate(segs):
             sg['start'] = 0.0 if n == 0 else sg['a']  # timeline; 'a' is where the slice's audio begins
             sg['id'] = f'{k}__{n}'
-            for host in ('marcus', 'tony'):
+            for host in ('marcus', 'tony') if slices else ():
                 mute = [f"between(t,{x:.3f},{y:.3f})" for (s, _), (x, y) in zip(lines, sp) if s != host]
                 fc = ("[0:a]" + (f"volume=enable='{'+'.join(mute)}':volume=0," if mute else '')
                       + f"atrim={sg['a']:.3f}:{sg['b']:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=44100:channel_layouts=stereo[a];"
@@ -39,4 +42,5 @@ def main(keys):
     json.dump(plan, open('plan.json', 'w'), indent=1)
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    args = sys.argv[1:]
+    main([a for a in args if a != '--plan-only'], slices='--plan-only' not in args)

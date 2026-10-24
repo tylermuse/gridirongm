@@ -17,7 +17,7 @@ import { isOffseason, type EpisodeMoment } from './showMoment';
 export type ShowThemeId = 'panic' | 'buysell' | 'contender';
 
 export interface WideLine { host: 'marcus' | 'tony'; text: string; start: number; end: number }
-/** `shots`: one letter per line, c = both hosts face the camera, p = they face each other (compose_shots.py). */
+/** `shots`: one letter per line, c = both hosts face the camera, p = they face each other straight-faced, P = face each other grinning (jokes and jabs only; compose_shots.py). */
 export interface WideClip { src: string; duration: number; speech: { start: number; end: number }; lines: WideLine[]; shots?: string }
 export const WIDE_CLIPS = WIDE as Record<string, WideClip>;
 
