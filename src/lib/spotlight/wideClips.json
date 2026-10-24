@@ -691,7 +691,7 @@
    },
    {
     "host": "marcus",
-    "text": "[chuckles] That's not analysis.",
+    "text": "That's not analysis.",
     "start": 6.12,
     "end": 8.2
    }
@@ -720,7 +720,7 @@
    },
    {
     "host": "tony",
-    "text": "[laughs] We don't talk about the fullback.",
+    "text": "We don't talk about the fullback.",
     "start": 5.64,
     "end": 7.96
    }
@@ -801,7 +801,7 @@
    },
    {
     "host": "tony",
-    "text": "[excited] I've been waiting all week for this.",
+    "text": "I've been waiting all week for this.",
     "start": 2.53,
     "end": 5.4
    },
