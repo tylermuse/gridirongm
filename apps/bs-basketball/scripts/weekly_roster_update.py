@@ -182,6 +182,8 @@ def roll_to_regular_season(d, log):
             p['tid'] = -1  # undrafted 2026 prospects → free agency
     d['draftPicks'] = [dp for dp in d.get('draftPicks', []) if dp.get('season', 0) >= SEASON]
     for t in d['teams']:
+        if t.get('disabled'):
+            continue  # BBGM only keeps current-season rows for active teams (payroll check throws otherwise)
         prev = t['seasons'][-1]
         t['seasons'].append({**prev, 'season': SEASON, 'won': 0, 'lost': 0, 'playoffRoundsWon': -1, 'numPlayersTradedAway': 0})
     log.append(f'Rolled the file from the {SEASON - 1} offseason into the {START_YEAR}-{str(SEASON)[2:]} regular season.')
@@ -384,9 +386,7 @@ def build_season(d, games, tid_by_abbrev, log):
             win, lose = ((h, g['hp']), (a, g['ap'])) if hw else ((a, g['ap']), (h, g['hp']))
             done_games.append({'gid': len(done_games), 'season': SEASON, 'playoffs': False, 'day': days[g['date']], 'date': g['date'].isoformat(),
                                'att': 0, 'overtimes': 0, 'numPeriods': 4,
-                               # BBGM iterates teams[].players on import; score-only games have none.
-                               'teams': [{'tid': h, 'pts': g['hp'], 'ptsQtrs': [], 'players': []},
-                                         {'tid': a, 'pts': g['ap'], 'ptsQtrs': [], 'players': []}],
+                               'teams': [{'tid': h, 'pts': g['hp']}, {'tid': a, 'pts': g['ap']}],
                                'won': {'tid': win[0], 'pts': win[1]}, 'lost': {'tid': lose[0], 'pts': lose[1]}})
         else:
             schedule.append({'gid': 100000 + len(schedule), 'day': days[g['date']], 'date': g['date'].isoformat(), 'homeTid': h, 'awayTid': a})
@@ -405,7 +405,11 @@ def build_season(d, games, tid_by_abbrev, log):
                 break
         s['streak'] = streak
     d['schedule'] = schedule
-    d['games'] = done_games
+    # Score-only results live under a BS-only key: Basketball GM would import
+    # `games` as box scores and crash on them (no player lines). The W-L is
+    # already in teams[].seasons, so vanilla BBGM loses nothing it can show.
+    d.pop('games', None)
+    d['bsRealResults'] = done_games
     remaining_dates = defaultdict(list)
     for g in all_games:
         if not g['done']:

@@ -21,7 +21,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
 const FILE = resolve(__dirname, '../../apps/bs-basketball/public/rosters/BBGM_NBA_Roster_2026_Updated.json');
 
-function importMidSeason(): { league: LeagueState; file: BbgmLeagueFile & { games: unknown[]; schedule: unknown[] } } {
+function importMidSeason(): { league: LeagueState; file: BbgmLeagueFile & { bsRealResults: unknown[]; schedule: unknown[] } } {
   const file = JSON.parse(readFileSync(FILE, 'utf8'));
   const imported = convertBbgmLeague(file);
   expect(imported.seasonInProgress).not.toBeNull();
@@ -38,7 +38,7 @@ describe('mid-season NBA roster import', () => {
 
     const played = league.games.filter(g => g.status === 'played');
     const scheduled = league.games.filter(g => g.status === 'scheduled');
-    expect(played.length).toBe(file.games.length);
+    expect(played.length).toBe(file.bsRealResults.length);
     expect(scheduled.length).toBe(file.schedule.length);
     expect(played.length + scheduled.length).toBe(30 * 82 / 2);
 
