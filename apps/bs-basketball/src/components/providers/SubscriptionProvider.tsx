@@ -29,7 +29,7 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 const FOUNDING_MEMBER_CUTOFF = '2026-05-01T00:00:00Z';
 
 interface PodcastCredits {
-  /** Credits remaining this billing period. -1 means uncapped (admins). */
+  /** Credits remaining: this period's plus bought episode packs. -1 means uncapped (admins). */
   remaining: number;
   /** Total credits the user is entitled to per period. */
   limit: number;
@@ -80,7 +80,8 @@ async function syncCheckoutReturn(): Promise<void> {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('session_id');
-  if (params.get('subscription') !== 'success' || !sessionId) return;
+  // Back from Checkout: a new subscription, or a bought episode pack.
+  if ((params.get('subscription') !== 'success' && params.get('episodes') !== 'success') || !sessionId) return;
   try {
     await fetch('/api/stripe/sync', {
       method: 'POST',
@@ -96,9 +97,13 @@ async function syncCheckoutReturn(): Promise<void> {
   }
 }
 
+const PROFILE_COLS = 'is_admin, podcast_credits_used, podcast_credits_reset_at, podcast_bonus_credits';
+
 interface ProfileRow {
   is_admin: boolean | null;
   podcast_credits_used: number | null;
+  /** Bought episode packs (never expire). */
+  podcast_bonus_credits: number | null;
   podcast_credits_reset_at: string | null;
 }
 
@@ -161,8 +166,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
       const expired = isPeriodExpired(profile?.podcast_credits_reset_at ?? null);
       const used = expired ? 0 : (profile?.podcast_credits_used ?? 0);
+      // Bought episodes only count for Premium (same rule as readCredits).
+      const bonus = effectiveTier === 'premium' ? Math.max(0, profile?.podcast_bonus_credits ?? 0) : 0;
       return {
-        remaining: Math.max(0, limit - used),
+        remaining: Math.max(0, limit - used) + bonus,
         limit,
         resetAt: profile?.podcast_credits_reset_at ?? null,
       };
@@ -183,7 +190,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const [profileResult, subResult] = await Promise.all([
         supabase
           .from('profiles')
-          .select('is_admin, podcast_credits_used, podcast_credits_reset_at')
+          .select(PROFILE_COLS)
           .eq('id', userId)
           .maybeSingle(),
         supabase
@@ -227,7 +234,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!supabase || !user) return;
     const { data, error } = await supabase
       .from('profiles')
-      .select('is_admin, podcast_credits_used, podcast_credits_reset_at')
+      .select(PROFILE_COLS)
       .eq('id', user.id)
       .maybeSingle();
     if (error) {

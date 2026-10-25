@@ -42,8 +42,9 @@ export async function POST(request: Request) {
 
     // Never sell a second subscription to someone who already has one. This is
     // what let users who still saw the paywall (webhook late or failed) pay
-    // 4–5 times in a few minutes.
-    if (await hasLiveSubscription(user.id)) {
+    // 4–5 times in a few minutes. Episode packs are FOR live subscribers, so
+    // they skip this (it used to 409 every paying Premium user's pack purchase).
+    if (!pack && await hasLiveSubscription(user.id)) {
       return NextResponse.json(
         {
           error: 'You already have an active Premium subscription. It may take a minute to show up — try refreshing.',

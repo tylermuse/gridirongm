@@ -399,7 +399,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>Frequently Asked Questions</h2>
 <h3>Is BS Hoops really free?</h3>
-<p>Yes. Free includes the full 82-game season, draft, lottery, free agency, trades, stats, league history, custom league settings and unlimited saves. <a href="/pricing">Premium</a> is optional: no ads, AI commentary on every game, and 3 audio podcast credits per month.</p>
+<p>Yes. Free includes the full 82-game season, draft, lottery, free agency, trades, stats, league history, custom league settings and unlimited saves. <a href="/pricing">Premium</a> is optional: no ads, AI commentary on every game, and 5 studio-audio Team Spotlight episodes a month.</p>
 
 <h3>Can I run multiple franchises?</h3>
 <p>Yes. Free players get multiple leagues and unlimited saves.</p>
@@ -582,7 +582,7 @@ export const seoPages: SEOPage[] = [
   <tbody>
     <tr><td>Full 82-game season simulation</td><td>Ad-free experience</td></tr>
     <tr><td>Draft, lottery, free agency, trades</td><td>AI commentary on every game</td></tr>
-    <tr><td>All stats, standings, league history</td><td>3 audio podcast credits per month</td></tr>
+    <tr><td>All stats, standings, league history</td><td>5 studio-audio Spotlight episodes a month</td></tr>
     <tr><td>Multiple leagues, unlimited saves</td><td>Also unlocks BS Football</td></tr>
   </tbody>
 </table>
