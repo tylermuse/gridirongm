@@ -384,7 +384,9 @@ def build_season(d, games, tid_by_abbrev, log):
             win, lose = ((h, g['hp']), (a, g['ap'])) if hw else ((a, g['ap']), (h, g['hp']))
             done_games.append({'gid': len(done_games), 'season': SEASON, 'playoffs': False, 'day': days[g['date']], 'date': g['date'].isoformat(),
                                'att': 0, 'overtimes': 0, 'numPeriods': 4,
-                               'teams': [{'tid': h, 'pts': g['hp']}, {'tid': a, 'pts': g['ap']}],
+                               # BBGM iterates teams[].players on import; score-only games have none.
+                               'teams': [{'tid': h, 'pts': g['hp'], 'ptsQtrs': [], 'players': []},
+                                         {'tid': a, 'pts': g['ap'], 'ptsQtrs': [], 'players': []}],
                                'won': {'tid': win[0], 'pts': win[1]}, 'lost': {'tid': lose[0], 'pts': lose[1]}})
         else:
             schedule.append({'gid': 100000 + len(schedule), 'day': days[g['date']], 'date': g['date'].isoformat(), 'homeTid': h, 'awayTid': a})
