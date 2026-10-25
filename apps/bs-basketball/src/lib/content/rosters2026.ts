@@ -21,7 +21,7 @@ import { convertBbgmLeague, type BbgmLeagueFile } from '@/lib/data/leagueImport'
 
 export const ROSTER_FILE = 'BBGM_NBA_Roster_2026_Updated.json';
 export const ROSTER_SEASON = 2026;
-export const SITE = 'https://bs-basketball.com';
+export const SITE = 'https://www.bs-basketball.com';
 
 export interface RosterPlayer {
   id: string;

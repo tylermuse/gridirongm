@@ -16,7 +16,7 @@ import { isAuthorizedCron } from '@/lib/cronAuth';
  * Ownership is proven by the key file at /<INDEXNOW_KEY>.txt in /public.
  */
 
-const HOST = 'bs-basketball.com';
+const HOST = 'www.bs-basketball.com';
 const BASE = `https://${HOST}`;
 const INDEXNOW_KEY = 'c27738dd334079e682ede61561746384';
 const LOOKBACK_DAYS = 3;

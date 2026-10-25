@@ -9,7 +9,7 @@ import Link from 'next/link';
 export const COMPANY = 'BS Sports GM LLC';
 export const STATE = 'Texas';
 export const CONTACT_EMAIL = 'support@bs-football.com';
-export const SITE = 'https://bs-basketball.com';
+export const SITE = 'https://www.bs-basketball.com';
 
 const PROSE = [
   'text-[15px] leading-relaxed text-[var(--foreground)]',
