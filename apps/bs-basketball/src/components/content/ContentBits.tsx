@@ -76,15 +76,115 @@ export function PlayCta({ title, body, secondary }: { title: string; body: strin
 }
 
 /** Page frame for content pages: max width + footer links + parody note. */
+/** Shared nav + footer links for the public content pages (parity with BS
+ *  Football's (marketing) layout). Search visitors land here with no league
+ *  loaded, so the app shell is minimal — this is their only site navigation. */
+const CONTENT_NAV = [
+  { label: 'Rosters', href: '/rosters/2026' },
+  { label: 'Player Tiers', href: '/player-tiers' },
+  { label: 'Playoff Odds', href: '/predictions' },
+  { label: 'Blog', href: '/blog' },
+  { label: 'Compare', href: '/vs/basketball-gm' },
+];
+
+const CONTENT_FOOTER = [
+  {
+    title: 'Game',
+    links: [
+      { label: 'Play Now', href: '/' },
+      { label: 'Pricing', href: '/pricing' },
+      { label: 'Real NBA Rosters', href: '/rosters' },
+    ],
+  },
+  {
+    title: 'Data',
+    links: [
+      { label: '2026-27 Team Rosters', href: '/rosters/2026' },
+      { label: 'Player Tiers', href: '/player-tiers' },
+      { label: 'Playoff Odds', href: '/predictions' },
+    ],
+  },
+  {
+    title: 'Compare',
+    links: [
+      { label: 'vs Basketball GM', href: '/vs/basketball-gm' },
+      { label: 'vs NBA 2K MyLeague', href: '/vs/nba-2k-myleague' },
+      { label: 'Best Basketball GM Games', href: '/best/basketball-gm-games' },
+      { label: 'Free Basketball Games', href: '/best/free-basketball-games-online' },
+      { label: 'Basketball GM Alternative', href: '/alternatives/basketball-gm' },
+    ],
+  },
+  {
+    title: 'Learn',
+    links: [
+      { label: 'Blog', href: '/blog' },
+      { label: 'Beginner’s Guide', href: '/blog/first-season-beginners-guide' },
+      { label: 'Cap, Tax & Aprons', href: '/glossary/nba-salary-cap-aprons' },
+      { label: 'For Fantasy Players', href: '/for/fantasy-basketball-players' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'About', href: '/about' },
+      { label: 'Contact', href: '/contact' },
+      { label: 'Privacy', href: '/privacy' },
+      { label: 'Terms', href: '/terms' },
+      { label: 'BS Football', href: 'https://bs-football.com' },
+    ],
+  },
+];
+
+function ContentHeader() {
+  return (
+    <header className="flex items-center gap-4 mb-8 pb-4 border-b border-[var(--border)]">
+      <Link href="/" className="font-black text-lg tracking-tight shrink-0" style={{ fontFamily: 'var(--font-display)' }}>
+        <span style={{ color: 'var(--accent)' }}>BS</span> Hoops
+      </Link>
+      <nav aria-label="Site" className="flex-1 min-w-0 flex items-center gap-4 overflow-x-auto text-sm text-[var(--text-sec)] [scrollbar-width:none]">
+        {CONTENT_NAV.map(item => (
+          <Link key={item.href} href={item.href} className="whitespace-nowrap hover:text-[var(--foreground)] transition-colors">
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      <Link href="/" className="hidden sm:inline-block shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
+        Play Now
+      </Link>
+    </header>
+  );
+}
+
+function ContentFooter() {
+  return (
+    <footer className="mt-12 pt-8 border-t border-[var(--border)]">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+        {CONTENT_FOOTER.map(col => (
+          <div key={col.title}>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-2">{col.title}</h3>
+            <ul className="space-y-1.5">
+              {col.links.map(link => (
+                <li key={link.href}>
+                  <Link href={link.href} className="text-sm text-[var(--text-sec)] hover:text-[var(--foreground)] transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      {/* The app shell's footer carries the parody / not-affiliated notice. */}
+    </footer>
+  );
+}
+
 export function ContentFrame({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
   return (
-    <main className={`${wide ? 'max-w-6xl' : 'max-w-3xl'} mx-auto px-4 sm:px-6 py-10`}>
+    <main className={`${wide ? 'max-w-6xl' : 'max-w-3xl'} mx-auto px-4 sm:px-6 py-6 sm:py-8`}>
+      <ContentHeader />
       {children}
-      <div className="mt-12 pt-6 border-t border-[var(--border)]">
-        <p className="text-[11px] text-[var(--text-sec)] opacity-80">
-          BS Hoops is an independent parody basketball simulation. It is not affiliated with or endorsed by the NBA, any team, or any player.
-        </p>
-      </div>
+      <ContentFooter />
     </main>
   );
 }

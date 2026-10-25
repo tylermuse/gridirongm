@@ -1,7 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
+import { recordCrash } from '@/lib/diagnostics/breadcrumbs';
+
 /** Last-resort boundary (root layout itself failed) — no app CSS is loaded here. */
-export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => { recordCrash(error, 'root'); }, [error]);
+
   return (
     <html lang="en">
       <body style={{ margin: 0, background: '#f3f4f7', color: '#16181d', fontFamily: 'system-ui, sans-serif' }}>

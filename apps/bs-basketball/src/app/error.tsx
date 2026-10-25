@@ -1,8 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect } from 'react';
+import { recordCrash } from '@/lib/diagnostics/breadcrumbs';
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => { recordCrash(error, 'page'); }, [error]);
+
   return (
     <main className="min-h-[60vh] flex flex-col items-center justify-center text-center px-6">
       <div className="text-5xl mb-3" aria-hidden>🏀</div>
@@ -19,6 +23,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
         </Link>
       </div>
       {error.digest && <p className="text-[10px] text-[var(--text-sec)] mt-4">Error ref: {error.digest}</p>}
+      <Link href="/diagnostics" className="text-xs underline text-[var(--text-sec)] mt-2">Reporting a bug? Copy diagnostics</Link>
     </main>
   );
 }
