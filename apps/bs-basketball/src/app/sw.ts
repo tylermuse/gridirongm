@@ -29,7 +29,9 @@ declare global {
 declare const self: ServiceWorkerGlobalScope;
 
 const NEVER_CACHE = /^\/api\/(auth|stripe|analytics)(\/|$)/;
-const AI_ROUTES = /^\/api\/(spotlight|spotlight-audio|recap)(\/|$)/;
+// Every /api/spotlight* route (spotlight-audio, -chat, -show streams NDJSON) and recap:
+// never cached or buffered (same prefix rule as BS Football's sw).
+const AI_ROUTES = /^\/api\/(spotlight[\w-]*|recap)(\/|$)/;
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,

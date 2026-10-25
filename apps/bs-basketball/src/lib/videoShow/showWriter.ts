@@ -1,0 +1,426 @@
+/**
+ * Team Spotlight video show — the writers' room (BS Hoops: basketball prompt).
+ *
+ * The Spotlight topics are written as debate-show copy (punchy, a stat in
+ * every line). Read aloud, that sounds like two bots trading lines. Before
+ * voicing an episode, a writer model (GPT-5.4 mini; Gemini, then Claude as backups)
+ * rewrites the topics' notes as one unscripted conversation between the
+ * hosts — reacting, conceding, interrupting, calling back — using only the
+ * facts in the notes. Server-only.
+ *
+ * Falls back to the original topics on any failure (no key, timeout, bad
+ * JSON), so the show always plays.
+ */
+import type { ShowTopicInput } from './showScript';
+import type { ShowStatLine } from './teamStats';
+import { momentNote, type EpisodeMoment } from './showMoment';
+import { ordinal, rankTone } from './teamStats';
+import { PHRASES, type Phrase, type PhraseTone } from './phrases';
+import { THEMES, WIDE_BANTER, parseCalls, parseVerdict, type ThemePlan } from './showThemes';
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+/** Claude, the last backup (and the original writer: best, but ~10x the price). */
+export const WRITER_MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-opus-5-5';
+/** Gemini, the first backup (same price class as GPT-5.4 mini). */
+export const GEMINI_WRITER_MODEL = process.env.SPOTLIGHT_SHOW_GEMINI_MODEL || 'gemini-3-flash-preview';
+/** OpenAI, the main writer: about a tenth of Opus's price per episode, and
+ *  side by side the scripts held up. */
+export const OPENAI_WRITER_MODEL = process.env.SPOTLIGHT_SHOW_OPENAI_MODEL || 'gpt-5.4-mini';
+export type WriterProvider = 'gemini' | 'claude' | 'openai';
+/** Who writes, in order: the next one takes over if one fails before
+ *  writing a line (no key, outage, out of credit). */
+export const WRITERS: WriterProvider[] = (process.env.SPOTLIGHT_SHOW_WRITERS || 'openai,gemini,claude')
+  .split(',').map(w => w.trim()).filter((w): w is WriterProvider => w === 'gemini' || w === 'claude' || w === 'openai');
+const TIMEOUT_MS = 110_000;
+/** How long the model deliberates before writing (it thinks adaptively).
+ *  Low keeps the first topic arriving in seconds: the show is already
+ *  playing while it writes. */
+const WRITER_EFFORT = process.env.SPOTLIGHT_SHOW_WRITER_EFFORT || 'low';
+
+/** The writer may cut to two-shot banter (off: see writeConversation). */
+const WRITER_WIDE = false;
+
+export const WRITER_SYSTEM_PROMPT = `You write "Team Spotlight", a two-host basketball talk show inside a basketball GM simulation game. From the producer's notes you write the transcript of one unscripted conversation between the hosts. It will be voiced by expressive TTS. The bar: someone listening should not be able to tell it was written. It should sound like two guys who've done this show together for years, talking, not performing.
+
+THE HOSTS
+- Marcus Cole: the analyst. Dry, precise, a little wry. Reaches for one telling detail rather than a list. Concedes good points without fuss, then narrows them ("Fine. But only in the first half.").
+- Tony Blaze: the gut-feel guy with real basketball knowledge. Opinionated, funny, sometimes wrong and knows it. Gets louder when he's sure; laughs at himself when caught.
+- They like each other. They tease, interrupt, finish each other's thoughts, and bring back things said earlier in the episode.
+
+WHAT MAKES IT SOUND REAL
+- Respond to what was just said, not to the topic in general. Pick up a word or phrase the other guy used.
+- Let turns breathe. Most turns are two to four sentences: a host making his point, thinking out loud, changing direction mid-way, answering the other guy and then adding something. Quick reactions ("Right." / "Yeah, no.") are fine but rare: at most one in six lines, never two in a row. Fewer, fuller turns beat a rapid volley.
+- Let thoughts be messy: restarts ("They— look, they have to get to the line."), interruptions with an em dash, a host coming back after being cut off.
+- Disagreement that goes somewhere: someone gives ground, or they find the actual question they disagree about. It doesn't always resolve.
+- Outside the game breakdown, most lines carry no number at all. When a number comes up, say it the way people talk ("like sixteen a game", "twenty-seventh, I think?"), and never repeat a number the other host just said.
+- Humor comes from the relationship (needling, callbacks, a running bit), not from jokes.
+- Topics end where the talk naturally runs out: an unresolved point, a jab, a shrug. Never a summary, never "Thank you."
+
+TRANSITIONS
+Each topic after the first opens with one host moving the conversation on in his own words, usually tying back to what was just said ("Speaking of the bench—", "Alright, Boston. You've been waiting on this one all show."). Never "next topic" or "let's move on".
+
+NEVER (these read as AI or as a bad radio script)
+- Catchphrases and broadcaster clichés: "statement game", "buckle up", "make no mistake", "let that sink in", "at the end of the day", "here's the thing", "it is what it is", "mark my words".
+- "It's not X, it's Y", tidy lists of three, rhetorical-question chains, every line ending in an exclamation point.
+- Restating the headline, announcing the topic, explaining what a stat means to a co-host who obviously knows.
+- A host describing his own personality, or the hosts agreeing in a neat bow.
+- ALL CAPS, hashtags, emojis.
+
+STYLE REFERENCE (a different team — tone only, don't reuse lines)
+TONY: I'm just saying, if he jacks up one more step-back three with twenty on the shot clock I'm driving to the arena myself.
+MARCUS: You'd get lost.
+TONY: [laughs] I would get lost.
+MARCUS: But — and I hate this — you're not wrong. Three of his last four bad possessions were in crunch time, same look.
+TONY: Same look! That's coaching.
+MARCUS: Or it's him. That's sort of the whole question, isn't it.
+TONY: Yeah. Yeah, okay. I don't know which one scares me more.
+
+PERFORMANCE CUES
+Voiced with ElevenLabs v3, which performs bracketed cues. Use them only where a person really would, at most one in four lines: [laughs], [chuckles], [sighs], [scoffs], [exhales], [pause].
+
+THE MOMENT
+The user message starts with MOMENT: where the season is right now. Everything the hosts say must fit it. In the offseason the record is last season's final mark and there are no games left to play; at the deadline they talk buying and selling; before opening night there are no results yet. If a producer's note assumes a different moment, drop that part of the note.
+
+FACTS
+Use only facts, names and numbers in the notes and team numbers. Never claim a "first", a record or a streak ("their first title", "first time since…") unless the notes state it. You may reason about basketball in general, but don't invent stats, injuries, trades, quotes or events for this team. Teams are "they" or their name, never "we". When a player or a unit (the bench, the backcourt, the frontcourt) comes up, name it plainly (the show puts his or its numbers on screen when it hears the name).
+
+THEMES
+Some episodes are a game the hosts play (Panic Mode, Buy or Sell, Contender or Pretender). When the user message has a THEME line, the whole episode plays that game, as it says, and the hosts keep coming back to its question.
+
+OUTPUT
+One JSON object per spoken line, each on its own single line, nothing else (no array, no prose) — the show starts playing while you write, so write the lines in order:
+{"t":<topic number, from 1>,"speaker":"marcus"|"tony","text":"..."}
+- Cover every topic in the notes, in order; "t" is its position in the notes (the first topic is 1).
+- The first topic comes right after the hosts' intros and Marcus's one-line hook (already written): get straight into it, no greeting, no restating the record. If it's a regular topic, keep it quick (2–4 lines).
+- Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 8–12 lines each. Walk through how the game was won or lost (the flow, the quarter that swung it, the stretch that decided it), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("thirty-one and twelve", "six of nine from three", "fourteen turnovers"). Here, numbers are welcome: one per line is fine.
+- A topic marked "verdict":true closes a themed episode: follow its notes exactly (they say who goes first and the JSON line to write first).
+- Other topics: 4–6 lines. Keep the whole episode tight — about two minutes of talk outside the game breakdown. A topic with little to say can be three lines.`;
+
+function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
+  if (!stats) return `${teamName}.`;
+  const parts = stats.stats.map(s => `${s.label} ${s.value} (${ordinal(s.rank)} of ${s.of})`);
+  return `${teamName}, record ${stats.record}. ${parts.join('; ')}.`;
+}
+
+interface WriterLine { speaker: string; text?: string; clip?: string; play?: unknown; exchange?: unknown; wide?: unknown; verdict?: unknown; calls?: unknown }
+
+/** Pre-recorded back-and-forths (lines are the manifest's `exchange` phrases,
+ *  in order): when the writer may use each, and whether it's true for the
+ *  team at all. */
+// BS Football's pre-recorded back-and-forths are football dialogue and the
+// writer no longer places clips, so Hoops has none.
+const EXCHANGES: { id: string; when: string; fits: (stats?: ShowStatLine | null) => boolean }[] = [];
+
+export function exchangesFor(stats?: ShowStatLine | null): { id: string; when: string; lines: Phrase[] }[] {
+  return EXCHANGES.filter(x => x.fits(stats))
+    .map(x => ({ id: x.id, when: x.when, lines: PHRASES.filter(p => p.exchange === x.id) }))
+    .filter(x => x.lines.length >= 2);
+}
+
+function recordTone(stats?: ShowStatLine | null): PhraseTone | null {
+  if (!stats) return null;
+  const [w, l] = stats.record.split('-').map(Number);
+  const pct = w + l > 0 ? w / (w + l) : 0.5;
+  return pct >= 0.6 ? 'good' : pct <= 0.4 ? 'bad' : 'mid';
+}
+
+/**
+ * On-camera lines the writer may use for this team: the conversational
+ * topical bank and Marcus's stat takes — only the ones that are true for
+ * this team (tone matches its record / that stat), with any rank slot shown
+ * filled in. The older announcer-style lines (Tony's stat riffs, record
+ * takes, stock glue) are left out: they're what made the show sound canned.
+ */
+/** Seconds of speech a clip needs before the writer may cut to it. */
+export const MIN_CLIP_SPEECH = 2.5;
+
+export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; words: string }[] {
+  const rt = recordTone(stats);
+  const statOf = (k: string) => stats?.stats.find(x => x.key === k);
+  const out: { phrase: Phrase; words: string }[] = [];
+  for (const p of PHRASES) {
+    // Topical lines only: the stat riffs ("They're 15th in rushing.
+    // Serviceable…") read as canned next to the writer's own numbers.
+    const usable = p.kind === 'topical';
+    if (!usable) continue;
+    // A one-second cut to a host and back reads as choppy: only offer clips
+    // with enough speech to hold the shot.
+    if (p.speech.end - p.speech.start < MIN_CLIP_SPEECH) continue;
+    let words = p.text.replace(/\[[a-z ]+\]\s*/gi, '');
+    if (p.stat) {
+      const st = statOf(p.stat);
+      if (!st || (p.tone && rankTone(st.rank, st.of) !== p.tone)) continue;
+      words = words.replace('{rank}', ordinal(st.rank));
+    } else if (p.tone) {
+      if (p.tone !== rt) continue;
+    }
+    if (words.includes('{rank}')) continue;
+    out.push({ phrase: p, words: words.charAt(0).toUpperCase() + words.slice(1) });
+  }
+  return out;
+}
+
+export interface WrittenEpisode {
+  topics: ShowTopicInput[];
+  /** True when the writer produced the conversation (else: original notes). */
+  written: boolean;
+}
+
+/** Progress while the writer streams: called after every line it writes
+ *  with the episode so far — topics it has started carry their rewritten
+ *  lines; `done` = the topics (indexes into `topics`) it has finished. */
+export type OnProgress = (sofar: ShowTopicInput[], done: Set<number>) => void;
+
+/** "MAKE A MOVE! They must act NOW!" → "Make a move. They must act now." (acronyms like QB, NFL, DAL stay). */
+export function calm(text: string): string {
+  const SHOUT = new Set(['NOW', 'YES', 'WOW', 'BIG', 'ALL', 'AND', 'THE', 'OUT', 'NOT', 'WIN', 'WON', 'GO', 'NO', 'SO', 'IS', 'IT']);
+  // Runs of shouted words, long shouted words, and shouted short words (not acronyms like QB, NFL, DAL).
+  let out = text.replace(/\b[A-Z][A-Z']*(?:\s+[A-Z][A-Z']*)+\b/g, run => (run.split(/\s+/).some(w => w.length >= 4 || SHOUT.has(w)) ? run.toLowerCase() : run));
+  out = out.replace(/\b[A-Z][A-Z']{3,}\b/g, w => w.toLowerCase()).replace(/\b[A-Z]{2,3}\b/g, w => (SHOUT.has(w) ? w.toLowerCase() : w));
+  out = out.replace(/(^|[.!?]\s+)([a-z])/g, (_, a, b) => a + b.toUpperCase());
+  const bangs = (out.match(/!/g) ?? []).length;
+  if (bangs > 1) { let k = 0; out = out.replace(/!/g, () => (++k === bangs ? '!' : '.')); }
+  return out;
+}
+
+const debateOf = (t: ShowTopicInput) => t.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
+export const hasDebate = (t: ShowTopicInput) => debateOf(t).length > 0;
+
+/**
+ * Rewrite the topics' Marcus/Tony lines as one natural conversation,
+ * streamed line by line: `onProgress` fires after every line, so the show
+ * can voice and play the start while the rest is still being written.
+ * Topics the writer doesn't deliver keep their original lines.
+ */
+export async function writeConversation(
+  topics: ShowTopicInput[],
+  teamName: string,
+  stats?: ShowStatLine | null,
+  moment?: EpisodeMoment,
+  onProgress?: OnProgress,
+  theme?: ThemePlan | null,
+  opts?: { writers?: WriterProvider[] },
+): Promise<WrittenEpisode> {
+  // No writer at all: the notes are voiced as they are, toned down
+  // (no shouted ALL-CAPS words, no exclamation pile-ups).
+  const original = { topics: topics.map(t => ({ ...t, exchanges: t.exchanges.map(e => ({ ...e, text: calm(e.text) })) })), written: false };
+  if (!ANTHROPIC_API_KEY && !GEMINI_API_KEY && !OPENAI_API_KEY) { console.warn('Spotlight show writer skipped: no writer API key'); return original; }
+  const liveIdx = topics.flatMap((t, i) => (hasDebate(t) ? [i] : []));
+  if (!liveIdx.length) return original;
+
+  // The writer only writes. It no longer drops pre-recorded clips, two-shot
+  // banter or exchanges into the conversation: they bent the talk around
+  // canned lines. (Theme openers, verdict clips and signoffs are placed by
+  // the show itself.)
+  const catalog: ReturnType<typeof clipCatalog> = [];
+  const clipById = new Map(catalog.map(c => [c.phrase.id, c]));
+  const exchanges = new Map<string, ReturnType<typeof exchangesFor>[number]>();
+  let exchangeUsed = false;
+  const notes = liveIdx.map(i => ({
+    headline: topics[i].headline,
+    ...(topics[i].depth === 'deep' ? { depth: 'deep' } : {}),
+    ...(topics[i].isVerdict ? { verdict: true } : {}),
+    notes: debateOf(topics[i]).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
+  }));
+  const themeLine = theme ? `\n\nTHEME: ${THEMES[theme.id].note}` : '';
+  const user = `MOMENT: ${momentNote(moment, stats?.record)}${themeLine}\n\nTeam numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`;
+
+  // The episode as written so far.
+  const written = new Map<number, ShowTopicInput['exchanges']>(); // topic index → lines
+  /** What the writer committed to per topic (themed episodes). */
+  const marks = new Map<number, Pick<ShowTopicInput, 'verdict' | 'calls'>>();
+  let wideUsed = false;
+  const done = new Set<number>();
+  let current = -1; // position in liveIdx being written
+  const sofar = () => topics.map((t, i) => (written.has(i) || marks.has(i) ? { ...t, ...(marks.get(i) ?? {}), exchanges: written.get(i) ?? [] } : t));
+
+  const take = (jsonLine: string) => {
+    const start = jsonLine.indexOf('{');
+    if (start < 0) return;
+    let l: WriterLine & { t?: unknown };
+    try { l = JSON.parse(jsonLine.slice(start, jsonLine.lastIndexOf('}') + 1)); } catch { return; }
+    const pos = typeof l.t === 'number' ? l.t - 1 : -1;
+    if (pos < 0 || pos >= liveIdx.length || pos < current) return; // out of order: skip
+    if (typeof l.exchange === 'string') {
+      const x = exchanges.get(l.exchange);
+      if (!x || exchangeUsed) return;
+      exchangeUsed = true;
+      for (let k = Math.max(0, current); k < pos; k++) done.add(liveIdx[k]);
+      current = pos;
+      const i = liveIdx[pos];
+      written.set(i, [...(written.get(i) ?? []), ...x.lines.map(p => ({ speakerId: (p.host === 'marcus' ? 'stats' : 'hottake') as 'stats' | 'hottake', text: p.text, clipId: p.id }))]);
+      onProgress?.(sofar(), done);
+      return;
+    }
+    if (theme && (l.verdict || l.calls)) {
+      const i = liveIdx[pos];
+      const verdict = l.verdict ? parseVerdict(theme.id, l.verdict) : null;
+      const calls = l.calls ? parseCalls(theme.id, l.calls) : null;
+      if (verdict && topics[i].isVerdict) marks.set(i, { ...marks.get(i), verdict });
+      if (calls) marks.set(i, { ...marks.get(i), calls });
+      return;
+    }
+    if (typeof l.wide === 'string') {
+      if (!WRITER_WIDE || wideUsed || !WIDE_BANTER.some(b => b.id === l.wide)) return;
+      wideUsed = true;
+      for (let k = Math.max(0, current); k < pos; k++) done.add(liveIdx[k]);
+      current = pos;
+      const i = liveIdx[pos];
+      written.set(i, [...(written.get(i) ?? []), { speakerId: 'stats', text: '', wideId: l.wide }]);
+      onProgress?.(sofar(), done);
+      return;
+    }
+    if (l.speaker !== 'marcus' && l.speaker !== 'tony') return;
+    const clip = typeof l.clip === 'string' ? clipById.get(l.clip) : undefined;
+    if (l.clip && clip?.phrase.host !== l.speaker) return;
+    const text = clip ? clip.words : typeof l.text === 'string' ? l.text.trim() : '';
+    if (!text) return;
+    // Moving on: every topic before this one is finished.
+    for (let k = Math.max(0, current); k < pos; k++) done.add(liveIdx[k]);
+    current = pos;
+    const i = liveIdx[pos];
+    const speakerId = l.speaker === 'marcus' ? 'stats' : 'hottake';
+    const play = typeof l.play === 'number' && Number.isInteger(l.play) && l.play > 0 ? l.play : undefined;
+    written.set(i, [...(written.get(i) ?? []), clip ? { speakerId, text, clipId: clip.phrase.id } : { speakerId, text, ...(play ? { play } : {}) }]);
+    onProgress?.(sofar(), done);
+  };
+
+  const finish = (): WrittenEpisode => {
+    for (const i of liveIdx) done.add(i);
+    // A topic the writer never got to (cut off, skipped) is dropped rather
+    // than voiced from the producer's notes — those read like a promo.
+    const out = sofar().map((t, i) => (liveIdx.includes(i) && !written.has(i) ? { ...t, exchanges: t.exchanges.filter(e => !debateOf({ ...t, exchanges: [e] }).length) } : t));
+    onProgress?.(out, done);
+    return { topics: out, written: true };
+  };
+
+  const keys: Record<WriterProvider, string | undefined> = { gemini: GEMINI_API_KEY, claude: ANTHROPIC_API_KEY, openai: OPENAI_API_KEY };
+  const streams: Record<WriterProvider, StreamWriter> = { gemini: streamGemini, claude: streamClaude, openai: streamOpenAi };
+  const models: Record<WriterProvider, string> = { gemini: GEMINI_WRITER_MODEL, claude: WRITER_MODEL, openai: OPENAI_WRITER_MODEL };
+  const order = (opts?.writers ?? WRITERS).filter(w => keys[w]);
+  for (const writer of order) {
+    let text = '';
+    const onText = (delta: string) => {
+      text += delta;
+      let cut: number;
+      while ((cut = text.indexOf('\n')) >= 0) { take(text.slice(0, cut)); text = text.slice(cut + 1); }
+    };
+    try {
+      await streams[writer](user, onText);
+      take(text);
+      if (!written.size) throw new Error('writer returned no lines');
+      console.info(`[spotlight-show] written by ${models[writer]}`);
+      return finish();
+    } catch (err) {
+      console.warn(`Spotlight show writer failed (${writer}):`, err instanceof Error ? err.message : err);
+      // Partway through: keep what it wrote (the show is already playing it).
+      if (written.size) return finish();
+    }
+  }
+  return original;
+}
+
+/** Stream a writer's reply as text deltas. Throws on any failure. */
+type StreamWriter = (user: string, onText: (delta: string) => void) => Promise<void>;
+
+/** Read a server-sent-events body, handing each `data:` payload to `on`. */
+async function readSse(res: Response, on: (data: string) => void): Promise<void> {
+  if (!res.body) throw new Error('no body');
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let sse = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    sse += dec.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = sse.indexOf('\n')) >= 0) {
+      const ev = sse.slice(0, nl).trim();
+      sse = sse.slice(nl + 1);
+      if (ev.startsWith('data:')) on(ev.slice(5).trim());
+    }
+  }
+}
+
+const streamClaude: StreamWriter = async (user, onText) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'x-api-key': ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: WRITER_MODEL, max_tokens: 8000, stream: true,
+        output_config: { effort: WRITER_EFFORT },
+        system: WRITER_SYSTEM_PROMPT, messages: [{ role: 'user', content: user }],
+      }),
+    });
+    if (!res.ok) throw new Error(`claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    await readSse(res, raw => {
+      let data: { type?: string; delta?: { type?: string; text?: string }; error?: { message?: string } };
+      try { data = JSON.parse(raw); } catch { return; }
+      if (data.type === 'error') throw new Error(data.error?.message ?? 'stream error');
+      if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta') onText(data.delta.text ?? '');
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const streamGemini: StreamWriter = async (user, onText) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_WRITER_MODEL}:streamGenerateContent?alt=sse`;
+    const res = await fetch(url, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'x-goog-api-key': GEMINI_API_KEY!, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: WRITER_SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { maxOutputTokens: 8000, temperature: 1, thinkingConfig: { thinkingLevel: WRITER_EFFORT === 'high' ? 'high' : 'low' } },
+      }),
+    });
+    if (!res.ok) throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    await readSse(res, raw => {
+      let data: { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; error?: { message?: string } };
+      try { data = JSON.parse(raw); } catch { return; }
+      if (data.error) throw new Error(data.error.message ?? 'stream error');
+      for (const part of data.candidates?.[0]?.content?.parts ?? []) if (part.text && !part.thought) onText(part.text);
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const streamOpenAi: StreamWriter = async (user, onText) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { authorization: `Bearer ${OPENAI_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: OPENAI_WRITER_MODEL, stream: true, max_completion_tokens: 8000,
+        reasoning_effort: WRITER_EFFORT === 'high' ? 'high' : 'low',
+        messages: [{ role: 'system', content: WRITER_SYSTEM_PROMPT }, { role: 'user', content: user }],
+      }),
+    });
+    if (!res.ok) throw new Error(`openai ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    await readSse(res, raw => {
+      if (raw === '[DONE]') return;
+      let data: { choices?: { delta?: { content?: string } }[]; error?: { message?: string } };
+      try { data = JSON.parse(raw); } catch { return; }
+      if (data.error) throw new Error(data.error.message ?? 'stream error');
+      const delta = data.choices?.[0]?.delta?.content;
+      if (delta) onText(delta);
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+};

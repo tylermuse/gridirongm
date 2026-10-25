@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamSpotlight } from '@/components/show/TeamSpotlight';
+import { HoopsVideoShow } from '@/components/videoShow/HoopsVideoShow';
 
 /**
- * /show — the full "Hoops Tonight" episode: every storyline this week, as a
- * two-persona chat-bubble talk show. The dashboard embeds a compact version.
+ * /show — this week's episode: the video show (Marcus & Tony on set, the
+ * last game and the storylines, real numbers on screen), then every storyline
+ * as the two-voice audio episode / chat transcript. The dashboard embeds both.
  */
 export default function ShowPage() {
   const { league, loading, error } = useLeagueOrHydrate();
@@ -28,6 +30,8 @@ export default function ShowPage() {
         <h1 className="text-3xl sm:text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>The Show</h1>
         <span className="text-sm text-[var(--text-sec)]">Hoops Tonight — your weekly two-voice breakdown</span>
       </header>
+
+      <div className="mb-5"><HoopsVideoShow league={league} /></div>
 
       <TeamSpotlight league={league} />
 

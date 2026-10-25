@@ -1,0 +1,166 @@
+[
+ {
+  "id": "marcus_stamp_contender",
+  "host": "marcus",
+  "kind": "stamp",
+  "text": "My stamp? Contender.",
+  "src": "/show/phrases/marcus_stamp_contender.mp4",
+  "duration": 2.68,
+  "speech": {
+   "start": 0.42,
+   "end": 2.14
+  },
+  "stamp": "contender"
+ },
+ {
+  "id": "marcus_stamp_pretender",
+  "host": "marcus",
+  "kind": "stamp",
+  "text": "My stamp? Pretender.",
+  "src": "/show/phrases/marcus_stamp_pretender.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.34,
+   "end": 2.1
+  },
+  "stamp": "pretender"
+ },
+ {
+  "id": "marcus_stamp_agree_contender",
+  "host": "marcus",
+  "kind": "stamp",
+  "text": "You sound like you agree with me. [pause] Contender.",
+  "src": "/show/phrases/marcus_stamp_agree_contender.mp4",
+  "duration": 3.72,
+  "speech": {
+   "start": 0.34,
+   "end": 3.1
+  },
+  "stamp": "contender",
+  "stampReply": "agree"
+ },
+ {
+  "id": "marcus_stamp_agree_pretender",
+  "host": "marcus",
+  "kind": "stamp",
+  "text": "You sound like you agree with me. [pause] Pretender.",
+  "src": "/show/phrases/marcus_stamp_agree_pretender.mp4",
+  "duration": 3.32,
+  "speech": {
+   "start": 0.36,
+   "end": 2.68
+  },
+  "stamp": "pretender",
+  "stampReply": "agree"
+ },
+ {
+  "id": "marcus_stamp_split_contender",
+  "host": "marcus",
+  "kind": "stamp",
+  "text": "Pretender? I don't see it. Contender.",
+  "src": "/show/phrases/marcus_stamp_split_contender.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.38,
+   "end": 2.94
+  },
+  "stamp": "contender",
+  "stampReply": "split"
+ },
+ {
+  "id": "marcus_stamp_split_pretender",
+  "host": "marcus",
+  "kind": "stamp",
+  "text": "Contender? [pause] I can't get there. Pretender.",
+  "src": "/show/phrases/marcus_stamp_split_pretender.mp4",
+  "duration": 3.72,
+  "speech": {
+   "start": 0.38,
+   "end": 3.26
+  },
+  "stamp": "pretender",
+  "stampReply": "split"
+ },
+ {
+  "id": "tony_stamp_contender",
+  "host": "tony",
+  "kind": "stamp",
+  "text": "Contender. Stamp it.",
+  "src": "/show/phrases/tony_stamp_contender.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.36,
+   "end": 1.9
+  },
+  "stamp": "contender"
+ },
+ {
+  "id": "tony_stamp_pretender",
+  "host": "tony",
+  "kind": "stamp",
+  "text": "Pretender. Stamp it.",
+  "src": "/show/phrases/tony_stamp_pretender.mp4",
+  "duration": 2.24,
+  "speech": {
+   "start": 0.38,
+   "end": 1.66
+  },
+  "stamp": "pretender"
+ },
+ {
+  "id": "tony_stamp_agree_contender",
+  "host": "tony",
+  "kind": "stamp",
+  "text": "You sound like you agree with me. Contender, all day.",
+  "src": "/show/phrases/tony_stamp_agree_contender.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.42,
+   "end": 2.94
+  },
+  "stamp": "contender",
+  "stampReply": "agree"
+ },
+ {
+  "id": "tony_stamp_agree_pretender",
+  "host": "tony",
+  "kind": "stamp",
+  "text": "You sound like you agree with me. Pretender, all day.",
+  "src": "/show/phrases/tony_stamp_agree_pretender.mp4",
+  "duration": 3.28,
+  "speech": {
+   "start": 0.38,
+   "end": 2.84
+  },
+  "stamp": "pretender",
+  "stampReply": "agree"
+ },
+ {
+  "id": "tony_stamp_split_contender",
+  "host": "tony",
+  "kind": "stamp",
+  "text": "Pretender? No way. [pause] Contender.",
+  "src": "/show/phrases/tony_stamp_split_contender.mp4",
+  "duration": 3.08,
+  "speech": {
+   "start": 0.4,
+   "end": 2.64
+  },
+  "stamp": "contender",
+  "stampReply": "split"
+ },
+ {
+  "id": "tony_stamp_split_pretender",
+  "host": "tony",
+  "kind": "stamp",
+  "text": "Contender? Not for me. Pretender.",
+  "src": "/show/phrases/tony_stamp_split_pretender.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.32,
+   "end": 3.04
+  },
+  "stamp": "pretender",
+  "stampReply": "split"
+ }
+]
