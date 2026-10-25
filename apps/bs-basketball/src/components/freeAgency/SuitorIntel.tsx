@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import {
-  faIntelReport, intelRemaining, isIntelRevealed, INTEL_REPORTS_PER_WINDOW,
+  faIntelReport, intelRemaining, isIntelRevealed,
   type Interest,
 } from '@/lib/freeAgency/intel';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
@@ -20,12 +22,15 @@ function m(n: number): string { return `$${(n / 1_000_000).toFixed(1)}M`; }
 
 /**
  * Per-free-agent suitor intel: which AI teams are in, fuzzed offer ranges, and
- * the player's priorities. Costs one of the window's limited intel reports.
+ * the player's priorities. Costs one of the window's intel reports (3 free,
+ * 9 Premium, unlimited for founders/admins).
  */
 export function SuitorIntel({ league, playerId, teamById }: { league: BasketballLeagueState; playerId: string; teamById: Map<string, BasketballTeam> }) {
   const reveal = useLeagueStore(s => s.revealFaIntel);
   const revealed = isIntelRevealed(league, playerId);
-  const left = intelRemaining(league);
+  const { scoutingAllocations, tier } = useSubscription();
+  const budget = scoutingAllocations.intelReports;
+  const left = intelRemaining(league, budget);
 
   if (!revealed) {
     return (
@@ -38,8 +43,17 @@ export function SuitorIntel({ league, playerId, teamById }: { league: Basketball
           className="ml-auto rounded-md px-2.5 py-1 font-bold text-white disabled:opacity-40"
           style={{ background: 'var(--accent)' }}
         >
-          {left > 0 ? `Pull report (${left}/${INTEL_REPORTS_PER_WINDOW} left)` : 'No reports left this window'}
+          {left <= 0
+            ? 'No reports left this window'
+            : scoutingAllocations.isUnlimited
+              ? 'Pull report'
+              : `Pull report (${left}/${budget} left)`}
         </button>
+        {left <= 0 && tier === 'free' && (
+          <Link href="/pricing" onClick={e => e.stopPropagation()} className="font-bold hover:underline" style={{ color: 'var(--accent)' }}>
+            Premium gets 9 →
+          </Link>
+        )}
       </div>
     );
   }

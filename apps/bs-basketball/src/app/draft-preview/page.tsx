@@ -9,7 +9,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
 import { TieredScoutPanel, TierPips } from '@/components/draft/TieredScoutPanel';
 import { MockDraftCard } from '@/components/draft/MockDraftCard';
-import { buildBigBoard, getDraft, SCOUT_POINTS_PER_DRAFT, type BigBoardEntry } from '@/lib/draft';
+import { buildBigBoard, getDraft, type BigBoardEntry } from '@/lib/draft';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { buildTieredReport, isWatched, potentialRange, scoutLevel, scoutPointsLeft, scoutSaveSeed } from '@/lib/scouting';
 import { buildScoutingReport } from '@/lib/scouting/scoutingReport';
 import type { BasketballPlayer } from '@bs/sport-basketball';
@@ -26,6 +27,7 @@ export default function DraftPreviewPage() {
   const store = useLeagueStore();
   const [reportId, setReportId] = useState<string | null>(null);
   const [view, setView] = useState<'board' | 'mock'>('board');
+  const { scoutingAllocations } = useSubscription();
   const [watchOnly, setWatchOnly] = useState(false);
 
   const board = useMemo<BigBoardEntry[] | null>(() => (league ? buildBigBoard(league) : null), [league]);
@@ -51,13 +53,13 @@ export default function DraftPreviewPage() {
   const saveSeed = scoutSaveSeed(league);
   const reportPlayer = reportId ? ((league.players as Record<string, BasketballPlayer>)[reportId] as BasketballPlayer | undefined) ?? null : null;
   const rows = watchOnly ? board.filter(e => isWatched(draft, e.player.id)) : board;
-  const points = scoutPointsLeft(draft);
+  const points = scoutPointsLeft(draft, scoutingAllocations.scoutPoints);
 
   return (
     <Shell>
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <p className="text-sm text-[var(--text-sec)]">
-          {board.length} prospects · <span className="font-semibold text-[var(--foreground)]">{points}/{SCOUT_POINTS_PER_DRAFT}</span> scouting pts left. Tap a name to scout.
+          {board.length} prospects · <span className="font-semibold text-[var(--foreground)]">{scoutingAllocations.isUnlimited ? '∞' : `${points}/${scoutingAllocations.scoutPoints}`}</span> scouting pts left. Tap a name to scout.
         </p>
         <div className="ml-auto flex rounded-lg p-0.5 text-xs font-bold" style={{ background: 'var(--surface-2)' }} role="tablist">
           {([['board', 'Big Board'], ['mock', 'Mock Draft']] as const).map(([k, label]) => (

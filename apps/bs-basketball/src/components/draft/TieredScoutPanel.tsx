@@ -3,6 +3,7 @@
 import { ratingHex } from '@/lib/ui/ratingColor';
 import type { ScoutLevel } from '@/lib/draft';
 import type { TieredScoutReport } from '@/lib/scouting';
+import { UNLIMITED_ALLOCATION } from '@bs/core/billing';
 
 /**
  * Tiered scouting report panel: shows exactly what the user's scouting tier has
@@ -123,7 +124,7 @@ export function TieredScoutPanel({
         <div className="rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-1.5">
             <span>Scout further</span>
-            <span className="tabular-nums">{report.pointsLeft} pts left</span>
+            <span className="tabular-nums">{report.pointsLeft >= UNLIMITED_ALLOCATION / 2 ? '∞' : report.pointsLeft} pts left</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {report.upgrades.map(u => (

@@ -17,8 +17,9 @@ import { setGodMode, editPlayer, createPlayer } from '@/../apps/bs-basketball/sr
 import { getInjuries } from '@/../apps/bs-basketball/src/lib/injuries';
 import { aiSuitors, bestCompetingOffer, freeAgentInfo } from '@/../apps/bs-basketball/src/lib/freeAgency';
 import {
-  faIntelReport, fuzzRange, revealFaIntel, intelRemaining, isIntelRevealed, INTEL_REPORTS_PER_WINDOW,
+  faIntelReport, fuzzRange, revealFaIntel, intelRemaining, isIntelRevealed,
 } from '@/../apps/bs-basketball/src/lib/freeAgency/intel';
+import { getScoutingAllocations, setCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { saveLeague, loadLeague } from '@/../apps/bs-basketball/src/lib/persistence/db';
 
 function line(p: Partial<BasketballStats>): BasketballStats {
@@ -327,18 +328,39 @@ describe('FA suitor intel', () => {
 
   it('limited intel reports per window, idempotent per player', () => {
     const { league } = marketLeague();
+    const BUDGET = 3; // free tier
     let l = league;
-    expect(intelRemaining(l)).toBe(INTEL_REPORTS_PER_WINDOW);
-    const ids = l.freeAgentIds.slice(0, INTEL_REPORTS_PER_WINDOW + 2);
-    l = revealFaIntel(l, ids[0]);
-    expect(revealFaIntel(l, ids[0])).toBe(l); // same player twice = free
-    for (const id of ids.slice(1)) l = revealFaIntel(l, id);
-    expect(intelRemaining(l)).toBe(0);
+    expect(intelRemaining(l, BUDGET)).toBe(BUDGET);
+    const ids = l.freeAgentIds.slice(0, BUDGET + 2);
+    l = revealFaIntel(l, ids[0], BUDGET);
+    expect(revealFaIntel(l, ids[0], BUDGET)).toBe(l); // same player twice = free
+    for (const id of ids.slice(1)) l = revealFaIntel(l, id, BUDGET);
+    expect(intelRemaining(l, BUDGET)).toBe(0);
     expect(isIntelRevealed(l, ids[0])).toBe(true);
     expect(isIntelRevealed(l, ids[ids.length - 1])).toBe(false);
     // New season → fresh budget.
-    expect(intelRemaining({ ...l, currentSeason: l.currentSeason + 1 })).toBe(INTEL_REPORTS_PER_WINDOW);
+    expect(intelRemaining({ ...l, currentSeason: l.currentSeason + 1 }, BUDGET)).toBe(BUDGET);
     // Non-free-agents can't be scouted.
-    expect(revealFaIntel(league, league.teams[0].playerIds[0])).toBe(league);
+    expect(revealFaIntel(league, league.teams[0].playerIds[0], BUDGET)).toBe(league);
+  });
+
+  it('report budget follows the subscription tier: 3 free, 9 Premium, unlimited founders', () => {
+    const { league } = marketLeague();
+    try {
+      setCurrentSubscriptionAllocations(getScoutingAllocations('free', false));
+      expect(intelRemaining(league)).toBe(3);
+      let l = league;
+      for (const id of league.freeAgentIds.slice(0, 5)) l = revealFaIntel(l, id);
+      expect(intelRemaining(l)).toBe(0);
+      // Upgrading mid-window unlocks the difference immediately.
+      setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false));
+      expect(intelRemaining(l)).toBe(6);
+      l = revealFaIntel(l, league.freeAgentIds[5]);
+      expect(isIntelRevealed(l, league.freeAgentIds[5])).toBe(true);
+      setCurrentSubscriptionAllocations(getScoutingAllocations('free', true));
+      expect(intelRemaining(l)).toBeGreaterThan(1000);
+    } finally {
+      setCurrentSubscriptionAllocations(getScoutingAllocations('free', false));
+    }
   });
 });
