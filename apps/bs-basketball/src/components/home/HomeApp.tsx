@@ -16,6 +16,7 @@ import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
 import { DashboardRow } from '@/components/dashboard/DashboardRow';
 import { EditorialWidgets } from '@/components/dashboard/EditorialWidgets';
 import { TeamSpotlight } from '@/components/show/TeamSpotlight';
+import { HoopsVideoShow } from '@/components/videoShow/HoopsVideoShow';
 import { TeamLeaders } from '@/components/dashboard/TeamLeaders';
 import { LiveViewer } from '@/components/live/LiveViewer';
 import { CloudRestoreBanner } from '@/components/settings/CloudRestoreBanner';
@@ -307,6 +308,7 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
             )}
             <InjuryReport league={league} team={userTeam as BasketballTeam} />
             <DashboardRow league={league} team={userTeam as BasketballTeam} />
+            <div className="mb-4"><HoopsVideoShow league={league} /></div>
             <div className="mb-6"><TeamSpotlight league={league} compact /></div>
             <TeamLeaders league={league} team={userTeam as BasketballTeam} />
             <EditorialWidgets league={league} team={userTeam as BasketballTeam} />
