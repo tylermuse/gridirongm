@@ -81,26 +81,10 @@ export async function GET(request: NextRequest) {
       service.rpc('admin_interaction_report', { p_since: since, p_app: 'bs-football' }),
     ]);
 
-    if (summaryRes.error) {
-      return NextResponse.json({
-        period,
-        totalUsers: 0,
-        activeUsers: 0,
-        uniqueDevices: 0,
-        sessions: 0,
-        pageViews: 0,
-        conversionRate: 0,
-        totalSubscriptions: 0,
-        signupsByDay: {},
-        topPages: [],
-        recentEvents: [],
-        _warning:
-          `admin_analytics_summary RPC failed: ${summaryRes.error.message}. ` +
-          `Run supabase/migrations/20260712_analytics_aggregates.sql.`,
-      });
-    }
-
-    const summary = (summaryRes.data ?? {}) as {
+    // A failed summary used to return all zeros and drop every other section,
+    // which made a statement timeout look like "no data". Now the cards zero
+    // out but everything else still renders, and the page shows the warning.
+    const summary = (summaryRes.error ? {} : (summaryRes.data ?? {})) as {
       totalUsers?: number;
       newUsers?: number;
       grandfatheredUsers?: number;
@@ -147,6 +131,15 @@ export async function GET(request: NextRequest) {
       hoopsActiveUsersRolling: hoopsActiveRes.error ? null : (hoopsActiveRes.data ?? null),
       sim3dCohorts: sim3dRes.error ? null : (sim3dRes.data ?? null),
       interactions: interactionsRes.error ? null : (interactionsRes.data ?? null),
+      warnings: ([
+        ['Summary cards', summaryRes.error],
+        ['Recent activity', recentEventsRes.error],
+        ['Active users', activeRes.error],
+        ['3D sim cohorts', sim3dRes.error],
+        ['Feature usage', interactionsRes.error],
+      ] as const)
+        .filter(([, e]) => e)
+        .map(([label, e]) => `${label}: ${e!.message}`),
     });
   } catch (err) {
     console.error('Analytics API error:', err);
