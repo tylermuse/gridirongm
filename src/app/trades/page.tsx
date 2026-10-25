@@ -859,6 +859,11 @@ function TradesPage() {
   const [counterReceivedPlayerIds, setCounterReceivedPlayerIds] = useState<string[]>([]);
   const [counterReceivedPickIds, setCounterReceivedPickIds] = useState<string[]>([]);
   const [counterResult, setCounterResult] = useState<'accepted' | 'rejected' | null>(null);
+  // Why the last counter failed + how many times in a row. Re-submitting a rejected
+  // counter used to leave the DOM untouched, so it read as a dead button (24 of 61
+  // Submit Counter clicks in the Oct 2026 interaction report).
+  const [counterReason, setCounterReason] = useState<string | null>(null);
+  const [counterAttempt, setCounterAttempt] = useState(0);
 
   // Trading block state
   const [blockedPlayerIds, setBlockedPlayerIds] = useState<string[]>([]);
@@ -1191,6 +1196,8 @@ function TradesPage() {
     setCounterReceivedPlayerIds([...proposal.offeredPlayerIds]);
     setCounterReceivedPickIds([...proposal.offeredPickIds]);
     setCounterResult(null);
+    setCounterReason(null);
+    setCounterAttempt(0);
   }
 
   function handleCancelCounter() {
@@ -1200,6 +1207,8 @@ function TradesPage() {
     setCounterReceivedPlayerIds([]);
     setCounterReceivedPickIds([]);
     setCounterResult(null);
+    setCounterReason(null);
+    setCounterAttempt(0);
   }
 
   function handleSubmitCounter(force = false) {
@@ -1213,6 +1222,8 @@ function TradesPage() {
       force, // forceGodMode
     );
     setCounterResult(result.success ? 'accepted' : 'rejected');
+    setCounterReason(result.success ? null : (result.reason ?? null));
+    setCounterAttempt(n => (result.success ? 0 : n + 1));
     if (result.success) {
       respondToTradeProposal(proposal.id, false);
       // DON'T immediately cancel — keep the UI open with the success message.
@@ -1734,7 +1745,14 @@ function TradesPage() {
                               </span>
                             </div>
                             {counterResult === 'rejected' && (
-                              <p className="text-sm text-red-600 mt-1">Counter rejected — offer more value or adjust your asks.</p>
+                              <p key={counterAttempt} className="text-sm text-red-600 mt-1 animate-nudge">
+                                {counterAttempt > 1 && <span className="font-bold">Rejected again ({counterAttempt}×) — </span>}
+                                {counterReason && !counterReason.startsWith('Trade value too low')
+                                  ? counterReason
+                                  : counterReceivedValue * 0.95 > counterOfferedValue
+                                    ? `Counter rejected — they want roughly ${Math.ceil(counterReceivedValue * 0.95 - counterOfferedValue).toLocaleString()} more pts of value. Add a player or pick, or ask for less.`
+                                    : 'Counter rejected — offer more value or adjust your asks.'}
+                              </p>
                             )}
                             {counterResult === 'accepted' && (
                               <div className="mt-2 bg-green-50 border border-green-300 rounded-lg p-3 flex items-center gap-3">
