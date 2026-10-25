@@ -23,7 +23,7 @@ import { useBoothStore, boothEpisodeKey, EMPTY_BOOTH_LOG, type BoothEpisodeTopic
  * screen. Each question + the hosts' replies is one card; older cards
  * collapse to a single line with both verdicts.
  *
- * History, votes + turn count are kept per in-game week key in the booth
+ * History + turn count are kept per in-game week key in the booth
  * store, so closing the Booth, changing pages or refreshing keeps the call. Hosts are
  * grounded on the same teamData the episode generator uses, plus the
  * rendered episode.
@@ -60,11 +60,11 @@ export interface OnAirInfo {
 const HOST_META = {
   marcus: {
     name: 'Marcus', initials: 'MC', avatar: 'bg-blue-600 text-white', rule: 'border-t-blue-600',
-    label: 'text-blue-700', chip: 'bg-blue-50 text-blue-700', vote: 'border-blue-600 text-blue-700', voted: 'bg-blue-600 text-white border-blue-600',
+    label: 'text-blue-700', chip: 'bg-blue-50 text-blue-700',
   },
   tony: {
     name: 'Tony', initials: 'TB', avatar: 'bg-orange-600 text-orange-950', rule: 'border-t-orange-600',
-    label: 'text-orange-800', chip: 'bg-orange-50 text-orange-800', vote: 'border-orange-600 text-orange-800', voted: 'bg-orange-600 text-white border-orange-600',
+    label: 'text-orange-800', chip: 'bg-orange-50 text-orange-800',
   },
 } as const;
 
@@ -211,14 +211,13 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
   const isPremium = hasFeature('ai_commentary');
   const signedIn = !!user;
 
-  const { messages, turns, votes } = useBoothStore(s => s.logs[weekKey]) ?? EMPTY_BOOTH_LOG;
+  const { messages, turns } = useBoothStore(s => s.logs[weekKey]) ?? EMPTY_BOOTH_LOG;
   const updateLog = useBoothStore(s => s.updateLog);
   // Functional updates go through the store, so replies that land after the
   // Booth closes (or after a page change) still reach the saved log.
   const patch = (fn: (log: BoothLog) => Partial<BoothLog>) => updateLog(weekKey, l => ({ ...l, ...fn(l) }));
   const setMessages = (fn: (m: Msg[]) => Msg[]) => patch(l => ({ messages: fn(l.messages) }));
   const setTurns = (n: number) => patch(() => ({ turns: n }));
-  const setVotes = (fn: (v: Record<number, Host>) => Record<number, Host>) => patch(l => ({ votes: fn(l.votes) }));
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -390,7 +389,6 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
                 );
               }
               const pending = busy && i === latest;
-              const vote = votes[i];
               return (
                 <article key={i} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm overflow-hidden">
                   {call.question && (
@@ -410,24 +408,6 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
                     <TakeColumn host="marcus" msg={call.marcus} pending={pending} />
                     <TakeColumn host="tony" msg={call.tony} pending={pending} />
                   </div>
-
-                  {!pending && call.marcus && call.tony && (
-                    <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--surface-2)]/40 flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-semibold flex-1">
-                        {vote ? <>You sided with <span className={HOST_META[vote].label}>{HOST_META[vote].name}</span></> : "Who's right?"}
-                      </span>
-                      {(['marcus', 'tony'] as const).map(h => (
-                        <button
-                          key={h}
-                          onClick={() => setVotes(v => ({ ...v, [i]: h }))}
-                          aria-pressed={vote === h}
-                          className={`min-h-10 px-3 rounded-lg border text-[13px] font-semibold transition-colors ${vote === h ? HOST_META[h].voted : `bg-[var(--surface)] ${HOST_META[h].vote}`}`}
-                        >
-                          {HOST_META[h].name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
 
                   {!pending && i === latest && canType && call.marcus && call.tony && (
                     <div className="px-4 py-2.5 border-t border-[var(--border)] flex gap-2 flex-wrap">

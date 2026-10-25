@@ -30,11 +30,9 @@ export interface BoothLog {
   messages: BoothMsg[];
   /** Typed (LLM) turns only — chips are free. */
   turns: number;
-  /** Who the caller sided with, by call index. */
-  votes: Record<number, BoothHost>;
 }
 
-export const EMPTY_BOOTH_LOG: BoothLog = { messages: [], turns: 0, votes: {} };
+export const EMPTY_BOOTH_LOG: BoothLog = { messages: [], turns: 0 };
 
 // Only the current week matters for the free-turn cap; keep a couple of
 // recent weeks so stepping back and forth doesn't wipe a call.
