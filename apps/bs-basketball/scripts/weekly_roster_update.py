@@ -182,6 +182,8 @@ def roll_to_regular_season(d, log):
             p['tid'] = -1  # undrafted 2026 prospects → free agency
     d['draftPicks'] = [dp for dp in d.get('draftPicks', []) if dp.get('season', 0) >= SEASON]
     for t in d['teams']:
+        if t.get('disabled'):
+            continue  # BBGM only keeps current-season rows for active teams (payroll check throws otherwise)
         prev = t['seasons'][-1]
         t['seasons'].append({**prev, 'season': SEASON, 'won': 0, 'lost': 0, 'playoffRoundsWon': -1, 'numPlayersTradedAway': 0})
     log.append(f'Rolled the file from the {SEASON - 1} offseason into the {START_YEAR}-{str(SEASON)[2:]} regular season.')
@@ -403,7 +405,11 @@ def build_season(d, games, tid_by_abbrev, log):
                 break
         s['streak'] = streak
     d['schedule'] = schedule
-    d['games'] = done_games
+    # Score-only results live under a BS-only key: Basketball GM would import
+    # `games` as box scores and crash on them (no player lines). The W-L is
+    # already in teams[].seasons, so vanilla BBGM loses nothing it can show.
+    d.pop('games', None)
+    d['bsRealResults'] = done_games
     remaining_dates = defaultdict(list)
     for g in all_games:
         if not g['done']:
