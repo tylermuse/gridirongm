@@ -87,6 +87,15 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     !m.winnerId && m.homeTeamId && m.awayTeamId &&
     (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId));
 
+  // simPlayoffRound always skips the user's matchup (so it can be watched live),
+  // so when that's the only game left in the round the button did nothing — the
+  // top dead click on /playoffs. Swap it for a "Sim My Game" action instead.
+  const currentRoundOpen = nextPlayoffGame
+    ? playoffBracket!.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId && m.round === nextPlayoffGame.round)
+    : [];
+  const onlyUserGameLeftInRound = currentRoundOpen.length > 0 &&
+    currentRoundOpen.every(m => m.homeTeamId === userTeamId || m.awayTeamId === userTeamId);
+
   const userTeam = teams.find(t => t.id === userTeamId);
   const maxWeek = schedule.length > 0 ? Math.max(...schedule.map(g => g.week)) : 18;
 
@@ -335,13 +344,13 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       Sim Next Game
                     </Button>
                     <Button
-                      onClick={simPlayoffRound}
+                      onClick={onlyUserGameLeftInRound ? simNextPlayoffGame : simPlayoffRound}
                       size="sm"
                       variant="secondary"
                       disabled={!nextPlayoffGame}
                       className="active:scale-95 transition-transform"
                     >
-                      Sim Round
+                      {onlyUserGameLeftInRound ? 'Sim My Game' : 'Sim Round'}
                     </Button>
                     <Button
                       onClick={simAllPlayoffGames}
