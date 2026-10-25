@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hookLine, momentNote, recordWords, sanitizeMoment, isOffseason } from '@/lib/spotlight/showMoment';
-import { planShots, MAX_HOLD, type ShotLine } from '@/lib/spotlight/showShots';
+import { planShots, MAX_HOLD, OTS_GAP, type ShotLine } from '@/lib/spotlight/showShots';
 
 describe('show moment', () => {
   it('says records the way hosts do', () => {
@@ -49,12 +49,14 @@ describe('planShots — nothing holds too long', () => {
 
   it('cuts away from one graphic after ~MAX_HOLD words', () => {
     // Six 12-word lines on the same graphic (~27s) used to be one long hold.
+    // The cutaways are spaced (~OTS_GAP words apart), so a later hold can
+    // run that much longer before the next one.
     const shots = planShots([0, 1, 2, 3, 4, 5].map(i => line(i % 2 ? 'tony' : 'marcus', 12)));
     let run = 0, worst = 0, prev = '';
     shots.forEach(s => { const k = s.kind === 'ots' ? `ots:${s.listener}` : s.kind; run = k === prev ? run + 12 : 12; worst = Math.max(worst, run); prev = k; });
-    expect(worst).toBeLessThanOrEqual(MAX_HOLD);
-    expect(shots[0].kind).toBe('gfx'); // a topic still opens on its graphic
-    expect(shots.some(s => s.kind === 'ots')).toBe(true);
+    expect(worst).toBeLessThanOrEqual(MAX_HOLD + OTS_GAP);
+    expect(shots.slice(0, 3).map(s => s.kind)).toEqual(['gfx', 'gfx', 'ots']); // a topic still opens on its graphic
+    expect(shots.filter(s => s.kind === 'ots')).toHaveLength(1);
   });
 
   it('a new graphic (different look) resets the hold', () => {

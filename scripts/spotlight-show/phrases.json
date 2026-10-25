@@ -4309,6 +4309,122 @@
    "text": "And I'd pick the guys who put that quarterback on his back. We'll agree to disagree, which, at this desk, is a pretty normal day at the office.",
    "take": "tony_ex5_side",
    "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_stamp_contender",
+   "host": "marcus",
+   "kind": "stamp",
+   "stamp": "contender",
+   "text": "My stamp? Contender.",
+   "take": "marcus_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_stamp_pretender",
+   "host": "marcus",
+   "kind": "stamp",
+   "stamp": "pretender",
+   "text": "My stamp? Pretender.",
+   "take": "marcus_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_stamp_agree_contender",
+   "host": "marcus",
+   "kind": "stamp",
+   "stamp": "contender",
+   "stampReply": "agree",
+   "text": "You sound like you agree with me. [pause] Contender.",
+   "take": "marcus_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_stamp_agree_pretender",
+   "host": "marcus",
+   "kind": "stamp",
+   "stamp": "pretender",
+   "stampReply": "agree",
+   "text": "You sound like you agree with me. [pause] Pretender.",
+   "take": "marcus_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_stamp_split_contender",
+   "host": "marcus",
+   "kind": "stamp",
+   "stamp": "contender",
+   "stampReply": "split",
+   "text": "Pretender? I don't see it. Contender.",
+   "take": "marcus_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_stamp_split_pretender",
+   "host": "marcus",
+   "kind": "stamp",
+   "stamp": "pretender",
+   "stampReply": "split",
+   "text": "Contender? [pause] I can't get there. Pretender.",
+   "take": "marcus_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_stamp_contender",
+   "host": "tony",
+   "kind": "stamp",
+   "stamp": "contender",
+   "text": "Contender. Stamp it.",
+   "take": "tony_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_stamp_pretender",
+   "host": "tony",
+   "kind": "stamp",
+   "stamp": "pretender",
+   "text": "Pretender. Stamp it.",
+   "take": "tony_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_stamp_agree_contender",
+   "host": "tony",
+   "kind": "stamp",
+   "stamp": "contender",
+   "stampReply": "agree",
+   "text": "You sound like you agree with me. Contender, all day.",
+   "take": "tony_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_stamp_agree_pretender",
+   "host": "tony",
+   "kind": "stamp",
+   "stamp": "pretender",
+   "stampReply": "agree",
+   "text": "You sound like you agree with me. Pretender, all day.",
+   "take": "tony_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_stamp_split_contender",
+   "host": "tony",
+   "kind": "stamp",
+   "stamp": "contender",
+   "stampReply": "split",
+   "text": "Pretender? No way. [pause] Contender.",
+   "take": "tony_s",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_stamp_split_pretender",
+   "host": "tony",
+   "kind": "stamp",
+   "stamp": "pretender",
+   "stampReply": "split",
+   "text": "Contender? Not for me. Pretender.",
+   "take": "tony_s",
+   "model": "eleven_v3"
   }
  ]
 }

@@ -166,8 +166,13 @@ export function verdictTopicNotes(plan: ThemePlan): string[] {
     stamp: '{"t":<this topic>,"verdict":{"marcus":"contender"|"pretender","tony":"contender"|"pretender"}}',
     move: '{"t":<this topic>,"verdict":{"marcus":"<his move, under six words>","tony":"<his move, under six words>"}}',
   }[t.verdict];
+  // The stamps are pre-recorded: the show cuts to each host saying his to
+  // camera (the second one reacting to the first), then voices the rest.
+  const stampNote = t.verdict === 'stamp'
+    ? ' Each host\'s first line here opens with his stamp alone as its own sentence ("Contender." or "Pretender.") and then his why. The show plays that stamp as a pre-recorded shot of him saying it, and the second host\'s shot reacts to the first stamp for him ("You sound like you agree with me. Contender." or "Pretender? I don\'t see it. Contender."), so after his stamp each host goes straight to his reason: no "I agree", no "I\'m going with", no repeating the other\'s stamp.'
+    : '';
   return [
-    `Marcus: This topic plays right after a pre-recorded exchange (${said}). ${first} answers first. Each host gives ${what}; the other reacts. Three to five lines, ending on a jab or a shrug, not a summary.`,
+    `Marcus: This topic plays right after a pre-recorded exchange (${said}). ${first} answers first. Each host gives ${what}; the other reacts. Three to five lines, ending on a jab or a shrug, not a summary.${stampNote}`,
     `Tony: Before the first line of this topic, write ${json} with exactly what they say.`,
   ];
 }
