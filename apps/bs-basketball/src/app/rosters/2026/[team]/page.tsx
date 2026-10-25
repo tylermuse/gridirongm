@@ -81,7 +81,7 @@ export default async function TeamRosterPage({ params }: Props) {
             {t.fullName} 2026-27 Roster
           </h1>
           <p className="text-sm text-[var(--text-sec)] mt-1">
-            {t.conference} Conference · {t.division} Division{t.lastRecord ? ` · ${t.lastRecord.won}-${t.lastRecord.lost} in 2025-26` : ''}
+            {t.conference} Conference · {t.division} Division{t.record ? ` · ${t.record.won}-${t.record.lost} in 2026-27` : ''}{t.lastRecord ? ` · ${t.lastRecord.won}-${t.lastRecord.lost} in 2025-26` : ''}
           </p>
         </div>
       </header>

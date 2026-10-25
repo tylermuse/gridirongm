@@ -30,6 +30,7 @@ import {
   type ImportedHoopsLeague,
 } from '../data/leagueImport';
 import { ESPN_2026_R1_ORDER, normalizeAbbrev } from '../data/draft2026';
+import { applySeasonInProgress } from '../league/importSeason';
 import { backfillPlayerPhotos } from '../data/photoBackfill';
 import {
   saveLeague,
@@ -391,6 +392,15 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
   }
   // Flag custom-roster leagues so they're excluded from the global GM board.
   league = { ...league, sportData: { ...(league.sportData as object), imported: true, pickOwnership } };
+
+  // MID-season snapshot (file in the regular season with a real schedule): the
+  // league opens on the next real game day with real records so far.
+  if (imported.seasonInProgress) {
+    return applySeasonInProgress(
+      { ...league, freeAgentIds: [...league.freeAgentIds, ...imported.draftProspectIds] },
+      imported.seasonInProgress,
+    );
+  }
 
   // POST-draft snapshot (file phase ≥ RESIGN_PLAYERS): the rookies are already
   // on their teams. Skip the inaugural draft entirely and open the league at the
