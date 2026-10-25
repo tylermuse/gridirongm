@@ -8,6 +8,10 @@
     {
       "path": "/api/indexnow",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/rebuild-predictions",
+      "schedule": "0 12 * * 1"
     }
   ]
 }

@@ -34,6 +34,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     page('/blog', 0.8, 'weekly'),
     ...blog,
     ...landing,
+    page('/predictions', 0.9, 'weekly'),
     page('/player-tiers', 0.8, 'monthly'),
     page('/rosters', 0.8, 'weekly'),
     page('/rosters/2026', 0.8, 'monthly'),

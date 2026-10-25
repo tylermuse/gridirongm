@@ -65,6 +65,9 @@ export default function Rosters2026Page() {
         <Link href="/player-tiers" className="inline-block mt-3 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
           See the top 60 players ranked into tiers →
         </Link>
+        <Link href="/predictions" className="block mt-1 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+          NBA playoff &amp; title odds for every team →
+        </Link>
       </header>
 
       <section className="grid gap-3 sm:grid-cols-4 mb-10">
