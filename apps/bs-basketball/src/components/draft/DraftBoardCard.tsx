@@ -1,12 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import { ScoutingReportBody } from '@/components/draft/ScoutingReportBody';
 import { TieredScoutPanel, TierPips } from '@/components/draft/TieredScoutPanel';
 import { buildScoutingReport, teamFitFor } from '@/lib/scouting/scoutingReport';
 import { buildTieredReport, isWatched, scoutLevel, scoutPointsLeft, potentialRange, scoutSaveSeed, tierCost } from '@/lib/scouting';
-import { SCOUT_POINTS_PER_DRAFT, type ScoutLevel } from '@/lib/draft';
+import type { ScoutLevel } from '@/lib/draft';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { positionNeeds, TARGET_DEPTH } from '@/lib/draft/needs';
 import { consensus2026Rank } from '@/lib/data/draft2026';
 import { ratingColor } from '@/lib/ui/ratingColor';
@@ -52,6 +54,8 @@ export function DraftBoardCard({
   const [posFilter, setPosFilter] = useState<BasketballPosition | 'ALL'>('ALL');
   const [tab, setTab] = useState<'all' | 'starred' | 'scouted'>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const { scoutingAllocations, tier } = useSubscription();
+  const scoutBudget = scoutingAllocations.scoutPoints;
 
   // Projected draft rank = position on the overall board.
   const projRank = useMemo(() => {
@@ -72,9 +76,9 @@ export function DraftBoardCard({
     return true;
   }).sort((a, b) => prospectScore(b) - prospectScore(a));
 
-  const pointsLeft = scoutPointsLeft(draft);
-  const scoutPct = Math.round((pointsLeft / SCOUT_POINTS_PER_DRAFT) * 100);
-  const scoutBar = pointsLeft > SCOUT_POINTS_PER_DRAFT * 0.5 ? 'bg-blue-500' : pointsLeft > SCOUT_POINTS_PER_DRAFT * 0.2 ? 'bg-amber-500' : 'bg-red-500';
+  const pointsLeft = scoutPointsLeft(draft, scoutBudget);
+  const scoutPct = Math.round((pointsLeft / Math.max(1, scoutBudget)) * 100);
+  const scoutBar = pointsLeft > scoutBudget * 0.5 ? 'bg-blue-500' : pointsLeft > scoutBudget * 0.2 ? 'bg-amber-500' : 'bg-red-500';
   const saveSeed = scoutSaveSeed(league);
 
   function autoScout() {
@@ -106,10 +110,21 @@ export function DraftBoardCard({
         </div>
         <div className="flex items-center gap-2 mt-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)]">Scout Pts</span>
-          <div className="w-20 h-2 rounded-full bg-[var(--surface)] overflow-hidden">
-            <div className={`h-full ${scoutBar}`} style={{ width: `${scoutPct}%` }} />
-          </div>
-          <span className="text-xs tabular-nums text-[var(--text-sec)]">{pointsLeft}/{SCOUT_POINTS_PER_DRAFT}</span>
+          {scoutingAllocations.isUnlimited ? (
+            <span className="text-xs font-bold text-purple-600">∞</span>
+          ) : (
+            <>
+              <div className="w-20 h-2 rounded-full bg-[var(--surface)] overflow-hidden">
+                <div className={`h-full ${scoutBar}`} style={{ width: `${scoutPct}%` }} />
+              </div>
+              <span className="text-xs tabular-nums text-[var(--text-sec)]">{pointsLeft}/{scoutBudget}</span>
+              {tier === 'free' && pointsLeft < tierCost(3) && (
+                <Link href="/pricing" className="text-[10px] font-bold hover:underline" style={{ color: 'var(--accent)' }}>
+                  Premium: 30/draft →
+                </Link>
+              )}
+            </>
+          )}
           <span className="hidden sm:inline text-[10px] text-[var(--text-sec)]">Quick look {tierCost(1)} · Workout {tierCost(2)} · Full eval {tierCost(3)}</span>
           <button onClick={autoScout} disabled={pointsLeft === 0 || loading} title="Quick look at up to 10 unscouted prospects (watchlist first)" className="ml-auto text-[11px] font-bold rounded-md px-2 py-1 disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>Auto-scout</button>
         </div>

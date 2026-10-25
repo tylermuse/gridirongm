@@ -12,8 +12,15 @@
  *                              NBA comp
  *
  * Costs are cumulative totals — upgrading pays only the difference (a quick
- * look then a full eval costs 1 + 5 = 6). 30 pts/draft = ~4 full evals plus a
- * handful of quick looks, or ~10 workouts, or 30 quick looks.
+ * look then a full eval costs 1 + 5 = 6).
+ *
+ * Budget by tier (shared `getScoutingAllocations`, same as Football): 10 pts
+ * free, 30 Premium (~4 full evals + a few quick looks), unlimited for founders
+ * and admins. Points LEFT are derived as budget − points spent (from
+ * scoutLevels), not read from the stored `scoutPoints` field, so an upgrade
+ * mid-draft takes effect immediately and old saves need no migration. Callers
+ * in React pass the budget from useSubscription(); engine code falls back to
+ * the module-level tier SubscriptionProvider publishes.
  *
  * Scouting corrects misperception, which is what creates busts (graded high,
  * real ceiling low) and steals (the reverse).
@@ -23,14 +30,16 @@
  * remaining flat scouts convert proportionally to points. Nothing is rewritten
  * until the next scouting action, which then writes the tiered fields.
  *
- * Everything is pure + deterministic: per-prospect noise is seeded off the
- * save (league.id), prospect id, and draft season. No Math.random.
+ * Everything is deterministic: per-prospect noise is seeded off the save
+ * (league.id), prospect id, and draft season. No Math.random. The only
+ * environmental input is the default scouting budget (see above).
  */
 
 import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
+import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { developmentFactorFor, type BasketballPlayer, type BasketballRatings, type BasketballStats } from '@bs/sport-basketball';
 import { getDraft } from '../draft/draft';
-import { SCOUTS_PER_DRAFT, SCOUT_POINTS_PER_DRAFT, type DraftState, type ScoutLevel } from '../draft/types';
+import type { DraftState, ScoutLevel } from '../draft/types';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -85,13 +94,23 @@ const SKILL_NOISE: Record<ScoutLevel, number> = { 0: 0, 1: 7, 2: 3, 3: 0 };
 // Budget + level (with lazy legacy conversion)
 // ===========================================================================
 
-/** Scouting points left this draft. Legacy saves convert flat scouts → points. */
-export function scoutPointsLeft(draft: DraftState): number {
-  if (typeof draft.scoutPoints === 'number') return draft.scoutPoints;
-  if (typeof draft.scoutsRemaining === 'number') {
-    return Math.max(0, Math.round((draft.scoutsRemaining / SCOUTS_PER_DRAFT) * SCOUT_POINTS_PER_DRAFT));
-  }
-  return SCOUT_POINTS_PER_DRAFT;
+/** This user's per-draft scouting budget for their tier (UNLIMITED_ALLOCATION when uncapped). */
+export function scoutBudget(): number {
+  return getCurrentSubscriptionAllocations().scoutPoints;
+}
+
+/** Points already spent this draft, from the tier reached on each prospect. */
+export function scoutPointsSpent(draft: DraftState): number {
+  const ids = new Set<string>([...Object.keys(draft.scoutLevels ?? {}), ...(draft.scoutedIds ?? [])]);
+  let spent = 0;
+  for (const id of ids) spent += tierCost(scoutLevel(draft, id));
+  return spent;
+}
+
+/** Scouting points left this draft: tier budget minus points spent. Legacy
+ *  flat-scout saves count each revealed prospect as a full evaluation. */
+export function scoutPointsLeft(draft: DraftState, budget: number = scoutBudget()): number {
+  return Math.max(0, budget - scoutPointsSpent(draft));
 }
 
 /** @deprecated use scoutPointsLeft — kept for callers of the flat system. */
@@ -120,7 +139,7 @@ function normalized(draft: DraftState): DraftState {
   if (typeof draft.scoutPoints === 'number' && draft.scoutLevels) return draft;
   const levels: Record<string, ScoutLevel> = { ...(draft.scoutLevels ?? {}) };
   for (const id of draft.scoutedIds ?? []) if (!levels[id]) levels[id] = 3;
-  return { ...draft, scoutPoints: scoutPointsLeft(draft), scoutLevels: levels };
+  return { ...draft, scoutLevels: levels };
 }
 
 function withDraft(league: LeagueState, draft: DraftState): LeagueState {
@@ -132,13 +151,18 @@ function withDraft(league: LeagueState, draft: DraftState): LeagueState {
  * difference from his current tier. A no-op if he's already there, he's not in
  * the pool, or the budget can't cover it — you can never overspend.
  */
-export function scoutProspect(league: LeagueState, prospectId: string, level: Exclude<ScoutLevel, 0> = 3): LeagueState {
+export function scoutProspect(
+  league: LeagueState,
+  prospectId: string,
+  level: Exclude<ScoutLevel, 0> = 3,
+  budget: number = scoutBudget(),
+): LeagueState {
   const draft = getDraft(league);
   if (!draft) return league;
   if (!draft.poolIds.includes(prospectId as PlayerId)) return league;
   const cost = upgradeCost(draft, prospectId, level);
   if (cost === 0) return league;
-  const points = scoutPointsLeft(draft);
+  const points = scoutPointsLeft(draft, budget);
   if (cost > points) return league;
   const base = normalized(draft);
   return withDraft(league, {

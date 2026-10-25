@@ -7,11 +7,13 @@ import type { PlayerId, TeamId } from '@bs/core/adapter';
 
 /**
  * LEGACY: the old flat budget (8 scouts, each revealing true potential). Kept so
- * saves made before tiered scouting can be converted — see scoutPointsLeft().
+ * saves made before tiered scouting can be read — see scoutLevel().
  */
 export const SCOUTS_PER_DRAFT = 8;
 
-/** Tiered scouting budget (points) per draft. */
+/** Premium per-draft scouting budget. Informational seed for `scoutPoints`
+ *  only — the real budget is tier-based (10 free / 30 Premium / unlimited),
+ *  see scoutBudget() + scoutPointsLeft() in lib/scouting. */
 export const SCOUT_POINTS_PER_DRAFT = 30;
 
 /** 1 = Quick look, 2 = Workout, 3 = Full evaluation. 0 = unscouted. */
@@ -80,7 +82,8 @@ export interface DraftState {
   /** LEGACY: prospects revealed under the flat system — treated as fully
    *  evaluated (level 3). Never written by new code. */
   scoutedIds?: PlayerId[];
-  /** Tiered scouting points left. Absent on legacy saves (derived lazily). */
+  /** Last-written points left, kept for old clients. Not authoritative:
+   *  scoutPointsLeft() derives it from the tier budget and scoutLevels. */
   scoutPoints?: number;
   /** Highest scouting tier reached per prospect id. */
   scoutLevels?: Record<string, ScoutLevel>;
