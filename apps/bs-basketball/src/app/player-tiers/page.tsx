@@ -111,6 +111,9 @@ export default function PlayerTiersPage() {
           stacked into a six-tier pyramid. Ratings come from the same real-roster file you can import and play with —
           ties break on potential, then youth. Tap any player to see his team&apos;s full depth chart, cap sheet and contracts.
         </p>
+        <Link href="/predictions" className="inline-block mt-3 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+          How these rosters project: NBA playoff &amp; title odds →
+        </Link>
       </header>
 
       <section aria-label="Tier pyramid" className="space-y-6">
