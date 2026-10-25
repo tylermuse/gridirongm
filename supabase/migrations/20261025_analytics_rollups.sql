@@ -186,6 +186,10 @@ begin
     return 'nothing to do: range is after the rollup start';
   end if;
 
+  -- One backfill at a time: two overlapping runs (e.g. a re-run while the SQL
+  -- editor's first attempt was still going) would both delete, then collide.
+  perform pg_advisory_xact_lock(hashtext('analytics_backfill_rollups'));
+
   delete from analytics_device_minutes where src = 'backfill' and minute >= v_from and minute < v_to;
   delete from analytics_page_hours where src = 'backfill' and hour >= v_from and hour < v_to;
   delete from analytics_ui_days where src = 'backfill' and day >= (v_from at time zone 'utc')::date and day <= (v_to at time zone 'utc')::date
@@ -203,7 +207,9 @@ begin
   from analytics_events
   where created_at >= v_from and created_at < v_to
     and event not in ('ui_click', 'ui_hover', 'ui_rage_click', 'ui_dead_click', 'ui_change', 'page_engagement')
-  group by 1, 2, 3;
+  group by 1, 2, 3
+  on conflict (app, device_id, minute, src) do update set
+    user_id = excluded.user_id, events = excluded.events, page_views = excluded.page_views, sessions = excluded.sessions;
   get diagnostics v_minutes = row_count;
 
   insert into analytics_page_hours (app, path, hour, src, views)
@@ -215,7 +221,8 @@ begin
   from analytics_events
   where created_at >= v_from and created_at < v_to
     and event = 'page_view' and properties ->> 'path' is not null
-  group by 1, 2, 3;
+  group by 1, 2, 3
+  on conflict (app, path, hour, src) do update set views = excluded.views;
   get diagnostics v_pages = row_count;
 
   insert into analytics_ui_days (app, day, device_id, event, feature, area, target, value, src, user_id, n, active_ms, visible_ms)
@@ -235,7 +242,9 @@ begin
   from analytics_events
   where created_at >= v_from and created_at < v_to
     and event in ('ui_click', 'ui_hover', 'ui_rage_click', 'ui_dead_click', 'ui_change', 'page_engagement')
-  group by 1, 2, 3, 4, 5, 6, 7, 8;
+  group by 1, 2, 3, 4, 5, 6, 7, 8
+  on conflict (app, day, device_id, event, feature, area, target, value, src) do update set
+    user_id = excluded.user_id, n = excluded.n, active_ms = excluded.active_ms, visible_ms = excluded.visible_ms;
   get diagnostics v_ui = row_count;
 
   return format('backfilled %s to %s: %s device-minutes, %s page-hours, %s ui-days', v_from, v_to, v_minutes, v_pages, v_ui);
