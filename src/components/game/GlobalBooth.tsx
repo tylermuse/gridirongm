@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { useBoothStore, boothEpisodeKey } from '@/lib/engine/boothStore';
@@ -17,8 +17,8 @@ import { Avatar, BoothPanel, type OnAirInfo } from './SpotlightCallIn';
  *
  * The launcher is also where new Team Spotlight episodes are announced (it
  * replaced the old SpotlightPopup): at narrative moments a callout slides
- * out above it with Watch / Call in, and a dot stays on the launcher until
- * the Booth is opened. Inside, the episode is pinned as the On Air card.
+ * out above it once with Watch / Call in, and a dot stays on the launcher
+ * until the Booth is opened. Inside, the episode is pinned as the On Air card.
  *
  * Builds the hosts' grounding straight from the game store so it works on
  * any page, not just the dashboard that renders the Team Spotlight.
@@ -116,15 +116,50 @@ export function GlobalBooth() {
   const fresh = !!momentKey && seen.engaged !== momentKey;
   const showDot = fresh && seen.opened !== momentKey;
   const onLiveGame = pathname.startsWith('/game/');
-  const showCallout = showDot && seen.dismissed !== momentKey && !open && !onLiveGame && episode.length > 0;
+  const calloutDue = showDot && seen.dismissed !== momentKey && !open && !onLiveGame && episode.length > 0;
 
-  // Slide the callout in a beat after it's due, like the old popup.
-  const [calloutIn, setCalloutIn] = useState(false);
+  // The callout announces each episode once: a beat after it's due it slides
+  // in and the episode is marked dismissed right away, so later pages and
+  // refreshes never replay it (the launcher dot still flags the episode).
+  const [callout, setCallout] = useState<{ key: string; stage: 'enter' | 'in' | 'leave' } | null>(null);
+  const calloutRef = useRef<HTMLDivElement>(null);
+  const hideCallout = useCallback(() => setCallout(c => c && { ...c, stage: 'leave' }), []);
   useEffect(() => {
-    if (!showCallout) { setCalloutIn(false); return; }
-    const t = setTimeout(() => setCalloutIn(true), 800);
+    if (!calloutDue || !momentKey) return;
+    const t = setTimeout(() => {
+      markSeen('dismissed', momentKey);
+      setCallout({ key: momentKey, stage: 'enter' });
+    }, 800);
     return () => clearTimeout(t);
-  }, [showCallout]);
+  }, [calloutDue, momentKey, markSeen]);
+
+  // Changing page or opening the Booth ends it on the spot.
+  useEffect(() => setCallout(null), [pathname, open]);
+
+  // Once in, it leaves after 5s, or on the first click or keypress outside it.
+  useEffect(() => {
+    if (!callout) return;
+    if (callout.stage !== 'in') {
+      const t = callout.stage === 'enter'
+        ? setTimeout(() => setCallout(c => c && { ...c, stage: 'in' }), 20)
+        : setTimeout(() => setCallout(null), 500);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(hideCallout, 5000);
+    const onAction = (e: Event) => {
+      if (!calloutRef.current?.contains(e.target as Node)) hideCallout();
+    };
+    document.addEventListener('pointerdown', onAction, true);
+    document.addEventListener('keydown', onAction, true);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('pointerdown', onAction, true);
+      document.removeEventListener('keydown', onAction, true);
+    };
+  }, [callout, hideCallout]);
+
+  const showCallout = callout?.key === momentKey && showDot && !open && !onLiveGame;
+  const calloutIn = callout?.stage === 'in';
 
   if (!team || !fetchOpts) return null;
   const weekKey = `${team.id}-s${season}-w${week}-${phase}-${narrative}`;
@@ -150,6 +185,7 @@ export function GlobalBooth() {
         <div className={`fixed right-4 ${mobileBottomBar ? 'bottom-20' : 'bottom-4'} sm:bottom-5 sm:right-5 z-50 flex flex-col items-end gap-2`}>
           {showCallout && (
             <div
+              ref={calloutRef}
               role="status"
               className={`relative w-60 sm:w-72 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-xl overflow-hidden transition-all duration-500 ${calloutIn ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}
             >
@@ -165,7 +201,7 @@ export function GlobalBooth() {
                 {MOMENT_LABEL[narrative] && <p className="hidden sm:block text-xs text-slate-300 mt-0.5">{MOMENT_LABEL[narrative]}</p>}
               </div>
               <button
-                onClick={() => momentKey && markSeen('dismissed', momentKey)}
+                onClick={hideCallout}
                 aria-label="Dismiss"
                 className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg text-slate-300 hover:text-white"
               >
