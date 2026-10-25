@@ -21,7 +21,10 @@ export type PhraseKind =
   | 'topical'
   // A line of a pre-recorded back-and-forth (see `exchange`), played only as
   // part of the whole exchange.
-  | 'exchange';
+  | 'exchange'
+  // Contender or Pretender: a host saying his stamp to camera, cut in at the
+  // start of his first verdict line (see `stamp`, `stampReply`).
+  | 'stamp';
 export type PhraseTone = 'good' | 'bad' | 'mid';
 
 export interface Phrase {
@@ -51,6 +54,11 @@ export interface Phrase {
   /** Only true in a specific situation (a blown lead, a close game…): shown
    *  to the writer as a condition. Implies writerOnly. */
   when?: string;
+  /** Stamp clips: the stamp the host gives… */
+  stamp?: 'contender' | 'pretender';
+  /** …and, when he answers second, whether it matches the first host's
+   *  ("You sound like you agree with me." / "Pretender? I don't see it."). */
+  stampReply?: 'agree' | 'split';
 }
 
 export const PHRASES = manifest as Phrase[];

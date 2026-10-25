@@ -227,6 +227,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const sfxPlaying = useRef<Set<AudioBufferSourceNode>>(new Set());
   const musicRef = useRef<{ src: AudioBufferSourceNode; gain: GainNode } | null>(null);
   const firedSfx = useRef<Set<string>>(new Set());
+  /** When each verdict card went up (`topicIdx:host` → clock). */
+  const revealAt = useRef<Map<string, number>>(new Map());
 
   // Only mount <video> elements for clips this episode actually uses.
   const videoSegs = useMemo(() => {
@@ -480,6 +482,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       kind: 'tts' as const, speaker: sg.speaker, topicIdx: sg.topicIdx, words: sg.text.split(/\s+/).length,
       bare: !!team && !measurableIn(sg.text, { topic: topics[sg.topicIdx], team, teams, players, earlier: [], play: sg.play }),
       look: lookOf(focusAt(segments, i)),
+      verdict: !!sg.verdict,
     }
     : { kind: 'other' as const, speaker: sg.speaker, topicIdx: -1, words: 0, bare: false })), [segments, team, teams, players, topics, focusAt]);
 
@@ -537,7 +540,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     setSegIdx(i);
     const advance = () => { if (tokenRef.current === token) playSegment(i + 1); };
     const ctx = ctxRef.current;
-    if (i === 0) { firedSfx.current.clear(); playMusic('open'); }
+    if (i === 0) { firedSfx.current.clear(); revealAt.current.clear(); playMusic('open'); }
 
     if (seg.kind === 'clip' || seg.kind === 'phrase') {
       if (lowerTimer.current) clearTimeout(lowerTimer.current);
@@ -618,7 +621,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     setVisibleVideo(null);
     const onGraphic = prev && (prev.kind === 'tts' || (prev.kind === 'clip' && !!prev.voiceover));
     enterGraphic(`${seg.visual}:${seg.topicIdx}`, !onGraphic || prev.speaker !== seg.speaker);
-    graphicSfx(seg);
+    // A verdict card goes up when its host gives his verdict.
+    const now = performance.now() - pausedTotal.current;
+    for (const h of seg.revealed ?? []) if (!revealAt.current.has(`${seg.topicIdx}:${h}`)) revealAt.current.set(`${seg.topicIdx}:${h}`, now);
+    const at = (h: Host) => ((revealAt.current.get(`${seg.topicIdx}:${h}`) ?? topicStart.current) - topicStart.current) / 1000;
+    graphicSfx(seg.revealed ? { ...seg, revealAt: { marcus: at('marcus'), tony: at('tony') } } : seg);
     const buf = buffersRef.current.get(i);
     if (!ctx) return advance();
     if (!buf) {
@@ -935,6 +942,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     // Jumping into a topic mid-way: let its graphic come in fresh.
     stopSfx();
     firedSfx.current.clear();
+    revealAt.current.clear();
     blockKey.current = '';
     panelKey.current = '';
     phaseRef.current = 'playing';
@@ -1045,7 +1053,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const tts = seg?.kind === 'tts' ? seg : null;
   // What the graphic layer shows: the current voiceover (a line, or a topic
   // transition wiping in), else the last one — kept mounted to dissolve.
-  type Gfx = { visual: 'title' | 'graphic'; headline: string; icon: string; speaker: Host; text: string; topicIdx: number; theme?: ShowThemeId; calls?: Calls; verdict?: Verdict };
+  type Gfx = { visual: 'title' | 'graphic'; headline: string; icon: string; speaker: Host; text: string; topicIdx: number; theme?: ShowThemeId; calls?: Calls; verdict?: Verdict; revealed?: Host[] };
   const gfxOf = (x: TimedShowSegment | undefined): Gfx | null =>
     !x ? null
       : x.kind === 'tts' ? x
@@ -1233,6 +1241,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 theme={gfx.theme}
                 calls={gfx.calls}
                 verdict={gfx.verdict}
+                revealed={gfx.revealed}
+                revealMs={gfx.revealed && Object.fromEntries(gfx.revealed.map(h => [h, onGfx ? clock - (revealAt.current.get(`${gfx.topicIdx}:${h}`) ?? topicStart.current) : 60_000]))}
               />
             </div>
           )}

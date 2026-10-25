@@ -90,8 +90,12 @@ interface GraphicProps {
   theme?: ShowThemeId;
   /** …this item's buy/sell calls (Buy or Sell)… */
   calls?: Calls | null;
-  /** …and on the closing topic, what each host committed to. */
+  /** …and on the closing topic, what each host committed to: only the
+   *  cards of the hosts who have given theirs (`revealed`), each landing
+   *  when he did (`revealMs`: since then). */
   verdict?: Verdict | null;
+  revealed?: Host[];
+  revealMs?: Partial<Record<Host, number>>;
 }
 
 /** Theme colors (light treatments: color on white). */
@@ -116,20 +120,24 @@ function CallChip({ host, call, delay, ms }: { host: Host; call: 'buy' | 'sell';
 }
 
 /** The closing verdict: each host's panic meter (1–10), stamp, or one move. */
-function VerdictBoard({ verdict, ms }: { verdict: Verdict; ms: number }) {
+function VerdictBoard({ verdict, ms, revealed, revealMs }: { verdict: Verdict; ms: number; revealed?: Host[]; revealMs?: Partial<Record<Host, number>> }) {
   return (
     <div className="my-auto grid grid-cols-2 gap-[1.2em] py-[0.4em]">
       {(['marcus', 'tony'] as const).map((h, k) => {
         const v = verdict[h];
-        const p = anim(ms, 250 + k * 450, 500);
+        // Each card lands when its host gives his verdict (else both, staggered).
+        const shown = !revealed || revealed.includes(h);
+        const p = revealed ? anim(revealMs?.[h] ?? ms, 250, 500) : anim(ms, 250 + k * 450, 500);
         return (
-          <div key={h} className="flex flex-col items-center rounded-[0.9em] bg-white px-[0.8em] py-[0.7em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]" style={{ opacity: anim(ms, k * 450, 300) }}>
+          <div key={h} className="flex flex-col items-center rounded-[0.9em] bg-white px-[0.8em] py-[0.7em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]" style={{ opacity: anim(ms, revealed ? 0 : k * 450, 300) }}>
             <div className="flex items-center gap-[0.5em]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={avatarSrc(h)} alt="" className="h-[1.9em] w-[1.9em] rounded-full border-[0.1em] border-orange-500 object-cover" />
               <span className="text-[0.85em] font-extrabold text-[#1e3a5f]">{HOSTS[h].name}</span>
             </div>
-            {typeof v === 'number' ? (
+            {!shown ? (
+              <div className="mt-[0.45em] text-[1.6em] font-black leading-none text-slate-300">?</div>
+            ) : typeof v === 'number' ? (
               <>
                 <div className={`mt-[0.2em] text-[2.6em] font-black leading-none tabular-nums ${v <= 3 ? 'text-emerald-600' : v <= 6 ? 'text-amber-500' : 'text-red-600'}`} style={{ transform: `scale(${0.5 + 0.5 * p})`, opacity: p }}>
                   {Math.max(1, Math.round(v * p))}<span className="text-[0.4em] text-slate-400">/10</span>
@@ -491,7 +499,7 @@ export function ShowGraphic(p: GraphicProps) {
             </div>
             {p.verdict ? (
               <>
-                <VerdictBoard verdict={p.verdict} ms={p.topicMs} />
+                <VerdictBoard verdict={p.verdict} ms={p.topicMs} revealed={p.revealed} revealMs={p.revealMs} />
                 {p.text && (
                   <div key={p.text} className="line-clamp-2 text-[0.78em] font-semibold leading-snug text-slate-500" style={{ opacity: anim(p.lineMs, 120, 380) }}>
                     {p.text}

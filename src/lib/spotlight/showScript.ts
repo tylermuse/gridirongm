@@ -11,8 +11,10 @@
  *  - `tts`    the episode's generated lines, voiced per episode with
  *             ElevenLabs and played over a stat graphic (voiceover).
  *
- * Nobody is ever shown listening: the screen is either the host who is
- * talking or a graphic.
+ * A voiced line never shows the speaker's face: it plays over a graphic or
+ * the over-the-shoulder listening shot (showShots.ts). Lines everyone can
+ * predict (a Contender or Pretender stamp) are pre-recorded instead, so
+ * the host says them to camera (`stampCut`).
  *
  * Shared by the API route (which voices `tts` segments) and the client
  * player. Deterministic for a given input so cached episodes are stable.
@@ -98,6 +100,9 @@ export type ShowSegment =
       /** …and, on its lines, the topic's buy/sell calls or the hosts' verdict. */
       calls?: Calls;
       verdict?: Verdict;
+      /** Verdict lines: the hosts who have given theirs so far (the board
+       *  shows only their cards). */
+      revealed?: Host[];
     };
 
 export interface ShowTopicInput {
@@ -293,6 +298,24 @@ class PhrasePicker {
 
 const onCamera = (x: ShowSegment) => (x.kind === 'phrase' && !x.wide) || (x.kind === 'clip' && !x.voiceover);
 
+/**
+ * Contender or Pretender: a verdict line that opens with the host's stamp
+ * ("Contender. I don't love every part of it…") plays the stamp as a
+ * pre-recorded shot of him saying it to camera, then voices the rest. The
+ * host answering second gets the clip that reacts to the first stamp
+ * ("You sound like you agree with me. Contender."). Null when the line
+ * doesn't open with that stamp, or the clip isn't rendered.
+ */
+export function stampCut(text: string, host: Host, stamp: unknown, reply?: 'agree' | 'split'): { clip: Phrase; rest: string } | null {
+  if (stamp !== 'contender' && stamp !== 'pretender') return null;
+  const m = text.match(/^\s*(?:\[[a-z ]+\]\s*)?(contender|pretender)\s*(?:[.!]+|—|–|-{1,2}|$)\s*/i);
+  if (!m || m[1].toLowerCase() !== stamp) return null;
+  const clip = PHRASES.find(p => p.kind === 'stamp' && p.host === host && p.stamp === stamp && p.stampReply === reply);
+  if (!clip) return null;
+  const rest = text.slice(m[0].length).trim();
+  return { clip, rest: rest.charAt(0).toUpperCase() + rest.slice(1) };
+}
+
 /** Drop any on-camera phrase that would sit next to another on-camera shot
  *  of the same host (a jump cut): a sign-off goes first, else the later
  *  phrase; a fixed clip (intro/outro) always stays. */
@@ -404,6 +427,8 @@ export function buildShowScript(
     // as runs of canned lines with no conversation around them.
     let exchanged = !written;
     let topicalDone = writerClips;
+    // The verdict: each host's card goes up on the board once he's given it.
+    const revealed: Host[] | null = topic.isVerdict && topic.verdict ? [] : null;
     const tryExchange = (text: string, speaker: Host) => {
       if (exchanged) return;
       // The other host takes the stat just cited (if not covered yet this
@@ -435,11 +460,25 @@ export function buildShowScript(
         if (chosen) { segs.push(chosen); lastTopic = { i, topic }; return; }
       }
       lastTopic = { i, topic };
+      let text = ex.text;
+      if (revealed && topic.verdict && !revealed.includes(speaker)) {
+        const v = topic.verdict;
+        const reply = revealed.includes(other(speaker)) ? (v[speaker] === v[other(speaker)] ? 'agree' : 'split') : undefined;
+        const cut = stampCut(text, speaker, v[speaker], reply);
+        const last = segs[segs.length - 1];
+        if (cut && !(last && onCamera(last) && last.speaker === speaker)) {
+          segs.push(phraseSegment(cut.clip));
+          text = cut.rest;
+        }
+        revealed.push(speaker);
+      }
+      if (!text) return;
       segs.push({
-        kind: 'tts', speaker, text: ex.text, visual: 'graphic',
+        kind: 'tts', speaker, text, visual: 'graphic',
         topicIdx: i, headline: topic.headline, icon: topic.icon,
         ...(ex.play ? { play: ex.play } : {}),
         ...themed,
+        ...(revealed ? { revealed: [...revealed] } : {}),
       });
       if (written) return;
       const before = segs.length;
