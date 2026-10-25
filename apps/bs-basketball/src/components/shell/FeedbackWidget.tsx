@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useBoothStore } from '@/lib/show/booth';
 
 /**
  * Floating "Send feedback" button (parity with BS Football's FeedbackWidget).
  * Posts to /api/feedback, tagged app = 'bs-hoops'; messages show up in the
  * admin analytics view on bs-football.com. Sits at z-30 so modals, the mobile
- * nav drawer and bottom sheets (z-40/50) cover it.
+ * nav drawer and bottom sheets (z-40/50) cover it. In-game screens put the
+ * Booth launcher in this corner instead (same as Football), so it only shows
+ * before a league is loaded (splash, content pages).
  */
 export function FeedbackWidget() {
   const [open, setOpen] = useState(false);
@@ -15,6 +18,7 @@ export function FeedbackWidget() {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const pathname = usePathname();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const boothMounted = useBoothStore(s => s.mounted);
 
   useEffect(() => {
     if (open) textareaRef.current?.focus();
@@ -43,6 +47,8 @@ export function FeedbackWidget() {
       setStatus('error');
     }
   }
+
+  if (boothMounted) return null;
 
   return (
     <>
