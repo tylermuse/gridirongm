@@ -19,7 +19,11 @@ export const LIPS_MODEL = 'fal-ai/musetalk';
 export const LIPS_MAX_SECONDS = Number(process.env.SPOTLIGHT_SHOW_LIPS_MAX_SECONDS || 90);
 const MIN_LINE = 2.5, MAX_LINE = 15;
 
-export const lipsEnabled = () => !!FAL_KEY && process.env.SPOTLIGHT_SHOW_LIPS !== 'off';
+/** Off unless SPOTLIGHT_SHOW_LIPS=on. MuseTalk on fal bills compute seconds,
+ *  and a render costs about the same whatever the line's length (~23 s with
+ *  the current footage, 100-215 s before), so an episode's 8-14 two-shots
+ *  run $0.30-2.10 against ~$0.20 for everything else. */
+export const lipsEnabled = () => !!FAL_KEY && process.env.SPOTLIGHT_SHOW_LIPS === 'on';
 
 /** What the player needs to line a clip up with the line's audio: the fal
  *  request, and where in the block's audio the clip's sound starts. */
