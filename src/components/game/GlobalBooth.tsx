@@ -151,32 +151,36 @@ export function GlobalBooth() {
           {showCallout && (
             <div
               role="status"
-              className={`relative w-72 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-xl overflow-hidden transition-all duration-500 ${calloutIn ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}
+              className={`relative w-60 sm:w-72 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-xl overflow-hidden transition-all duration-500 ${calloutIn ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}
             >
-              <div className="bg-[#121A2B] text-white px-3.5 py-2.5 pr-10">
-                <span className="inline-flex items-center gap-1.5 bg-red-600 text-[10px] font-extrabold tracking-widest px-1.5 py-0.5 rounded">
+              {/* Phones get a compact card: one-line headline, no moment label, slim buttons. */}
+              <div className="bg-[#121A2B] text-white px-3 py-2 pr-9 sm:px-3.5 sm:py-2.5 sm:pr-10">
+                <span className="inline-flex items-center gap-1.5 bg-red-600 text-[9px] sm:text-[10px] font-extrabold tracking-widest px-1.5 py-0.5 rounded">
                   <span className="w-1.5 h-1.5 rounded-full bg-white" />NEW EPISODE
                 </span>
-                <p className="text-sm font-bold leading-snug mt-1.5">Marcus &amp; Tony break down the {team.name}</p>
-                {MOMENT_LABEL[narrative] && <p className="text-xs text-slate-300 mt-0.5">{MOMENT_LABEL[narrative]}</p>}
+                <p className="text-[13px] sm:text-sm font-bold leading-snug mt-1 sm:mt-1.5 truncate sm:whitespace-normal">
+                  <span className="sm:hidden">Marcus &amp; Tony on the {team.name}</span>
+                  <span className="hidden sm:inline">Marcus &amp; Tony break down the {team.name}</span>
+                </p>
+                {MOMENT_LABEL[narrative] && <p className="hidden sm:block text-xs text-slate-300 mt-0.5">{MOMENT_LABEL[narrative]}</p>}
               </div>
               <button
                 onClick={() => momentKey && markSeen('dismissed', momentKey)}
                 aria-label="Dismiss"
-                className="absolute top-1 right-1 w-9 h-9 flex items-center justify-center rounded-lg text-slate-300 hover:text-white"
+                className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg text-slate-300 hover:text-white"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
               </button>
-              <div className="flex gap-2 p-2.5">
-                <button onClick={watch} className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-10 rounded-lg bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700">
+              <div className="flex gap-1.5 sm:gap-2 p-2 sm:p-2.5">
+                <button onClick={watch} className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-8 sm:min-h-10 rounded-lg bg-blue-600 text-white text-xs sm:text-[13px] font-bold hover:bg-blue-700">
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z" /></svg>Watch
                 </button>
-                <button onClick={() => setOpen(true)} className="flex-1 min-h-10 rounded-lg border border-[var(--border)] text-[13px] font-semibold hover:bg-[var(--bg-hover)]">
+                <button onClick={() => setOpen(true)} className="flex-1 min-h-8 sm:min-h-10 rounded-lg border border-[var(--border)] text-xs sm:text-[13px] font-semibold hover:bg-[var(--bg-hover)]">
                   Call in
                 </button>
               </div>
               {!isPremium && (
-                <p className="px-3 pb-2.5 -mt-1 text-[11px] text-purple-700">Premium adds an AI-written breakdown of this moment.</p>
+                <p className="hidden sm:block px-3 pb-2.5 -mt-1 text-[11px] text-purple-700">Premium adds an AI-written breakdown of this moment.</p>
               )}
             </div>
           )}
