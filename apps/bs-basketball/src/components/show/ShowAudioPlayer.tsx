@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { EPISODE_PACK } from '@bs/core/billing';
 import { SPOTLIGHT_HOSTS, type SpotlightEpisode } from '@/lib/show/spotlight';
 import { normalizeTtsText, type PodcastSpeaker } from '@/lib/show/podcastScript';
 import {
@@ -57,7 +58,24 @@ export function ShowAudioPlayer(props: PlayerProps) {
 }
 
 function PlayerInner({ episode, compact = false, autoStart = false, onClose, body, audioKey: key }: PlayerProps & { body: ShowAudioRequestBody; audioKey: string }) {
-  const { podcastCredits, refreshPodcastCredits } = useSubscription();
+  const { podcastCredits, refreshPodcastCredits, tier } = useSubscription();
+  // Episode packs (BS Football parity): Premium users out of the month's
+  // studio episodes can buy more. Hidden until the Stripe price is configured.
+  const [buying, setBuying] = useState<'idle' | 'loading' | 'error'>('idle');
+  const canBuyPack = tier === 'premium' && !!EPISODE_PACK.priceId;
+  const buyPack = useCallback(async () => {
+    setBuying('loading');
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product: 'episode_pack' }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) throw new Error(json.error ?? String(res.status));
+      window.location.href = json.url;
+    } catch {
+      setBuying('error');
+    }
+  }, []);
   const lines = useMemo(() => scriptFor(body), [body]);
   const chapters = useMemo(() => buildChapters(lines, body.topics), [lines, body]);
 
@@ -333,6 +351,17 @@ function PlayerInner({ episode, compact = false, autoStart = false, onClose, bod
         <div className="mx-3 mb-2 rounded-lg px-3 py-1.5 text-xs flex flex-wrap items-center gap-x-2 gap-y-1" style={{ background: 'var(--muted)', color: 'var(--text-sec)' }} role="status" data-testid="show-audio-note">
           <span>{note.text}</span>
           {note.cta && <Link href={note.cta.href} className="font-bold hover:underline" style={{ color: 'var(--accent)' }}>{note.cta.label} →</Link>}
+          {reason === 'out_of_credits' && canBuyPack && (
+            <button
+              onClick={() => void buyPack()}
+              disabled={buying === 'loading'}
+              className="font-bold hover:underline disabled:opacity-60"
+              style={{ color: 'var(--accent)' }}
+            >
+              {buying === 'loading' ? 'Opening checkout…' : `Get ${EPISODE_PACK.credits} more episodes · ${EPISODE_PACK.priceLabel} →`}
+            </button>
+          )}
+          {buying === 'error' && <span className="text-red-600">Couldn&apos;t open checkout. Try again.</span>}
         </div>
       )}
 

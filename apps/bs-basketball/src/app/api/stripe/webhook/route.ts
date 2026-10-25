@@ -7,6 +7,7 @@ import {
   saveCustomerId,
   upsertSubscription,
 } from '@/lib/server/stripeSync';
+import { grantEpisodePack } from '@bs/core/podcast';
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -31,6 +32,13 @@ export async function POST(request: Request) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+        // Episode pack (one-time payment): grant the episodes, once.
+        const packCredits = Number(session.metadata?.episode_pack ?? 0);
+        if (session.mode === 'payment' && packCredits > 0 && session.payment_status === 'paid') {
+          const userId = session.metadata?.supabase_user_id;
+          if (userId) await grantEpisodePack(getServiceClient(), userId, session.id, packCredits);
+          else console.error(`[stripe webhook] no user for episode pack session ${session.id}`);
+        }
         if (session.mode === 'subscription' && session.subscription) {
           const sub = await getStripe().subscriptions.retrieve(session.subscription as string);
           const userId = session.metadata?.supabase_user_id ?? (await resolveUserId(sub));

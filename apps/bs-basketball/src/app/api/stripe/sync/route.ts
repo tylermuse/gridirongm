@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { getStripe } from '@bs/core/billing';
 import { createClient } from '@bs/core/supabase/server';
-import { saveCustomerId, upsertSubscription } from '@/lib/server/stripeSync';
+import { getServiceClient, saveCustomerId, upsertSubscription } from '@/lib/server/stripeSync';
+import { grantEpisodePack } from '@bs/core/podcast';
 
 /**
  * Called by the success page right after Stripe Checkout redirects back.
@@ -29,6 +30,14 @@ export async function POST(request: Request) {
     // Only the user who started this checkout may sync it.
     if (session.metadata?.supabase_user_id !== user.id) {
       return NextResponse.json({ error: 'Session does not belong to this user' }, { status: 403 });
+    }
+    // An episode pack: grant it now rather than waiting on the webhook
+    // (grantEpisodePack is idempotent, so both can run).
+    const packCredits = Number(session.metadata?.episode_pack ?? 0);
+    if (session.mode === 'payment' && packCredits > 0) {
+      if (session.payment_status !== 'paid') return NextResponse.json({ synced: false });
+      const granted = await grantEpisodePack(getServiceClient(), user.id, session.id, packCredits);
+      return NextResponse.json({ synced: true, episodes: packCredits, granted });
     }
     if (session.mode !== 'subscription' || !session.subscription) {
       return NextResponse.json({ synced: false });

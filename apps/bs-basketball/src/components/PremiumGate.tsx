@@ -43,7 +43,7 @@ const FEATURE_COPY: Record<Feature, { title: string; description: string }> = {
   podcast_credits: {
     title: 'Podcasts are a Premium Feature',
     description:
-      'Premium subscribers get 3 audio podcast credits every month plus access to the full feed.',
+      'Premium subscribers get 5 studio-audio Team Spotlight episodes every month plus access to the full feed.',
   },
 };
 
