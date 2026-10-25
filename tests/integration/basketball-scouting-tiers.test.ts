@@ -2,7 +2,8 @@
  * Tiered draft scouting + mock draft (BS Hoops).
  *
  * - Points budget: tiers cost 1 / 3 / 6 (cumulative), upgrades pay the
- *   difference, and the budget can never be overspent.
+ *   difference, and the budget can never be overspent. The budget is
+ *   tier-based (10 free / 30 Premium / unlimited); most tests pin Premium.
  * - Potential ranges narrow monotonically with each tier, always contain the
  *   true potential, and collapse to it exactly at a full evaluation.
  * - Reports are deterministic per save.
@@ -14,7 +15,8 @@
  *   pick, because both run the same aiChooseProspect function.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { getScoutingAllocations, setCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
 import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import {
@@ -47,6 +49,10 @@ function withDraft(league: BasketballLeagueState, draft: DraftState): Basketball
 
 let base: BasketballLeagueState;
 beforeAll(() => { base = offseason('scout-tiers'); }, 120_000);
+
+// Pin Premium (30 pts) so the budget arithmetic below reads against SCOUT_POINTS_PER_DRAFT.
+beforeAll(() => setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false)));
+afterAll(() => setCurrentSubscriptionAllocations(getScoutingAllocations('free', false)));
 
 describe('tiered scouting budget', () => {
   it('starts with the full points budget and nothing scouted', () => {
@@ -176,7 +182,7 @@ describe('ranges + reports', () => {
 });
 
 describe('legacy (flat scout) back-compat', () => {
-  it('treats old scoutedIds as fully evaluated and converts remaining scouts to points', () => {
+  it('treats old scoutedIds as fully evaluated and charges them as full evaluations', () => {
     const d = getDraft(base)!;
     const [a, b, c] = d.poolIds;
     const legacy: DraftState = { ...d, scoutPoints: undefined, scoutLevels: undefined, scoutedIds: [a, b], scoutsRemaining: SCOUTS_PER_DRAFT - 2 };
@@ -186,7 +192,7 @@ describe('legacy (flat scout) back-compat', () => {
     expect(isScouted(ld, b)).toBe(true);
     expect(revealedPotential(ld, l.players[a] as BasketballPlayer)).toBe((l.players[a] as BasketballPlayer).development.potential);
     expect(scoutLevel(ld, c)).toBe(0);
-    const expected = Math.round(((SCOUTS_PER_DRAFT - 2) / SCOUTS_PER_DRAFT) * SCOUT_POINTS_PER_DRAFT);
+    const expected = SCOUT_POINTS_PER_DRAFT - 2 * tierCost(3);
     expect(scoutPointsLeft(ld)).toBe(expected);
 
     // First tiered action materializes the new fields and keeps the old reveals.
@@ -201,6 +207,40 @@ describe('legacy (flat scout) back-compat', () => {
     const d = getDraft(base)!;
     const bare: DraftState = { ...d, scoutPoints: undefined, scoutLevels: undefined, scoutedIds: undefined, scoutsRemaining: undefined };
     expect(scoutPointsLeft(bare)).toBe(SCOUT_POINTS_PER_DRAFT);
+  });
+});
+
+describe('tier-based budget', () => {
+  it('free gets 10 points, Premium 30, founders unlimited', () => {
+    const d = getDraft(base)!;
+    expect(scoutPointsLeft(d, getScoutingAllocations('free', false).scoutPoints)).toBe(10);
+    expect(scoutPointsLeft(d, getScoutingAllocations('premium', false).scoutPoints)).toBe(30);
+    expect(scoutPointsLeft(d, getScoutingAllocations('free', true).scoutPoints)).toBeGreaterThan(1000);
+  });
+
+  it('a free budget stops spending at 10 and an upgrade mid-draft adds the difference', () => {
+    const d = getDraft(base)!;
+    const FREE = 10;
+    let l = base;
+    for (const id of d.poolIds.slice(0, 3)) l = scoutProspect(l, id, 3, FREE); // 6, then two no-ops (6 > 4 left)
+    expect(scoutPointsLeft(getDraft(l)!, FREE)).toBe(FREE - 6);
+    l = scoutProspect(l, d.poolIds[1], 2, FREE); // workout costs 3 → 1 left
+    expect(scoutPointsLeft(getDraft(l)!, FREE)).toBe(1);
+    expect(scoutProspect(l, d.poolIds[2], 2, FREE)).toBe(l); // can't afford
+    // Same draft state, Premium budget: spend so far is kept, the rest unlocks.
+    expect(scoutPointsLeft(getDraft(l)!, 30)).toBe(30 - 9);
+    expect(scoutLevel(getDraft(scoutProspect(l, d.poolIds[2], 2, 30))!, d.poolIds[2])).toBe(2);
+  });
+
+  it('defaults to the tier SubscriptionProvider publishes', () => {
+    const d = getDraft(base)!;
+    try {
+      setCurrentSubscriptionAllocations(getScoutingAllocations('free', false));
+      expect(scoutPointsLeft(d)).toBe(10);
+    } finally {
+      setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false));
+    }
+    expect(scoutPointsLeft(d)).toBe(30);
   });
 });
 

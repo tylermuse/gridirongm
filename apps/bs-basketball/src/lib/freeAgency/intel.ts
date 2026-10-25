@@ -14,13 +14,17 @@
  *     (the ±9% appeal swing), loyalty (Bird-rights discount) and role
  *     (the mood model's "top-5 talent expects to start").
  *
- * Cost: each FA window (season) grants `INTEL_REPORTS_PER_WINDOW` reports.
+ * Cost: each FA window (season) grants a tier-based number of reports (shared
+ * `getScoutingAllocations`, same as Football): 3 free, 9 Premium, unlimited for
+ * founders/admins. React callers pass the count from useSubscription(); engine
+ * code falls back to the module-level tier SubscriptionProvider publishes.
  * Revealed reports are stored as player ids on league.sportData.faIntel —
  * optional, so old saves default to "none used".
  */
 
 import type { BasketballPlayer, BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
+import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import {
   aiSuitors, bestCompetingOffer, freeAgentInfo, teamAppeal, acceptanceThreshold,
   type AiSuitor,
@@ -28,7 +32,10 @@ import {
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-export const INTEL_REPORTS_PER_WINDOW = 5;
+/** This user's intel reports per FA window for their tier (UNLIMITED_ALLOCATION when uncapped). */
+export function intelBudget(): number {
+  return getCurrentSubscriptionAllocations().intelReports;
+}
 
 export interface FaIntelState {
   season: number;
@@ -187,8 +194,8 @@ export function getFaIntel(league: LeagueState): FaIntelState {
   return st;
 }
 
-export function intelRemaining(league: LeagueState): number {
-  return Math.max(0, INTEL_REPORTS_PER_WINDOW - getFaIntel(league).revealed.length);
+export function intelRemaining(league: LeagueState, budget: number = intelBudget()): number {
+  return Math.max(0, budget - getFaIntel(league).revealed.length);
 }
 
 export function isIntelRevealed(league: LeagueState, playerId: string): boolean {
@@ -197,10 +204,10 @@ export function isIntelRevealed(league: LeagueState, playerId: string): boolean 
 
 /** Spend one intel report on a free agent. No-op (same league) if already
  *  revealed, out of reports, or not a free agent. Pure. */
-export function revealFaIntel(league: LeagueState, playerId: string): LeagueState {
+export function revealFaIntel(league: LeagueState, playerId: string, budget: number = intelBudget()): LeagueState {
   if (!league.freeAgentIds.includes(playerId as PlayerId)) return league;
   const st = getFaIntel(league);
-  if (st.revealed.includes(playerId) || st.revealed.length >= INTEL_REPORTS_PER_WINDOW) return league;
+  if (st.revealed.includes(playerId) || st.revealed.length >= budget) return league;
   const next: FaIntelState = { season: st.season, revealed: [...st.revealed, playerId] };
   return { ...league, sportData: { ...(league.sportData as LeagueSportData), faIntel: next } };
 }
