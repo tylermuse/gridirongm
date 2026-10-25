@@ -31,7 +31,7 @@ const FEATURE_COLUMNS: { key: SortKey; label: string; help: string; fmt: (r: Fea
 
 const PAGE_SIZE = 25;
 
-export function InteractionsSection({ r, period }: { r: InteractionReport | null; period: string }) {
+export function InteractionsSection({ r, period, error }: { r: InteractionReport | null; period: string; error?: string }) {
   const [sort, setSort] = useState<SortKey>('devices');
   const [feature, setFeature] = useState<string>('all');
   const [query, setQuery] = useState('');
@@ -58,6 +58,14 @@ export function InteractionsSection({ r, period }: { r: InteractionReport | null
     return r.elements.filter(e =>
       (feature === 'all' || e.feature === feature) && (!q || e.target.toLowerCase().includes(q)));
   }, [r, feature, query]);
+
+  if (!r && error && !/does not exist|Could not find the function/i.test(error)) {
+    return (
+      <Card title="Feature Usage & Interactions">
+        <p className="text-sm text-amber-700">Couldn&rsquo;t load: {error}</p>
+      </Card>
+    );
+  }
 
   if (!r) {
     return (

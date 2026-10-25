@@ -24,6 +24,7 @@ interface AnalyticsData {
   hoopsActiveUsersRolling: ActiveUsersRolling | null;
   sim3dCohorts: Sim3dCohorts | null;
   interactions: InteractionReport | null;
+  warnings?: string[];
 }
 
 interface Sim3dCohort { devices: number; sessions: number; sessionsPerDevice: number; medianMinutes: number; meanMinutes: number; pctMultiDay: number; pctReturned7d: number }
@@ -65,7 +66,6 @@ export default function AdminAnalyticsPage() {
       const res = await fetch(`/api/admin/analytics?period=${p}`);
       const json = await res.json().catch(() => ({}));
       if (res.ok) {
-        if (json._warning) console.warn('Analytics warning:', json._warning);
         setData(json);
       } else {
         setError(json.detail ? `${json.error}: ${json.detail}` : json.error ?? `Failed to load analytics (${res.status})`);
@@ -155,6 +155,16 @@ export default function AdminAnalyticsPage() {
           <div className="text-center py-20 text-gray-400">No data available yet. Events will appear once users start visiting.</div>
         ) : (
           <div className="space-y-8">
+            {/* A query that fails (e.g. a statement timeout) shows here instead of as silent zeros */}
+            {data.warnings && data.warnings.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <div className="font-semibold mb-1">Some numbers didn&rsquo;t load</div>
+                <ul className="list-disc pl-5 space-y-0.5">
+                  {data.warnings.map(w => <li key={w}>{w}</li>)}
+                </ul>
+              </div>
+            )}
+
             {/* All-time — these do NOT move with the period selector. */}
             <div>
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">All time</h2>
@@ -190,7 +200,7 @@ export default function AdminAnalyticsPage() {
                 <MetricCard
                   label="Unique Devices"
                   value={data.uniqueDevices || '—'}
-                  sub="any event · incl. crawlers · upper bound"
+                  sub="visited a page · incl. crawlers · upper bound"
                 />
                 <MetricCard label="Sessions" value={data.sessions} />
                 <MetricCard label="Page Views" value={data.pageViews} />
@@ -206,7 +216,11 @@ export default function AdminAnalyticsPage() {
             {data.sim3dCohorts && <Sim3dSection c={data.sim3dCohorts} period={period} />}
 
             {/* Automatic click / hover / change capture — what people use, ignore, and fight with */}
-            <InteractionsSection r={data.interactions} period={period} />
+            <InteractionsSection
+              r={data.interactions}
+              period={period}
+              error={data.warnings?.find(w => w.startsWith('Feature usage'))}
+            />
 
             {/* Signups chart + Top pages side by side */}
             <div className="grid lg:grid-cols-2 gap-6">
