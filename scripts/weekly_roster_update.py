@@ -12,7 +12,9 @@ Pulls current ESPN data and updates the 2026 roster in place:
     "records through Week N" note with the division leaders
   - writes a dated changelog with full standings + a move/injury summary
 
-Keeps the file a Week-1 season opener (does NOT bake W-L into team.seasons).
+Then runs build_midseason_start.py (real schedule, records, stats and
+performance-based ratings) and build_vanilla_fbgm.py, and appends the biggest
+rating moves to the changelog.
 Idempotent-ish: re-running against the same ESPN state yields the same result.
 """
 import json, re, sys, subprocess, datetime, os
@@ -255,6 +257,16 @@ def write_changelog(week, teams, today, moves, unret, cuts, ninj):
     fn=f"roster-updates/{today.strftime('%Y-%m-%d')}.md"
     open(fn,'w').write("\n".join(L)); return fn
 
+def append_rating_changes(fn, n=12):
+    """List the biggest performance-based rating moves (build_midseason_start.py's log)."""
+    adj=json.load(open("scripts/data/nfl2026_perf_adjustments.json"))["players"].values()
+    ranked=sorted(adj,key=lambda e:e["delta"])
+    untouched=[p for p in ("QB","RB","WR","TE","OL","DL","LB","CB","S","K","P") if not any(e["pos"]==p for e in ranked)]
+    fmt=lambda e:f"- {e['name']} ({e['pos']}, {TEAM_NAME.get(e['tid'],'FA')}): {e['ovrBefore']} → {e['ovrAfter']}"
+    L=["","## Performance rating changes",f"_{len(ranked)} players adjusted vs. what their rating predicts; {', '.join(untouched) or 'no positions'} untouched (box scores don't measure them well enough)._",
+       "","### Biggest risers"]+[fmt(e) for e in ranked[::-1][:n] if e["delta"]>0]+["","### Biggest fallers"]+[fmt(e) for e in ranked[:n] if e["delta"]<0]
+    open(fn,'a').write("\n"+"\n".join(L)+"\n")
+
 def main():
     today=datetime.date.today()
     week, teams, injured, ok = fetch_espn()
@@ -271,6 +283,7 @@ def main():
     fn = write_changelog(week, teams, today, moves, unret, cuts, ninj)
     subprocess.run([sys.executable,"scripts/build_midseason_start.py"],check=True)
     subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variant
+    append_rating_changes(fn)
     print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":

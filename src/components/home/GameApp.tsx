@@ -507,7 +507,11 @@ function TeamPicker() {
               }`}
             >
               Regular Season
-              <div className="text-[10px] font-normal opacity-80">Skip to Week 1</div>
+              <div className="text-[10px] font-normal opacity-80">
+                {importedTeams?.realSeason
+                  ? `Real season, Week ${importedTeams.realSeason.currentWeek}`
+                  : 'Skip to Week 1'}
+              </div>
             </button>
           </div>
         )}

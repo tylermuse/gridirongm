@@ -6,7 +6,7 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 import type {
-  LeagueState, Team, Player, GameResult, PlayerStats, PlayerRatings,
+  LeagueState, Team, TeamRecord, Player, GameResult, PlayerStats, PlayerRatings,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost, ImportedProspect, ApprovalState,
@@ -2538,6 +2538,39 @@ export function resolveWeekGameResult(
 }
 
 // ---------------------------------------------------------------------------
+/** Fold one played game into `team`'s record in place: W/L/T, points, streak,
+ *  division split and ATS. Shared by the weekly sim and the real-season import. */
+function applyGameToRecord(record: TeamRecord, team: Team, game: GameResult, teams: Team[]): void {
+  const isHome = game.homeTeamId === team.id;
+  const teamScore = isHome ? game.homeScore : game.awayScore;
+  const oppScore = isHome ? game.awayScore : game.homeScore;
+  record.pointsFor += teamScore;
+  record.pointsAgainst += oppScore;
+  if (teamScore > oppScore) {
+    record.wins += 1;
+    record.streak = record.streak >= 0 ? record.streak + 1 : 1;
+  } else if (teamScore < oppScore) {
+    record.losses += 1;
+    record.streak = record.streak <= 0 ? record.streak - 1 : -1;
+  } else {
+    record.ties += 1;
+    record.streak = 0;
+  }
+  const opponent = teams.find(t => t.id === (isHome ? game.awayTeamId : game.homeTeamId));
+  if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
+    if (teamScore > oppScore) record.divisionWins += 1;
+    else if (teamScore < oppScore) record.divisionLosses += 1;
+  }
+  // ATS tracking
+  if (game.spreadCover) {
+    const teamCovered = (isHome && game.spreadCover === 'home') || (!isHome && game.spreadCover === 'away');
+    const teamLostCover = (isHome && game.spreadCover === 'away') || (!isHome && game.spreadCover === 'home');
+    if (teamCovered) record.atsWins = (record.atsWins ?? 0) + 1;
+    else if (teamLostCover) record.atsLosses = (record.atsLosses ?? 0) + 1;
+    else record.atsPushes = (record.atsPushes ?? 0) + 1;
+  }
+}
+
 function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; isSeasonOver: boolean } | null {
   if (state.phase !== 'regular') return null;
 
@@ -2564,36 +2597,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       g => g.homeTeamId === team.id || g.awayTeamId === team.id,
     );
     const record = { ...team.record };
-    for (const game of teamGames) {
-      const isHome = game.homeTeamId === team.id;
-      const teamScore = isHome ? game.homeScore : game.awayScore;
-      const oppScore = isHome ? game.awayScore : game.homeScore;
-      record.pointsFor += teamScore;
-      record.pointsAgainst += oppScore;
-      if (teamScore > oppScore) {
-        record.wins += 1;
-        record.streak = record.streak >= 0 ? record.streak + 1 : 1;
-      } else if (teamScore < oppScore) {
-        record.losses += 1;
-        record.streak = record.streak <= 0 ? record.streak - 1 : -1;
-      } else {
-        record.ties += 1;
-        record.streak = 0;
-      }
-      const opponent = state.teams.find(t => t.id === (isHome ? game.awayTeamId : game.homeTeamId));
-      if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
-        if (teamScore > oppScore) record.divisionWins += 1;
-        else if (teamScore < oppScore) record.divisionLosses += 1;
-      }
-      // ATS tracking
-      if (game.spreadCover) {
-        const teamCovered = (isHome && game.spreadCover === 'home') || (!isHome && game.spreadCover === 'away');
-        const teamLostCover = (isHome && game.spreadCover === 'away') || (!isHome && game.spreadCover === 'home');
-        if (teamCovered) record.atsWins = (record.atsWins ?? 0) + 1;
-        else if (teamLostCover) record.atsLosses = (record.atsLosses ?? 0) + 1;
-        else record.atsPushes = (record.atsPushes ?? 0) + 1;
-      }
-    }
+    for (const game of teamGames) applyGameToRecord(record, team, game, state.teams);
     return { ...team, record };
   });
 
@@ -2884,7 +2888,12 @@ export const useGameStore = create<GameStore>()(
           }
 
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
-          const schedule = generateSchedule(imported.teams, imported.season);
+          const isRegularStart = startMode === 'regular';
+          // A file carrying the real season so far (NFL 2026) picks up at the
+          // current real week: real completed games + the real remaining slate,
+          // with records and season stats rebuilt from the real box scores.
+          const realSeason = isRegularStart ? imported.realSeason : undefined;
+          const schedule = realSeason?.schedule ?? generateSchedule(imported.teams, imported.season);
 
           // Generate street free agents for in-season signings
           const fbgmFAs: Player[] = [];
@@ -2900,7 +2909,6 @@ export const useGameStore = create<GameStore>()(
             fbgmFAs.push(p);
           }
 
-          const isRegularStart = startMode === 'regular';
           // For post-draft variants (e.g. NFL 2026 Updated), the current
           // season's draft has already happened in real life. Strip leftover
           // year=season picks (rounds 2-7 with no playerId) and convert
@@ -2924,11 +2932,29 @@ export const useGameStore = create<GameStore>()(
                 .filter(p => p.teamId === null && p.experience === 0 && p.draftYear === imported.season)
                 .map(p => p.id)
             : [];
-          const allImportedPlayers = [...cleanedPlayers, ...fbgmFAs];
+          const playedRealGames = (realSeason?.schedule ?? []).filter(g => g.played);
+          const realSeasonStats = new Map<string, PlayerStats>();
+          for (const game of playedRealGames) {
+            for (const [pid, line] of Object.entries(game.playerStats)) {
+              realSeasonStats.set(pid, addStats(realSeasonStats.get(pid) ?? emptyStats(), line));
+            }
+          }
+          // Career totals only accrue from here on, so they start at the season line.
+          const allImportedPlayers = [...cleanedPlayers, ...fbgmFAs].map(p => {
+            const stats = realSeasonStats.get(p.id);
+            return stats ? { ...p, stats, careerStats: { ...stats } } : p;
+          });
 
-          // For regular season start, reset all records to 0-0
+          // For regular season start, reset all records to 0-0, then replay any
+          // real games already played.
           const startTeams = isRegularStart
-            ? cleanedTeams.map(t => ({ ...t, record: emptyRecord() }))
+            ? cleanedTeams.map(t => {
+                const record = emptyRecord();
+                for (const game of playedRealGames) {
+                  if (game.homeTeamId === t.id || game.awayTeamId === t.id) applyGameToRecord(record, t, game, cleanedTeams);
+                }
+                return { ...t, record };
+              })
             : cleanedTeams;
 
           // Only compute re-signing entries for offseason start
@@ -2947,10 +2973,11 @@ export const useGameStore = create<GameStore>()(
             t.id === userTeam.id ? { ...t, approval: userApproval } : t,
           );
 
+          const startWeek = realSeason?.currentWeek ?? 1;
           set({
             initialized: true,
             season: imported.season,
-            week: 1,
+            week: startWeek,
             // Spectator leagues skip the re-signing window — there's no user
             // team to manage, jump straight to regular season.
             phase: isSpectator || isRegularStart ? 'regular' : 'resigning',
@@ -2972,7 +2999,12 @@ export const useGameStore = create<GameStore>()(
             playoffBracket: null,
             playoffSeeds: null,
             champions: [],
-            newsItems: [],
+            newsItems: realSeason ? [makeNews({
+              season: imported.season, week: startWeek, type: 'system',
+              headline: `Picking up the real ${imported.season} season at Week ${startWeek}`,
+              body: `Records, results and player stats are real${realSeason.asOf ? ` as of ${realSeason.asOf}` : ''}, and ratings reflect how players have actually performed. Every team plays its real remaining schedule.`,
+              isUserTeam: true,
+            })] : [],
             newsLastReadWeek: 0,
             newsLastReadSeason: 0,
             seasonHistory: [],
@@ -3263,7 +3295,11 @@ export const useGameStore = create<GameStore>()(
         // start on Brady Era 2007 hit "active roster is at 61 — cut or
         // demote 8 more" because the gate keyed on userTeamId without
         // checking isSpectator.)
-        if (state.week === 1 && state.userTeamId && !state.isSpectator) {
+        // "Week 1" here means the league's first simmed week — a league that
+        // picks up the real season mid-way opens at a later week with no
+        // weeks simmed yet (weeklyRecaps resets each season).
+        const isOpeningWeek = state.week === 1 || state.weeklyRecaps.length === 0;
+        if (isOpeningWeek && state.userTeamId && !state.isSpectator) {
           const userTeam = state.teams.find(t => t.id === state.userTeamId);
           if (userTeam && userTeam.roster.length > 53) {
             const over = userTeam.roster.length - 53;
