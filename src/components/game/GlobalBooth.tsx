@@ -61,7 +61,11 @@ export function GlobalBooth() {
     ? detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id, playoffSeeds)
     : 'weekly';
   const episodeKey = boothEpisodeKey(season, week, phase, playoffBracket, userTeamId);
-  const momentKey = shouldShowSpotlightPopup(narrative) ? episodeKey : null;
+  // The callout/dot fires once per narrative moment per season — season start,
+  // trade deadline, playoffs start, season over (title won / knocked out /
+  // missed playoffs) — not once per week or playoff round inside those windows.
+  // (episodeKey still changes weekly so the On Air card stays current.)
+  const momentKey = shouldShowSpotlightPopup(narrative) ? `${userTeamId}-s${season}-${narrative}` : null;
 
   // The episode: whatever the dashboard last rendered for this exact state
   // (AI topics when it wrote them), else the template spotlight, which is
