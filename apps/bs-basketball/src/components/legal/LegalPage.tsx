@@ -44,6 +44,9 @@ export function LegalLinks({ className = '' }: { className?: string }) {
       <Link href="/about" className="hover:text-[var(--foreground)]">About</Link>
       <Link href="/blog" className="hover:text-[var(--foreground)]">Blog</Link>
       <Link href="/rosters/2026" className="hover:text-[var(--foreground)]">Rosters</Link>
+      <Link href="/player-tiers" className="hover:text-[var(--foreground)]">Player Tiers</Link>
+      <Link href="/best/basketball-gm-games" className="hover:text-[var(--foreground)]">Best GM Games</Link>
+      <Link href="/contact" className="hover:text-[var(--foreground)]">Contact</Link>
       <Link href="/privacy" className="hover:text-[var(--foreground)]">Privacy</Link>
       <Link href="/terms" className="hover:text-[var(--foreground)]">Terms</Link>
       <a href="https://bs-football.com" className="hover:text-[var(--foreground)]">BS Football</a>

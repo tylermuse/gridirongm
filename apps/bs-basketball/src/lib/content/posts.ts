@@ -665,6 +665,325 @@ export const blogPosts: BlogPost[] = [
 <p>None of these settings will turn a 30-win roster into a contender — talent still dominates. But over 82 games a few percentage points on turnovers and shooting is worth several wins, and in a seven-game series it can be the difference.</p>
 `,
   },
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 'free-basketball-gm-games-browser',
+    title: 'Free Basketball GM Games You Can Play in Your Browser (No Download)',
+    seoTitle: 'Free Basketball GM Games in Your Browser (No Download) — 2026 Guide',
+    metaDescription:
+      'The best free basketball GM and management games you can play in a browser with no download: what BS Hoops, Basketball GM and others offer, how they differ, and which one fits how you like to play.',
+    keywords: ['free basketball gm games', 'basketball gm browser game', 'free basketball management game no download', 'basketball general manager game online', 'play basketball gm free'],
+    publishDate: '2026-10-24',
+    category: 'getting-started',
+    readingTime: 6,
+    summary:
+      'You do not need a console, a $70 game or an install to run an NBA-style front office. A guide to the free basketball GM games that run in a browser tab, what each does best, and how to pick one.',
+    related: ['first-season-beginners-guide', 'basketball-gm-tips-for-beginners', 'nba-2k-myleague-alternative'],
+    content: `
+<p>Basketball GM games have a simple promise: you are the front office. You draft, trade, sign free agents, manage the cap, and live with the results for decades of simulated seasons. For a long time the deepest versions of that fantasy lived inside console games or paid PC sims. Today you can get most of it in a browser tab, for free, with nothing to install. This guide covers what to look for and how the main free options compare.</p>
+
+<h2>What makes a good browser basketball GM game?</h2>
+<p>Before comparing games, it helps to know which features actually matter once you are 20 seasons into a save:</p>
+<ul>
+<li><strong>A real salary cap.</strong> A hard number with no exceptions makes every team the same. A soft cap with Bird rights, exceptions and aprons forces real trade-offs.</li>
+<li><strong>A trade AI that can say no.</strong> If the computer accepts lopsided deals, the game is over in one offseason.</li>
+<li><strong>Player development that is uncertain.</strong> Prospects should boom and bust. If every rookie hits his ceiling, drafting is a formality.</li>
+<li><strong>A sim you can watch.</strong> Box scores are fine; seeing why you lost is better.</li>
+<li><strong>Saves you will not lose.</strong> Browser games store data locally, so look for unlimited saves and a way to sync across devices.</li>
+<li><strong>Real or realistic rosters.</strong> Some players want fictional leagues; others want to fix their favorite franchise.</li>
+</ul>
+
+<h2>BS Hoops</h2>
+<p><a href="/">BS Hoops</a> is a free basketball GM game that runs entirely in your browser, with no download and no account required to start. You pick one of 30 franchises and run a full 82-game season, then the draft, free agency and the next season, as long as you want.</p>
+<p>What it does differently:</p>
+<ul>
+<li><strong>Possession-by-possession simulation.</strong> Every game is simulated possession by possession, and you can watch your own games live with a shot chart, win probability and game flow, or replay recent games from the box score.</li>
+<li><strong>A real-style soft cap.</strong> The 2026-27 cap is $165.0M, with a luxury tax line, two aprons, the Mid-Level, Bi-Annual and Room exceptions, and Bird rights. Our <a href="/blog/salary-cap-aprons-and-exceptions">cap guide</a> breaks down each rung.</li>
+<li><strong>Trades with teeth.</strong> Salary matching, pick protections, a trade finder, and an AI that values players by rating, age and contract. See <a href="/blog/trade-value-and-pick-protections">how the AI prices a deal</a>.</li>
+<li><strong>A noisy draft.</strong> A 14-team lottery, tiered scouting, and hidden boom/bust development traits.</li>
+<li><strong>Real rosters, optional.</strong> Start a generated league, or <a href="/rosters">import a real roster</a> converted to BS Hoops ratings. Every team's payroll, cap tier and depth chart is browsable under <a href="/rosters/2026">2026 rosters</a> before you commit.</li>
+<li><strong>Coaching levers.</strong> Starters, bench order and game plans (pace, shot profile, press or pack the paint) all feed the sim.</li>
+</ul>
+<p>The free tier includes the full season sim, draft, lottery, free agency, trades, all stats and history, custom league settings, and multiple leagues with unlimited saves. An optional <a href="/pricing">Premium plan</a> removes ads and adds AI game commentary, audio podcasts and extra scouting and free-agent intel. Sign in if you want saves synced across devices. BS Hoops is a parody and simulation, not affiliated with the NBA.</p>
+
+<h2>Basketball GM</h2>
+<p>Basketball GM is the long-running, open-source browser basketball manager and the game many people picture when they hear the term. It is free, text-and-table driven, and famously deep, with random-player leagues by default, a large modding and custom-roster community, and a huge amount of historical and statistical detail. If you love spreadsheets and long dynasties, it has earned its reputation. If you want to see games play out visually or want NBA-style cap mechanics like aprons front and center, you may prefer something else. We wrote a fair side-by-side at <a href="/vs/basketball-gm">BS Hoops vs Basketball GM</a>, and a broader list at <a href="/alternatives/basketball-gm">Basketball GM alternatives</a>.</p>
+
+<h2>What about NBA 2K MyLeague and MyGM?</h2>
+<p>NBA 2K's franchise modes are the deepest licensed option, with official players, presentation and the ability to play the games yourself. They are not browser games, though: they come with the paid annual release on console or PC. If that is the depth you want without the hardware, our <a href="/blog/nba-2k-myleague-alternative">MyLeague alternative guide</a> and the <a href="/vs/nba-2k-myleague">BS Hoops vs NBA 2K MyLeague</a> comparison cover what carries over and what does not.</p>
+
+<h2>Other names you will see</h2>
+<ul>
+<li><strong>Hoop Land</strong> is a retro-styled basketball game where you can play the games yourself as well as run a franchise; it is built as a downloadable app rather than a browser game.</li>
+<li><strong>Draft Day Sports: Pro Basketball</strong> is a long-running, text-based PC simulation for players who want a traditional desktop sim. It is a paid download.</li>
+</ul>
+<p>Both are good at what they do; neither is a free, open-a-tab-and-play browser game. Our roundup of the <a href="/best/basketball-gm-games">best basketball GM games</a> covers the whole field, including paid ones.</p>
+
+<h2>Quick comparison</h2>
+<table>
+<thead><tr><th>Game</th><th>Platform</th><th>Free to play</th><th>Watch your games</th></tr></thead>
+<tbody>
+<tr><td>BS Hoops</td><td>Any browser, no download</td><td>Yes (optional Premium)</td><td>Yes, possession by possession with shot chart and win probability</td></tr>
+<tr><td>Basketball GM</td><td>Any browser, no download</td><td>Yes</td><td>Box score and play-by-play</td></tr>
+<tr><td>NBA 2K MyLeague / MyGM</td><td>Console and PC</td><td>No</td><td>Yes, fully playable</td></tr>
+<tr><td>Hoop Land</td><td>Downloadable app</td><td>Varies by platform</td><td>Yes, playable</td></tr>
+<tr><td>Draft Day Sports Pro Basketball</td><td>PC download</td><td>No</td><td>Text play-by-play</td></tr>
+</tbody>
+</table>
+
+<h2>Which one should you play?</h2>
+<ul>
+<li><strong>You want to start in 30 seconds on any computer:</strong> a browser game. BS Hoops or Basketball GM.</li>
+<li><strong>You want the cap to feel like the real thing:</strong> BS Hoops, where second-apron teams lose the Mid-Level and must match salaries one-for-one.</li>
+<li><strong>You want to see your team play:</strong> BS Hoops' live game viewer, or a console game if you want to control players.</li>
+<li><strong>You want maximum modding and historical leagues:</strong> Basketball GM's community is hard to beat.</li>
+</ul>
+
+<h2>Getting started in BS Hoops</h2>
+<p>Open the <a href="/">home page</a>, click a team, and your first season is waiting. If you would rather run a real franchise, start from <a href="/rosters">Rosters</a>. Not sure which team? Our data breakdown of the <a href="/blog/best-nba-teams-to-rebuild-2026">best and hardest teams to take over</a> ranks all 30 by cap room, young talent and draft capital. Then read the <a href="/blog/first-season-beginners-guide">first-season guide</a> and the <a href="/blog/basketball-gm-tips-for-beginners">15 tips every new GM should know</a>, and you will be ahead of most AI front offices by the trade deadline.</p>
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 'best-nba-teams-to-rebuild-2026',
+    title: 'Best (and Hardest) NBA Teams to Take Over in 2026-27',
+    seoTitle: 'Best NBA Teams to Rebuild in 2026-27 — Easiest & Hardest GM Saves',
+    metaDescription:
+      'Which NBA franchise should you take over in a basketball GM game? We ranked all 30 2026-27 rosters by cap room, young high-potential talent, future picks and second-apron pain. The five easiest and five hardest saves.',
+    keywords: ['best nba teams to rebuild', 'best team to rebuild basketball gm', 'nba teams cap space 2026', 'hardest nba team to rebuild', 'nba second apron teams 2026'],
+    publishDate: '2026-10-25',
+    category: 'strategy',
+    readingTime: 7,
+    summary:
+      'Four teams start under the $165.0M cap and nine start above the second apron. Using the real 2026-27 roster data in BS Hoops, here are the five friendliest franchises to take over and the five that will test you.',
+    related: ['rebuild-or-contend-timeline', 'salary-cap-aprons-and-exceptions', 'draft-lottery-and-scouting'],
+    content: `
+<p>Picking a team is the first and most consequential decision in any basketball GM save. Pick a team buried above the second apron with an aging core and no picks, and you spend three seasons fighting the cap instead of building. Pick a team with room, young talent and extra draft capital, and every system in the game works for you. We pulled the numbers for all 30 franchises from the real-roster league in BS Hoops, using the same ratings and contracts you get when you import it, and ranked them.</p>
+
+<h2>How we ranked them</h2>
+<p>For each team we looked at five things, all straight from the <a href="/rosters/2026">2026 roster pages</a>:</p>
+<ul>
+<li><strong>Payroll and cap tier</strong> against the 2026-27 lines: a $165.0M cap, $200.5M tax line, $209.1M first apron and $221.8M second apron.</li>
+<li><strong>Average roster age.</strong></li>
+<li><strong>Top-8 average OVR</strong> and its rank among the 30 teams.</li>
+<li><strong>Future picks</strong> owned from other teams versus own picks owed away (first and second round).</li>
+<li><strong>Young upside</strong>: players 23 and under with 80+ potential.</li>
+</ul>
+<p>Across the league, only four teams start under the cap (Charlotte, Milwaukee, Brooklyn and Memphis) and nine start above the second apron. That spread is why team choice matters so much: the <a href="/blog/salary-cap-aprons-and-exceptions">cap and aprons guide</a> explains exactly which tools each tier takes away.</p>
+
+<h2>The five easiest teams to take over</h2>
+<table>
+<thead><tr><th>Team</th><th>Payroll</th><th>Cap tier</th><th>Avg age</th><th>Top-8 OVR (rank)</th><th>Picks in / out</th><th>Young 80+ POT</th></tr></thead>
+<tbody>
+<tr><td><a href="/rosters/2026/bkn">Brooklyn Nets</a></td><td>$156.8M</td><td>Under the cap</td><td>23.8</td><td>76.6 (#28)</td><td>19 / 1</td><td>6</td></tr>
+<tr><td><a href="/rosters/2026/cha">Charlotte Hornets</a></td><td>$151.8M</td><td>Under the cap</td><td>24.8</td><td>78.5 (#19)</td><td>14 / 2</td><td>5</td></tr>
+<tr><td><a href="/rosters/2026/mem">Memphis Grizzlies</a></td><td>$159.7M</td><td>Under the cap</td><td>24.8</td><td>78.0 (#22)</td><td>5 / 3</td><td>5</td></tr>
+<tr><td><a href="/rosters/2026/uta">Utah Jazz</a></td><td>$180.5M</td><td>Over the cap</td><td>25.3</td><td>80.3 (#5)</td><td>10 / 4</td><td>6</td></tr>
+<tr><td><a href="/rosters/2026/sas">San Antonio Spurs</a></td><td>$209.1M</td><td>Taxpayer</td><td>26.0</td><td>79.9 (#6)</td><td>8 / 1</td><td>7</td></tr>
+</tbody>
+</table>
+
+<h3>1. Brooklyn Nets: the draft-capital mountain</h3>
+<p><a href="/rosters/2026/bkn">Brooklyn</a> is the purest rebuild in the league. Payroll is $156.8M, $8.3M under the cap, the roster averages 23.8 years old, and the Nets own 19 future picks from other teams while owing just one of their own. Six players 23 and under carry 80+ potential, led by 20-year-old point guard Mikel Brown Jr. (75 OVR, 87 POT). The current rotation ranks #28, so year one will be rough, but you have more trade ammunition than anyone. Julius Randle (31) is exactly the kind of veteran the <a href="/blog/rebuild-or-contend-timeline">rebuild framework</a> says to sell before his age multiplier drops again.</p>
+
+<h3>2. Charlotte Hornets: room, youth and picks</h3>
+<p><a href="/rosters/2026/cha">Charlotte</a> has the lowest payroll in the league at $151.8M, $13.3M of cap room, 14 future picks in against two out, and $52.8M of expiring salary. The top three are all 24 or younger: Ryan Kalkbrenner (83/85) and Moussa Diabate (82/84) on cheap deals, plus Brandon Miller (23, 79/84). Kon Knueppel (20, 77/89) is the long-term centerpiece. This is the friendliest save for learning every system, because you can sign a free agent outright and still use the Room Exception afterward.</p>
+
+<h3>3. Memphis Grizzlies: a 19-year-old cornerstone and room</h3>
+<p><a href="/rosters/2026/mem">Memphis</a> sits $5.3M under the cap at $159.7M with an average age of 24.8. The prize is Cameron Boozer, a 19-year-old center at 81 OVR with 93 potential, next to 24-year-old Zach Edey (84/86) on a $6.8M deal. Five young players have 80+ potential and $65.5M expires after the season. It is the best combination of a present-day frontcourt and a future star among the under-cap teams.</p>
+
+<h3>4. Utah Jazz: a superstar prospect and a full Mid-Level</h3>
+<p><a href="/rosters/2026/uta">Utah</a> is over the cap at $180.5M, but $41.3M below the second apron, so the full Non-Tax Mid-Level is available. More importantly, the Jazz have Darryn Peterson, a 19-year-old shooting guard at 86 OVR with 98 potential, on a $12.1M rookie-scale deal. The top-8 already ranks #5, six young players have 80+ potential, and Utah owns 10 future picks against four owed. Few saves let you contend and stockpile at the same time.</p>
+
+<h3>5. San Antonio Spurs: build around Wembanyama</h3>
+<p><a href="/rosters/2026/sas">San Antonio</a> is the one team on this list in the tax, at $209.1M, but it earns its spot. Victor Wembanyama is 22, rated 94 OVR with 99 potential, and paid $15.1M. Stephon Castle (21, 81/89) is the second piece, seven young players carry 80+ potential, the Spurs own eight future picks while owing one, and $81.3M expires after the season. The cap gets easy fast; the challenge is simply not wasting the window.</p>
+
+<h2>The five hardest teams to take over</h2>
+<table>
+<thead><tr><th>Team</th><th>Payroll</th><th>Over 2nd apron by</th><th>Avg age</th><th>Top-8 OVR (rank)</th><th>Picks in / out</th><th>Young 80+ POT</th></tr></thead>
+<tbody>
+<tr><td><a href="/rosters/2026/gsw">Golden State Warriors</a></td><td>$225.0M</td><td>$3.2M</td><td>28.6</td><td>78.9 (#15)</td><td>0 / 5</td><td>2</td></tr>
+<tr><td><a href="/rosters/2026/den">Denver Nuggets</a></td><td>$233.8M</td><td>$12.0M</td><td>26.8</td><td>79.3 (#13)</td><td>0 / 9</td><td>2</td></tr>
+<tr><td><a href="/rosters/2026/cle">Cleveland Cavaliers</a></td><td>$243.0M</td><td>$21.2M</td><td>27.3</td><td>79.4 (#11)</td><td>0 / 8</td><td>0</td></tr>
+<tr><td><a href="/rosters/2026/nyk">New York Knicks</a></td><td>$240.7M</td><td>$18.9M</td><td>26.3</td><td>80.3 (#4)</td><td>4 / 7</td><td>1</td></tr>
+<tr><td><a href="/rosters/2026/mia">Miami Heat</a></td><td>$217.1M</td><td>($4.8M under)</td><td>26.9</td><td>79.8 (#8)</td><td>0 / 7</td><td>0</td></tr>
+</tbody>
+</table>
+
+<h3>1. Golden State Warriors: the oldest roster in the league</h3>
+<p><a href="/rosters/2026/gsw">Golden State</a> has the highest average age of any team, 28.6, and the top three average 32.3: Stephen Curry (38, 85 OVR, $61.1M) and Jimmy Butler (36, 83 OVR, $55.5M) around 23-year-old Yaxel Lendeborg. Payroll is $225.0M, $3.2M over the second apron, with no extra picks and five owed. The silver lining is enormous: $199.3M expires after the season. Survive one year and the cap sheet resets.</p>
+
+<h3>2. Denver Nuggets: the best player, the thinnest cupboard</h3>
+<p><a href="/rosters/2026/den">Denver</a> has Nikola Jokic, the highest-rated player in the league at 97 OVR, but he is 31 and five of the top eight are 30 or older. Payroll is $233.8M, $12.0M over the second apron, and the Nuggets own no extra picks while owing nine of their own. With no Mid-Level and one-for-one matching, every upgrade has to come from a trade you can barely make.</p>
+
+<h3>3. Cleveland Cavaliers: elite now, no runway</h3>
+<p><a href="/rosters/2026/cle">Cleveland</a> won 64 games last season and its core is in its prime: Jarrett Allen (28) and Donovan Mitchell (29) are both 87s, with Evan Mobley (25, 83/85). But payroll is $243.0M, $21.2M over the second apron, the Cavs owe eight picks and own none, and not one player 23 or under has 80+ potential. You are contending on a clock with no replacement parts.</p>
+
+<h3>4. New York Knicks: top-four talent, second-apron handcuffs</h3>
+<p><a href="/rosters/2026/nyk">New York</a> has the league's #4 top-eight at 80.3, led by Karl-Anthony Towns (30, 87 OVR). Payroll is $240.7M, $18.9M over the second apron, and only $35.9M expires. The Knicks own four future picks but owe seven, and just one young player carries 80+ potential. Good enough to win now, very hard to improve at the deadline.</p>
+
+<h3>5. Miami Heat: a superstar and nothing in reserve</h3>
+<p><a href="/rosters/2026/mia">Miami</a> is technically $4.8M under the second apron at $217.1M, but it has the profile of a hard save: Giannis Antetokounmpo (31, 94 OVR) and Bam Adebayo (28, 87), four of the top eight aged 30+, no young players with 80+ potential, and seven picks owed with none coming in. The out is $135.7M of expiring salary; the risk is a slow slide while you wait for it.</p>
+
+<h2>Honorable mentions</h2>
+<p><a href="/rosters/2026/okc">Oklahoma City</a> has the highest payroll in the league, $265.0M and $43.2M over the second apron, but owns 12 future picks and averages 24.4 years old, so it is expensive rather than hopeless. <a href="/rosters/2026/was">Washington</a> has 10 players 23 and under with 80+ potential, including 19-year-old AJ Dybantsa (82/94), and would be on the easy list if not for a $195.3M payroll.</p>
+
+<h2>Pick your challenge</h2>
+<p>Browse every franchise on the <a href="/rosters/2026">2026 rosters index</a>, then start from <a href="/rosters">Rosters</a> to import the league. If you take an easy save, the <a href="/blog/draft-lottery-and-scouting">draft guide</a> and <a href="/blog/player-development-and-aging">development guide</a> will help you turn picks into stars. If you take a hard one, start with the <a href="/blog/trade-value-and-pick-protections">trade value guide</a>, because you will need every edge.</p>
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 'nba-2k-myleague-alternative',
+    title: 'Want NBA 2K MyLeague Depth Without a Console? Try a Browser GM Game',
+    seoTitle: 'NBA 2K MyLeague Alternative — Free Browser Basketball GM (No Console)',
+    metaDescription:
+      'Love NBA 2K MyLeague or MyGM but not the console, the price or the load times? What a free browser basketball GM game like BS Hoops gives you, what it does not, and how to set it up like a MyLeague save.',
+    keywords: ['nba 2k myleague alternative', 'myleague without console', 'free alternative to nba 2k mygm', 'basketball franchise mode browser', 'nba gm game free'],
+    publishDate: '2026-10-27',
+    category: 'strategy',
+    readingTime: 6,
+    summary:
+      'MyLeague and MyGM are the deepest licensed franchise modes around, but they need a console or gaming PC and a new purchase each year. Here is what a free browser GM game keeps, what it trades away, and how to recreate a MyLeague-style save.',
+    related: ['free-basketball-gm-games-browser', 'salary-cap-aprons-and-exceptions', 'best-nba-teams-to-rebuild-2026'],
+    content: `
+<p>NBA 2K's MyLeague and MyGM modes are, for a lot of players, the reason to buy the game. Decades-long saves, real cap rules, trades, the draft, and the ability to jump into any game and play it yourself. The catch is the setup: you need a console or a capable PC, a new copy each year to stay current, and patience with menus and load times. If what you actually love is the front-office half, a browser GM game can give you most of that for free.</p>
+
+<h2>What MyLeague and MyGM do best</h2>
+<p>To be fair about the comparison, here is what the 2K franchise modes do that a browser game will not match:</p>
+<ul>
+<li><strong>Official licensing.</strong> Real player names, likenesses, logos and arenas.</li>
+<li><strong>Playable games.</strong> You can take the sticks for any game, not just watch.</li>
+<li><strong>Presentation.</strong> Full broadcast visuals and commentary.</li>
+<li><strong>Story and role-play layers</strong> in MyGM, built around running the organization.</li>
+</ul>
+<p>If those are the reasons you play, keep playing 2K. If you mostly sim games and live in the trade, cap and draft screens, read on.</p>
+
+<h2>What you keep in a browser GM game</h2>
+<p><a href="/">BS Hoops</a> is a free basketball GM game that runs in any browser tab with no download and no account required. Here is how its front-office systems line up with what MyLeague players care about:</p>
+<table>
+<thead><tr><th>MyLeague habit</th><th>In BS Hoops</th></tr></thead>
+<tbody>
+<tr><td>Real cap rules</td><td>Soft cap of $165.0M in 2026-27, luxury tax, first and second aprons, Non-Tax and Tax Mid-Level, Bi-Annual, Room Exception, minimums</td></tr>
+<tr><td>Re-signing your stars</td><td>Full and Early Bird rights, five-year deals with raises up to 8%</td></tr>
+<tr><td>Trade logic</td><td>Salary matching by tier, pick protections, trade finder, AI that values rating, age and contract</td></tr>
+<tr><td>Draft</td><td>14-team lottery, tiered scouting, mock draft, hidden boom/bust traits</td></tr>
+<tr><td>Free agency</td><td>Bid against AI teams with Bird rights and exceptions over a 30-day window</td></tr>
+<tr><td>Simming games</td><td>Possession-by-possession sim, watch any of your games live with a shot chart, win probability and game flow</td></tr>
+<tr><td>Coaching</td><td>Starters, bench order and game plans for pace, shot profile, pressure and defense</td></tr>
+<tr><td>Long saves</td><td>Aging, retirement, awards, franchise history, owner approval; multiple leagues and unlimited saves</td></tr>
+</tbody>
+</table>
+<p>The cap rules are where MyLeague veterans tend to feel at home. Above the second apron you lose the Mid-Level entirely and have to match salaries one-for-one in trades; using the Non-Tax Mid-Level hard-caps you at the first apron for the season. Our <a href="/blog/salary-cap-aprons-and-exceptions">cap and aprons guide</a> has every number.</p>
+
+<h2>What you give up</h2>
+<p>Honesty matters here. BS Hoops is a parody and simulation, not affiliated with the NBA. You will not get licensed likenesses, logos or arenas, and you cannot control players on the court; you coach through lineups and game plans, then watch the sim. If playing the games yourself is essential, a browser GM game is a complement to 2K, not a replacement.</p>
+<p>Plenty of players run both: a 2K save on the couch for playing marquee games, and a browser save on a laptop for the front-office grind, where a full season of trades, drafts and free agency takes minutes instead of evenings.</p>
+
+<h2>What you gain</h2>
+<ul>
+<li><strong>Cost.</strong> The full game, including the season sim, draft, lottery, free agency, trades, stats, history and custom league settings, is free. An optional <a href="/pricing">Premium plan</a> removes ads and adds AI game commentary, audio podcasts and extra scouting and free-agent intel.</li>
+<li><strong>Speed.</strong> A whole season sims in the time a console takes to load a menu, so you get through more seasons, more drafts and more trade deadlines per hour.</li>
+<li><strong>Any device with a browser.</strong> Work laptop, old desktop, Chromebook. Sign in to sync saves across devices.</li>
+<li><strong>Transparency.</strong> We publish how the engine works. The <a href="/blog/trade-value-and-pick-protections">trade value formula</a>, the <a href="/blog/player-development-and-aging">aging curve</a> and the <a href="/blog/game-plans-and-pace">game-plan multipliers</a> are all documented, so you can plan instead of guessing.</li>
+</ul>
+
+<h2>How to recreate a MyLeague-style save</h2>
+<ol>
+<li><strong>Start from real rosters.</strong> Go to <a href="/rosters">Rosters</a> to import a real player pool, with contracts and future pick trades, converted to BS Hoops ratings. You can preview every team's payroll, cap tier and depth chart under <a href="/rosters/2026">2026 rosters</a> first.</li>
+<li><strong>Pick a team with a story.</strong> Our breakdown of the <a href="/blog/best-nba-teams-to-rebuild-2026">best and hardest teams to take over</a> ranks all 30 by cap room, young upside and draft capital. A second-apron contender is the closest thing to a MyGM "win now" scenario.</li>
+<li><strong>Tune your league.</strong> Custom league settings let you shape the league the way you would in MyLeague.</li>
+<li><strong>Coach the rotation.</strong> Only your first five bench players form the second unit, so bench order is your minutes slider. See the <a href="/blog/rotation-bench-order-and-minutes">rotation guide</a>.</li>
+<li><strong>Watch the big games.</strong> Sim the regular season in chunks, then watch playoff games live to see how your game plan holds up.</li>
+<li><strong>Play the long game.</strong> Ownership judges you against a 41-win baseline, but nobody is fired in their first three seasons, so a real rebuild is survivable.</li>
+</ol>
+
+<h2>How it compares to other options</h2>
+<p>If you want a deeper look, we put together a direct <a href="/vs/nba-2k-myleague">BS Hoops vs NBA 2K MyLeague</a> comparison, a <a href="/vs/basketball-gm">BS Hoops vs Basketball GM</a> breakdown, and a roundup of the <a href="/best/basketball-gm-games">best basketball GM games</a> across browser, PC and mobile. For other free browser options, see <a href="/blog/free-basketball-gm-games-browser">free basketball GM games you can play in your browser</a> and our list of <a href="/alternatives/basketball-gm">Basketball GM alternatives</a>.</p>
+
+<h2>The bottom line</h2>
+<p>MyLeague is the best licensed franchise experience. But if your favorite part of 2K is the trade screen at 1 a.m., you can get that loop, with real cap rules and a sim you can watch, in a browser tab for free. <a href="/">Start a league</a> and see how far you get by the first trade deadline.</p>
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 'basketball-gm-tips-for-beginners',
+    title: '15 Basketball GM Tips Every New GM Should Know',
+    seoTitle: '15 Basketball GM Tips for Beginners — Cap, Trades, Draft & Rotation',
+    metaDescription:
+      'Fifteen practical basketball GM tips for new players: picking a team, the cap and aprons, Bird rights, bench order, game plans, trade value, pick protections, the lottery, scouting, aging and owner approval.',
+    keywords: ['basketball gm tips', 'basketball gm tips for beginners', 'how to get better at basketball gm', 'basketball gm strategy', 'bs hoops tips'],
+    publishDate: '2026-10-29',
+    category: 'getting-started',
+    readingTime: 7,
+    summary:
+      'The fifteen lessons most new GMs learn the hard way, each backed by how the BS Hoops engine actually works, with links to the full guides.',
+    related: ['first-season-beginners-guide', 'rebuild-or-contend-timeline', 'trade-value-and-pick-protections'],
+    content: `
+<p>Most new basketball GMs make the same handful of mistakes: they drift into the luxury tax, bury their best backup at bench slot seven, trade a young star for two good veterans, and hold a 32-year-old two years too long. Every tip below comes from how the <a href="/">BS Hoops</a> engine actually works, with a link to the guide that goes deeper.</p>
+
+<h2>Team building</h2>
+
+<h3>1. Do not start with a second-apron team</h3>
+<p>A team above the second apron has no Mid-Level and must match salaries one-for-one in trades. For a first save, pick a team near or under the $165.0M cap so every tool works. Our ranking of the <a href="/blog/best-nba-teams-to-rebuild-2026">best and hardest teams to take over</a> does the homework, and the <a href="/blog/first-season-beginners-guide">first-season guide</a> walks through year one.</p>
+
+<h3>2. Pick a lane by the trade deadline</h3>
+<p>The worst place in the game is a 40-44 win team with an older core: not good enough to win a series, with a pick around #12-16 and a full cap sheet. Decide to contend or rebuild by the deadline on day 115. The <a href="/blog/rebuild-or-contend-timeline">rebuild-or-contend framework</a> has a five-minute checklist.</p>
+
+<h3>3. Use the grace period</h3>
+<p>Ownership judges you against 41 wins, but no one is fired in their first three seasons, and a firing takes two consecutive seasons below 20 approval. A planned two-year rebuild is survivable; make year three look like progress.</p>
+
+<h2>The salary cap</h2>
+
+<h3>4. Know the five lines</h3>
+<p>The 2026-27 cap is $165.0M, the tax line about $200.5M, the first apron about $209.1M and the second about $221.8M. Each line takes tools away. The <a href="/blog/salary-cap-aprons-and-exceptions">cap and aprons guide</a> lists exactly which.</p>
+
+<h3>5. The Mid-Level can hard-cap you</h3>
+<p>Using the Non-Tax Mid-Level (about $15.5M) or the Bi-Annual hard-caps you at the first apron for the rest of the season. If you spend it in July, you cannot take on salary in a February trade that pushes you past that line. Plan the deadline before free agency.</p>
+
+<h3>6. Re-sign with Bird rights before you shop</h3>
+<p>Over the cap, the best you can offer another team's free agent is an exception. With full Bird rights you can re-sign your own player up to his max regardless of the cap, and he gives you a small loyalty discount. Re-signing is almost always cheaper than replacing.</p>
+
+<h3>7. Patience is a cap tool</h3>
+<p>The cap grows about 7% a year, and the aprons scale with it. A payroll that is a first-apron problem this season can be a mere taxpayer next season. And the late days of free agency (24-30) are where asking prices fall toward 50% of market value.</p>
+
+<h2>Rotation and coaching</h2>
+
+<h3>8. Only bench slots 1-5 play</h3>
+<p>The sim alternates your starters with a second unit made of the first five players in your bench order. Starters play about 32 minutes; slot 6 and below barely see the floor. Re-check slots 1-5 after every trade, signing and injury. Details in the <a href="/blog/rotation-bench-order-and-minutes">rotation guide</a>.</p>
+
+<h3>9. Give rookies slot 4 or 5, not 30 minutes</h3>
+<p>A 19-year-old at bench slot 4 plays about 12 minutes a night and builds a real stat line. At slot 9 he plays nothing. Development itself is driven by age and potential each offseason, but minutes produce the stats that feed trade value and awards.</p>
+
+<h3>10. Match pace to your odds</h3>
+<p>Play fast when you are the better team, because more possessions mean less variance. Play slow when you are the underdog. Perimeter focus multiplies three-point attempts by 1.4, and the full-court press forces 40% more turnovers at the cost of better shots when it is beaten. The <a href="/blog/game-plans-and-pace">game-plan guide</a> has every multiplier.</p>
+
+<h2>Trades</h2>
+
+<h3>11. One star beats two good players</h3>
+<p>Trade value is built on a cubed OVR curve, so two 75s (about 1,540 PTS combined) do not get you an 85 (about 2,120). Consolidating talent costs more than you expect, and the AI rarely gives up a star for depth. See the <a href="/blog/trade-value-and-pick-protections">trade value guide</a>.</p>
+
+<h3>12. Sell at 29-30, buy at 22-25</h3>
+<p>The trade-value age multiplier is 1.25 at 22-23, 1.0 at 28-29, 0.82 at 30-31 and 0.6 at 32-33. Sell veterans to Win Now teams before the drop; rebuilding AI teams discount incoming players 31 and older by 30%.</p>
+
+<h3>13. Protect your own picks top-3 or top-5</h3>
+<p>A top-3 protection costs only about 9% of a pick's trade value but removes the nightmare of handing a rival the #1 pick. Lottery protection nearly halves the value, so avoid asking for it when you are the buyer.</p>
+
+<h2>Draft and development</h2>
+
+<h3>14. Do not tank for the worst record</h3>
+<p>The worst three records each have a 14% chance at the #1 pick, and only three picks are drawn, so the worst team picks no lower than #4. There is no reason to strip a roster bare in March. Spend your scouting points on the players likely to be there at your pick. The <a href="/blog/draft-lottery-and-scouting">draft guide</a> covers the full odds table and scouting levels.</p>
+
+<h3>15. Read the first offseason</h3>
+<p>Every player has a hidden development trait: about 15% are busts, 70% normal and 15% booms. Young players gain about 3.5 OVR a year at 21 and under, peaks are flat from 26 to 28, and decline speeds up after 31, with athleticism going first. If a rookie gains five or more points in his first summer, he is at least normal. The <a href="/blog/player-development-and-aging">development guide</a> shows how to time every decision around the curve.</p>
+
+<h2>Put it into practice</h2>
+<p>None of this requires a download. Open <a href="/">BS Hoops</a>, pick a team, or <a href="/rosters">import a real roster</a> and browse every franchise under <a href="/rosters/2026">2026 rosters</a>. Coming from another game? See <a href="/vs/basketball-gm">BS Hoops vs Basketball GM</a>, <a href="/vs/nba-2k-myleague">BS Hoops vs NBA 2K MyLeague</a>, our <a href="/alternatives/basketball-gm">Basketball GM alternatives</a> list, and the roundup of the <a href="/best/basketball-gm-games">best basketball GM games</a>. Then apply tip 1, and you are already ahead of most first-time GMs.</p>
+`,
+  },
 ];
 
 function todayIso(): string {

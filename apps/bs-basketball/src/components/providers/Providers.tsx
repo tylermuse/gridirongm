@@ -2,7 +2,7 @@
 
 import { type ReactNode } from 'react';
 import { SubscriptionProvider } from './SubscriptionProvider';
-import { usePageView } from '@bs/core/analytics';
+import { useInteractionTracking, usePageView } from '@bs/core/analytics';
 import { ServiceWorkerRegister } from './ServiceWorkerRegister';
 
 /**
@@ -21,12 +21,14 @@ import { ServiceWorkerRegister } from './ServiceWorkerRegister';
  *
  * PageViewTracker: page_view + session_start beacons to /api/analytics/track
  * (rows tagged app = 'bs-hoops'). Also makes trackAuthEvent's signup/login
- * beacons land — they were 404ing before this route existed.
+ * beacons land — they were 404ing before this route existed. Also runs the
+ * click/hover/change autocapture behind the admin feature-usage report.
  *
  * ServiceWorkerRegister: production-only PWA/offline registration (sw.ts).
  */
 function PageViewTracker() {
   usePageView();
+  useInteractionTracking();
   return null;
 }
 
