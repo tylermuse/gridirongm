@@ -184,7 +184,7 @@ export function detectNarrativeMoment(
 // Fetch
 // ============================================================================
 
-interface FetchOptions {
+export interface FetchOptions {
   team: BasketballTeam;
   roster: BasketballPlayer[];
   allTeams: BasketballTeam[];
@@ -220,44 +220,28 @@ function getStreakValue(streak: string[]): number {
   return last === 'W' ? n : last === 'L' ? -n : 0;
 }
 
-export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
-  const { team, roster, allTeams, allPlayers, season, dayIndex, phase, narrative } = opts;
+/** The user's completed playoff series (play-in included): won / lost. */
+function userPlayoffRecord(opts: FetchOptions): { wins: number; losses: number } {
+  if (opts.phase !== 'playoffs' || !opts.playoffBracket) return { wins: 0, losses: 0 };
+  const allSeries = [...(opts.playoffBracket.playIn ?? []), ...opts.playoffBracket.rounds.flat()];
+  const userSeries = allSeries.filter(s => s.winnerTeamId && (s.teamA === opts.team.id || s.teamB === opts.team.id));
+  return {
+    wins: userSeries.filter(s => s.winnerTeamId === opts.team.id).length,
+    losses: userSeries.filter(s => s.winnerTeamId && s.winnerTeamId !== opts.team.id).length,
+  };
+}
 
+/**
+ * The facts the hosts are grounded on: the user team, roster slices, ranks and
+ * the narrative-specific context (playoff picture, deadline, season result).
+ * Shared by the AI episode fetch and the Booth call-in (/api/spotlight-chat)
+ * so the hosts answer callers from the same data they used on air.
+ */
+export function buildSpotlightTeamData(opts: FetchOptions): Record<string, unknown> {
+  const { team, roster, allTeams, allPlayers, season, dayIndex, phase, narrative } = opts;
   const { w, l } = teamRecord(team);
   const gp = w + l;
-  // Allow preseason (gp=0) and seasonOver
-  if (gp === 0 && narrative !== 'preseason' && narrative !== 'seasonOver') return Promise.resolve();
-
-  // During playoffs, both `narrative` (playoffsStart) and `dayIndex` move
-  // independently of the user's series progress. Tag the cache key with
-  // the user's completed playoff series wins so each round refetches.
-  // Also tag with the resolved next-opponent id (when supplied) so a stale
-  // prior-round cache entry can't re-render with the wrong team.
-  let cacheNarrative: string = narrative;
-  let userPlayoffWins = 0;
-  let userPlayoffLosses = 0;
-  if (phase === 'playoffs' && opts.playoffBracket) {
-    const allSeries = [
-      ...(opts.playoffBracket.playIn ?? []),
-      ...opts.playoffBracket.rounds.flat(),
-    ];
-    const userSeries = allSeries.filter(
-      s => s.winnerTeamId && (s.teamA === team.id || s.teamB === team.id),
-    );
-    userPlayoffWins = userSeries.filter(s => s.winnerTeamId === team.id).length;
-    userPlayoffLosses = userSeries.filter(s => s.winnerTeamId && s.winnerTeamId !== team.id).length;
-    const oppKey = opts.nextOpponentId ? `-no${opts.nextOpponentId}` : '';
-    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}${oppKey}`;
-  }
-
-  const key = buildCacheKey(team.id, season, dayIndex, w, l, `${phase}-${cacheNarrative}`);
-  if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
-
-  cache.key = key;
-  cache.topics = null;
-  cache.loading = true;
-  cache.error = false;
-  notify();
+  const { wins: userPlayoffWins } = userPlayoffRecord(opts);
 
   // ─ Roster slices ─
   const activeRoster = roster.filter(p => !p.contract === false || p.contract !== null); // signed players only
@@ -326,6 +310,12 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
       starTier: sd.starTier,
       yearsInLeague: sd.yearsInLeague,
       howAcquired,
+      // Contract: this season's cap hit ($M) and seasons left including this one.
+      salary: (() => {
+        const y = p.contract?.years.find(yr => yr.season === season);
+        return y ? Math.round(((y.baseSalary + y.proratedBonus) / 1_000_000) * 10) / 10 : 0;
+      })(),
+      yearsLeft: p.contract ? p.contract.years.filter(yr => yr.season >= season).length : 0,
       stats: {
         gamesPlayed: stats.gamesPlayed,
         ppg: Math.round(ppgVal * 10) / 10,
@@ -719,6 +709,40 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
       .map(tx => tx.summary);
     teamData.tradesThisSeason = seasonTrades;
   }
+
+  return teamData;
+}
+
+export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
+  const { team, roster, season, dayIndex, phase, narrative } = opts;
+
+  const { w, l } = teamRecord(team);
+  const gp = w + l;
+  // Allow preseason (gp=0) and seasonOver
+  if (gp === 0 && narrative !== 'preseason' && narrative !== 'seasonOver') return Promise.resolve();
+
+  // During playoffs, both `narrative` (playoffsStart) and `dayIndex` move
+  // independently of the user's series progress. Tag the cache key with
+  // the user's completed playoff series wins so each round refetches.
+  // Also tag with the resolved next-opponent id (when supplied) so a stale
+  // prior-round cache entry can't re-render with the wrong team.
+  let cacheNarrative: string = narrative;
+  if (phase === 'playoffs' && opts.playoffBracket) {
+    const { wins: userPlayoffWins, losses: userPlayoffLosses } = userPlayoffRecord(opts);
+    const oppKey = opts.nextOpponentId ? `-no${opts.nextOpponentId}` : '';
+    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}${oppKey}`;
+  }
+
+  const key = buildCacheKey(team.id, season, dayIndex, w, l, `${phase}-${cacheNarrative}`);
+  if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
+
+  cache.key = key;
+  cache.topics = null;
+  cache.loading = true;
+  cache.error = false;
+  notify();
+
+  const teamData = buildSpotlightTeamData(opts);
 
   // ─ Fallback name pool ─
   // Build a pool of fallback player names from the user roster so the UI
