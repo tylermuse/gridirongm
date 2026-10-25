@@ -62,6 +62,9 @@ export default function Rosters2026Page() {
           free agents. Ratings, positions and contracts below are exactly what you get when you start a BS Hoops league from the real
           roster file — converted to the game’s 40-99 overall scale.
         </p>
+        <Link href="/player-tiers" className="inline-block mt-3 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+          See the top 60 players ranked into tiers →
+        </Link>
       </header>
 
       <section className="grid gap-3 sm:grid-cols-4 mb-10">

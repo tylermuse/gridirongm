@@ -3,5 +3,11 @@
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm install",
   "buildCommand": "cd ../.. && npm run build --workspace=apps/bs-basketball",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/indexnow",
+      "schedule": "0 15 * * *"
+    }
+  ]
 }
