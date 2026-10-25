@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Script from 'next/script';
 import { Barlow_Condensed, Inter } from 'next/font/google';
 import { Providers } from '@/components/providers/Providers';
+import { FeedbackWidget } from '@/components/shell/FeedbackWidget';
 import { AppShell } from '@/components/shell/AppShell';
 import './globals.css';
 
@@ -70,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased min-h-screen font-sans" style={{ fontFamily: 'var(--font-body), system-ui, sans-serif' }}>
         <Providers>
           <AppShell>{children}</AppShell>
+          <FeedbackWidget />
         </Providers>
         {/* Vercel Web Analytics (cookieless) — same as BS Football. Requires Web
             Analytics enabled on the Vercel project; 404s harmlessly otherwise. */}

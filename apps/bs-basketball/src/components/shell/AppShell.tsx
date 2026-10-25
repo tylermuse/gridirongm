@@ -10,6 +10,7 @@ import { Sidebar } from './Sidebar';
 import { LegalLinks } from '@/components/legal/LegalPage';
 import { SimToast } from '@/components/ui/Toast';
 import { WhatsNew } from '@/components/ui/WhatsNew';
+import { Booth } from '@/components/show/Booth';
 import { GameSounds } from '@/components/ui/GameSounds';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { PlayerModalProvider } from '@/components/modals/PlayerModalProvider';
@@ -92,6 +93,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <SimToast />
       <WhatsNew />
+      {/* Marcus & Tony call-in on every in-game screen; replaces the feedback bubble. */}
+      <Booth />
       <GameSounds />
       <ErrorBanner />
     </div>

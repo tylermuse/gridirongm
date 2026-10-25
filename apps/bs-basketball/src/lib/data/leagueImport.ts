@@ -81,7 +81,8 @@ interface BbgmScheduledGame {
   awayTid: number;
 }
 
-/** Completed game (BBGM `games`). Only the score is read; teams[0] is home. */
+/** Completed real game (BS-only `bsRealResults`, BBGM game shape). Only the
+ *  score is read; teams[0] is home. */
 interface BbgmGame {
   day?: number;
   date?: string;
@@ -96,7 +97,7 @@ export interface BbgmLeagueFile {
   teams: BbgmTeam[];
   draftPicks?: BbgmDraftPick[];
   schedule?: BbgmScheduledGame[];
-  games?: BbgmGame[];
+  bsRealResults?: BbgmGame[];
   gameAttributes?: Array<{ key: string; value: unknown }> | Record<string, unknown>;
 }
 
@@ -721,7 +722,7 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
   let seasonInProgress: ImportedSeasonInProgress | null = null;
   if (inSeason) {
     const games: ImportedSeasonGame[] = [];
-    for (const g of file.games ?? []) {
+    for (const g of file.bsRealResults ?? []) {
       if (g.playoffs || !Array.isArray(g.teams) || g.teams.length !== 2) continue;
       const home = tidToTeamId.get(g.teams[0].tid);
       const away = tidToTeamId.get(g.teams[1].tid);
