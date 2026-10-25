@@ -84,7 +84,7 @@ export const seoPages: SEOPage[] = [
 <p>BS Hoops hides true potential behind noisy projections. Every draft you get a scouting budget to spend on quick looks, workouts and full evaluations, and a hidden boom/normal/bust development trait means some picks will surprise you either way. There is also a Mock Draft tab that projects every pick using the same logic AI teams use on the clock.</p>
 
 <h2>Customization and Community</h2>
-<p>This is where Basketball GM shines. It is open source, supports God Mode, custom leagues and a deep library of community-made files, and its community has refined the game for years. BS Hoops offers custom league settings and multiple leagues with unlimited saves, plus a real-roster league built from the 2025-26 player pool, but it is more opinionated and has fewer knobs. If modding is the reason you play, Basketball GM is hard to beat.</p>
+<p>This is where Basketball GM shines. It is open source, supports God Mode, custom leagues and a deep library of community-made files, and its community has refined the game for years. BS Hoops offers custom league settings and multiple leagues with unlimited saves, plus a real-roster league built from the current 2026-27 rosters, but it is more opinionated and has fewer knobs. If modding is the reason you play, Basketball GM is hard to beat.</p>
 
 <h2>Who Should Choose Basketball GM</h2>
 <ul>
@@ -109,7 +109,7 @@ export const seoPages: SEOPage[] = [
 <p>Yes. Basketball GM is free. BS Hoops is free with banner ads, including the full 82-game season, draft, free agency and trades; an optional Premium plan removes ads and adds AI commentary and podcast credits.</p>
 
 <h3>Can I play with real players?</h3>
-<p>In BS Hoops, the <a href="/rosters">Rosters</a> page imports the 2025-26 player pool with contracts and future pick trades. BS Hoops is a parody and simulation and is not affiliated with the NBA.</p>
+<p>In BS Hoops, the <a href="/rosters">Rosters</a> page imports the current 2026-27 rosters with contracts and future pick trades. BS Hoops is a parody and simulation and is not affiliated with the NBA.</p>
 
 <h3>Do I need an account?</h3>
 <p>No account is required to play BS Hoops. Signing in lets you sync saves across devices.</p>
@@ -205,7 +205,7 @@ export const seoPages: SEOPage[] = [
 <p>Yes. The full season, draft, lottery, free agency, trades, stats and league history are free. Premium is optional.</p>
 
 <h3>Does BS Hoops have real players?</h3>
-<p>The <a href="/rosters">Rosters</a> page imports the 2025-26 player pool, contracts and future pick trades, converted to BS Hoops ratings. BS Hoops is a parody and simulation and is not affiliated with the NBA or any team or player.</p>
+<p>The <a href="/rosters">Rosters</a> page imports the current 2026-27 rosters, contracts and future pick trades, converted to BS Hoops ratings. BS Hoops is a parody and simulation and is not affiliated with the NBA or any team or player.</p>
 
 <h3>Can I play the games myself in BS Hoops?</h3>
 <p>No. Games are simulated possession by possession. You control the rotation and game plan, and you can watch your games live.</p>
@@ -305,7 +305,7 @@ export const seoPages: SEOPage[] = [
 <p>Yes. The full game is free with banner ads: 82-game seasons, draft, lottery, free agency, trades, stats and league history. Premium is optional and removes ads.</p>
 
 <h3>Can I start with real rosters?</h3>
-<p>Yes. Use <a href="/rosters">Rosters</a> to import the 2025-26 player pool with contracts and future pick trades, or browse every team on the <a href="/rosters/2026">2026 rosters</a> pages first.</p>
+<p>Yes. Use <a href="/rosters">Rosters</a> to import the current 2026-27 rosters with contracts and future pick trades, or browse every team on the <a href="/rosters/2026">2026 rosters</a> pages first.</p>
 
 <h3>Will my saves stay in my browser?</h3>
 <p>You can play without an account. Sign in if you want to sync saves across devices.</p>
@@ -355,7 +355,7 @@ export const seoPages: SEOPage[] = [
 <p>BS Hoops is a free basketball GM game that runs entirely in your browser. There is no download and no account required. Click a team and the season is waiting.</p>
 
 <h3>Real-Roster Start</h3>
-<p>Import the 2025-26 player pool, contracts and future pick trades from <a href="/rosters">Rosters</a>, converted to BS Hoops ratings. Each franchise has a public page under <a href="/rosters/2026">2026 rosters</a> showing payroll, cap tier, age profile and depth chart, so you can choose your project before you commit. Prefer something fresh? Start a generated 30-team league instead.</p>
+<p>Import the current 2026-27 rosters, contracts and future pick trades from <a href="/rosters">Rosters</a>, converted to BS Hoops ratings. Each franchise has a public page under <a href="/rosters/2026">2026 rosters</a> showing payroll, cap tier, age profile and depth chart, so you can choose your project before you commit. Prefer something fresh? Start a generated 30-team league instead.</p>
 
 <h3>The Cap Feels Like the Real Thing</h3>
 <p>The cap is $165.0M in 2026-27 and grows about 7% a year. The tax line sits near $200.5M and the aprons at about $209.1M and $221.8M. Each line takes something away: the full Mid-Level, the Bi-Annual, flexible trade matching. In the real-roster league only four teams start under the cap, and several contenders start above the second apron, which is exactly why every save feels different.</p>
@@ -446,7 +446,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>2. BS Hoops</h2>
 <p><strong>Price:</strong> Free (optional Premium) | <strong>Platform:</strong> Browser</p>
-<p>A modern browser basketball GM focused on a live game viewer and real-style cap rules. Every game is simulated possession by possession; you can watch your own with a shot chart, win probability and game flow. The cap ladder includes the luxury tax, first and second aprons, the Mid-Level, Bi-Annual and Room exceptions, and Bird rights. Trades support pick protections, and the draft uses tiered scouting with hidden boom/bust traits. A real-roster league built from the 2025-26 player pool is one click away. Premium adds AI commentary on every game and audio podcasts.</p>
+<p>A modern browser basketball GM focused on a live game viewer and real-style cap rules. Every game is simulated possession by possession; you can watch your own with a shot chart, win probability and game flow. The cap ladder includes the luxury tax, first and second aprons, the Mid-Level, Bi-Annual and Room exceptions, and Bird rights. Trades support pick protections, and the draft uses tiered scouting with hidden boom/bust traits. A real-roster league built from the current 2026-27 rosters is one click away. Premium adds AI commentary on every game and audio podcasts.</p>
 <p><strong>Best for:</strong> Players who want to watch games and wrestle with NBA-style aprons in a modern interface.</p>
 
 <h2>3. NBA 2K MyLeague / MyGM</h2>
@@ -528,7 +528,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>1. BS Hoops</h2>
 <p><strong>Type:</strong> Basketball GM / franchise sim | <strong>Cost:</strong> Free with ads (optional Premium)</p>
-<p>Pick one of 30 franchises and run it: draft, trade, sign free agents and coach the rotation. Every game is simulated possession by possession, and you can watch yours live with a shot chart, win probability and game flow. The cap follows modern NBA-style rules ($165.0M cap, ~$200.5M tax, aprons at ~$209.1M and ~$221.8M), with Bird rights, the Mid-Level and pick protections. Start with a generated league or import the 2025-26 player pool from <a href="/rosters">Rosters</a>.</p>
+<p>Pick one of 30 franchises and run it: draft, trade, sign free agents and coach the rotation. Every game is simulated possession by possession, and you can watch yours live with a shot chart, win probability and game flow. The cap follows modern NBA-style rules ($165.0M cap, ~$200.5M tax, aprons at ~$209.1M and ~$221.8M), with Bird rights, the Mid-Level and pick protections. Start with a generated league or import the current 2026-27 rosters from <a href="/rosters">Rosters</a>.</p>
 <p>The free version includes the full 82-game season, draft and lottery, free agency, trades, all stats, standings and league history, custom league settings, multiple leagues and unlimited saves. No download and no account required.</p>
 <p><strong>Best for:</strong> Front-office fans who want to watch their games and work a realistic cap.</p>
 
@@ -667,7 +667,7 @@ export const seoPages: SEOPage[] = [
 </table>
 
 <h2>Start With Real Players</h2>
-<p>Want familiar names? Import the 2025-26 player pool, contracts and future pick trades from <a href="/rosters">Rosters</a>, or browse each team's payroll, age profile and depth chart on the <a href="/rosters/2026">2026 rosters</a> pages before you pick. BS Hoops is a parody and simulation and is not affiliated with the NBA.</p>
+<p>Want familiar names? Import the current 2026-27 rosters, contracts and future pick trades from <a href="/rosters">Rosters</a>, or browse each team's payroll, age profile and depth chart on the <a href="/rosters/2026">2026 rosters</a> pages before you pick. BS Hoops is a parody and simulation and is not affiliated with the NBA.</p>
 
 <h2>Frequently Asked Questions</h2>
 <h3>Is BS Hoops a fantasy basketball game?</h3>
@@ -849,7 +849,7 @@ export const seoPages: SEOPage[] = [
   <li><strong>Watch games live</strong>: a shot chart, win probability and game flow for your games.</li>
   <li><strong>Build a legacy</strong>: awards, playoff runs, franchise history and owner approval.</li>
 </ul>
-<p>A season runs 82 games over 170 days with a trade deadline on day 115, a play-in for seeds 7-10, and an offseason of draft, re-signings and a 30-day free-agency window. You can start a generated league or import the 2025-26 player pool from <a href="/rosters">Rosters</a>. No download and no account required.</p>
+<p>A season runs 82 games over 170 days with a trade deadline on day 115, a play-in for seeds 7-10, and an offseason of draft, re-signings and a 30-day free-agency window. You can start a generated league or import the current 2026-27 rosters from <a href="/rosters">Rosters</a>. No download and no account required.</p>
 
 <h2>Why People Love GM Sims</h2>
 <ul>

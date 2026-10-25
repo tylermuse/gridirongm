@@ -66,6 +66,9 @@ export function regularSeasonStatsByTeam(
 
   for (const g of league.games as GameResult[]) {
     if (g.status !== 'played' || isPlayoffGame(g)) continue;
+    // Real results from a mid-season import carry a score but no box score —
+    // counting them would dilute every per-game team stat.
+    if (Object.keys(g.boxScores).length === 0) continue;
     const homeAgg = acc.get(g.homeTeamId);
     const awayAgg = acc.get(g.awayTeamId);
     if (!homeAgg || !awayAgg) continue;

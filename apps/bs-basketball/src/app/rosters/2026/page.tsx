@@ -102,6 +102,7 @@ export default function Rosters2026Page() {
                 <tr className="text-left text-[var(--text-sec)] bg-[var(--muted)]">
                   <th className="px-3 py-2 font-semibold">Team</th>
                   <th className="px-3 py-2 font-semibold">Division</th>
+                  <th className="px-3 py-2 font-semibold">2026-27</th>
                   <th className="px-3 py-2 font-semibold">2025-26</th>
                   <th className="px-3 py-2 font-semibold">Top-8 OVR</th>
                   <th className="px-3 py-2 font-semibold">Avg age</th>
@@ -122,6 +123,7 @@ export default function Rosters2026Page() {
                         </Link>
                       </td>
                       <td className="px-3 py-2 text-[var(--text-sec)]">{t.division}</td>
+                      <td className="px-3 py-2 tabular-nums font-semibold">{t.record ? `${t.record.won}-${t.record.lost}` : '—'}</td>
                       <td className="px-3 py-2 tabular-nums text-[var(--text-sec)]">{t.lastRecord ? `${t.lastRecord.won}-${t.lastRecord.lost}` : '—'}</td>
                       <td className="px-3 py-2 tabular-nums font-semibold">{t.top8.toFixed(1)} <span className="text-[var(--text-sec)] font-normal">#{t.strengthRank}</span></td>
                       <td className="px-3 py-2 tabular-nums">{t.avgAge.toFixed(1)}</td>

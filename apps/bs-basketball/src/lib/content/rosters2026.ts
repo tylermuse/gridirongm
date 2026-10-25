@@ -61,7 +61,10 @@ export interface RosterTeam {
   conference: string;
   division: string;
   color: string;
+  /** 2025-26 final record. */
   lastRecord: { won: number; lost: number } | null;
+  /** 2026-27 record so far (the file is refreshed weekly in-season). */
+  record: { won: number; lost: number } | null;
   players: RosterPlayer[];
   payroll: number;
   cap: number;
@@ -130,13 +133,18 @@ export function getLeague2026(): LeagueSummary {
   const league = convertBbgmLeague(raw);
   const season = league.season;
 
-  // Last completed season's record per abbreviation, straight from the file.
+  // Last completed season's record per abbreviation, straight from the file,
+  // plus the in-progress 2026-27 record (BBGM season 2027) once the weekly
+  // refresh bakes one in.
   const recordByAbbrev = new Map<string, { won: number; lost: number }>();
+  const currentByAbbrev = new Map<string, { won: number; lost: number }>();
   for (const t of raw.teams) {
     if (t.disabled || !t.abbrev) continue;
-    const played = (t.seasons ?? []).filter(s => (s.won ?? 0) + (s.lost ?? 0) > 0);
+    const played = (t.seasons ?? []).filter(s => (s.won ?? 0) + (s.lost ?? 0) > 0 && (s.season ?? 0) <= ROSTER_SEASON);
     const last = played[played.length - 1];
     if (last) recordByAbbrev.set(t.abbrev, { won: last.won ?? 0, lost: last.lost ?? 0 });
+    const cur = (t.seasons ?? []).find(s => s.season === ROSTER_SEASON + 1);
+    if (cur && (cur.won ?? 0) + (cur.lost ?? 0) > 0) currentByAbbrev.set(t.abbrev, { won: cur.won ?? 0, lost: cur.lost ?? 0 });
   }
 
   const abbrevById = new Map(league.teams.map(t => [t.id, t.abbreviation] as const));
@@ -200,6 +208,7 @@ export function getLeague2026(): LeagueSummary {
       division: t.sportData.division,
       color: t.primaryColor,
       lastRecord: recordByAbbrev.get(t.abbreviation) ?? null,
+      record: currentByAbbrev.get(t.abbreviation) ?? null,
       players: rows,
       payroll: status.payroll,
       cap: status.cap,

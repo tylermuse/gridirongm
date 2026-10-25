@@ -73,12 +73,30 @@ interface BbgmDraftPick {
   season: number;
 }
 
+/** Remaining regular-season game (BBGM `schedule`). `date` is our extension. */
+interface BbgmScheduledGame {
+  day?: number;
+  date?: string;
+  homeTid: number;
+  awayTid: number;
+}
+
+/** Completed game (BBGM `games`). Only the score is read; teams[0] is home. */
+interface BbgmGame {
+  day?: number;
+  date?: string;
+  playoffs?: boolean;
+  teams: { tid: number; pts: number }[];
+}
+
 export interface BbgmLeagueFile {
   startingSeason?: number;
   version?: number;
   players: BbgmPlayer[];
   teams: BbgmTeam[];
   draftPicks?: BbgmDraftPick[];
+  schedule?: BbgmScheduledGame[];
+  games?: BbgmGame[];
   gameAttributes?: Array<{ key: string; value: unknown }> | Record<string, unknown>;
 }
 
@@ -111,6 +129,24 @@ export interface ImportedHoopsLeague {
    *  draft and starts the league at the re-sign step. Any leftover undrafted
    *  prospects fall to free agency. */
   draftComplete: boolean;
+  /** Set when the file is a mid-season snapshot (BBGM regular-season phase with
+   *  a schedule): the real results so far and the remaining real schedule, so
+   *  the league opens on the next game day instead of the offseason. */
+  seasonInProgress: ImportedSeasonInProgress | null;
+}
+
+export interface ImportedSeasonGame {
+  day: number;
+  /** ISO date (YYYY-MM-DD) when the file has it. */
+  date: string | null;
+  homeTeamId: TeamId;
+  awayTeamId: TeamId;
+  /** Final score for games already played; null for upcoming games. */
+  finalScore: { home: number; away: number } | null;
+}
+
+export interface ImportedSeasonInProgress {
+  games: ImportedSeasonGame[];
 }
 
 // ===========================================================================
@@ -533,10 +569,17 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     throw new Error('Not a BBGM league file — missing teams/players arrays.');
   }
   const ga = normalizeGameAttributes(file.gameAttributes);
-  const season =
+  const fileSeason =
     (typeof ga.season === 'number' ? ga.season : undefined) ??
     file.startingSeason ??
     2026;
+  // BBGM names a season by the year it ENDS (2026-27 = 2027); BS Hoops by the
+  // year it starts. Offseason/draft files already line up (the 2026 draft and
+  // re-sign phases lead into Hoops season 2026), but a regular-season file
+  // (phase 1 = REGULAR_SEASON, 2 = AFTER_TRADE_DEADLINE) is one year ahead.
+  const inSeason =
+    (ga.phase === 1 || ga.phase === 2) && Array.isArray(file.schedule) && file.schedule.length > 0;
+  const season = inSeason ? fileSeason - 1 : fileSeason;
 
   // BBGM phase tells us where in the calendar the file sits. Phases ≥ 7
   // (RESIGN_PLAYERS) mean the draft for `season` has already happened, so the
@@ -674,7 +717,28 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     draftPickOwnership.push({ season: dp.season, round: dp.round, originalTeamId: original, ownerTeamId: owner });
   }
 
-  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds, draftComplete };
+  // --- Mid-season snapshot: real results so far + the remaining schedule ---
+  let seasonInProgress: ImportedSeasonInProgress | null = null;
+  if (inSeason) {
+    const games: ImportedSeasonGame[] = [];
+    for (const g of file.games ?? []) {
+      if (g.playoffs || !Array.isArray(g.teams) || g.teams.length !== 2) continue;
+      const home = tidToTeamId.get(g.teams[0].tid);
+      const away = tidToTeamId.get(g.teams[1].tid);
+      if (!home || !away || typeof g.day !== 'number') continue;
+      games.push({ day: g.day, date: g.date ?? null, homeTeamId: home, awayTeamId: away, finalScore: { home: g.teams[0].pts, away: g.teams[1].pts } });
+    }
+    for (const g of file.schedule ?? []) {
+      const home = tidToTeamId.get(g.homeTid);
+      const away = tidToTeamId.get(g.awayTid);
+      if (!home || !away || typeof g.day !== 'number') continue;
+      games.push({ day: g.day, date: g.date ?? null, homeTeamId: home, awayTeamId: away, finalScore: null });
+    }
+    games.sort((a, b) => a.day - b.day);
+    seasonInProgress = { games };
+  }
+
+  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds, draftComplete, seasonInProgress };
 }
 
 // ===========================================================================

@@ -28,10 +28,10 @@ import type { TeamId } from '@bs/core/adapter';
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
-const CACHE_BUST = 11;
+const CACHE_BUST = 12;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
-const LAST_UPDATED = 'July 2, 2026';
+const LAST_UPDATED = 'October 25, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
 /** Collapsible "How to use this roster" panel — BS Hoops + Basketball GM paths. */
@@ -113,8 +113,8 @@ export default function RostersPage() {
 
   async function choose(teamId: TeamId) {
     await pickUserTeam(teamId);
-    // Imported leagues start in the offseason with their draft pending — go run
-    // it first; otherwise straight to the team dashboard.
+    // Offseason files with a draft pending go run it first, post-draft files go
+    // to re-sign; mid-season imports land straight on the team dashboard.
     const picked = useLeagueStore.getState().league;
     const sd = picked?.sportData as { draft?: unknown; postDraftImport?: boolean } | undefined;
     router.push(sd?.draft ? '/draft' : sd?.postDraftImport ? '/re-sign' : '/league');
@@ -192,17 +192,17 @@ export default function RostersPage() {
                   Modern
                 </span>
               </div>
-              <h2 className="text-lg font-black">NBA 2025-26 Roster</h2>
+              <h2 className="text-lg font-black">NBA 2026-27 Roster — Updated {LAST_UPDATED}</h2>
               <p className="text-sm text-[var(--text-sec)] mt-1.5 leading-relaxed">
-                All 30 teams with real rosters, positions, and contracts, re-leveled to current NBA 2K26 overalls.
-                Imports as a full 30-team league in Basketball GM or BS Hoops, starting at the 2026 season. Includes
-                the 2026 draft class with the top of the board curated to real consensus big-board order (AJ Dybantsa,
-                Darryn Peterson, Cameron Boozer, Caleb Wilson…), so the lottery feels true to life.
+                Starts mid-season, on the next real NBA game day: the real 2026-27 schedule and every result so far are
+                baked in, so you pick up exactly where the real standings are and play the rest of the real slate. All 30
+                rosters reconciled against current NBA rosters, with every trade, signing and waiver since the draft
+                (2026 rookies included), 2026-27 contracts and the current injury report. Refreshed weekly.
               </p>
-              <p className="text-[11px] text-[var(--text-sec)] mt-2 opacity-70">BBGM-native · 30 teams · 529 players</p>
+              <p className="text-[11px] text-[var(--text-sec)] mt-2 opacity-70">BBGM-native · 30 teams · 15-man rosters · regular season</p>
               <p className="text-xs mt-2 text-[var(--text-sec)] italic">
                 Base roster by <span className="font-semibold not-italic text-[var(--text)]">AlexNoob</span> (2025-26 NBA),
-                synced to current overalls. Free-agency &amp; draft updates by BS Hoops. Thanks to AlexNoob for making this possible.
+                synced to current overalls. Draft, free-agency, trade and in-season updates by BS Hoops. Thanks to AlexNoob for making this possible.
               </p>
 
               <div className="flex items-center gap-2 mt-3 flex-wrap">
