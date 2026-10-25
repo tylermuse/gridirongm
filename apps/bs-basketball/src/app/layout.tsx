@@ -20,7 +20,7 @@ const DESCRIPTION =
   'Free browser basketball GM game. Draft, trade, sign free agents, and watch every game simulated possession by possession. No download, no account required.';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://bs-basketball.com'),
+  metadataBase: new URL('https://www.bs-basketball.com'),
   title: { default: 'BS Hoops — Free Basketball GM Game', template: '%s · BS Hoops' },
   description: DESCRIPTION,
   applicationName: 'BS Hoops',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     title: 'BS Hoops — Free Basketball GM Game',
     description: DESCRIPTION,
     siteName: 'BS Hoops',
-    url: 'https://bs-basketball.com',
+    url: 'https://www.bs-basketball.com',
     type: 'website',
   },
   twitter: {

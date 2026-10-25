@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { CATEGORY_LABELS, formatPostDate, getPublishedPosts } from '@/lib/content/posts';
 import { Breadcrumbs, ContentFrame, JsonLd, breadcrumbJsonLd } from '@/components/content/ContentBits';
 
-const SITE = 'https://bs-basketball.com';
+const SITE = 'https://www.bs-basketball.com';
 
 // Rebuild daily so future-dated posts appear on their publish date.
 export const revalidate = 86400;

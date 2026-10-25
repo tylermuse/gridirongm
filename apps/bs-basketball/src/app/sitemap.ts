@@ -3,7 +3,7 @@ import { getPublishedPosts } from '@/lib/content/posts';
 import { getLeague2026 } from '@/lib/content/rosters2026';
 import { seoPages } from '@/lib/content/pages';
 
-const SITE = 'https://bs-basketball.com';
+const SITE = 'https://www.bs-basketball.com';
 
 // Rebuild daily so newly published (previously future-dated) posts appear.
 export const revalidate = 86400;

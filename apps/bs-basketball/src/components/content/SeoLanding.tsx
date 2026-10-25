@@ -17,7 +17,7 @@ import {
  * most of the organic traffic; each route file is a thin wrapper.
  */
 
-const SITE = 'https://bs-basketball.com';
+const SITE = 'https://www.bs-basketball.com';
 
 type Section = SEOPage['section'];
 

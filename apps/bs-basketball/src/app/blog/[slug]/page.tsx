@@ -18,7 +18,7 @@ import {
   breadcrumbJsonLd,
 } from '@/components/content/ContentBits';
 
-const SITE = 'https://bs-basketball.com';
+const SITE = 'https://www.bs-basketball.com';
 
 // Published posts are prebuilt; a post dated in the future 404s until its date,
 // then renders on first request (dynamicParams) and is cached for a day.

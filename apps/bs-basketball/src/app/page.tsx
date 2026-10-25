@@ -3,7 +3,7 @@ import HomeApp from '@/components/home/HomeApp';
 import HomeIntro from '@/components/home/HomeIntro';
 import { JsonLd } from '@/components/content/ContentBits';
 
-const SITE = 'https://bs-basketball.com';
+const SITE = 'https://www.bs-basketball.com';
 const DESCRIPTION =
   'BS Hoops is a free browser basketball GM game. Draft prospects, trade with pick protections, sign free agents under a real soft cap with aprons and Bird rights, set your rotation, and sim seasons possession by possession.';
 
