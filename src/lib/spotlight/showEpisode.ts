@@ -222,7 +222,7 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
       const cut = mp3Slice(audio, l.start, l.start + l.duration);
       if (!cut) continue;
       lipsSeconds += l.duration;
-      lipsQueued.push(submitLips(origin, seg.speaker, cut.bytes).then(request => {
+      lipsQueued.push(submitLips(origin, seg.speaker, cut.bytes, l.start + l.duration - cut.start).then(request => {
         const r = { request, start: cut.start };
         lips.set(l.seg, r);
         send({ type: 'lips', seg: l.seg, ...r });

@@ -25,8 +25,12 @@ export const lipsEnabled = () => !!FAL_KEY && process.env.SPOTLIGHT_SHOW_LIPS !=
  *  request, and where in the block's audio the clip's sound starts. */
 export interface LipsRequest { request: string; start: number }
 
-/** The footage each host's mouth is synced onto (him talking, 60 s, 720²). */
-export const talkSrc = (host: Host) => `/show/lips/talk_${host}.mp4`;
+/** The footage each host's mouth is synced onto: him talking, 480², cut to
+ *  the line's length (MuseTalk processes the whole source video, so a long
+ *  one makes every render take minutes; this keeps a line to ~20 s). */
+export const TALK_MIN = 3, TALK_MAX = 16;
+export const talkSrc = (host: Host, duration: number) =>
+  `/show/lips/talk_${host}_${Math.min(TALK_MAX, Math.max(TALK_MIN, Math.ceil(duration + 0.3)))}.mp4`;
 
 /** Lines worth putting on camera: conversation, not numbers (those keep
  *  their graphic), long enough to be a shot, short enough to render. */
@@ -78,12 +82,12 @@ const QUEUE = `https://queue.fal.run/${LIPS_MODEL}`;
 const auth = () => ({ authorization: `Key ${FAL_KEY}` });
 
 /** Queue one render: `origin` serves the talking footage. */
-export async function submitLips(origin: string, host: Host, mp3: Buffer): Promise<string> {
+export async function submitLips(origin: string, host: Host, mp3: Buffer, duration: number): Promise<string> {
   const res = await fetch(QUEUE, {
     method: 'POST',
     headers: { ...auth(), 'content-type': 'application/json' },
     body: JSON.stringify({
-      source_video_url: new URL(talkSrc(host), origin).toString(),
+      source_video_url: new URL(talkSrc(host, duration), origin).toString(),
       audio_url: `data:audio/mpeg;base64,${mp3.toString('base64')}`,
     }),
   });

@@ -43,7 +43,7 @@ const LIPS_CROP: Record<Host, { left: string; top: string; width: string; height
 const LIPS_STUDIO = '/show/lips/studio.jpg';
 const lipsIdle = (h: Host) => `/show/lips/idle_${h}.mp4`;
 const lipsMask = (h: Host) => `url(/show/lips/mask_${h}.png)`;
-const LIPS_POLL_MS = 5000;
+const LIPS_POLL_MS = 3000;
 
 type ShowTopic = {
   headline: string;
