@@ -216,18 +216,28 @@ export default function GamePage() {
           deterministic synthetic split from the final score so the view is
           always present (covers playoff games saved before BUG-30 lost the
           quarterScores in sportData). */}
-      {gameData?.quarterScores?.length ? (
-        <LineScore away={awayTeam} home={homeTeam} data={gameData} />
+      {(game.sportData as { realResult?: boolean } | undefined)?.realResult ? (
+        // Real result baked into a mid-season roster import: the score is real,
+        // but there's no box score or quarter split to show (and we don't invent one).
+        <section className="rounded-xl border px-4 py-3 text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+          Real result from before this league was imported — final score only, no box score.
+        </section>
       ) : (
-        <LineScoreFallback away={awayTeam} home={homeTeam} game={game} />
+        <>
+          {gameData?.quarterScores?.length ? (
+            <LineScore away={awayTeam} home={homeTeam} data={gameData} />
+          ) : (
+            <LineScoreFallback away={awayTeam} home={homeTeam} game={game} />
+          )}
+
+          <GameLeaders away={awayTeam} home={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <BoxScoreTable team={awayTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
+            <BoxScoreTable team={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
+          </div>
+        </>
       )}
-
-      <GameLeaders away={awayTeam} home={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
-
-      <div className="grid md:grid-cols-2 gap-6">
-        <BoxScoreTable team={awayTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
-        <BoxScoreTable team={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
-      </div>
 
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
       {replaying && (
