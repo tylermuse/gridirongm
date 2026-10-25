@@ -110,3 +110,14 @@ two-shot and both are composited back over the still:
    re-render (`python3 plan_shots.py --plan-only`). p↔P is a 0.35 s crossfade
    at the pause; c↔p turns use the straight-faced `turn_pc_n.mp4` /
    `turn_cp_n.mp4` (Seedance, medium.png → medium_cam.png)..
+## Verdict stamps (`kind: "stamp"`)
+
+Contender or Pretender verdicts are said to camera instead of voiced over the
+over-the-shoulder shot: `<host>_stamp_<contender|pretender>` for the host who
+answers first, `<host>_stamp_<agree|split>_<stamp>` for the second (it reacts
+to the first stamp, then gives his own — "You sound like you agree with me.
+Contender."). `stamp` / `stampReply` in `phrases.json` carry through to the
+manifest; `stampCut` in `showScript.ts` cuts a clip in where a host's first
+verdict line opens with his stamp. Takes `marcus_s` / `tony_s` (HeyGen
+Avatar 4, Expressive, 1080p, on `portraits/<host>.png`). Long `[pause]`
+gaps from v3 were trimmed to 0.5 s before `build_takes.py`.

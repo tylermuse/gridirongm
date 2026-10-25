@@ -89,6 +89,8 @@ def main(wt):
             if p.get("when"): m["when"] = p["when"]
             if p.get("angle"): m["angle"] = p["angle"]
             if p.get("exchange"): m["exchange"] = p["exchange"]
+            if p.get("stamp"): m["stamp"] = p["stamp"]
+            if p.get("stampReply"): m["stampReply"] = p["stampReply"]
             if "slot" in e:
                 m["slot"] = {"start": round(e["slot"]["start"] - a, 3), "end": round(e["slot"]["end"] - a, 3)}
             manifest.append(m)

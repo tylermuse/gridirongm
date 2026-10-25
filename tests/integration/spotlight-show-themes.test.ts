@@ -3,7 +3,7 @@ import {
   THEMES, WIDE_CLIPS, WIDE_BANTER, SIGNOFFS, themeFor, planTheme, verdictTopicNotes,
   parseVerdict, parseCalls, wideLineAt, VERDICT_HEADLINE, verdictHeadline,
 } from '@/lib/spotlight/showThemes';
-import { buildShowScript, type ShowSegment, type ShowTopicInput } from '@/lib/spotlight/showScript';
+import { buildShowScript, stampCut, type Host, type ShowSegment, type ShowTopicInput } from '@/lib/spotlight/showScript';
 import { themePlan, writerTopics } from '@/lib/spotlight/showEpisode';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -152,6 +152,63 @@ describe('a themed episode', () => {
     const l = s2.find((s): s is Extract<ShowSegment, { kind: 'tts' }> => s.kind === 'tts' && s.topicIdx === 0)!;
     expect(l.calls).toEqual({ marcus: 'sell', tony: 'buy' });
     expect(kinds(s2).some(x => x.startsWith('wide:panic_verdict') || x.startsWith('wide:contender_verdict'))).toBe(false);
+  });
+});
+
+describe('Contender or Pretender: each stamp is said to camera', () => {
+  const plan = planTheme('contender', 'Dallas Wranglers|7-2')!;
+  const first = plan.verdictClip!.first;
+  const second: Host = first === 'marcus' ? 'tony' : 'marcus';
+  const who = (h: Host) => (h === 'marcus' ? 'm' : 't');
+  const build = (verdict: Record<Host, string>, lines: [Host, string][]) => buildShowScript([
+    topic('The case', [['m', 'They win close games.'], ['t', 'They do.']]),
+    topic(VERDICT_HEADLINE, lines.map(([h, text]) => [who(h), text]), { isVerdict: true, verdict }),
+  ], 'Dallas Wranglers', null, { written: true, theme: plan });
+  const verdictLines = (segs: ShowSegment[]) => segs.filter((x): x is Extract<ShowSegment, { kind: 'tts' }> => x.kind === 'tts' && x.topicIdx === 1);
+
+  it('the first host stamps on camera, the second reacts to it on camera, and each goes on with his why', () => {
+    const segs = build({ [first]: 'contender', [second]: 'contender' } as Record<Host, string>, [
+      [first, "Contender. I don't love every part of it, but I trust them."],
+      [second, 'Contender. They win the games they should.'],
+      [first, 'Big if.'],
+    ]);
+    const k = kinds(segs);
+    const at = k.indexOf(`wide:${plan.verdictClip!.id}`);
+    expect(k.slice(at, at + 5)).toEqual([`wide:${plan.verdictClip!.id}`, `${first}_stamp_contender`, `tts:${first}`, `${second}_stamp_agree_contender`, `tts:${second}`]);
+    const lines = verdictLines(segs);
+    expect(lines.map(l => l.text)).toEqual(["I don't love every part of it, but I trust them.", 'They win the games they should.', 'Big if.']);
+    // The board shows a card only once its host has given it.
+    expect(lines.map(l => l.revealed)).toEqual([[first], [first, second], [first, second]]);
+  });
+  it('a split gets the clip that answers the other stamp', () => {
+    const k = kinds(build({ [first]: 'contender', [second]: 'pretender' } as Record<Host, string>, [
+      [first, 'Contender. The defense is real.'],
+      [second, 'Pretender! The schedule did them favors.'],
+    ]));
+    expect(k).toContain(`${first}_stamp_contender`);
+    expect(k).toContain(`${second}_stamp_split_pretender`);
+  });
+  it('a line that is only the stamp plays just the clip; one that doesn\'t open with it is voiced as written', () => {
+    const segs = build({ [first]: 'pretender', [second]: 'pretender' } as Record<Host, string>, [
+      [first, 'Pretender.'],
+      [second, "I'm going pretender too, and it's not close."],
+    ]);
+    const k = kinds(segs);
+    expect(k).toContain(`${first}_stamp_pretender`);
+    expect(k.some(x => x.startsWith(`${second}_stamp`))).toBe(false);
+    expect(verdictLines(segs).map(l => l.text)).toEqual(["I'm going pretender too, and it's not close."]);
+  });
+  it('cuts only a stamp that matches the verdict and ends its sentence', () => {
+    expect(stampCut('Contender — and I mean it.', 'marcus', 'contender')?.rest).toBe('And I mean it.');
+    expect(stampCut('[laughs] Pretender! Come on.', 'tony', 'pretender')?.clip.id).toBe('tony_stamp_pretender');
+    expect(stampCut('Contender, but barely.', 'marcus', 'contender')).toBeNull();
+    expect(stampCut('Pretender. Sorry.', 'marcus', 'contender')).toBeNull();
+    expect(stampCut('Seven. Hit it.', 'marcus', 7)).toBeNull();
+  });
+  it('the panic meter goes up host by host too', () => {
+    const p = planTheme('panic', 'Dallas Wranglers|3-5')!;
+    const segs = buildShowScript([topic(VERDICT_HEADLINE, [['t', 'Nine. Hit it.'], ['m', 'Four. Breathe.']], { isVerdict: true, verdict: { marcus: 4, tony: 9 } })], 'X', null, { written: true, theme: p });
+    expect(segs.filter((x): x is Extract<ShowSegment, { kind: 'tts' }> => x.kind === 'tts' && x.topicIdx === 0).map(l => l.revealed)).toEqual([['tony'], ['tony', 'marcus']]);
   });
 });
 
