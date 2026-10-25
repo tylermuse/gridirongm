@@ -173,6 +173,15 @@ export default function FreeAgencyPage() {
   const [faView, setFaView] = useState<'available' | 'retired'>('available');
   const [retiredError, setRetiredError] = useState<string | null>(null);
   const msgFeedRef = useRef<HTMLDivElement>(null);
+  // The negotiation panel renders above the FA table, so clicking Negotiate on a
+  // player further down opened it off-screen and read as a dead click.
+  const negotiationPanelRef = useRef<HTMLDivElement>(null);
+  const negotiationPlayerId = negotiation?.playerId;
+  useEffect(() => {
+    if (!negotiationPlayerId) return;
+    const el = negotiationPanelRef.current;
+    if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [negotiationPlayerId]);
 
   // Auto-initialize pursuitState for existing saves that entered FA before
   // this feature was added. Per-tier allocation: free=3, premium=9,
@@ -688,6 +697,7 @@ export default function FreeAgencyPage() {
 
             {/* Negotiation panel */}
             {negotiation && (
+              <div ref={negotiationPanelRef} className="scroll-mt-20">
               <Card>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -846,6 +856,7 @@ export default function FreeAgencyPage() {
                   )}
                 </div>
               </Card>
+              </div>
             )}
 
             {/* Free agency / retired players tab bar */}
