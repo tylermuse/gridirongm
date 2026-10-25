@@ -9,7 +9,7 @@ const PREMIUM_FEATURES = [
   'Ad-free experience',
   'AI commentary on every game',
   '3 audio podcast credits per month',
-  '30 scout points per draft (3× the free allotment)',
+  '30 scout points per draft (6× the free allotment)',
   '9 free-agent intel reports (3× the free allotment)',
   'Premium unlocks BS Football too — one sub, both sports',
   'Cancel anytime — Stripe Customer Portal',
@@ -21,7 +21,7 @@ const FREE_FEATURES = [
   'All stats, standings, league history',
   'Custom league settings',
   'Multiple leagues & unlimited saves',
-  '10 scout points per draft',
+  '5 scout points per draft',
   '3 free-agent intel reports',
 ];
 
