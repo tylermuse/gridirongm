@@ -367,7 +367,7 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
         </div>
 
         {watching && (
-          <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} />
+          <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} pregame />
         )}
         {userTeam && (
           <GamePlanModal teamId={userTeam.id} open={gamePlanOpen} onClose={() => setGamePlanOpen(false)} />

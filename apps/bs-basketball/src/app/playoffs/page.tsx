@@ -181,7 +181,7 @@ export default function PlayoffsPage() {
 
 
       {watching && (
-        <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} />
+        <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} pregame />
       )}
     </Shell>
   );

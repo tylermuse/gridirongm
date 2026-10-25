@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { useGameBroadcast } from '@/lib/broadcast/useGameBroadcast';
+import { useSegmentAudio, type SegmentAudio } from '@/lib/broadcast/useSegmentAudio';
+import { broadcastClipLines, silentBeatMs } from '@/lib/broadcast/gameBroadcast';
+import { buildPregameFacts, generateTemplatedPregame, pregameAudioLines, priorScoringAverages, type PregameShow } from '@/lib/broadcast/pregameShow';
+import { generateHalftimeNotes } from '@/lib/broadcast/halftimeNotes';
 import { synthesizePlayByPlay, type LiveEvent, type LiveEventKind, type LiveShot } from '@/lib/live/playByPlay';
 import { eventsFromPlayLog, hasPlayLog } from '@/lib/live/fromPlayLog';
 import { computeEventBeats } from '@/lib/live/beats';
@@ -26,6 +33,15 @@ const TONE: Record<MomentTone, string> = {
   gold: '#d97706', red: '#dc2626', blue: '#2563eb', accent: 'var(--accent)',
 };
 
+// Live audio broadcast + spoken pregame/halftime segments are Premium
+// (founders + admins grandfathered), enforced server-side in the audio routes
+// too — same gating as BS Football. This env flag is only a local-dev override
+// so the broadcast can be tested on localhost without a premium account.
+const GAME_AUDIO_DEV_OVERRIDE = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
+const PREGAME_AUTO_OFF_KEY = 'bsbb-pregame-auto-off';
+/** Post-call dwell during a broadcast, per speed (the call is never cut). */
+const BROADCAST_DWELL: Record<Speed, number> = { 1: 900, 2: 350, 5: 80, max: 0 };
+
 /** Live stat line accumulated from revealed events (real-log mode). */
 interface LiveLine { pts: number; reb: number; ast: number; fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number; stl: number; blk: number; to: number; pf: number }
 const EMPTY_LINE: LiveLine = { pts: 0, reb: 0, ast: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, stl: 0, blk: 0, to: 0, pf: 0 };
@@ -42,11 +58,14 @@ const CODE_TO_LINE: Record<string, keyof LiveLine | undefined> = {
  * halftime break. Older saves fall back to the box-score reconstruction.
  */
 export function LiveViewer({
-  userGameId, dayGameIds, onClose,
+  userGameId, dayGameIds, onClose, pregame = false,
 }: {
   userGameId: string;
   dayGameIds: string[];
   onClose: () => void;
+  /** Open the Pregame Show before tip-off (the user's own games; not replays
+   *  from the box score). Shown once per game per session; opt-out-able. */
+  pregame?: boolean;
 }) {
   const { league } = useLeagueStore();
   const router = useRouter();
@@ -97,10 +116,128 @@ export function LiveViewer({
   const last = cursor > 0 ? events[cursor - 1] : null;
   const crunch = !!(last && moments[cursor - 1]?.crunch) && !atEnd;
 
+  const { tier, isAdmin, isFoundingMember } = useSubscription();
+  const isPremium = tier === 'premium' || isAdmin || isFoundingMember;
+  const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || isPremium;
+  // The dev override unlocks the spoken pregame/halftime buttons too (the
+  // routes skip the Premium check when Supabase isn't configured locally).
+  const canListen = GAME_AUDIO_DEV_OVERRIDE || isPremium;
+
+  // ── Pregame Show ─────────────────────────────────────────────────────
+  // Marcus + Tony preview the matchup before tip-off and hold the playback
+  // until the user tips off. Free = templated banter; Premium = LLM-written
+  // via /api/pregame (falls back to the template on any failure) + voiced via
+  // /api/pregame-audio. Built only from games before this one, so it never
+  // leaks tonight's result.
+  const pregameSeenKey = `bsbb-pregame-seen-${userGameId}`;
+  const [pregameOpen, setPregameOpen] = useState(pregame);
+  const [pregameAutoOff, setPregameAutoOff] = useState(false);
+  useEffect(() => {
+    if (!pregame) return;
+    try {
+      const autoOff = window.localStorage.getItem(PREGAME_AUTO_OFF_KEY) === '1';
+      setPregameAutoOff(autoOff);
+      if (autoOff || window.sessionStorage.getItem(pregameSeenKey)) setPregameOpen(false);
+    } catch { /* storage blocked: show it */ }
+  }, [pregame, pregameSeenKey]);
+  const pregameFacts = useMemo(() => {
+    if (!pregameOpen || !game || !league) return null;
+    return buildPregameFacts({
+      game, games: league.games as GameResult[], teams: league.teams as BasketballTeam[], players,
+    });
+    // Built once when the show opens; the league ticking mid-show shouldn't reshuffle it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pregameOpen, game?.id]);
+  const templatedPregame = useMemo(() => (pregameFacts ? generateTemplatedPregame(pregameFacts) : null), [pregameFacts]);
+  const [aiPregame, setAiPregame] = useState<PregameShow | null>(null);
+  const [aiPregameLoading, setAiPregameLoading] = useState(false);
+  useEffect(() => {
+    if (!pregameFacts || !isPremium) return;
+    let cancelled = false;
+    setAiPregameLoading(true);
+    fetch('/api/pregame', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ facts: pregameFacts }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d?.show) setAiPregame(d.show as PregameShow); })
+      .catch(() => { /* template stays up */ })
+      .finally(() => { if (!cancelled) setAiPregameLoading(false); });
+    return () => { cancelled = true; };
+  }, [pregameFacts, isPremium]);
+  const pregameShow = aiPregame ?? templatedPregame;
+  const pregameAudio = useSegmentAudio('/api/pregame-audio');
+  const halftimeAudio = useSegmentAudio('/api/halftime-audio');
+  const stopPregameAudio = pregameAudio.stop;
+  const closePregame = useCallback(() => {
+    setPregameOpen(false);
+    stopPregameAudio();
+    try { window.sessionStorage.setItem(pregameSeenKey, '1'); } catch { /* ignore */ }
+  }, [pregameSeenKey, stopPregameAudio]);
+  const togglePregameAutoOff = useCallback(() => {
+    setPregameAutoOff(prev => {
+      const next = !prev;
+      try {
+        if (next) window.localStorage.setItem(PREGAME_AUTO_OFF_KEY, '1');
+        else window.localStorage.removeItem(PREGAME_AUTO_OFF_KEY);
+      } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  // ── Live audio broadcast ─────────────────────────────────────────────
+  // Per-event, audio-driven: the spoken call reveals each event and gates
+  // the advance, so the voice stays in sync with the feed. Narrates from the
+  // next unrevealed event forward. While it runs, the timer below stands down.
+  const broadcast = useGameBroadcast();
+  const broadcastOn = broadcast.status !== 'idle';
+  // Driving = the audio is the clock (an errored or finished run hands the
+  // reveal back to the timer).
+  const broadcastDriving = broadcastOn && broadcast.status !== 'error' && broadcast.status !== 'done';
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+  // Season scoring averages before tonight, for the halftime notes' "gone quiet".
+  const seasonPpg = useMemo(
+    () => (game && league && real ? priorScoringAverages(game, league.games as GameResult[]) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [game?.id, real],
+  );
+  const halftimeIdx = useMemo(() => events.findIndex(e => e.kind === 'period' && e.quarter === 2), [events]);
+  const startBroadcast = useCallback((fromIndex: number) => {
+    if (!home || !away || fromIndex >= events.length) return;
+    const ctx = { homeAbbr: home.abbreviation, awayAbbr: away.abbreviation, homeName: home.city, awayName: away.city };
+    setPaused(false);
+    if (speedRef.current === 'max') setSpeed(2);
+    broadcast.start({
+      count: events.length,
+      fromIndex,
+      linesFor: i => broadcastClipLines(events, beats, moments, i, fromIndex, ctx),
+      onShowPlay: i => setCursor(c => Math.max(c, i + 1)),
+      onCallDone: i => {
+        // Halftime break opens after Marcus has called the half (not over it).
+        if (real && i === halftimeIdx && !halftimeShownRef.current) {
+          halftimeShownRef.current = true;
+          setHalftimeOpen(true);
+        }
+      },
+      postClipDelayMs: () => BROADCAST_DWELL[speedRef.current] ?? 0,
+      silentBeatMs: i => silentBeatMs(events[i], speedRef.current === 'max' ? 5 : speedRef.current),
+    });
+  }, [home, away, events, beats, moments, real, halftimeIdx, broadcast]);
+  const toggleBroadcast = () => {
+    if (broadcastOn) broadcast.stop(); else startBroadcast(cursor);
+  };
+  // Mirror the viewer's holds (pause, halftime, pregame) onto the broadcast.
+  const held = paused || halftimeOpen || pregameOpen;
+  useEffect(() => {
+    if (!broadcastDriving) return;
+    if (held) broadcast.pause(); else broadcast.resume();
+  }, [held, broadcastDriving]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Playback: per-event delay — scoring plays and banners linger, crunch time
   // slows down, quiet events (rapid subs) flash by.
   useEffect(() => {
-    if (paused || atEnd || speed === 'max' || halftimeOpen) return;
+    if (paused || atEnd || speed === 'max' || halftimeOpen || pregameOpen || broadcastDriving) return;
     const next = events[cursor];
     let ms = 1100 / speed;
     if (next?.quiet) ms *= 0.15;
@@ -110,16 +247,17 @@ export function LiveViewer({
     if (moments[cursor]?.crunch) ms *= 1.7;
     const id = window.setTimeout(() => setCursor(c => Math.min(events.length, c + 1)), ms);
     return () => window.clearTimeout(id);
-  }, [paused, atEnd, speed, halftimeOpen, cursor, events, moments]);
+  }, [paused, atEnd, speed, halftimeOpen, pregameOpen, broadcastDriving, cursor, events, moments]);
 
   // Halftime break — pause once at the half (not when skipping to the end).
+  // During a broadcast it opens from onCallDone instead, once the half is called.
   useEffect(() => {
-    if (!real || halftimeShownRef.current || speed === 'max' || !last) return;
+    if (!real || halftimeShownRef.current || speed === 'max' || !last || broadcastDriving) return;
     if (last.kind === 'period' && last.quarter === 2) {
       halftimeShownRef.current = true;
       setHalftimeOpen(true);
     }
-  }, [real, last, speed]);
+  }, [real, last, speed, broadcastDriving]);
 
   // Space toggles pause.
   useEffect(() => {
@@ -164,9 +302,17 @@ export function LiveViewer({
   const shots = events.slice(0, cursor).filter(e => e.shot && e.quarter === (last?.quarter ?? 1));
 
   function setSpeedFn(s: Speed) {
-    if (s === 'max') { setCursor(events.length); setHalftimeOpen(false); }
+    if (s === 'max') { broadcast.stop(); halftimeAudio.stop(); setCursor(events.length); setHalftimeOpen(false); }
     setSpeed(s);
   }
+  function jumpTo(target: number) {
+    setCursor(target);
+    setHalftimeOpen(false);
+    halftimeAudio.stop();
+    // A running broadcast picks up from the new spot; skipping to the end stops it.
+    if (broadcastDriving) { if (target < events.length) startBroadcast(target); else broadcast.stop(); }
+  }
+  const halftimeNotes = () => generateHalftimeNotes({ home, away, score, lines, players, seasonPpg });
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-[var(--bg)] text-[var(--foreground)]">
@@ -286,13 +432,30 @@ export function LiveViewer({
             </div>
           )}
           {!atEnd && real && (
-            <button onClick={() => { setCursor(jumpTarget(events, cursor)); setHalftimeOpen(false); }} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--foreground)]">
+            <button onClick={() => jumpTo(jumpTarget(events, cursor))} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--foreground)]">
               Next quarter ⏭
             </button>
           )}
           {!atEnd && (
-            <button onClick={() => { setCursor(events.length); setHalftimeOpen(false); }} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--foreground)]">
+            <button onClick={() => jumpTo(events.length)} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--foreground)]">
               Skip to final →
+            </button>
+          )}
+          {canBroadcast && (!atEnd || broadcastOn) && (
+            <button
+              onClick={toggleBroadcast}
+              className="rounded-lg px-3 py-1.5 text-sm font-bold transition-colors"
+              style={broadcastOn ? { background: '#059669', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--text-sec)' }}
+              title="Audio play-by-play — Marcus & Tony call the game; the call drives the play-by-play"
+            >
+              {broadcastOn
+                ? (broadcast.status === 'buffering' ? '🔊 Buffering…'
+                  : broadcast.status === 'blocked' ? '🔊 Tap to start'
+                  : broadcast.status === 'paused' ? '🔊 Paused'
+                  : broadcast.status === 'error' ? '🔊 Error'
+                  : broadcast.status === 'done' ? '🔊 Broadcast ✓'
+                  : '🔊 On air')
+                : '🔊 Broadcast'}
             </button>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -308,8 +471,40 @@ export function LiveViewer({
         </div>
       </div>
 
+      {broadcast.status === 'blocked' && !held && (
+        <button onClick={broadcast.resume} className="absolute left-1/2 -translate-x-1/2 bottom-20 z-20 rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-lg" style={{ background: '#059669' }}>
+          ▶ Tap to start the audio broadcast
+        </button>
+      )}
+      {broadcast.status === 'error' && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-20 z-20 max-w-sm w-[calc(100%-2rem)] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs shadow-lg flex items-center gap-3">
+          <span className="flex-1">
+            {broadcast.errorCode === 'premium_required' || broadcast.errorCode === 'auth_required'
+              ? <>The live audio broadcast is a Premium feature. <Link href="/pricing" className="font-bold text-[var(--accent)]">Go Premium →</Link></>
+              : broadcast.errorCode === 'not_configured'
+                ? 'The audio broadcast isn\'t set up on this server yet.'
+                : `Broadcast error: ${broadcast.error ?? 'audio unavailable'}`}
+          </span>
+          <button onClick={broadcast.stop} className="font-bold text-[var(--text-sec)]">✕</button>
+        </div>
+      )}
+
       {halftimeOpen && (
-        <HalftimeCard home={home} away={away} score={score} lines={lines} players={players} onResume={() => setHalftimeOpen(false)} />
+        <HalftimeCard
+          home={home} away={away} score={score} lines={lines} players={players}
+          isPremium={canListen} audio={halftimeAudio} onListen={() => halftimeAudio.toggle(halftimeNotes())}
+          onResume={() => { halftimeAudio.stop(); setHalftimeOpen(false); }}
+        />
+      )}
+
+      {pregameOpen && pregameShow && (
+        <PregameCard
+          show={pregameShow} home={home} away={away} isPremium={canListen} aiLoading={aiPregameLoading && !aiPregame}
+          audio={pregameAudio} onListen={() => pregameAudio.toggle(pregameAudioLines(pregameShow))}
+          autoOff={pregameAutoOff} onToggleAutoOff={togglePregameAutoOff}
+          canBroadcast={canBroadcast}
+          onTipOff={withBroadcast => { closePregame(); if (withBroadcast) startBroadcast(cursor); }}
+        />
       )}
     </div>
   );
@@ -539,7 +734,10 @@ function ApproxBoxScore({ game, home, away, players, progress }: { game: GameRes
 // Halftime
 // ===========================================================================
 
-function HalftimeCard({ home, away, score, lines, players, onResume }: { home: BasketballTeam; away: BasketballTeam; score: { home: number; away: number }; lines: Map<string, LiveLine>; players: Players; onResume: () => void }) {
+function HalftimeCard({ home, away, score, lines, players, isPremium, audio, onListen, onResume }: {
+  home: BasketballTeam; away: BasketballTeam; score: { home: number; away: number }; lines: Map<string, LiveLine>; players: Players;
+  isPremium: boolean; audio: SegmentAudio; onListen: () => void; onResume: () => void;
+}) {
   const teamLine = (team: BasketballTeam) => team.playerIds.reduce((s, id) => {
     const l = lines.get(id); if (!l) return s;
     return { fgm: s.fgm + l.fgm, fga: s.fga + l.fga, tpm: s.tpm + l.tpm, tpa: s.tpa + l.tpa, reb: s.reb + l.reb, to: s.to + l.to };
@@ -575,7 +773,141 @@ function HalftimeCard({ home, away, score, lines, players, onResume }: { home: B
             );
           })}
         </div>
-        <button onClick={onResume} className="mt-4 w-full rounded-lg py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>Start the 2nd half ▶</button>
+        <div className="mt-4">
+          <SegmentAudioButton
+            isPremium={isPremium} audio={audio} onListen={onListen}
+            labels={{ idle: '🔊 Listen — Marcus & Tony break down the half', loading: '🔊 Marcus & Tony are recording it…', playing: '⏸ Stop breakdown' }}
+            upsell="to hear Marcus & Tony break down both teams and the second-half adjustments — plus the live audio broadcast."
+          />
+        </div>
+        <button onClick={onResume} className="mt-2 w-full rounded-lg py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>Start the 2nd half ▶</button>
+      </div>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Pregame Show + spoken segments
+// ===========================================================================
+
+/** Premium: a Listen/Stop button for a spoken segment. Free: the upsell. */
+function SegmentAudioButton({ isPremium, audio, onListen, labels, upsell }: {
+  isPremium: boolean; audio: SegmentAudio; onListen: () => void;
+  labels: { idle: string; loading: string; playing: string }; upsell: string;
+}) {
+  if (!isPremium) {
+    return (
+      <Link href="/pricing" className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-3 py-2 hover:bg-purple-500/20 transition-colors">
+        <span className="text-xs">🔊 <span className="font-bold">Go Premium</span> {upsell}</span>
+        <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
+      </Link>
+    );
+  }
+  const err = audio.state === 'error';
+  return (
+    <div>
+      <button
+        onClick={onListen}
+        disabled={audio.state === 'loading'}
+        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-60 transition-colors"
+        style={{ background: '#059669' }}
+      >
+        {audio.state === 'loading' ? labels.loading : audio.state === 'playing' ? labels.playing : err ? '🔊 Retry audio' : labels.idle}
+      </button>
+      {err && (
+        <div className="mt-1 text-[11px] text-[var(--text-sec)]">
+          {audio.errorCode === 'premium_required' || audio.errorCode === 'auth_required' ? 'Sign in with a Premium account to hear it.'
+            : audio.errorCode === 'not_configured' ? 'Studio audio isn\'t set up on this server yet.'
+            : audio.errorCode === 'tts_quota' ? 'The studio voices are over capacity right now.'
+            : 'Audio is unavailable right now.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PREGAME_HOSTS = {
+  stats: { name: 'Marcus Cole', avatar: '🤓', color: '#2563eb' },
+  hottake: { name: 'Tony Blaze', avatar: '🔥', color: '#dc2626' },
+} as const;
+
+function PregameCard({ show, home, away, isPremium, aiLoading, audio, onListen, autoOff, onToggleAutoOff, canBroadcast, onTipOff }: {
+  show: PregameShow; home: BasketballTeam; away: BasketballTeam; isPremium: boolean; aiLoading: boolean;
+  audio: SegmentAudio; onListen: () => void; autoOff: boolean; onToggleAutoOff: () => void;
+  canBroadcast: boolean; onTipOff: (withBroadcast: boolean) => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-3 sm:p-4">
+      <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border)] shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl" aria-hidden>🎙️</span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-black leading-tight">Pregame Show</h2>
+              <div className="text-xs text-[var(--text-sec)] truncate">{show.headline}</div>
+            </div>
+          </div>
+          <button onClick={() => onTipOff(false)} aria-label="Skip pregame show" className="text-[var(--text-sec)] hover:text-[var(--foreground)] text-xl leading-none">✕</button>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {(['stats', 'hottake'] as const).map(k => {
+              const h = PREGAME_HOSTS[k];
+              const p = show.picks[k];
+              const team = p.abbr === home.abbreviation ? home : p.abbr === away.abbreviation ? away : null;
+              return (
+                <div key={k} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: h.color }}>{h.avatar} {h.name.split(' ')[0]}&apos;s Pick</div>
+                  <div className="text-sm font-black mt-0.5" style={team ? { color: team.primaryColor } : undefined}>{team ? `${team.city} ${team.name}` : p.abbr}</div>
+                  <div className="text-xs text-[var(--text-sec)] tabular-nums">{p.score}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <SegmentAudioButton
+            isPremium={isPremium} audio={audio} onListen={onListen}
+            labels={{ idle: '🔊 Listen to the pregame show', loading: '🔊 Marcus & Tony are recording it…', playing: '⏸ Stop' }}
+            upsell="for a fully AI-written pregame show you can listen to — plus the live audio broadcast and halftime breakdown."
+          />
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">In the Booth</div>
+              {aiLoading && <div className="text-[10px] text-[var(--text-sec)] animate-pulse">Marcus &amp; Tony are going deeper…</div>}
+            </div>
+            {show.exchanges.map((ex, i) => {
+              const h = PREGAME_HOSTS[ex.speakerId];
+              return (
+                <div key={`${show.source}-${i}`} className="flex gap-2.5">
+                  <span className="text-lg shrink-0 leading-none mt-0.5" aria-hidden>{h.avatar}</span>
+                  <div>
+                    <div className="text-xs font-bold" style={{ color: h.color }}>{h.name}</div>
+                    <div className="text-sm">{ex.text}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t border-[var(--border)] px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <label className="flex items-center gap-2 text-xs text-[var(--text-sec)] cursor-pointer order-2 sm:order-1">
+            <input type="checkbox" checked={autoOff} onChange={onToggleAutoOff} />
+            Don&apos;t show automatically
+          </label>
+          <div className="order-1 sm:order-2 sm:ml-auto flex gap-2">
+            {canBroadcast && (
+              <button onClick={() => onTipOff(true)} className="flex-1 sm:flex-none rounded-lg px-4 py-2.5 text-sm font-bold border border-[var(--border)] bg-[var(--surface-2)] hover:brightness-95">
+                🔊 Tip off with audio
+              </button>
+            )}
+            <button onClick={() => onTipOff(false)} className="flex-1 sm:flex-none sm:px-8 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: '#059669' }}>
+              🏀 Tip Off
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
