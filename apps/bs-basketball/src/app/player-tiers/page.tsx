@@ -45,7 +45,7 @@ function PlayerChip({ p, rank, big }: { p: RankedPlayer; rank: number; big?: boo
     >
       <span className="text-[11px] font-mono text-[var(--text-sec)] w-5 text-right">{rank}</span>
       <span className="min-w-0">
-        <span className={`block font-bold leading-tight truncate ${big ? 'text-base' : 'text-sm'}`}>{p.name}</span>
+        <span className={`block font-bold leading-tight ${big ? 'text-base' : 'text-sm'}`}>{p.name}</span>
         <span className="block text-[11px] text-[var(--text-sec)]">{p.pos} · {p.team.abbrev} · {p.age}</span>
       </span>
       <span className={`ml-auto font-black tabular-nums ${big ? 'text-xl' : 'text-base'}`} style={{ color: 'var(--accent)' }}>{p.ovr}</span>
@@ -124,16 +124,11 @@ export default function PlayerTiersPage() {
                 {tier.blurb} {tier.players.length > 0 && `${tier.players[tier.players.length - 1].p.ovr}–${tier.players[0].p.ovr} OVR`}
               </p>
             </div>
-            <div
-              className="grid gap-2 mx-auto"
-              style={{
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
-                maxWidth: `${Math.min(100, 22 + ti * 16)}%`,
-                minWidth: 'min(100%, 240px)',
-              }}
-            >
+            <div className="flex flex-wrap justify-center gap-2">
               {tier.players.map(({ p, rank }) => (
-                <PlayerChip key={p.id} p={p} rank={rank} big={ti < 2} />
+                <div key={p.id} className={`w-full ${ti < 2 ? 'sm:w-[240px]' : 'sm:w-[200px]'}`}>
+                  <PlayerChip p={p} rank={rank} big={ti < 2} />
+                </div>
               ))}
             </div>
           </div>
