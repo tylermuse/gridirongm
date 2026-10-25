@@ -14,9 +14,9 @@
  * Costs are cumulative totals — upgrading pays only the difference (a quick
  * look then a full eval costs 1 + 5 = 6).
  *
- * Budget by tier (shared `getScoutingAllocations`, same as Football): 10 pts
- * free, 30 Premium (~4 full evals + a few quick looks), unlimited for founders
- * and admins. Points LEFT are derived as budget − points spent (from
+ * Budget by tier (getHoopsScoutingAllocations): 5 pts free (an NBA draft is
+ * only 2 rounds), 30 Premium (~4 full evals + a few quick looks), unlimited for
+ * founders and admins. Points LEFT are derived as budget − points spent (from
  * scoutLevels), not read from the stored `scoutPoints` field, so an upgrade
  * mid-draft takes effect immediately and old saves need no migration. Callers
  * in React pass the budget from useSubscription(); engine code falls back to
@@ -36,7 +36,8 @@
  */
 
 import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
-import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
+import { getCurrentSubscriptionAllocations, getCurrentSubscriptionTier } from '@bs/core/billing';
+import { HOOPS_FREE_SCOUT_POINTS } from '../billing/allocations';
 import { developmentFactorFor, type BasketballPlayer, type BasketballRatings, type BasketballStats } from '@bs/sport-basketball';
 import { getDraft } from '../draft/draft';
 import type { DraftState, ScoutLevel } from '../draft/types';
@@ -96,7 +97,10 @@ const SKILL_NOISE: Record<ScoutLevel, number> = { 0: 0, 1: 7, 2: 3, 3: 0 };
 
 /** This user's per-draft scouting budget for their tier (UNLIMITED_ALLOCATION when uncapped). */
 export function scoutBudget(): number {
-  return getCurrentSubscriptionAllocations().scoutPoints;
+  const alloc = getCurrentSubscriptionAllocations();
+  // The shared default (before SubscriptionProvider resolves) is Football's
+  // free 10; Hoops free is 5.
+  return alloc.isUnlimited || getCurrentSubscriptionTier() === 'premium' ? alloc.scoutPoints : HOOPS_FREE_SCOUT_POINTS;
 }
 
 /** Points already spent this draft, from the tier reached on each prospect. */

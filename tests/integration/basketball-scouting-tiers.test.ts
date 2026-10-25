@@ -16,7 +16,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getScoutingAllocations, setCurrentSubscriptionAllocations } from '@bs/core/billing';
+import { getScoutingAllocations, setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
+import { getHoopsScoutingAllocations, HOOPS_FREE_SCOUT_POINTS } from '@/../apps/bs-basketball/src/lib/billing/allocations';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
 import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import {
@@ -51,8 +52,8 @@ let base: BasketballLeagueState;
 beforeAll(() => { base = offseason('scout-tiers'); }, 120_000);
 
 // Pin Premium (30 pts) so the budget arithmetic below reads against SCOUT_POINTS_PER_DRAFT.
-beforeAll(() => setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false)));
-afterAll(() => setCurrentSubscriptionAllocations(getScoutingAllocations('free', false)));
+beforeAll(() => { setCurrentSubscriptionTier('premium'); setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false)); });
+afterAll(() => { setCurrentSubscriptionTier('free'); setCurrentSubscriptionAllocations(getScoutingAllocations('free', false)); });
 
 describe('tiered scouting budget', () => {
   it('starts with the full points budget and nothing scouted', () => {
@@ -211,33 +212,40 @@ describe('legacy (flat scout) back-compat', () => {
 });
 
 describe('tier-based budget', () => {
-  it('free gets 10 points, Premium 30, founders unlimited', () => {
+  it('Hoops free gets 5 points (Football free keeps 10), Premium 30, founders unlimited', () => {
     const d = getDraft(base)!;
-    expect(scoutPointsLeft(d, getScoutingAllocations('free', false).scoutPoints)).toBe(10);
-    expect(scoutPointsLeft(d, getScoutingAllocations('premium', false).scoutPoints)).toBe(30);
-    expect(scoutPointsLeft(d, getScoutingAllocations('free', true).scoutPoints)).toBeGreaterThan(1000);
+    expect(getScoutingAllocations('free', false).scoutPoints).toBe(10); // Football unchanged
+    expect(scoutPointsLeft(d, getHoopsScoutingAllocations('free', false).scoutPoints)).toBe(5);
+    expect(getHoopsScoutingAllocations('free', false).intelReports).toBe(3);
+    expect(scoutPointsLeft(d, getHoopsScoutingAllocations('premium', false).scoutPoints)).toBe(30);
+    expect(scoutPointsLeft(d, getHoopsScoutingAllocations('free', true).scoutPoints)).toBeGreaterThan(1000);
   });
 
-  it('a free budget stops spending at 10 and an upgrade mid-draft adds the difference', () => {
+  it('a free budget stops spending at 5 and an upgrade mid-draft adds the difference', () => {
     const d = getDraft(base)!;
-    const FREE = 10;
-    let l = base;
-    for (const id of d.poolIds.slice(0, 3)) l = scoutProspect(l, id, 3, FREE); // 6, then two no-ops (6 > 4 left)
-    expect(scoutPointsLeft(getDraft(l)!, FREE)).toBe(FREE - 6);
-    l = scoutProspect(l, d.poolIds[1], 2, FREE); // workout costs 3 → 1 left
+    const FREE = HOOPS_FREE_SCOUT_POINTS;
+    const [a, b, c] = d.poolIds;
+    let l = scoutProspect(base, a, 3, FREE);
+    expect(l).toBe(base); // a full evaluation (6) is out of reach on free
+    l = scoutProspect(l, a, 2, FREE); // workout: 3 → 2 left
+    l = scoutProspect(l, b, 1, FREE); // quick look: 1 → 1 left
     expect(scoutPointsLeft(getDraft(l)!, FREE)).toBe(1);
-    expect(scoutProspect(l, d.poolIds[2], 2, FREE)).toBe(l); // can't afford
+    expect(scoutProspect(l, c, 2, FREE)).toBe(l); // can't afford
     // Same draft state, Premium budget: spend so far is kept, the rest unlocks.
-    expect(scoutPointsLeft(getDraft(l)!, 30)).toBe(30 - 9);
-    expect(scoutLevel(getDraft(scoutProspect(l, d.poolIds[2], 2, 30))!, d.poolIds[2])).toBe(2);
+    expect(scoutPointsLeft(getDraft(l)!, 30)).toBe(30 - 4);
+    expect(scoutLevel(getDraft(scoutProspect(l, c, 2, 30))!, c)).toBe(2);
   });
 
-  it('defaults to the tier SubscriptionProvider publishes', () => {
+  it('defaults to the tier SubscriptionProvider publishes (Hoops free = 5, even before it resolves)', () => {
     const d = getDraft(base)!;
     try {
-      setCurrentSubscriptionAllocations(getScoutingAllocations('free', false));
-      expect(scoutPointsLeft(d)).toBe(10);
+      setCurrentSubscriptionTier('free');
+      setCurrentSubscriptionAllocations(getScoutingAllocations('free', false)); // shared default (10)
+      expect(scoutPointsLeft(d)).toBe(5);
+      setCurrentSubscriptionAllocations(getHoopsScoutingAllocations('free', true)); // founder
+      expect(scoutPointsLeft(d)).toBeGreaterThan(1000);
     } finally {
+      setCurrentSubscriptionTier('premium');
       setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false));
     }
     expect(scoutPointsLeft(d)).toBe(30);

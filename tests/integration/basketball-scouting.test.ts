@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getScoutingAllocations, setCurrentSubscriptionAllocations } from '@bs/core/billing';
+import { getScoutingAllocations, setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
 import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import {
@@ -31,8 +31,8 @@ function offseason(seed: string) {
 }
 
 // Pin Premium (30 pts) so the expectations read against SCOUT_POINTS_PER_DRAFT.
-beforeAll(() => setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false)));
-afterAll(() => setCurrentSubscriptionAllocations(getScoutingAllocations('free', false)));
+beforeAll(() => { setCurrentSubscriptionTier('premium'); setCurrentSubscriptionAllocations(getScoutingAllocations('premium', false)); });
+afterAll(() => { setCurrentSubscriptionTier('free'); setCurrentSubscriptionAllocations(getScoutingAllocations('free', false)); });
 
 describe('draft scouting', () => {
   it('starts with a full scout budget and unscouted prospects', () => {

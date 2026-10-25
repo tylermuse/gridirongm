@@ -118,7 +118,7 @@ export function DraftBoardCard({
                 <div className={`h-full ${scoutBar}`} style={{ width: `${scoutPct}%` }} />
               </div>
               <span className="text-xs tabular-nums text-[var(--text-sec)]">{pointsLeft}/{scoutBudget}</span>
-              {tier === 'free' && pointsLeft < tierCost(3) && (
+              {tier === 'free' && pointsLeft < tierCost(2) && (
                 <Link href="/pricing" className="text-[10px] font-bold hover:underline" style={{ color: 'var(--accent)' }}>
                   Premium: 30/draft →
                 </Link>

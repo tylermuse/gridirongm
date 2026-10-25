@@ -16,10 +16,10 @@ import {
   type ScoutingAllocations,
   hasFeature as checkFeature,
   hasScouting as checkScouting,
-  getScoutingAllocations,
   PODCAST_CREDITS_PER_MONTH,
 } from '@bs/core/billing';
 import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
+import { getHoopsScoutingAllocations, HOOPS_FREE_SCOUT_POINTS } from '@/lib/billing/allocations';
 import { trackAuthEvent } from '@bs/core/analytics';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -63,7 +63,7 @@ const SubscriptionContext = createContext<SubscriptionContextValue>({
   loading: true,
   hasFeature: () => false,
   hasScouting: true,
-  scoutingAllocations: { scoutPoints: 10, intelReports: 3, isUnlimited: false },
+  scoutingAllocations: { scoutPoints: HOOPS_FREE_SCOUT_POINTS, intelReports: 3, isUnlimited: false },
   podcastCredits: DEFAULT_CREDITS,
   refreshPodcastCredits: async () => {},
   signOut: async () => {},
@@ -217,7 +217,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
       setTier(resolvedTier);
       setCurrentSubscriptionTier(resolvedTier);
-      setCurrentSubscriptionAllocations(getScoutingAllocations(resolvedTier, admin || isFounder));
+      setCurrentSubscriptionAllocations(getHoopsScoutingAllocations(resolvedTier, admin || isFounder));
       setPodcastCredits(computeCredits(resolvedTier, admin, profile));
     },
     [supabase, computeCredits],
@@ -333,7 +333,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setCurrentSubscriptionTier(effectiveTier);
     setCurrentSubscriptionAllocations(
-      getScoutingAllocations(effectiveTier, effectiveIsAdmin || effectiveIsFoundingMember),
+      getHoopsScoutingAllocations(effectiveTier, effectiveIsAdmin || effectiveIsFoundingMember),
     );
   }, [effectiveTier, effectiveIsAdmin, effectiveIsFoundingMember]);
 
@@ -348,7 +348,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     hasFeature: (feature: Feature) =>
       effectiveIsAdmin || effectiveIsFoundingMember || checkFeature(effectiveTier, feature),
     hasScouting: effectiveIsAdmin || effectiveIsFoundingMember || checkScouting(effectiveTier),
-    scoutingAllocations: getScoutingAllocations(effectiveTier, effectiveIsAdmin || effectiveIsFoundingMember),
+    scoutingAllocations: getHoopsScoutingAllocations(effectiveTier, effectiveIsAdmin || effectiveIsFoundingMember),
     podcastCredits,
     refreshPodcastCredits,
     signOut,
