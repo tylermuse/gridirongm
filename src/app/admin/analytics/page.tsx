@@ -49,6 +49,7 @@ interface FeedbackItem {
   page: string | null;
   created_at: string;
   user_id: string | null;
+  app?: string | null;
 }
 
 export default function AdminAnalyticsPage() {
@@ -313,6 +314,7 @@ export default function AdminAnalyticsPage() {
                       <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.message}</p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
                         <span>{timeAgo(fb.created_at)}</span>
+                        {fb.app === 'bs-hoops' && <span className="font-semibold text-orange-600">Hoops</span>}
                         {fb.page && <span className="font-mono">{fb.page}</span>}
                         <span className="font-mono">{fb.user_id ? fb.user_id.slice(0, 8) : 'anon'}</span>
                       </div>
