@@ -1,4 +1,4 @@
-import type { Player, PlayerRatings, Position, Team } from '@/types';
+import type { GameResult, Player, PlayerRatings, PlayerStats, Position, Team } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed } from '@/types';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from '@/lib/engine/salary';
 import { LEAGUE_TEAMS } from './teams';
@@ -113,6 +113,29 @@ interface FbgmDraftPick {
   dpid?: number;          // FBGM internal id
 }
 
+/** An unplayed game in FBGM's `schedule` (`day` is the week for football). */
+interface FbgmScheduledGame {
+  day: number;
+  homeTid: number;
+  awayTid: number;
+}
+
+/** BS-only block written by scripts/build_midseason_start.py: every completed
+ *  real game so far with its final score and per-player box line (BS stat
+ *  keys, keyed by FBGM pid). The file's `schedule` holds the rest of the slate. */
+interface FbgmRealSeason {
+  season: number;
+  asOf?: string;
+  games: Array<{
+    week: number;
+    homeTid: number;
+    awayTid: number;
+    homeScore: number;
+    awayScore: number;
+    playerStats?: Record<string, Partial<PlayerStats>>;
+  }>;
+}
+
 interface FbgmLeagueFile {
   teams: FbgmTeam[];
   players: FbgmPlayer[];
@@ -122,6 +145,8 @@ interface FbgmLeagueFile {
     divs?: Array<{ did: number; cid: number; name: string }>;
   };
   draftPicks?: FbgmDraftPick[];
+  schedule?: FbgmScheduledGame[];
+  bsRealSeason?: FbgmRealSeason;
 }
 
 function clamp(value: number, min = 20, max = 99): number {
@@ -264,6 +289,61 @@ export interface ImportedLeagueData {
    *  season — these are real veterans who should populate the FA pool, not
    *  ghost-attach to whichever team they last played for. */
   freeAgentIds: string[];
+  /** The real season so far, when the file carries one (NFL 2026 roster). A
+   *  regular-season start picks up here instead of a generated Week 1. */
+  realSeason?: RealSeasonState;
+}
+
+export interface RealSeasonState {
+  /** First week with an unplayed game — where the league picks up. */
+  currentWeek: number;
+  /** Date the real results were pulled (YYYY-MM-DD). */
+  asOf?: string;
+  /** Real completed games (played, with box lines) then the real remaining slate. */
+  schedule: GameResult[];
+}
+
+/**
+ * Build the real-season schedule from a file's `bsRealSeason` + `schedule`.
+ * Undefined when the file has none, or when it doesn't hold together (unknown
+ * team, nothing left to play) — the caller then generates a fresh season.
+ */
+function convertRealSeason(
+  league: FbgmLeagueFile,
+  season: number,
+  teamByTid: Map<number, string>,
+  playerIds: Set<string>,
+): RealSeasonState | undefined {
+  const real = league.bsRealSeason;
+  if (!real || real.season !== season || !Array.isArray(real.games) || !league.schedule?.length) return undefined;
+
+  const schedule: GameResult[] = [];
+  const realGames = [...real.games].sort((a, b) => a.week - b.week);
+  for (const g of realGames) {
+    const homeTeamId = teamByTid.get(g.homeTid);
+    const awayTeamId = teamByTid.get(g.awayTid);
+    if (!homeTeamId || !awayTeamId) return undefined;
+    // Box lines for players the import dropped (retired, duplicate stubs) go too.
+    const playerStats: Record<string, Partial<PlayerStats>> = {};
+    for (const [pid, line] of Object.entries(g.playerStats ?? {})) {
+      if (playerIds.has(`player-${pid}`)) playerStats[`player-${pid}`] = line;
+    }
+    schedule.push({
+      id: uuid(), week: g.week, season, homeTeamId, awayTeamId,
+      homeScore: g.homeScore, awayScore: g.awayScore, played: true, playerStats,
+    });
+  }
+  for (const g of league.schedule) {
+    const homeTeamId = teamByTid.get(g.homeTid);
+    const awayTeamId = teamByTid.get(g.awayTid);
+    if (!homeTeamId || !awayTeamId) return undefined;
+    schedule.push({
+      id: uuid(), week: g.day, season, homeTeamId, awayTeamId,
+      homeScore: 0, awayScore: 0, played: false, playerStats: {},
+    });
+  }
+  const currentWeek = Math.min(...league.schedule.map(g => g.day));
+  return { currentWeek, asOf: real.asOf, schedule };
 }
 
 export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
@@ -597,7 +677,9 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   // picks on expiring deals, etc.
   validateImportedLeague(season, finalizedTeams, players);
 
-  return { season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds };
+  const realSeason = convertRealSeason(league, season, teamByTid, new Set(players.map(p => p.id)));
+
+  return { season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds, realSeason };
 }
 
 /**
