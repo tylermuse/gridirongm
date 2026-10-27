@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { PREMIUM_PRICE_ID, PODCAST_CREDITS_PER_MONTH, EPISODE_PACK } from '@bs/core/billing';
+import { getAttribution } from '@/lib/attribution';
 
 const PREMIUM_FEATURES = [
   'Ad-free experience',
@@ -59,7 +60,7 @@ export default function PricingPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId: PREMIUM_PRICE_ID }),
+        body: JSON.stringify({ priceId: PREMIUM_PRICE_ID, attribution: getAttribution() }),
       });
       const data = await res.json();
       if (data.url) {

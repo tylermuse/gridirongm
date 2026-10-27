@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@bs/core/supabase/client';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { getAttribution } from '@/lib/attribution';
 
 // Whitelist of relative paths the login flow may redirect to after a
 // successful sign-in. Prevents open-redirect attacks via ?next= URLs.
@@ -78,7 +79,12 @@ function LoginContent() {
         const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+          options: {
+            emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+            // Where this person first found the game — lands in
+            // auth.users.raw_user_meta_data so signups can be attributed.
+            data: { first_touch: getAttribution() ?? undefined },
+          },
         });
         if (signUpError) throw signUpError;
         setMessage('Check your email for a confirmation link.');

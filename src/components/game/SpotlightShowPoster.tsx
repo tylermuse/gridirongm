@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { EPISODE_PACK } from '@bs/core/billing';
+import { getAttribution } from '@/lib/attribution';
 import Link from 'next/link';
 import { formatRecord, type Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -45,7 +46,7 @@ export function SpotlightShowPoster({
     setBuying('loading');
     try {
       const res = await fetch('/api/stripe/checkout', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product: 'episode_pack' }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product: 'episode_pack', attribution: getAttribution() }),
       });
       const data = (await res.json()) as { url?: string };
       if (!res.ok || !data.url) throw new Error('no checkout url');

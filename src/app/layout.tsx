@@ -6,6 +6,7 @@ import { FeedbackWidget } from '@/components/game/FeedbackWidget';
 import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister';
 import { RolloverErrorBeacon } from '@/components/providers/RolloverErrorBeacon';
 import { ExpansionTakeoverErrorBeacon } from '@/components/providers/ExpansionTakeoverErrorBeacon';
+import { AttributionCapture } from '@/components/providers/AttributionCapture';
 import './globals.css';
 
 const ADSENSE_CLIENT_ID = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ServiceWorkerRegister />
           <RolloverErrorBeacon />
           <ExpansionTakeoverErrorBeacon />
+          <AttributionCapture />
         </Providers>
         {/* Vercel Web Analytics — independent, bot-filtered visitor &
             pageview counts. Serves from /_vercel/insights/script.js once

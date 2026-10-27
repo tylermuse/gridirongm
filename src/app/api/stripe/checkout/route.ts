@@ -3,7 +3,8 @@ import { getStripe } from '@bs/core/billing';
 import { createClient } from '@bs/core/supabase/server';
 import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS, EPISODE_PACK } from '@bs/core/billing';
 import { readCredits, getServiceClient } from '@bs/core/podcast';
-import { getOrCreateCustomerId, hasLiveSubscription } from '@/lib/server/stripeSync';
+import { getOrCreateCustomerId, hasLiveSubscription, saveFirstTouch } from '@/lib/server/stripeSync';
+import { sanitizeAttribution, attributionToStripeMetadata } from '@/lib/attribution';
 
 // Only the configured Premium price is allowed at checkout. Legacy prices
 // remain valid for existing subscribers (the webhook still maps them up to
@@ -14,7 +15,15 @@ const ALLOWED_PRICE_IDS = new Set<string>(
 
 export async function POST(request: Request) {
   try {
-    const { priceId, product } = (await request.json()) as { priceId?: string; product?: string };
+    const { priceId, product, attribution: rawAttribution } = (await request.json()) as {
+      priceId?: string;
+      product?: string;
+      attribution?: unknown;
+    };
+    // First-touch source captured in the browser (referrer / UTMs). Untrusted
+    // input: whitelisted keys, trimmed values, nothing else gets through.
+    const attribution = sanitizeAttribution(rawAttribution);
+    const attrMeta = attributionToStripeMetadata(attribution);
     // Episode pack: a one-time purchase, Premium subscribers only.
     const pack = product === 'episode_pack';
     if (pack && !EPISODE_PACK.priceId) {
@@ -56,6 +65,8 @@ export async function POST(request: Request) {
 
     // Reuse the user's existing Stripe customer instead of minting a new one per click.
     const customerId = await getOrCreateCustomerId(user.id, user.email);
+    // Remember how this user found us (no-op if already recorded).
+    await saveFirstTouch(user.id, attribution);
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
     if (pack) {
@@ -70,7 +81,7 @@ export async function POST(request: Request) {
         // Back to the dashboard: the show is right there, with the new episodes.
         success_url: `${appUrl}/?episodes=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/?episodes=canceled`,
-        metadata: { supabase_user_id: user.id, episode_pack: String(EPISODE_PACK.credits) },
+        metadata: { supabase_user_id: user.id, episode_pack: String(EPISODE_PACK.credits), ...attrMeta },
       });
       return NextResponse.json({ url: session.url });
     }
@@ -82,10 +93,11 @@ export async function POST(request: Request) {
       // instead of waiting on the webhook.
       success_url: `${appUrl}/settings?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pricing?subscription=canceled`,
-      metadata: { supabase_user_id: user.id },
-      // Put the user ID on the subscription itself so every later
-      // subscription event can be tied back to the user.
-      subscription_data: { metadata: { supabase_user_id: user.id } },
+      metadata: { supabase_user_id: user.id, ...attrMeta },
+      // Put the user ID (and acquisition source) on the subscription itself
+      // so every later subscription event — and the Stripe dashboard — can
+      // say who this is and where they came from.
+      subscription_data: { metadata: { supabase_user_id: user.id, ...attrMeta } },
     });
 
     return NextResponse.json({ url: session.url });

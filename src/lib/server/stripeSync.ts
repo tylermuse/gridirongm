@@ -9,6 +9,7 @@
 import { createServerClient } from '@supabase/ssr';
 import type Stripe from 'stripe';
 import { getStripe, tierFromPriceId } from '@bs/core/billing';
+import type { Attribution } from '@/lib/attribution';
 
 const ACTIVE_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
@@ -80,6 +81,30 @@ export async function saveCustomerId(userId: string, customerId: string) {
     .from('profiles')
     .upsert({ id: userId, stripe_customer_id: customerId }, { onConflict: 'id' });
   if (error) throw new Error(`profiles upsert failed for ${userId}: ${error.message}`);
+}
+
+/**
+ * Record first-touch attribution on the profile, once. Never overwrites an
+ * existing value (the first answer is the one that matters) and never
+ * throws: attribution is best-effort and must not block a checkout.
+ */
+export async function saveFirstTouch(userId: string, attr: Attribution | null) {
+  if (!attr) return;
+  try {
+    const service = getServiceClient();
+    const { data } = await service
+      .from('profiles')
+      .select('first_touch')
+      .eq('id', userId)
+      .maybeSingle();
+    if (data?.first_touch) return;
+    const { error } = await service
+      .from('profiles')
+      .upsert({ id: userId, first_touch: attr }, { onConflict: 'id' });
+    if (error) console.error(`[attribution] profiles.first_touch upsert failed for ${userId}: ${error.message}`);
+  } catch (err) {
+    console.error('[attribution] saveFirstTouch failed:', err);
+  }
 }
 
 /**
