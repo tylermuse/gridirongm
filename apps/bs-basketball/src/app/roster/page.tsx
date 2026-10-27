@@ -14,7 +14,7 @@ import { ReleaseModal } from '@/components/modals/ReleaseModal';
 import { DepthChart } from '@/components/roster/DepthChart';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { getHeadCoach, coachScheme, schemeFit, SCHEME_LABELS, type SchemeFit } from '@/lib/coaching/coaches';
-import { getInjuries } from '@/lib/injuries';
+import { getInjuries, canPlayThrough } from '@/lib/injuries';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { lastSeasonLog } from '@/lib/stats/statLine';
@@ -318,10 +318,14 @@ export default function RosterPage() {
   const hcScheme = hc ? coachScheme(hc) : null;
   const injuries = getInjuries(league);
   const today = league.currentTick;
-  const injuryLabel = (id: string): string | null => {
+  // A player who can suit up through a day-to-day / minor knock is NOT "OUT" —
+  // he's game-time decision (GTD) and may play. Flagging those as a hard red
+  // "OUT" was the bug: users saw OUT in the lineup, then the guy played.
+  const injuryLabel = (id: string): { text: string; gtd: boolean } | null => {
     const inj = injuries[id];
     if (!inj || inj.returnDay <= today) return null;
-    return inj.returnDay >= 50_000 ? 'OUT' : `OUT ${inj.returnDay - today}d`;
+    if (canPlayThrough(inj)) return { text: `GTD ${inj.returnDay - today}d`, gtd: true };
+    return { text: inj.returnDay >= 50_000 ? 'OUT' : `OUT ${inj.returnDay - today}d`, gtd: false };
   };
   const renderCells = (p: BasketballPlayer, isStarter: boolean, dragData: object) => (
     <PlayerCells
@@ -558,7 +562,7 @@ function PlayerCells({
   moodOpen: boolean;
   onToggleMood: () => void;
   fit: SchemeFit | null;
-  injury: string | null;
+  injury: { text: string; gtd: boolean } | null;
   season: number;
   draggable: boolean;
   dragData: object;
@@ -634,8 +638,14 @@ function PlayerCells({
       </span>
       <span className="relative flex flex-col items-center gap-0.5">
         {injury ? (
-          <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: 'color-mix(in srgb, #dc2626 16%, transparent)', color: '#dc2626' }} title="Injured — unavailable">
-            🏥 {injury}
+          <span
+            className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap"
+            style={injury.gtd
+              ? { background: 'color-mix(in srgb, #f59e0b 16%, transparent)', color: '#f59e0b' }
+              : { background: 'color-mix(in srgb, #dc2626 16%, transparent)', color: '#dc2626' }}
+            title={injury.gtd ? 'Game-time decision — can play through (elevated re-injury risk)' : 'Injured — unavailable'}
+          >
+            {injury.gtd ? '🩹' : '🏥'} {injury.text}
           </span>
         ) : (
           <>

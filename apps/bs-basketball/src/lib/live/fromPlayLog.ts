@@ -151,6 +151,16 @@ export function eventsFromPlayLog(playLog: PlayLog, players: Players, homeAbbr: 
       return;
     }
 
+    if (entry.k === 'f') {
+      const side: Side = entry.side === 'h' ? 'home' : 'away';
+      const pid = ids[entry.id];
+      push({
+        quarter: entry.q, clock: fmtClock(entry.t), side, kind: 'foulout', scoring: false, points: 0,
+        playerId: pid, text: `${nm(players, pid)} has fouled out!`,
+      });
+      return;
+    }
+
     narratePossession(entry, idx, ids, players, push, () => ({ home, away }), (h, a) => { home = h; away = a; });
   });
 

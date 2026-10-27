@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { getTransactions } from '@/lib/transactions';
-import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
+import { getInjuries, SEVERITY_LABEL, canPlayThrough } from '@/lib/injuries';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import type {
   BasketballPlayer,
@@ -304,12 +304,13 @@ export default function TeamPage() {
             <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>
               {hurt.map(inj => {
                 const p = league.players[inj.playerId] as BasketballPlayer | undefined;
-                const out = inj.returnDay > 90_000 ? 'out for season' : `~${Math.max(1, inj.returnDay - day)}d`;
+                const gtd = canPlayThrough(inj);
+                const out = gtd ? 'GTD' : inj.returnDay > 90_000 ? 'out for season' : `~${Math.max(1, inj.returnDay - day)}d`;
                 return (
                   <li key={inj.playerId} className="py-1.5 flex items-center gap-2 text-sm">
                     <PlayerName playerId={inj.playerId} className="font-semibold">{p ? `${p.firstName} ${p.lastName}` : inj.playerId}</PlayerName>
                     <span className="text-xs text-[var(--text-sec)]">{inj.bodyPart} · {SEVERITY_LABEL[inj.severity]}</span>
-                    <span className="ml-auto text-xs font-semibold" style={{ color: '#dc2626' }}>{out}</span>
+                    <span className="ml-auto text-xs font-semibold" style={{ color: gtd ? '#f59e0b' : '#dc2626' }}>{out}</span>
                   </li>
                 );
               })}

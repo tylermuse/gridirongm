@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ratingDeltas, trajectoryDescription } from '@/lib/development';
-import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
+import { getInjuries, SEVERITY_LABEL, canPlayThrough } from '@/lib/injuries';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { buildAdvancedContext } from '@/lib/stats/advancedLeague';
 import {
@@ -179,11 +179,17 @@ export default function PlayerPage() {
             </Badge>
             {player.sportData.isTwoWay && <Badge variant="amber" size="md">Two-way</Badge>}
             {injuryActive && injury ? (
-              <Badge variant="red" size="md">
-                {injury.returnDay >= 50_000
-                  ? `Out for season (${injury.bodyPart})`
-                  : `Out: ${injury.bodyPart} · returns day ${injury.returnDay} (${SEVERITY_LABEL[injury.severity]})`}
-              </Badge>
+              canPlayThrough(injury) ? (
+                <Badge variant="amber" size="md">
+                  {`GTD: ${injury.bodyPart} · returns day ${injury.returnDay} (${SEVERITY_LABEL[injury.severity]})`}
+                </Badge>
+              ) : (
+                <Badge variant="red" size="md">
+                  {injury.returnDay >= 50_000
+                    ? `Out for season (${injury.bodyPart})`
+                    : `Out: ${injury.bodyPart} · returns day ${injury.returnDay} (${SEVERITY_LABEL[injury.severity]})`}
+                </Badge>
+              )
             ) : (
               <Badge variant="green" size="md">Healthy</Badge>
             )}
