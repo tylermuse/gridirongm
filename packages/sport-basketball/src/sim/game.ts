@@ -161,7 +161,9 @@ export type PlayLogEntry =
       h: number;
       a: number;
     }
-  | { k: 's'; q: number; t: number; side: 'h' | 'a'; ids: number[] };
+  | { k: 's'; q: number; t: number; side: 'h' | 'a'; ids: number[] }
+  /** A player fouled out (6th personal foul). `id` indexes PlayLog.ids. */
+  | { k: 'f'; q: number; t: number; side: 'h' | 'a'; id: number };
 
 // ===========================================================================
 // Pace tuning
@@ -215,36 +217,47 @@ function buildActiveLineup(
   side: BasketballGameSide,
   unit: 'starters' | 'bench',
   playerById: Map<PlayerId, BasketballPlayer>,
+  fouledOut?: ReadonlySet<PlayerId>,
 ): SimLineup {
-  if (unit === 'starters') {
-    const arr = side.lineup.starters.map(id => playerById.get(id)!);
-    // TS can't prove a .map() result is a 5-tuple even though the source
-    // is — cast through unknown.
-    return {
-      players: arr as unknown as readonly [
-        BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer,
-      ],
-      plan: side.plan,
-      schemeEffect: side.schemeEffect,
-    };
+  // Roster in priority order for the active unit: the unit's own five first,
+  // then the rest of the roster as backfill. A fouled-out player is skipped and
+  // the next available roster player is pulled up in his place. When `fouledOut`
+  // is empty (the common case) this yields exactly the unit's original five, so
+  // behavior is unchanged from the pre-foul-out version.
+  const order = unit === 'starters'
+    ? [...side.lineup.starters, ...side.lineup.bench]
+    : [...side.lineup.bench, ...side.lineup.starters];
+  const seen = new Set<PlayerId>();
+  const pool = order.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
+
+  const picked: PlayerId[] = [];
+  const taken = new Set<PlayerId>();
+  // First pass: available (on the roster, not already picked, not fouled out).
+  for (const id of pool) {
+    if (picked.length >= 5) break;
+    if (playerById.has(id) && !taken.has(id) && !(fouledOut?.has(id))) {
+      picked.push(id); taken.add(id);
+    }
   }
-  // Bench unit: first 5 in bench list. If bench has fewer than 5, mix in
-  // starters as fallback to maintain a 5-man lineup. (Rare in practice
-  // since NBA teams have 12-15 active players.)
-  const benchIds = side.lineup.bench.slice(0, 5);
-  while (benchIds.length < 5) {
-    // Fall back to starters in original position order
-    const fallback = side.lineup.starters[benchIds.length];
-    if (!benchIds.includes(fallback)) benchIds.push(fallback);
-    else break; // safety
+  // Safety net for the degenerate case where fewer than 5 players remain
+  // eligible (e.g. a tiny roster with many foul-outs): reuse fouled-out players
+  // so the sim always has a legal 5-man lineup rather than crashing.
+  if (picked.length < 5) {
+    for (const id of pool) {
+      if (picked.length >= 5) break;
+      if (playerById.has(id) && !taken.has(id)) { picked.push(id); taken.add(id); }
+    }
   }
-  const arr = benchIds.slice(0, 5).map(id => playerById.get(id)!);
+
+  const arr = picked.slice(0, 5).map(id => playerById.get(id)!);
+  // TS can't prove a .map() result is a 5-tuple even though the source
+  // is — cast through unknown.
   return {
     players: arr as unknown as readonly [
       BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer,
     ],
     plan: side.plan,
-      schemeEffect: side.schemeEffect,
+    schemeEffect: side.schemeEffect,
   };
 }
 
@@ -311,6 +324,43 @@ export function simBasketballGame(
   const logSub = (q: number, secondsLeft: number, isHome: boolean, lineup: SimLineup) => {
     playLog.push({ k: 's', q, t: Math.max(0, Math.round(secondsLeft)), side: isHome ? 'h' : 'a', ids: lineup.players.map(p => intern(p.id)) });
   };
+  const logFoulout = (q: number, secondsLeft: number, isHome: boolean, playerId: PlayerId) => {
+    playLog.push({ k: 'f', q, t: Math.max(0, Math.round(secondsLeft)), side: isHome ? 'h' : 'a', id: intern(playerId) });
+  };
+
+  // Foul-out tracking. A player who reaches FOUL_LIMIT personal fouls is barred
+  // from the floor for the rest of the game — buildActiveLineup skips anyone in
+  // the side's fouled-out set and pulls up the next available roster player.
+  const FOUL_LIMIT = 6;
+  const foulTotals = new Map<PlayerId, number>();
+  const homeFouledOut = new Set<PlayerId>();
+  const awayFouledOut = new Set<PlayerId>();
+  /** A fouled-out player can't legally pick up more fouls, so hold the box
+   *  score at the limit even when a single possession produced two fouls for
+   *  the same defender (a non-shooting foul + a shooting foul on the same
+   *  matchup can both land before we get to bench him). */
+  const clampFoulsInBox = (playerId: PlayerId) => {
+    const cur = boxScores.get(playerId);
+    if (cur && cur.personalFouls > FOUL_LIMIT) {
+      boxScores.set(playerId, { ...cur, personalFouls: FOUL_LIMIT });
+    }
+  };
+  /** Tally the personal fouls in a possession's events; bench anyone who hits
+   *  the limit and log it so the live viewer can surface the foul-out. */
+  const processFouls = (events: readonly StatEvent[], q: number, secondsLeft: number) => {
+    for (const e of events) {
+      if (e.field !== 'personalFouls') continue;
+      const isHome = homePlayerById.has(e.playerId);
+      const set = isHome ? homeFouledOut : awayFouledOut;
+      if (set.has(e.playerId)) { clampFoulsInBox(e.playerId); continue; } // already out
+      const next = (foulTotals.get(e.playerId) ?? 0) + (e.delta ?? 1);
+      foulTotals.set(e.playerId, Math.min(next, FOUL_LIMIT));
+      if (next < FOUL_LIMIT) continue;
+      set.add(e.playerId);
+      clampFoulsInBox(e.playerId);
+      logFoulout(q, secondsLeft, isHome, e.playerId);
+    }
+  };
 
   // Shared shooting environment for this game (officiating, tempo, a hot or
   // cold night in the building). Applied to BOTH offenses, it correlates the
@@ -340,8 +390,8 @@ export function simBasketballGame(
     const quarterStart = { home: homeScore, away: awayScore };
     let secondsRemaining = settings.quarterLengthSeconds;
     if (quarter === 1) {
-      logSub(1, secondsRemaining, true, buildActiveLineup(home, homeUnit, homePlayerById));
-      logSub(1, secondsRemaining, false, buildActiveLineup(away, awayUnit, awayPlayerById));
+      logSub(1, secondsRemaining, true, buildActiveLineup(home, homeUnit, homePlayerById, homeFouledOut));
+      logSub(1, secondsRemaining, false, buildActiveLineup(away, awayUnit, awayPlayerById, awayFouledOut));
     }
 
     // Possession arrow: in NBA, alternates between halves. v1 simplification:
@@ -357,8 +407,10 @@ export function simBasketballGame(
       // Build lineups for the active units
       const offUnit = offenseIsHome ? homeUnit : awayUnit;
       const defUnit = offenseIsHome ? awayUnit : homeUnit;
-      const offLineup = buildActiveLineup(offense, offUnit, offenseById);
-      const defLineup = buildActiveLineup(defense, defUnit, defenseById);
+      const offFouledOut = offenseIsHome ? homeFouledOut : awayFouledOut;
+      const defFouledOut = offenseIsHome ? awayFouledOut : homeFouledOut;
+      const offLineup = buildActiveLineup(offense, offUnit, offenseById, offFouledOut);
+      const defLineup = buildActiveLineup(defense, defUnit, defenseById, defFouledOut);
       offLineup.makeAdj = gameEnv + scoreEffect(
         offenseIsHome ? homeScore : awayScore, offenseIsHome ? awayScore : homeScore,
         quarter, secondsRemaining, settings.quarterLengthSeconds,
@@ -399,6 +451,9 @@ export function simBasketballGame(
 
       // Apply stat events
       for (const e of result.events) applyStatEvent(boxScores, e);
+      // Enforce foul-out: bench anyone who just hit 6 personal fouls so they
+      // can't take another possession (and can't pick up a 7th).
+      processFouls(result.events, quarter, secondsRemaining);
 
       // Update score
       if (offenseIsHome) homeScore += result.pointsScored;
@@ -415,14 +470,14 @@ export function simBasketballGame(
         if (homeStintRemaining <= 0) {
           homeUnit = (homeUnit === 'starters') ? 'bench' : 'starters';
           homeStintRemaining = stintLength(home, homeUnit);
-          logSub(quarter, secondsRemaining, true, buildActiveLineup(home, homeUnit, homePlayerById));
+          logSub(quarter, secondsRemaining, true, buildActiveLineup(home, homeUnit, homePlayerById, homeFouledOut));
         }
       } else {
         awayStintRemaining--;
         if (awayStintRemaining <= 0) {
           awayUnit = (awayUnit === 'starters') ? 'bench' : 'starters';
           awayStintRemaining = stintLength(away, awayUnit);
-          logSub(quarter, secondsRemaining, false, buildActiveLineup(away, awayUnit, awayPlayerById));
+          logSub(quarter, secondsRemaining, false, buildActiveLineup(away, awayUnit, awayPlayerById, awayFouledOut));
         }
       }
 
@@ -474,8 +529,10 @@ export function simBasketballGame(
       const defenseById = offenseIsHome ? awayPlayerById : homePlayerById;
       const offUnit = offenseIsHome ? homeUnit : awayUnit;
       const defUnit = offenseIsHome ? awayUnit : homeUnit;
-      const offLineup = buildActiveLineup(offense, offUnit, offenseById);
-      const defLineup = buildActiveLineup(defense, defUnit, defenseById);
+      const offFouledOut = offenseIsHome ? homeFouledOut : awayFouledOut;
+      const defFouledOut = offenseIsHome ? awayFouledOut : homeFouledOut;
+      const offLineup = buildActiveLineup(offense, offUnit, offenseById, offFouledOut);
+      const defLineup = buildActiveLineup(defense, defUnit, defenseById, defFouledOut);
       offLineup.makeAdj = gameEnv + clutchEffect(
         (offenseIsHome ? homeScore : awayScore) - (offenseIsHome ? awayScore : homeScore), secondsRemaining,
       );
@@ -503,6 +560,7 @@ export function simBasketballGame(
       }
 
       for (const e of result.events) applyStatEvent(boxScores, e);
+      processFouls(result.events, settings.numQuarters + overtimePeriods, secondsRemaining);
 
       if (offenseIsHome) homeScore += result.pointsScored;
       else awayScore += result.pointsScored;

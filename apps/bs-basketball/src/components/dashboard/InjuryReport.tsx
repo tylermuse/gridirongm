@@ -47,7 +47,10 @@ export function InjuryReport({ league, team }: { league: LeagueState; team: Bask
       <CardHeader><CardTitle>🏥 Availability Report</CardTitle><span className="text-xs text-[var(--text-sec)]">{injured.length + suspended.length} out</span></CardHeader>
       <div className="space-y-1.5">
         {injured.map(({ p, rec }) => {
-          const out = rec.returnDay >= 50_000 ? 'Out for season' : `${rec.returnDay - day} day${rec.returnDay - day === 1 ? '' : 's'}`;
+          // Day-to-day / minor knocks are game-time decisions, not "out" — show
+          // GTD (amber) so the availability report matches the roster + lineup.
+          const gtd = canPlayThrough(rec);
+          const out = gtd ? 'GTD' : rec.returnDay >= 50_000 ? 'Out for season' : `${rec.returnDay - day} day${rec.returnDay - day === 1 ? '' : 's'}`;
           return (
             <div key={p.id} className="flex items-center gap-2 text-sm">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEVERITY_COLOR[rec.severity] ?? '#dc2626' }} />
@@ -63,7 +66,7 @@ export function InjuryReport({ league, team }: { league: LeagueState; team: Bask
                   Play through →
                 </button>
               )}
-              <span className="text-xs font-semibold tabular-nums w-20 text-right" style={{ color: SEVERITY_COLOR[rec.severity] ?? '#dc2626' }}>{out}</span>
+              <span className="text-xs font-semibold tabular-nums w-20 text-right" style={{ color: gtd ? '#f59e0b' : SEVERITY_COLOR[rec.severity] ?? '#dc2626' }}>{out}</span>
             </div>
           );
         })}

@@ -721,7 +721,11 @@ function simulateDrive(
     if (play.touchdown) {
       // Extra point
       if (kicker) {
-        const xpMade = Math.random() < 0.94 + (kicker.ratings.kicking / 100) * 0.04;
+        // Kicker rating now meaningfully moves the XP: a 50-rated kicker sits
+        // at the ~94% league baseline, elite legs (99) reach ~99%, weak legs
+        // (40) dip toward ~93%. (Previously (kicking/100)*0.04 gave only a
+        // ~2pp spread across the whole rating range — rating barely mattered.)
+        const xpMade = Math.random() < 0.94 + ((kicker.ratings.kicking - 50) / 50) * 0.05;
         plays.push({
           type: 'fieldGoal', yards: 0, touchdown: false, turnover: false,
           kicker, fieldGoalMade: xpMade,

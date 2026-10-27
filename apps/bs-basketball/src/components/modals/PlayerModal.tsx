@@ -21,7 +21,7 @@ import { Modal } from './Modal';
 import { isGodMode } from '@/lib/godMode/godMode';
 import { GodModePlayerEditor } from '@/components/godMode/GodModePlayerEditor';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
-import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
+import { getInjuries, SEVERITY_LABEL, canPlayThrough } from '@/lib/injuries';
 import { ratingHex, ratingTier } from '@/lib/ui/ratingColor';
 import {
   basketballUiMetadata,
@@ -147,11 +147,17 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             </Badge>
             {player.sportData.isTwoWay && <Badge variant="amber" size="md">Two-way</Badge>}
             {injuryActive && injury && (
-              <Badge variant="red" size="md">
-                {injury.returnDay >= 50_000
-                  ? `Out for season (${injury.bodyPart})`
-                  : `Out: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
-              </Badge>
+              canPlayThrough(injury) ? (
+                <Badge variant="amber" size="md">
+                  {`GTD: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
+                </Badge>
+              ) : (
+                <Badge variant="red" size="md">
+                  {injury.returnDay >= 50_000
+                    ? `Out for season (${injury.bodyPart})`
+                    : `Out: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
+                </Badge>
+              )
             )}
           </div>
 
