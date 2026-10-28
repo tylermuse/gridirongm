@@ -3,6 +3,7 @@ import { getStripe } from '@bs/core/billing';
 import { createClient } from '@bs/core/supabase/server';
 import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS, EPISODE_PACK } from '@bs/core/billing';
 import { readCredits, getServiceClient } from '@bs/core/podcast';
+import { attributionMetadata } from '@bs/core/analytics/attribution';
 import { getOrCreateCustomerId, hasLiveSubscription } from '@/lib/server/stripeSync';
 
 // Only the configured Premium price is allowed at checkout. Legacy prices
@@ -72,8 +73,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // Where this account came from (signup attribution), so every subscriber
+    // in Stripe shows its source. Best-effort: empty when unknown.
+    const attribution = await attributionMetadata(supabase, user.id);
+
     // Reuse the user's existing Stripe customer instead of minting a new one per click.
-    const customerId = await getOrCreateCustomerId(user.id, user.email);
+    const customerId = await getOrCreateCustomerId(user.id, user.email, attribution);
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
     const session = await getStripe().checkout.sessions.create({
@@ -86,8 +91,9 @@ export async function POST(request: Request) {
       cancel_url: `${appUrl}/pricing?subscription=canceled`,
       metadata: { supabase_user_id: user.id },
       // Put the user ID on the subscription itself so every later
-      // subscription event can be tied back to the user.
-      subscription_data: { metadata: { supabase_user_id: user.id } },
+      // subscription event can be tied back to the user, plus where they
+      // came from.
+      subscription_data: { metadata: { ...attribution, supabase_user_id: user.id } },
     });
 
     return NextResponse.json({ url: session.url });

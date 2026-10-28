@@ -112,10 +112,15 @@ export async function customerExists(customerId: string): Promise<boolean> {
  * Return the user's Stripe customer ID, reusing an existing one wherever
  * possible: the profile first (verified against Stripe), then any Stripe
  * customer tagged with this user (preferring one that has a live
- * subscription). Creates a customer only when none exists. Always persists
+ * subscription). Creates a customer only when none exists, tagged with
+ * `metadata` (signup attribution) as well as the user ID. Always persists
  * the result to the profile, overwriting a stale ID.
  */
-export async function getOrCreateCustomerId(userId: string, email: string | undefined) {
+export async function getOrCreateCustomerId(
+  userId: string,
+  email: string | undefined,
+  metadata: Record<string, string> = {},
+) {
   const stripe = getStripe();
   const stored = await storedCustomerId(userId);
   if (stored) {
@@ -137,7 +142,7 @@ export async function getOrCreateCustomerId(userId: string, email: string | unde
   if (!customerId) {
     const created = await stripe.customers.create({
       email,
-      metadata: { supabase_user_id: userId },
+      metadata: { ...metadata, supabase_user_id: userId },
     });
     customerId = created.id;
   }
