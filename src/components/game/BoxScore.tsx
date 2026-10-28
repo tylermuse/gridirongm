@@ -1,6 +1,7 @@
 'use client';
 
 import type { GameResult, Player, PlayerStats } from '@/types';
+import { calcPasserRating } from '@/types';
 import { scoringPlayTypeLabel } from '@/lib/scoringSummary';
 
 interface BoxScoreProps {
@@ -22,20 +23,6 @@ function StatRow({ label, value }: { label: string; value: string | number }) {
       <span className="font-mono">{value}</span>
     </div>
   );
-}
-
-function qbRating(stats: Partial<PlayerStats>): number {
-  const att = stats.passAttempts ?? 0;
-  if (att === 0) return 0;
-  const cmp = stats.passCompletions ?? 0;
-  const yds = stats.passYards ?? 0;
-  const td = stats.passTDs ?? 0;
-  const int = stats.interceptions ?? 0;
-  const pct = cmp / att;
-  const ypa = yds / att;
-  const tdRate = td / att;
-  const intRate = int / att;
-  return Math.round(Math.min(158.3, Math.max(0, (pct + ypa + tdRate - intRate) * 25)));
 }
 
 export function BoxScore({ game, players, homeTeamName, awayTeamName, homeTeamId, awayTeamId, homeColor = '#3b82f6', awayColor = '#ef4444', onClose }: BoxScoreProps) {
@@ -256,7 +243,7 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, homeTeamId
                       <td className="py-1.5 text-center font-mono">{stats.passYards ?? 0}</td>
                       <td className="py-1.5 text-center text-green-600">{stats.passTDs ?? 0}</td>
                       <td className="py-1.5 text-center text-red-600">{stats.interceptions ?? 0}</td>
-                      <td className="py-1.5 text-right font-mono">{qbRating(stats)}</td>
+                      <td className="py-1.5 text-right font-mono">{calcPasserRating(stats.passCompletions ?? 0, stats.passAttempts ?? 0, stats.passYards ?? 0, stats.passTDs ?? 0, stats.interceptions ?? 0)}</td>
                     </tr>
                   ))}
                 </tbody>
