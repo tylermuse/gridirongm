@@ -17,6 +17,7 @@ import type { PlayEvent } from './playByPlay';
 import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickWeighted } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability } from './simulate';
+import { getBestReturner } from './specialTeams';
 
 export interface LiveEngineState {
   quarter: number;
@@ -384,8 +385,7 @@ export function createLiveCoachEngine(
       return;
     }
 
-    events.push(makeEvent('kickoff', 'Kickoff fielded at the 25.', 0, false, 25));
-    switchPossession(25);
+    regularKickoff(events);
     // OT sudden death: the post-score kickoff above completes the scoring team's
     // possession. If both teams have now had a possession and the score is no
     // longer tied, the game is over. Checked HERE (after the PAT, which every
@@ -397,6 +397,42 @@ export function createLiveCoachEngine(
     if (state.overtime && !state.isGameOver && state.homeScore !== state.awayScore && (state.otPossessionsCompleted ?? 0) >= 2) {
       endGame(events);
     }
+  }
+
+  /** A regular (non-onside) kickoff with a real result instead of a flat
+   *  "fielded at the 25" every time (Tyler 10/27: "every single kickoff is
+   *  returned to exactly the 25"). Mirrors the full sim's standard-mode return
+   *  (18–35, scaled by the receiving team's best returner) and adds the
+   *  current-rule touchback (~30%, ball at the 35) plus a rare return TD.
+   *  Descriptions follow the wording liveSim3d.ts parses for the 3D sim:
+   *  "returned to the N" / "touchback" / "return TOUCHDOWN". */
+  function regularKickoff(events: PlayEvent[]) {
+    const receivingRoster = state.possession === 'home' ? awayPlayers : homePlayers;
+    if (Math.random() < 0.005) {
+      // Return TD: logged on the kicking team's possession (the 3D sim credits
+      // the other side), then the scoring team kicks off.
+      const scorer = state.possession === 'home' ? 'away' : 'home';
+      const returner = getBestReturner(receivingRoster);
+      events.push(makeEvent('kickoff', `Kick return TOUCHDOWN! ${nameOrFallback(returner, 'The returner')} takes it all the way back!`, 100, true));
+      if (scorer === 'home') state.homeScore += 7; else state.awayScore += 7;
+      switchPossession(35);
+      doKickoffEvents(events);
+      return;
+    }
+    if (Math.random() < 0.30) {
+      events.push(makeEvent('kickoff', 'Kickoff sails into the end zone — touchback. Ball at the 35.', 0, false, 35));
+      switchPossession(35);
+      return;
+    }
+    const returner = getBestReturner(receivingRoster);
+    const returnerRating = returner
+      ? (returner.ratings.speed * 2 + returner.ratings.agility) / 3
+      : 50;
+    const baseReturn = 18 + Math.floor(Math.random() * 11); // 18–28
+    const ratingBonus = Math.round(Math.max(0, (returnerRating - 50) / 50) * 7 * Math.random());
+    const spot = Math.min(35, baseReturn + ratingBonus);
+    events.push(makeEvent('kickoff', `Kickoff returned to the ${spot}${returner ? ` by ${nameOrFallback(returner, '')}` : ''}.`, 0, false, spot));
+    switchPossession(spot);
   }
 
   function checkTwoMinWarning(events: PlayEvent[]) {
@@ -755,8 +791,7 @@ export function createLiveCoachEngine(
         return events;
       } else {
         // Regular kickoff (default)
-        events.push(makeEvent('kickoff', 'Kickoff fielded at the 25.', 0, false, 25));
-        switchPossession(25);
+        regularKickoff(events);
         return events;
       }
     }

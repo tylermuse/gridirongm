@@ -20,6 +20,23 @@ describe('liveSim3d.toSimResult', () => {
     expect(toSimResult(ev({ type: 'sack', yardsGained: -7 }))).toEqual({ kind: 'sack', yards: -7 });
     expect(toSimResult(ev({ type: 'interception', description: 'picked off downfield' }))).toEqual({ kind: 'int', depth: 'deep' });
   });
+  it('pictures the pass the user CALLED, not one guessed from the yardage (10/27: called deep shots animated as short catches and vice versa)', () => {
+    // a 16-yard deep shot is still a deep ball
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🚀 Deep Shot — J. Hurts completes to D. Smith for 16 yards.', yardsGained: 16 }))).toEqual({ kind: 'complete', depth: 'deep', yards: 16 });
+    // a short pass that breaks for 25 after the catch is still a short throw
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎯 Short Pass — J. Hurts fires deep to D. Smith — 25 yards!', yardsGained: 25 }))).toEqual({ kind: 'complete', depth: 'short', yards: 25 });
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: "🎯 Short Pass — J. Hurts's pass to D. Smith falls incomplete." }))).toEqual({ kind: 'incomplete', depth: 'short' });
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: "🚀 Deep Shot — J. Hurts's pass to D. Smith falls incomplete." }))).toEqual({ kind: 'incomplete', depth: 'deep' });
+    // a screen that pops for 20+ stays a screen
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🛡️ Screen — J. Hurts fires deep to S. Barkley — 24 yards!', yardsGained: 24 }))).toEqual({ kind: 'complete', depth: 'short', yards: 24, style: 'screen' });
+    // the live engine's own 20+ wording on an uncalled (CPU) play still reads as deep
+    expect(toSimResult(ev({ type: 'pass_complete', description: 'J. Hurts fires deep to D. Smith — 23 yards!', yardsGained: 23 }))).toEqual({ kind: 'complete', depth: 'deep', yards: 23 });
+  });
+  it('reads the live engine kickoff results (return spot, touchback, return TD)', () => {
+    expect(toSimResult(ev({ type: 'kickoff', description: 'Kickoff returned to the 28 by D. Hill.' }))).toEqual({ kind: 'kickoff', ret: 28 });
+    expect(toSimResult(ev({ type: 'kickoff', description: 'Kickoff sails into the end zone — touchback. Ball at the 35.' }))).toEqual({ kind: 'kickoff', touchback: true });
+    expect(toSimResult(ev({ type: 'kickoff', description: 'Kick return TOUCHDOWN! D. Hill takes it all the way back!', isScoring: true, yardsGained: 100 }))).toEqual({ kind: 'kickoff', td: true });
+  });
   it('skips bookkeeping events that ride on the run type (timeouts, turnover on downs)', () => {
     expect(toSimResult(ev({ type: 'run', description: '⏱️ Timeout called by NE. (2 remaining)' }))).toBeNull();
     expect(toSimResult(ev({ type: 'run', description: 'Turnover on downs! The defense takes over.' }))).toBeNull();

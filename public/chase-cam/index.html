@@ -162,7 +162,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17j'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17k'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1138,7 +1138,8 @@ function choreograph(res){
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc;
     /* Roll-out (reference: Prescott at GB, SNF): the pocket closes from the back side, he climbs, escapes toward the receiver's sideline
        and throws on the run — instead of the planted drop-back throw on every pass */
-    const roll = (!deep || layout) && !scn && res.kind!=='int' && (res.rollout ?? (window.__roll ?? Math.random() < (layout? .5 : .22))), rSide = Math.sign(catchX) || 1;
+    /* a deep roll-out used to exist only as the overthrown lay-out, so every roll-out deep shot fell incomplete (Tyler 10/27): deep completions now roll out at about the same rate, so the roll-out doesn't telegraph the result */
+    const roll = (!deep || layout || res.kind==='complete') && !scn && res.kind!=='int' && (res.rollout ?? (window.__roll ?? Math.random() < (layout? .5 : deep? .35 : .22))), rSide = Math.sign(catchX) || 1;
     const hx = roll? rSide*4.4 : 0, hz = roll? dropZ+.9 : dropZ+.2;
     const flight = Math.max(.45, Math.min(1.7, Math.hypot(catchX-hx, cz-hz)/(deep?21:19)));
     { // the QB holds the ball until the receiver can actually get there at a real sprint (deep shots are thrown late, not fast)
