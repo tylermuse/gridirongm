@@ -695,6 +695,11 @@ interface DriveResult {
   /** True when the offense was tackled/pinned in their own end zone — the
    *  DEFENSE scores 2, not the offense. `points` stays 0 for the offense. */
   safety?: boolean;
+  /** Field position (yards from the offense's own end zone, 0-100) when the
+   *  drive ended. The game loop uses this to start the next team's drive from
+   *  the spot of a non-punt change of possession (turnover, missed FG, loss on
+   *  downs) as `100 - finalFieldPosition`, instead of a fresh ~own 27. */
+  finalFieldPosition: number;
 }
 
 function simulateDrive(
@@ -704,9 +709,15 @@ function simulateDrive(
   rivalryIntensity: number = 0,
   gamePlan?: GamePlan,
   defGamePlan?: GamePlan,
+  /** When provided, the drive starts from this spot (yards from own end zone)
+   *  instead of the NFL-average fresh start — used to carry field position over
+   *  after a non-punt change of possession. */
+  startFieldPosition?: number,
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 25 + Math.floor(Math.random() * 12); // NFL avg start ~own 27-30
+  let fieldPosition = startFieldPosition !== undefined
+    ? Math.max(1, Math.min(99, Math.round(startFieldPosition)))
+    : 25 + Math.floor(Math.random() * 12); // NFL avg start ~own 27-30
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && playerAvailable(p));
@@ -730,13 +741,13 @@ function simulateDrive(
           type: 'fieldGoal', yards: 0, touchdown: false, turnover: false,
           kicker, fieldGoalMade: xpMade,
         });
-        return { points: xpMade ? 7 : 6, plays };
+        return { points: xpMade ? 7 : 6, plays, finalFieldPosition: 100 };
       }
-      return { points: 7, plays };
+      return { points: 7, plays, finalFieldPosition: 100 };
     }
 
     if (play.turnover) {
-      return { points: 0, plays };
+      return { points: 0, plays, finalFieldPosition: fieldPosition };
     }
 
     if (play.type === 'sack') {
@@ -766,7 +777,7 @@ function simulateDrive(
           type: 'fieldGoal', yards: fgDistance, touchdown: false, turnover: false,
           kicker, fieldGoalMade: made,
         });
-        return { points: made ? 3 : 0, plays };
+        return { points: made ? 3 : 0, plays, finalFieldPosition: fieldPosition };
       }
       // Punt
       const punter = offense.find(p => p.position === 'P' && playerAvailable(p));
@@ -777,7 +788,7 @@ function simulateDrive(
       if (punter) {
         plays.push({ type: 'punt', yards: puntDist, touchdown: false, turnover: false, punter, puntYards: puntDist });
       }
-      return { points: 0, plays };
+      return { points: 0, plays, finalFieldPosition: fieldPosition };
     }
 
     // Safety — offense tackled/pinned in their own end zone. Previously this
@@ -787,7 +798,7 @@ function simulateDrive(
     // totals (2, 5, 8, 9, 11, ...) could ever occur (Tyler report: scores
     // look "weird" / too formulaic).
     if (fieldPosition <= 0) {
-      return { points: 0, plays, safety: true };
+      return { points: 0, plays, safety: true, finalFieldPosition: fieldPosition };
     }
   }
 
@@ -800,11 +811,11 @@ function simulateDrive(
         type: 'fieldGoal', yards: fgDistance, touchdown: false, turnover: false,
         kicker, fieldGoalMade: made,
       });
-      return { points: made ? 3 : 0, plays };
+      return { points: made ? 3 : 0, plays, finalFieldPosition: fieldPosition };
     }
   }
 
-  return { points: 0, plays };
+  return { points: 0, plays, finalFieldPosition: fieldPosition };
 }
 
 // ── Stats helper ────────────────────────────────────────────────────────────
@@ -984,6 +995,19 @@ export function simulateGame(
   let runAway = 0;
   let runHome = 0;
 
+  // Field position carried to the next team's drive after a non-punt change of
+  // possession (turnover, missed FG, loss on downs): the next offense starts at
+  // `100 - finalFieldPosition` (the spot of the stop) instead of a fresh ~own 27.
+  // A scoring drive (kickoff follows), a safety (free kick), or a punt (net
+  // return ≈ the fresh start) all reset to undefined => NFL-average fresh start.
+  let nextStart: number | undefined = undefined;
+  const carryOver = (drive: DriveResult): number | undefined => {
+    if (drive.points !== 0 || drive.safety) return undefined;
+    const last = drive.plays[drive.plays.length - 1];
+    if (last && last.type === 'punt') return undefined;
+    return Math.max(1, Math.min(99, 100 - drive.finalFieldPosition));
+  };
+
   for (let i = 0; i < possessions; i++) {
     // Quarter assignment: distribute possessions across 4 quarters
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
@@ -1011,7 +1035,8 @@ export function simulateGame(
     // uses the offensive sliders, their defense uses the defensive sliders.
     const homePlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
     const awayDefPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
-    const homeDrive = simulateDrive(restStarters(effectiveHomeRoster, homeBlowout), restStarters(effectiveAwayRoster, awayBlowout), mcafeeMode, rivalryIntensity, homePlan, awayDefPlan);
+    const homeDrive = simulateDrive(restStarters(effectiveHomeRoster, homeBlowout), restStarters(effectiveAwayRoster, awayBlowout), mcafeeMode, rivalryIntensity, homePlan, awayDefPlan, nextStart);
+    nextStart = carryOver(homeDrive);
     const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
@@ -1030,7 +1055,8 @@ export function simulateGame(
     // Away offense drives — same scoring fatigue
     const awayPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
     const homeDefPlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
-    const awayDrive = simulateDrive(restStarters(effectiveAwayRoster, awayBlowout), restStarters(effectiveHomeRoster, homeBlowout), mcafeeMode, rivalryIntensity, awayPlan, homeDefPlan);
+    const awayDrive = simulateDrive(restStarters(effectiveAwayRoster, awayBlowout), restStarters(effectiveHomeRoster, homeBlowout), mcafeeMode, rivalryIntensity, awayPlan, homeDefPlan, nextStart);
+    nextStart = carryOver(awayDrive);
     const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;
