@@ -21,6 +21,7 @@ import {
 import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
 import { getHoopsScoutingAllocations, HOOPS_FREE_SCOUT_POINTS } from '@/lib/billing/allocations';
 import { trackAuthEvent } from '@bs/core/analytics';
+import { captureAttribution, saveAttribution } from '@bs/core/analytics/attribution';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 // Anyone who signed up before this date is a Founding Member forever.
@@ -126,6 +127,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // If Supabase isn't configured, there's no auth to wait for — start loaded.
   // This avoids a synchronous setState inside the effect below.
   const [loading, setLoading] = useState<boolean>(() => supabase != null);
+
+  // Signup attribution: record this device's first visit, then write it once
+  // for a newly signed-up user (no-op for everyone else). Never blocks render.
+  useEffect(() => { captureAttribution(); }, []);
+  useEffect(() => {
+    if (supabase && user) void saveAttribution(supabase, user, 'bs-hoops');
+  }, [supabase, user]);
 
   // Dev-only tier override — flip the active view via URL param without
   // editing files or restarting. Persisted in sessionStorage so it survives
