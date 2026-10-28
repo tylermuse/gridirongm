@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getStripe } from '@bs/core/billing';
 import { createClient } from '@bs/core/supabase/server';
-import { findCustomersForUser, saveCustomerId } from '@/lib/server/stripeSync';
+import { customerExists, findCustomersForUser, saveCustomerId, storedCustomerId } from '@/lib/server/stripeSync';
 
 export async function POST() {
   try {
@@ -11,15 +11,12 @@ export async function POST() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('stripe_customer_id')
-      .eq('id', user.id)
-      .maybeSingle();
-
     // Most existing subscribers have no profiles row, so fall back to the
     // Stripe customer tagged with this user (preferring one with a live sub).
-    let customerId = profile?.stripe_customer_id as string | undefined;
+    // A stored ID is verified first: a stale one (test-mode or deleted) would
+    // make billingPortal.sessions.create throw `resource_missing`.
+    let customerId = await storedCustomerId(user.id);
+    if (customerId && !(await customerExists(customerId))) customerId = undefined;
     if (!customerId) {
       const customers = await findCustomersForUser(user.id);
       for (const c of customers) {

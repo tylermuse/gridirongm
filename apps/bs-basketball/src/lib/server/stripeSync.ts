@@ -82,22 +82,47 @@ export async function saveCustomerId(userId: string, customerId: string) {
   if (error) throw new Error(`profiles upsert failed for ${userId}: ${error.message}`);
 }
 
-/**
- * Return the user's Stripe customer ID, reusing an existing one wherever
- * possible: the profile first, then any Stripe customer tagged with this
- * user (preferring one that has a live subscription). Creates a customer
- * only when none exists. Always persists the result to the profile.
- */
-export async function getOrCreateCustomerId(userId: string, email: string | undefined) {
-  const service = getServiceClient();
-  const { data: profile } = await service
+/** The customer ID saved on the user's profile, if any. */
+export async function storedCustomerId(userId: string): Promise<string | undefined> {
+  const { data: profile } = await getServiceClient()
     .from('profiles')
     .select('stripe_customer_id')
     .eq('id', userId)
     .maybeSingle();
-  if (profile?.stripe_customer_id) return profile.stripe_customer_id as string;
+  return (profile?.stripe_customer_id as string | null | undefined) || undefined;
+}
 
+/**
+ * True when the customer exists (and isn't deleted) in the Stripe mode the
+ * server is running in. A profile can hold an ID that doesn't — a test-mode
+ * customer written during local dev, or one deleted in the dashboard — and
+ * passing that to checkout.sessions.create fails with `resource_missing`.
+ */
+export async function customerExists(customerId: string): Promise<boolean> {
+  try {
+    const c = await getStripe().customers.retrieve(customerId);
+    return !c.deleted;
+  } catch (err) {
+    if ((err as { code?: string }).code === 'resource_missing') return false;
+    throw err;
+  }
+}
+
+/**
+ * Return the user's Stripe customer ID, reusing an existing one wherever
+ * possible: the profile first (verified against Stripe), then any Stripe
+ * customer tagged with this user (preferring one that has a live
+ * subscription). Creates a customer only when none exists. Always persists
+ * the result to the profile, overwriting a stale ID.
+ */
+export async function getOrCreateCustomerId(userId: string, email: string | undefined) {
   const stripe = getStripe();
+  const stored = await storedCustomerId(userId);
+  if (stored) {
+    if (await customerExists(stored)) return stored;
+    console.warn(`profiles.stripe_customer_id ${stored} for ${userId} does not exist in this Stripe mode; re-resolving`);
+  }
+
   const existing = await findCustomersForUser(userId);
   let customerId: string | undefined;
   for (const c of existing) {
