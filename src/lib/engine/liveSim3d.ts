@@ -62,6 +62,17 @@ export interface SimLineup {
 export interface SimTeam { id: string; name: string; jersey: string; num: string; pants: string; helmet: string; stripe: string; lineup?: SimLineup }
 
 const RUSH_TD_RE = /punches it in|crosses the goal line|-yard rush|stretches across|pylon|runs it in/i;
+/* The live-coach engine prefixes a user-called pass with its call ("🚀 Deep Shot — …", "🎯 Short Pass — …"), so the
+   sim pictures the play that was CALLED, not one guessed from the yardage: a 16-yard deep ball used to animate as a short
+   catch, and a short pass that broke for 25 animated as a bomb (Tyler 10/27). "fires deep" is the engine's own wording
+   for a 20+ yard completion on an uncalled (CPU) play. */
+const DEEP_CALL_RE = /deep shot/i;
+const SHORT_CALL_RE = /short pass/i;
+function passDepth(desc: string, y: number): 'short' | 'deep' {
+  if (DEEP_CALL_RE.test(desc)) return 'deep';
+  if (SHORT_CALL_RE.test(desc)) return 'short';
+  return /fires deep/i.test(desc) || y >= 20 ? 'deep' : 'short';
+}
 const SCRAMBLE_RE = /scramble/i;
 const SCREEN_RE = /screen/i;
 const TWO_POINT_RE = /^2-PT|two-point/i;
@@ -88,9 +99,9 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
       if (KNEEL_RE.test(e.description) || NON_PLAY_RE.test(e.description)) return null;
       return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}) };
     case 'pass_complete':
-      return { kind: 'complete', depth: y >= 20 && !SCREEN_RE.test(e.description) ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
+      return { kind: 'complete', depth: SCREEN_RE.test(e.description) ? 'short' : passDepth(e.description, y), yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'pass_incomplete':
-      return { kind: 'incomplete', depth: /deep|bomb|downfield|long/i.test(e.description) ? 'deep' : 'short', ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
+      return { kind: 'incomplete', depth: SCREEN_RE.test(e.description) ? 'short' : DEEP_CALL_RE.test(e.description) || (!SHORT_CALL_RE.test(e.description) && /deep|bomb|downfield|long/i.test(e.description)) ? 'deep' : 'short', ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'touchdown':
       return RUSH_TD_RE.test(e.description)
         ? { kind: 'run', yards: td(y) }
