@@ -97,6 +97,53 @@ html, body {
   pointer-events: none;
 }
 
+/* Same sticky edge columns, but only from the sm breakpoint up — for tables that
+ * collapse to a few columns on phones and no longer need to scroll (draft board). */
+@media (min-width: 640px) {
+  .sticky-col-sm th:first-child,
+  .sticky-col-sm td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: var(--surface);
+  }
+  .sticky-col-sm tr:hover td:first-child {
+    background-color: var(--surface-2);
+  }
+  .sticky-col-sm th:first-child::after,
+  .sticky-col-sm td:first-child::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(to right, rgba(0,0,0,0.08), transparent);
+    pointer-events: none;
+  }
+  .sticky-action-sm th:last-child,
+  .sticky-action-sm td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background-color: var(--surface);
+  }
+  .sticky-action-sm tr:hover td:last-child {
+    background-color: var(--surface-2);
+  }
+  .sticky-action-sm th:last-child::before,
+  .sticky-action-sm td:last-child::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -4px;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(to left, rgba(0,0,0,0.08), transparent);
+    pointer-events: none;
+  }
+}
+
 /* iPhone scoreboard contrast (wildbadger5 4/29). Two distinct issues:
  *   1. GameTicker uses light pastels (bg-green-100 etc.) on played games,
  *      and the inherited score text is dark in light mode but light
