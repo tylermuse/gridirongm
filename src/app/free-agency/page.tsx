@@ -327,7 +327,10 @@ export default function FreeAgencyPage() {
     return sortDir === 'asc' ? ' ↑' : ' ↓';
   }
 
-  const allAgents = (freeAgents ?? [])
+  // Unique ids: leagues saved before the store fix (first season of a
+  // /rosters import) carry ~166 duplicate ids in freeAgents, and duplicate
+  // React keys broke the table's re-render so the filters appeared dead.
+  const allAgents = Array.from(new Set(freeAgents ?? []))
     .map(id => players.find(p => p.id === id)!)
     .filter(Boolean)
     .sort((a, b) => {

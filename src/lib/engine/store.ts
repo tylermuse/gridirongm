@@ -2993,7 +2993,13 @@ export const useGameStore = create<GameStore>()(
             // listed on their old team in the source JSON but belong in the
             // FA pool) plus leftover year=season prospects when starting in
             // post-draft mode.
-            freeAgents: [...fbgmFAs.map(p => p.id), ...imported.freeAgentIds, ...leftoverProspectIds],
+            // De-duplicated: leftover year=season prospects are ALREADY in
+            // imported.freeAgentIds (the importer treats draftYear === season
+            // as a current FA), so spreading both listed ~166 players twice.
+            // Duplicate ids → duplicate React keys on the FA table → the list
+            // stopped responding to the position / affordable filters for
+            // the whole first season of a /rosters-loaded league (Tyler 10/28).
+            freeAgents: Array.from(new Set([...fbgmFAs.map(p => p.id), ...imported.freeAgentIds, ...leftoverProspectIds])),
             faDay: 0,
             faRefusals: [],
             playoffBracket: null,
