@@ -285,28 +285,57 @@ export function buildSpotlightTeamData(opts: FetchOptions): Record<string, unkno
   };
 
   // Add narrative-specific context
-  if (narrative === 'preseason' && opts.newsItems) {
-    // Offseason transactions for the user's team
-    const offseasonNews = opts.newsItems
+  if (narrative === 'preseason') {
+    // The offseason's moves are read off the ROSTER, not off store state that
+    // the season rollover has already cleared: startNewSeason() resets
+    // draftResults to [] and replaces newsItems with fresh preseason news, and
+    // FA signings / trades made in the offseason are stamped with the season
+    // that just ENDED (acquiredSeason = season - 1) while the draft class is
+    // stamped with the new one. The old `acquiredSeason === season` filter +
+    // empty draftResults had the preseason show telling a GM who made a dozen
+    // moves and seven picks that he'd done nothing (Tyler 10/29, Vikings).
+    const thisOffseason = (p: Player) => p.acquiredSeason != null && p.acquiredSeason >= season - 1;
+
+    // Offseason transactions for the user's team (news, when it survived)
+    const offseasonNews = (opts.newsItems ?? [])
       .filter(n => n.isUserTeam && (n.type === 'trade' || n.type === 'signing' || n.type === 'release'))
       .map(n => ({ type: n.type, headline: n.headline, week: n.week }));
-    teamData.offseasonMoves = offseasonNews;
 
-    // Draft picks this season
-    if (opts.draftResults) {
-      const teamPicks = opts.draftResults.filter(dr => dr.teamId === team.id);
-      const draftedPlayers = teamPicks.map(dr => {
+    // Draft picks this season: draftResults when present, else the rookies on
+    // the roster from this draft class (draftYear === the new season).
+    const fromResults = (opts.draftResults ?? [])
+      .filter(dr => dr.teamId === team.id)
+      .map(dr => {
         const p = allPlayers.find(pl => pl.id === dr.playerId);
         return p ? { name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, potential: p.potential, round: dr.round, pick: dr.overallPick } : null;
-      }).filter(Boolean);
-      teamData.draftPicks = draftedPlayers;
-    }
+      })
+      .filter(Boolean);
+    // (The draft stamps draftYear/draftPick/acquiredVia but not draftTeamId or
+    // draftRound — a rookie from this class still on the roster was drafted
+    // here, and the round comes from the overall pick.)
+    const teamsInLeague = Math.max(1, allTeams.length);
+    const fromRoster = activeRoster
+      .filter(p => p.acquiredVia === 'draft' && p.draftYear === season && (p.draftTeamId == null || p.draftTeamId === team.id))
+      .sort((a, b) => (a.draftPick ?? 999) - (b.draftPick ?? 999))
+      .map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, potential: p.potential,
+        round: p.draftRound ?? (p.draftPick ? Math.ceil(p.draftPick / teamsInLeague) : undefined), pick: p.draftPick ?? undefined }));
+    teamData.draftPicks = fromResults.length ? fromResults : fromRoster;
 
-    // Recent FA signings
-    const recentSignings = activeRoster
-      .filter(p => p.acquiredVia === 'free-agency' && p.acquiredSeason === season)
-      .map(mapPlayer);
+    // Free agents signed and players traded for this offseason
+    const recentSignings = activeRoster.filter(p => p.acquiredVia === 'free-agency' && thisOffseason(p)).map(mapPlayer);
+    const recentTrades = activeRoster.filter(p => p.acquiredVia === 'trade' && thisOffseason(p)).map(mapPlayer);
     teamData.freeAgencySignings = recentSignings;
+    teamData.tradeAcquisitions = recentTrades;
+
+    // offseasonMoves: the news when there is any, otherwise a summary built
+    // from the roster so the writer never sees an empty list it reads as
+    // "no moves".
+    teamData.offseasonMoves = offseasonNews.length ? offseasonNews : [
+      ...recentSignings.map(p => ({ type: 'signing', headline: `Signed ${p.pos} ${p.name} (${p.ovr} OVR) in free agency` })),
+      ...recentTrades.map(p => ({ type: 'trade', headline: `Acquired ${p.pos} ${p.name} (${p.ovr} OVR) by trade` })),
+      ...(teamData.draftPicks as { name: string; pos: string; round?: number }[]).map(d => ({ type: 'draft', headline: `Drafted ${d.pos} ${d.name}${d.round ? ` in round ${d.round}` : ''}` })),
+    ];
+    teamData.offseasonMoveCount = { signings: recentSignings.length, trades: recentTrades.length, draftPicks: (teamData.draftPicks as unknown[]).length };
   }
 
   if (narrative === 'tradeDeadline') {

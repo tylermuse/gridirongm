@@ -244,7 +244,12 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
   const canType = signedIn && !typedCapped;
   const calls = useMemo(() => groupCalls(messages), [messages]);
   const latest = calls.length - 1;
-  const chips = showAllChips ? CALL_IN_CHIPS : CALL_IN_CHIPS.slice(0, VISIBLE_CHIPS);
+  // A pill the user has already tapped this week drops out of the row (its
+  // question is sitting right there in the log — Tyler 10/29). Derived from
+  // the persisted messages, so it stays gone after closing and reopening.
+  const askedLabels = useMemo(() => new Set(messages.filter(m => m.role === 'user').map(m => m.text)), [messages]);
+  const unaskedChips = CALL_IN_CHIPS.filter(c => !askedLabels.has(c.label));
+  const chips = showAllChips ? unaskedChips : unaskedChips.slice(0, VISIBLE_CHIPS);
 
   function tapChip(id: string, label: string) {
     if (busy) return;
@@ -451,9 +456,9 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
                     {c.label}
                   </button>
                 ))}
-                {CALL_IN_CHIPS.length > VISIBLE_CHIPS && (
+                {unaskedChips.length > VISIBLE_CHIPS && (
                   <button onClick={() => setShowAllChips(s => !s)} className="min-h-9 text-xs px-3 rounded-full text-blue-700 font-semibold hover:bg-blue-50">
-                    {showAllChips ? 'Fewer' : `${CALL_IN_CHIPS.length - VISIBLE_CHIPS} more`}
+                    {showAllChips ? 'Fewer' : `${unaskedChips.length - VISIBLE_CHIPS} more`}
                   </button>
                 )}
               </div>
