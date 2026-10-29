@@ -185,7 +185,7 @@ function buildNarrativePrompt(narrative: NarrativeMoment): string {
   switch (narrative) {
     case 'preseason':
       return `This is the START OF A NEW SEASON — a preseason special episode. Focus on:
-- Recap the offseason moves: draft picks, free agency signings, and trades. For each key acquisition, evaluate the move — was it smart? Overpay? Exactly what they needed?
+- Recap the offseason moves: draft picks, free agency signings, and trades. The real data is in "draftPicks", "freeAgencySignings", "tradeAcquisitions" and "offseasonMoves" (with "offseasonMoveCount" totals). Use those lists — name the players. Only call it a quiet offseason or say they didn't draft anyone if those lists are actually empty. For each key acquisition, evaluate the move — was it smart? Overpay? Exactly what they needed?
 - How do the new additions change the roster? Who fills a hole, who's redundant?
 - Season expectations: contender, playoff team, rebuilding, or dark horse?
 - One bold prediction for the season ahead
