@@ -1777,15 +1777,19 @@ export default function DraftPage() {
             </details>
 
             <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[520px] sticky-col sticky-action">
+            {/* Mobile: 4 columns (Player / OVR / Scout / Draft) so the whole row fits a phone
+                without side-scrolling — the 7-column layout with sticky edge columns hid the name
+                behind the chevron and pushed Scout off-screen (Tyler 10/28). Chevron, Proj and
+                Pos fold into the Player cell below sm. */}
+            <table className="w-full text-sm sm:min-w-[520px] sticky-col-sm sticky-action-sm">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
-                  <th className="text-left pb-2 pl-2 w-6"></th>
-                  <th className="text-center pb-2 w-12">Proj</th>
-                  <th className="text-left pb-2">Player</th>
-                  <th className="text-center pb-2">Pos</th>
-                  <th className="text-center pb-2">OVR</th>
-                  <th className="text-center pb-2">Scout</th>
+                  <th className="hidden sm:table-cell text-left pb-2 pl-2 w-6"></th>
+                  <th className="hidden sm:table-cell text-center pb-2 w-12">Proj</th>
+                  <th className="text-left pb-2 pl-2 sm:pl-0 w-full sm:w-auto">Player</th>
+                  <th className="hidden sm:table-cell text-center pb-2">Pos</th>
+                  <th className="text-center pb-2 px-1">OVR</th>
+                  <th className="text-center pb-2 px-1">Scout</th>
                   <th className="text-right pb-2 pr-2 bg-[var(--surface)]">Draft</th>
                 </tr>
               </thead>
@@ -1806,17 +1810,17 @@ export default function DraftPage() {
                       className={`border-t border-[var(--border)] cursor-pointer transition-colors ${isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
                       onClick={() => setExpandedProspectId(isExpanded ? null : player.id)}
                     >
-                      <td className="py-2.5 pl-2">
+                      <td className="hidden sm:table-cell py-2.5 pl-2">
                         <svg className={`w-3 h-3 text-[var(--text-sec)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       </td>
-                      <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">
+                      <td className="hidden sm:table-cell py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">
                         {hasScouting ? projRank : (
                           <Link href="/pricing" onClick={e => e.stopPropagation()} className="text-blue-600 hover:underline" title="Premium">🔒</Link>
                         )}
                       </td>
-                      <td className="py-2.5">
+                      <td className="py-2.5 pl-2 sm:pl-0 w-full sm:w-auto max-w-0 sm:max-w-none">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleStarProspect(player.id); }}
@@ -1844,8 +1848,8 @@ export default function DraftPage() {
                               );
                               return (
                                 <>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-semibold truncate max-w-full">{player.firstName} {player.lastName}</span>
                                     {hasRealNeed && (
                                       <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium shrink-0">Fills Need</span>
                                     )}
@@ -1861,7 +1865,9 @@ export default function DraftPage() {
                                     ) : null}
                                   </div>
                                   <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
-                                    {player.college ?? player.scoutingLabel ?? 'Unranked'}
+                                    <span className="sm:hidden font-bold text-[var(--text)]">{player.position}</span>
+                                    {hasScouting && <span className="sm:hidden font-mono">#{projRank}</span>}
+                                    <span className="truncate">{player.college ?? player.scoutingLabel ?? 'Unranked'}</span>
                                     {hasScouting && isScouted && (() => {
                                       const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, 2);
                                       // Reconcile: when the dashboard says it's a real
@@ -1885,7 +1891,7 @@ export default function DraftPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-2.5 text-center"><Badge>{player.position}</Badge></td>
+                      <td className="hidden sm:table-cell py-2.5 text-center"><Badge>{player.position}</Badge></td>
                       <td className={`py-2.5 text-center font-bold ${hasScouting ? ratingColor(player.ratings.overall) : 'text-[var(--text-sec)]'}`}>
                         {hasScouting ? (
                           <span>{player.ratings.overall}</span>
@@ -1925,7 +1931,7 @@ export default function DraftPage() {
                         {isUserPick ? (
                           <button
                             onClick={() => draftPlayer(player.id)}
-                            className="min-h-[44px] min-w-[44px] px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg active:bg-blue-700 touch-manipulation"
+                            className="min-h-[44px] min-w-[44px] px-2.5 sm:px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg active:bg-blue-700 touch-manipulation"
                           >
                             Draft
                           </button>
