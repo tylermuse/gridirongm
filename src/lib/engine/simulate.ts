@@ -182,28 +182,46 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-// League-average (kicking 75) make rate by distance, NFL benchmarks:
-// <30 ≈ 99%, 30-39 ≈ 92%, 40-49 ≈ 78%, 50+ ≈ 65%.
+// League-average (kicking 76) make rate by distance, NFL benchmarks:
+// <30 ≈ 99%, 30-39 ≈ 92%, 40-49 ≈ 78%, 50-54 ≈ 65%, 55-59 ≈ 50%, 60+ drops off a cliff.
+// The curve extends past 60 and keeps declining toward 0 — there is no artificial
+// floor, so 65+ yard attempts are near-impossible rather than the old de-facto 35%
+// (which let even weak kickers hit physically-impossible long FGs).
 const FG_BASE_CURVE: [number, number][] = [
   [18, 0.995], [25, 0.985], [30, 0.96], [35, 0.91], [40, 0.85],
-  [45, 0.77], [50, 0.69], [55, 0.60], [60, 0.48], [65, 0.35],
+  [45, 0.77], [50, 0.67], [55, 0.55], [60, 0.38], [63, 0.22], [66, 0.08], [70, 0.02],
 ];
 
 /** FG make probability. Kicking rating shifts the base curve in logit space
- *  (≈65 → 78%, 75 → 86%, 85 → 92% over a typical attempt mix). Shared by the
- *  season sim, the play-by-play viewer and live coach mode. */
+ *  (≈65 → 78%, 76 → 86%, 85 → 92% over a typical attempt mix). Shared by the
+ *  season sim, the play-by-play viewer and live coach mode. Beyond the longest
+ *  benchmarked distance the base keeps falling off the final segment's slope
+ *  toward 0 instead of flattening at a floor, and genuinely out-of-range kicks
+ *  (<3% base) bypass the short-kick floor so they can approach 0%. */
 export function fieldGoalMakeProbability(distanceYards: number, kicking: number): number {
-  let base = FG_BASE_CURVE[FG_BASE_CURVE.length - 1][1];
-  if (distanceYards <= FG_BASE_CURVE[0][0]) base = FG_BASE_CURVE[0][1];
-  else {
+  const last = FG_BASE_CURVE.length - 1;
+  let base: number;
+  if (distanceYards <= FG_BASE_CURVE[0][0]) {
+    base = FG_BASE_CURVE[0][1];
+  } else if (distanceYards >= FG_BASE_CURVE[last][0]) {
+    // Extrapolate the final segment's (downward) slope toward zero.
+    const [dA, pA] = FG_BASE_CURVE[last - 1];
+    const [dB, pB] = FG_BASE_CURVE[last];
+    const slope = (pB - pA) / (dB - dA);
+    base = Math.max(0, pB + slope * (distanceYards - dB));
+  } else {
+    base = FG_BASE_CURVE[last][1];
     for (let i = 1; i < FG_BASE_CURVE.length; i++) {
       const [d0, p0] = FG_BASE_CURVE[i - 1];
       const [d1, p1] = FG_BASE_CURVE[i];
       if (distanceYards <= d1) { base = p0 + (p1 - p0) * (distanceYards - d0) / (d1 - d0); break; }
     }
   }
+  if (base <= 0) return 0;
+  // Out-of-range: at most a few percent even for a huge leg, and no floor.
+  if (base < 0.03) return clamp(base * (1 + Math.max(0, kicking - 76) * 0.02), 0, 0.05);
   const logit = Math.log(base / (1 - base)) + (kicking - 76) * 0.07;
-  return clamp(1 / (1 + Math.exp(-logit)), 0.05, 0.995);
+  return clamp(1 / (1 + Math.exp(-logit)), 0.01, 0.995);
 }
 
 /** Weighted random pick — higher weight = higher chance */
