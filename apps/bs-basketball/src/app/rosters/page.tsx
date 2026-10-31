@@ -28,10 +28,10 @@ import type { TeamId } from '@bs/core/adapter';
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
-const CACHE_BUST = 13;
+const CACHE_BUST = 14;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
-const LAST_UPDATED = 'October 25, 2026';
+const LAST_UPDATED = 'October 31, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
 /** Collapsible "How to use this roster" panel — BS Hoops + Basketball GM paths. */
