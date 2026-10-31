@@ -11,6 +11,7 @@ import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useBusyAction } from '@/components/ui/useBusyAction';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { formatRecord, type Player, type DraftPick, type Position } from '@/types';
 import { POSITIONS, getUnamortizedBonus } from '@/types';
@@ -871,6 +872,11 @@ function TradesPage() {
   const [seekPositions, setSeekPositions] = useState<Position[]>([]);
   const [seekDraftPicks, setSeekDraftPicks] = useState(false);
   const [blockSolicited, setBlockSolicited] = useState(false);
+  // Outcome of the last Ask/Refresh. Re-asking often returns an identical
+  // result (or the store bails silently on a low-value block), which left the
+  // page untouched — Refresh Proposals was a top dead/rage click.
+  const [blockSolicitNote, setBlockSolicitNote] = useState<string | null>(null);
+  const { busy: simBusy, run: runSim } = useBusyAction();
   const [blockSort, setBlockSort] = useState<'ovr' | 'pos' | 'age' | 'salary'>('ovr');
   const [blockSortDir, setBlockSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -1261,8 +1267,22 @@ function TradesPage() {
     `You lose ~${Math.round(Math.abs(counterValueDiff)).toLocaleString()} pts`;
 
   function handleSolicitProposals() {
-    solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
-    setBlockSolicited(true);
+    runSim('block-proposals', () => {
+      const before = useGameStore.getState().tradeProposals;
+      solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
+      const after = useGameStore.getState().tradeProposals;
+      // The store replaces all pending proposals with the fresh batch, and
+      // returns without touching state when the block can't draw offers.
+      const offers = after.filter(p => p.status === 'pending').length;
+      setBlockSolicited(true);
+      setBlockSolicitNote(
+        after === before
+          ? 'Nothing on the block is valuable enough to draw offers. Add a stronger player or pick.'
+          : offers > 0
+            ? `${offers} offer${offers === 1 ? '' : 's'} in. See below.`
+            : 'No offers this time. Try different assets or preferences.',
+      );
+    });
   }
 
   return (
@@ -1974,11 +1994,17 @@ function TradesPage() {
                         </div>
                         <Button
                           onClick={handleSolicitProposals}
-                          disabled={blockedPlayerIds.length === 0 && blockedPickIds.length === 0}
+                          busy={simBusy === 'block-proposals'}
+                          disabled={(blockedPlayerIds.length === 0 && blockedPickIds.length === 0) || !!simBusy}
                           className="w-full"
                         >
                           {blockSolicited ? 'Refresh Proposals' : 'Ask for Proposals'}
                         </Button>
+                        {blockSolicitNote && simBusy !== 'block-proposals' && (
+                          <p className="mt-2 text-xs text-[var(--text-sec)]" aria-live="polite">
+                            {blockSolicitNote}
+                          </p>
+                        )}
                       </div>
                     </Card>
                   </div>
