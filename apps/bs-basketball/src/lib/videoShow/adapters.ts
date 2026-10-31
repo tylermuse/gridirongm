@@ -67,7 +67,8 @@ export function fromLeague(league: BasketballLeagueState): ShowLeague | null {
         } : null,
         stats: toStats(statsById.get(p.id)),
         lastSeasonStats: toStats(last?.stats),
-        imageUrl: (p as { imageUrl?: string }).imageUrl,
+        // Hoops keeps the headshot on sportData (imported BBGM `imgURL`).
+        imageUrl: p.sportData.photoUrl,
       };
     });
   const schedule: ShowScheduleGame[] = league.games

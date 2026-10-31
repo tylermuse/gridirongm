@@ -81,6 +81,15 @@ describe('Hoops video show — data layer', () => {
     expect(sched.rows.length).toBeGreaterThan(1);
     expect(sched.rows.some(r => !r.result)).toBe(true);
   });
+
+  it("carries a player's headshot onto the show's player card", () => {
+    const p = Object.values(league.players).find(pl => pl.id === view.players[0].id)!;
+    const withPhoto: BasketballLeagueState = {
+      ...league,
+      players: { ...league.players, [p.id]: { ...p, sportData: { ...(p.sportData as object), photoUrl: 'https://cdn.test/p.png' } } },
+    };
+    expect(fromLeague(withPhoto)!.players.find(sp => sp.id === p.id)?.imageUrl).toBe('https://cdn.test/p.png');
+  });
 });
 
 describe('Hoops video show — script and assets', () => {
