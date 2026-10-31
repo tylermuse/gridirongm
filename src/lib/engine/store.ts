@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { idbStorage, getItem as idbGetItem, setItem as idbSetItem, flushPersist, flushPersistSync } from '@bs/core/storage';
-import { scheduleCloudPush } from '@bs/core/supabase/cloud-saves';
+import { persist } from 'zustand/middleware';
+import { useSyncExternalStore } from 'react';
+import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites } from '@bs/core/storage';
+import { scheduleCloudPush, isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 function uuid(): string {
   return crypto.randomUUID();
 }
@@ -41,6 +42,63 @@ import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { trackEvent } from '@bs/core/analytics/track';
 
 const SAVE_VERSION = 36;
+const AUTOSAVE_KEY = 'gridiron-gm-autosave';
+
+// ---------------------------------------------------------------------------
+// Save-load status
+// ---------------------------------------------------------------------------
+// Whether the persisted league has finished loading from IndexedDB. Until it
+// has, the store holds the empty initial state (phase 'preseason', no teams) —
+// which is what a slow or failed load used to put on screen as "my progress is
+// gone". Kept outside the persisted store so flipping it never autosaves.
+
+export type SaveLoadStatus = 'loading' | 'ready' | 'failed';
+
+let saveLoadStatus: SaveLoadStatus = 'loading';
+const saveLoadListeners = new Set<() => void>();
+/** Size + read time of the last autosave read, for load telemetry. */
+let lastSaveRead: { mb: number; readMs: number } | null = null;
+
+function setSaveLoadStatus(next: SaveLoadStatus): void {
+  if (saveLoadStatus === next) return;
+  saveLoadStatus = next;
+  saveLoadListeners.forEach(l => l());
+}
+
+function subscribeSaveLoadStatus(cb: () => void): () => void {
+  saveLoadListeners.add(cb);
+  return () => { saveLoadListeners.delete(cb); };
+}
+
+/** Load status of the persisted league. Server renders assume 'ready' so the
+ *  SSR markup is unchanged; the client switches to the real status on mount. */
+export function useSaveLoadStatus(): SaveLoadStatus {
+  return useSyncExternalStore(subscribeSaveLoadStatus, () => saveLoadStatus, () => 'ready');
+}
+
+/** Resolves once the persisted league has loaded or failed to. */
+export function whenSaveLoadSettles(): Promise<SaveLoadStatus> {
+  if (saveLoadStatus !== 'loading') return Promise.resolve(saveLoadStatus);
+  return new Promise(resolve => {
+    const unsubscribe = subscribeSaveLoadStatus(() => {
+      if (saveLoadStatus === 'loading') return;
+      unsubscribe();
+      resolve(saveLoadStatus);
+    });
+  });
+}
+
+/** Re-read the autosave after a failed load. */
+export async function retrySaveLoad(): Promise<SaveLoadStatus> {
+  await useGameStore.persist.rehydrate();
+  return saveLoadStatus;
+}
+
+/** Use the game without the saved league (after a load that keeps failing).
+ *  Autosaves resume, so starting a new league will replace the old save. */
+export function continueWithoutSave(): void {
+  setSaveLoadStatus('ready');
+}
 
 // Module-local dedup so the Week-1 roster-overflow alert can't infinite-loop
 // when simWeek() is invoked repeatedly from a caller (e.g. handleSimSeason
@@ -10616,7 +10674,8 @@ export const useGameStore = create<GameStore>()(
       },
 
       saveToSlot: async (slot: number) => {
-        const stored = await idbGetItem('gridiron-gm-autosave');
+        await flushPendingWrites();
+        const stored = await idbGetItem(AUTOSAVE_KEY);
         if (stored) {
           await idbSetItem(`gridiron-gm-save-${slot}`, stored);
         }
@@ -10625,7 +10684,7 @@ export const useGameStore = create<GameStore>()(
       loadFromSlot: async (slot: number) => {
         const data = await idbGetItem(`gridiron-gm-save-${slot}`);
         if (!data) return;
-        await idbSetItem('gridiron-gm-autosave', data);
+        await idbSetItem(AUTOSAVE_KEY, data);
         window.location.reload();
       },
 
@@ -10841,9 +10900,23 @@ export const useGameStore = create<GameStore>()(
       },
     }),
     {
-      name: 'gridiron-gm-autosave',
+      name: AUTOSAVE_KEY,
       version: SAVE_VERSION,
-      storage: createJSONStorage(() => idbStorage),
+      storage: {
+        getItem: async (name) => {
+          const startedAt = performance.now();
+          const raw = await idbGetItem(name);
+          lastSaveRead = { mb: Math.round((raw?.length ?? 0) / 1e5) / 10, readMs: Math.round(performance.now() - startedAt) };
+          return raw === null ? null : JSON.parse(raw);
+        },
+        // Nothing in memory is worth saving until the league has loaded:
+        // before that (and after a failed load) the store is the empty initial
+        // state. Writes are coalesced — see queueWrite.
+        setItem: (name, value) => {
+          if (saveLoadStatus === 'ready') queueWrite(name, value);
+        },
+        removeItem: idbRemoveItem,
+      },
       partialize: (state) => {
         // Slim down schedule: only keep playerStats/scoringPlays for user-team games
         // (other games' stats are already aggregated into player .stats objects)
@@ -10875,46 +10948,61 @@ export const useGameStore = create<GameStore>()(
           weeklyRecaps: trimmedRecaps,
         };
       },
-      onRehydrateStorage: () => (state) => {
-        // Auto-set initialized if we have a saved game
-        if (state && state.userTeamId && state.teams && state.teams.length > 0) {
-          useGameStore.setState({ initialized: true });
-        }
-        // Heal legacy saves whose imported players carried a non-string
-        // injury.type — some FBGM/ESPN exports store it as a status object
-        // ({id,name,description,abbreviation}). Rendering that object as a React
-        // child crashes the dashboard (React #31), which stranded users who
-        // started a league from such a roster. Coerce to a readable string in
-        // place. Idempotent; runs every rehydrate; no save-version bump.
-        if (state && Array.isArray(state.players)) {
-          let healed = false;
-          for (const p of state.players) {
-            const rawType: unknown = p?.injury?.type;
-            if (rawType && typeof rawType === 'object') {
-              const o = rawType as { description?: string; name?: string; abbreviation?: string };
-              p.injury!.type = String(o.description ?? o.name ?? o.abbreviation ?? 'Injured');
-              healed = true;
-            }
+      onRehydrateStorage: () => {
+        setSaveLoadStatus('loading');
+        return (state, error) => {
+          if (error || !state) {
+            if (typeof window === 'undefined') return; // no IndexedDB on the server
+            setSaveLoadStatus('failed');
+            console.error('[store] Saved league failed to load', error);
+            trackEvent('save_load_failed', {
+              message: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+              ...lastSaveRead,
+            });
+            return;
           }
-          if (healed) useGameStore.setState({ players: state.players });
-        }
-        // Un-stick any scouting/intel allocations that were frozen at free-tier
-        // values before the subscription tier resolved. No-op unless the module
-        // cache already holds a higher entitlement; SubscriptionProvider also
-        // calls this the moment it resolves the tier.
-        useGameStore.getState().syncEntitlementAllocations();
-        // Wire the sim-balance telemetry sink. Pushed records go into
-        // state.simTelemetry (capped) only when features.devPanels is on;
-        // otherwise the sink is a no-op.
-        setSimTelemetrySink((rec) => {
-          const s = useGameStore.getState();
-          if (!s.leagueSettings?.devPanels) return;
-          const prev = s.simTelemetry ?? [];
-          const next = prev.length >= SIM_TELEMETRY_CAP - 1
-            ? [...prev.slice(-(SIM_TELEMETRY_CAP - 1)), rec]
-            : [...prev, rec];
-          useGameStore.setState({ simTelemetry: next });
-        });
+          setSaveLoadStatus('ready');
+          if (lastSaveRead && lastSaveRead.readMs > 2500) trackEvent('save_load_slow', lastSaveRead);
+          // Auto-set initialized if we have a saved game
+          if (state && state.userTeamId && state.teams && state.teams.length > 0) {
+            useGameStore.setState({ initialized: true });
+          }
+          // Heal legacy saves whose imported players carried a non-string
+          // injury.type — some FBGM/ESPN exports store it as a status object
+          // ({id,name,description,abbreviation}). Rendering that object as a React
+          // child crashes the dashboard (React #31), which stranded users who
+          // started a league from such a roster. Coerce to a readable string in
+          // place. Idempotent; runs every rehydrate; no save-version bump.
+          if (state && Array.isArray(state.players)) {
+            let healed = false;
+            for (const p of state.players) {
+              const rawType: unknown = p?.injury?.type;
+              if (rawType && typeof rawType === 'object') {
+                const o = rawType as { description?: string; name?: string; abbreviation?: string };
+                p.injury!.type = String(o.description ?? o.name ?? o.abbreviation ?? 'Injured');
+                healed = true;
+              }
+            }
+            if (healed) useGameStore.setState({ players: state.players });
+          }
+          // Un-stick any scouting/intel allocations that were frozen at free-tier
+          // values before the subscription tier resolved. No-op unless the module
+          // cache already holds a higher entitlement; SubscriptionProvider also
+          // calls this the moment it resolves the tier.
+          useGameStore.getState().syncEntitlementAllocations();
+          // Wire the sim-balance telemetry sink. Pushed records go into
+          // state.simTelemetry (capped) only when features.devPanels is on;
+          // otherwise the sink is a no-op.
+          setSimTelemetrySink((rec) => {
+            const s = useGameStore.getState();
+            if (!s.leagueSettings?.devPanels) return;
+            const prev = s.simTelemetry ?? [];
+            const next = prev.length >= SIM_TELEMETRY_CAP - 1
+              ? [...prev.slice(-(SIM_TELEMETRY_CAP - 1)), rec]
+              : [...prev, rec];
+            useGameStore.setState({ simTelemetry: next });
+          });
+        };
       },
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
@@ -11679,34 +11767,29 @@ export const useGameStore = create<GameStore>()(
 // ---------------------------------------------------------------------------
 
 /**
- * Serialize the current store state using the same partialize logic as the
- * persist middleware, then write directly to IndexedDB. Returns a Promise
- * that resolves once the write is confirmed.
+ * Write the current league to IndexedDB now, superseding any queued autosave,
+ * and resolve once the write has landed.
  *
  * Call this before router.push() after any store mutation to guarantee the
  * navigation target will rehydrate fresh data.
  */
 export async function flushToStorage(): Promise<void> {
+  // Same rule as the persist storage: never write the empty pre-load state.
+  if (saveLoadStatus !== 'ready') return;
+  const { partialize } = useGameStore.persist.getOptions();
   const state = useGameStore.getState();
-  const opts = (useGameStore as any).persist?.getOptions?.();
-  const partialize = opts?.partialize ?? ((s: any) => s);
-  const partialized = partialize(state);
-  const serialized = JSON.stringify({ state: partialized, version: SAVE_VERSION });
-  await flushPersist(serialized);
+  const envelope = { state: partialize ? partialize(state) : state, version: SAVE_VERSION };
+  queueWrite(AUTOSAVE_KEY, envelope);
+  await flushPendingWrites();
   // Mirror the autosave to the user's account when cloud sync is on (no-op
   // otherwise). Fire-and-forget + debounced so it never blocks the local save.
-  scheduleCloudPush('gridiron-gm-autosave', serialized);
+  if (isCloudSyncEnabled()) scheduleCloudPush(AUTOSAVE_KEY, JSON.stringify(envelope));
 }
 
 /**
- * Synchronous fallback: write a recovery snapshot to localStorage.
- * Use in beforeunload handlers where async is unreliable.
+ * Start writing any queued autosave without waiting on it — for pagehide and
+ * visibilitychange handlers, where the page may not get to finish async work.
  */
-export function flushToStorageSync(): void {
-  const state = useGameStore.getState();
-  const opts = (useGameStore as any).persist?.getOptions?.();
-  const partialize = opts?.partialize ?? ((s: any) => s);
-  const partialized = partialize(state);
-  const serialized = JSON.stringify({ state: partialized, version: SAVE_VERSION });
-  flushPersistSync(serialized);
+export function flushPendingSave(): void {
+  void flushPendingWrites();
 }
