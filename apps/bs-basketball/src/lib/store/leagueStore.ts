@@ -84,7 +84,16 @@ import { installCoach, fireCoach as fireCoachLib, extendCoach as extendCoachLib,
 import { userExpiringCoaches } from '../coaching/carousel';
 import type { StaffRole } from '../coaching/coaches';
 import { createRng } from '@bs/sport-basketball';
-import { clearGmFired } from '../approval';
+import { clearGmFired, getGmFired } from '../approval';
+import { trackEvent } from '@bs/core/analytics/track';
+import {
+  daySimmedProps,
+  rosterFileName,
+  seasonCompletedProps,
+  seasonsCompleted,
+  startMode,
+  type DaySimMode,
+} from '../telemetry/gameplay';
 import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, createPlayer as createPlayerLib, type PlayerEdit, type CreatePlayerOpts } from '../godMode/godMode';
 import { revealFaIntel } from '../freeAgency/intel';
 import { forceUserGameResult } from '../godMode/forceGame';
@@ -472,6 +481,29 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
   return league;
 }
 
+/**
+ * True when `read` is still the live league, i.e. nothing else committed since
+ * this action took its snapshot. Actions read `current`, await (paint yield +
+ * Dexie save), then commit, so a double-clicked Sim / Enter Offseason runs the
+ * same transition twice from one snapshot. Only the first commit actually
+ * advanced the save; gameplay telemetry reports just that one so each event
+ * fires once per real occurrence.
+ */
+function isLiveSnapshot(get: () => LeagueStore, read: BasketballLeagueState): boolean {
+  return get().league === read;
+}
+
+/** Emit `day_simmed` for a regular-season sim that committed from `read`. */
+function trackDaySimmed(
+  get: () => LeagueStore,
+  read: BasketballLeagueState,
+  mode: DaySimMode,
+  days: number,
+  games: number,
+): void {
+  if (days > 0 && isLiveSnapshot(get, read)) trackEvent('day_simmed', daySimmedProps(read, mode, days, games));
+}
+
 /** Friendly error copy for a failed import. */
 function importErrorMessage(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
@@ -530,6 +562,14 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       const league = createNewBasketballLeague(opts);
       await saveLeague(league);
       set({ league, loading: false });
+      // Each call creates (and saves) a distinct league, so each one counts.
+      // No `team`: Hoops picks the team AFTER creation (see team_picked).
+      trackEvent('league_created', {
+        source: 'generated',
+        roster_file: null,
+        start_mode: startMode(league),
+        season: league.currentSeason,
+      });
     } catch (err) {
       console.error('[bs-hoops] newLeague failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
@@ -543,6 +583,13 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       const league = leagueFromImport(imported);
       await saveLeague(league);
       set({ league, loading: false });
+      trackEvent('league_created', {
+        source: 'import',
+        roster_file: rosterFileName(url),
+        upload: false,
+        start_mode: startMode(league),
+        season: league.currentSeason,
+      });
       return true;
     } catch (err) {
       console.error('[bs-hoops] importLeagueFromUrl failed:', err);
@@ -558,6 +605,13 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       const league = leagueFromImport(imported);
       await saveLeague(league);
       set({ league, loading: false });
+      trackEvent('league_created', {
+        source: 'import',
+        roster_file: null,
+        upload: true,
+        start_mode: startMode(league),
+        season: league.currentSeason,
+      });
       return true;
     } catch (err) {
       console.error('[bs-hoops] importLeagueFromData failed:', err);
@@ -668,6 +722,16 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     };
     const updated = clearGmFired(withTenure);
     set({ league: updated });
+    // The league_created team dimension: Hoops creates the league first and
+    // picks the team after. Re-picking the team you already run isn't a pick.
+    if (current.userTeamId !== teamId) {
+      trackEvent('team_picked', {
+        team: current.teams.find(t => t.id === teamId)?.abbreviation ?? null,
+        season: current.currentSeason,
+        phase: current.currentPhase,
+        fired_takeover: !!getGmFired(current),
+      });
+    }
     try {
       await saveLeague(updated);
     } catch (err) {
@@ -778,6 +842,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
+      trackDaySimmed(get, current, 'day', 1, outcome.gamesSimmed);
       set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) + newProposalNote(current, outcome.league) } });
       return { day: outcome.day, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
@@ -797,10 +862,14 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     try {
       let league = current;
       let result: { userGameId: string; dayGameIds: string[]; day: number } | null = null;
+      let daysSimmed = 0;
+      let gamesSimmed = 0;
       for (let guard = 0; guard < 200; guard++) {
         const outcome = simNextDay(league);
         if (!outcome) break;
         league = outcome.league;
+        daysSimmed++;
+        gamesSimmed += outcome.gamesSimmed;
         const day = outcome.day;
         const dayGames = league.games.filter(
           g => g.status === 'played' && (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason === day,
@@ -813,6 +882,8 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       }
       if (!result) { set({ loading: false, error: 'No upcoming game to watch.' }); return null; }
       await saveLeague(league);
+      // Watch Live sims every day up to (and incl.) the user's game day.
+      trackDaySimmed(get, current, 'watch_game', daysSimmed, gamesSimmed);
       // Deliberately no sim toast — it would spoil the score before the watch.
       set({ league, loading: false });
       return result;
@@ -924,11 +995,31 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       const payload = buildGmSyncPayload(current);
       if (payload) syncGmStats(payload);
 
+      // Season-end telemetry is built from the pre-rollover snapshot (final
+      // records + completed bracket; null if this season is already history).
+      const completed = seasonCompletedProps(current);
       const league = enterOffseason(current);
       await saveLeague(league);
       // Immediate heads-up if ownership just fired the GM (userTeamId cleared).
       const justFired = !!current.userTeamId && !league.userTeamId;
       const fired = (league.sportData as { gmFired?: { teamName: string } }).gmFired;
+      // enterOffseason is the only way out of a finished season (every playoff
+      // sim path just completes the bracket; this rolls it into history), so
+      // it's the single choke point for season_completed + gm_fired. Repeat
+      // calls return early above (draft already set up); a concurrent double
+      // click is dropped by the live-snapshot check.
+      if (isLiveSnapshot(get, current)) {
+        if (completed) trackEvent('season_completed', completed);
+        if (justFired) {
+          trackEvent('gm_fired', {
+            season: current.currentSeason,
+            // Fired at season end, so the season just played counts (same
+            // number as the season_completed sent alongside it).
+            seasons_completed: seasonsCompleted(current) + 1,
+            team: current.teams.find(t => t.id === current.userTeamId)?.abbreviation ?? null,
+          });
+        }
+      }
       // Contract-expiry prompt: the user's coaches whose deals are up.
       const expiringStaff = userExpiringCoaches(league, league.currentSeason + 1);
       const staffToast = expiringStaff.length
@@ -1780,6 +1871,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
+      trackDaySimmed(get, current, target, outcome.daysSimmed, outcome.gamesSimmed);
       set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) + newProposalNote(current, outcome.league) } });
       return { daysSimmed: outcome.daysSimmed, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
@@ -1808,6 +1900,9 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
+      // Plays only the user's next game (other teams' games that day stay
+      // scheduled), so it counts as one game day.
+      trackDaySimmed(get, current, 'next_game', 1, 1);
       set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, 1) } });
       return outcome.gameId;
     } catch (err) {
