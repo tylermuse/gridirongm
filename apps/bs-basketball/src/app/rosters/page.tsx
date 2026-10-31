@@ -31,6 +31,11 @@ import type { TeamId } from '@bs/core/adapter';
 const CACHE_BUST = 14;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
+// Stock-BBGM download variant (built by scripts/build_vanilla_bbgm.py): starts at
+// opening night with the full real schedule, records reset, injuries kept and
+// ratings nudged by results so far. BS Hoops keeps the mid-season main file.
+const NBA_VANILLA_FILE = '/rosters/BBGM_NBA_Roster_2026_Vanilla.json';
+const nbaVanillaUrl = `${NBA_VANILLA_FILE}?v=${CACHE_BUST}`;
 const LAST_UPDATED = 'October 31, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
@@ -57,7 +62,7 @@ function HowToUse() {
           <div>
             <div className="font-bold text-[var(--text)] mb-1">For Basketball GM:</div>
             <ol className="list-decimal list-inside space-y-1 text-[var(--text-sec)]">
-              <li>Download the JSON above.</li>
+              <li>Download the JSON above (the BBGM version starts at opening night with the full real schedule).</li>
               <li>Go to <a href="https://play.basketball-gm.com" target="_blank" rel="noopener noreferrer" className="font-medium hover:underline" style={{ color: 'var(--accent)' }}>play.basketball-gm.com</a></li>
               <li>Click <strong>Create new league</strong></li>
               <li>Under <strong>Customize</strong>, choose <strong>Upload league file</strong> and select the downloaded JSON</li>
@@ -103,8 +108,8 @@ export default function RostersPage() {
 
   function downloadNba() {
     const a = document.createElement('a');
-    a.href = nbaUrl;
-    a.download = 'BBGM_NBA_Roster_2026_Updated.json';
+    a.href = nbaVanillaUrl;
+    a.download = 'BBGM_NBA_Roster_2026.json';
     a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();
@@ -194,10 +199,11 @@ export default function RostersPage() {
               </div>
               <h2 className="text-lg font-black">NBA 2026-27 Roster — Updated {LAST_UPDATED}</h2>
               <p className="text-sm text-[var(--text-sec)] mt-1.5 leading-relaxed">
-                Starts mid-season, on the next real NBA game day: the real 2026-27 schedule and every result so far are
-                baked in, so you pick up exactly where the real standings are and play the rest of the real slate. All 30
-                rosters reconciled against current NBA rosters, with every trade, signing and waiver since the draft
-                (2026 rookies included), 2026-27 contracts and the current injury report. Refreshed weekly.
+                All 30 rosters reconciled against current NBA rosters, with every trade, signing and waiver since the
+                draft (2026 rookies included), 2026-27 contracts, the current injury report and real 2027 and 2028
+                draft classes. In BS Hoops it starts mid-season on the next real game day with every result so far
+                baked in; the BBGM download starts at opening night with the full real 2026-27 schedule, with ratings
+                nudged by how each team has actually played so far. Refreshed weekly.
               </p>
               <p className="text-[11px] text-[var(--text-sec)] mt-2 opacity-70">BBGM-native · 30 teams · 15-man rosters · regular season</p>
               <p className="text-xs mt-2 text-[var(--text-sec)] italic">

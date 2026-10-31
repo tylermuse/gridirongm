@@ -466,6 +466,8 @@ def main():
     open(os.path.join(LOG_DIR, f'{today.isoformat()}.md'), 'w').write(report)
     bust = update_page(today)
     print(f'\nWrote {ROSTER}\nCACHE_BUST → {bust}, LAST_UPDATED → {today:%B} {today.day}, {today.year}')
+    # Stock-BBGM download variant (opening-night start, full schedule) — derives from the file just written.
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_vanilla_bbgm.py')], check=True)
 
 
 if __name__ == '__main__':
