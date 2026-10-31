@@ -73,6 +73,28 @@ describe('Hoops video show — data layer', () => {
     expect(focusForLine('Look at the road trip coming up.', ctx).kind).toBe('schedule');
   });
 
+  it('puts the line score up when the hosts talk about how the game swung', () => {
+    const [g] = buildGameTopics(league, view.team, view.teams, view.players);
+    const q = g.gameQuarters!;
+    expect(q.periods.length).toBeGreaterThanOrEqual(4);
+    const [, us, them] = g.headline.match(/ (\d+), [A-Z]+ (\d+)$/)!.map(Number);
+    expect(q.periods.reduce((s, [a]) => s + a, 0)).toBe(us);
+    expect(q.periods.reduce((s, [, b]) => s + b, 0)).toBe(them);
+
+    const ctx = { topic: g, team: view.team, teams: view.teams, players: view.players, earlier: [] as string[] };
+    const hot = (text: string) => { const f = focusForLine(text, ctx); return f.kind === 'quarters' ? f.hot : f.kind; };
+    expect(hot("Fine. But they did come back and win the last two quarters by a little, so the effort's not the issue. The issue is they keep digging the hole first.")).toEqual([3, 4]);
+    expect(hot('They lost the first quarter by sixteen.')).toEqual([1]);
+    expect(hot('Down twenty-eight at the half.')).toEqual([1, 2]);
+    expect(hot('Out of halftime they finally woke up.')).toEqual([3, 4]);
+    expect(hot('The second and fourth quarters were a mess.')).toEqual([2, 4]);
+    expect(hot('Another slow start.')).toEqual([1]);
+    expect(hot('They keep digging a hole and then trying to climb out.')).toEqual([]);
+    // Box-score talk stays on the box score; "the fourth" as a count isn't Q4.
+    expect(hot('They shot 47 percent from the field.')).toBe('team');
+    expect(hot('That is the fourth straight loss.')).toBe('team');
+  });
+
   it('builds the conference race and the road ahead', () => {
     const race = conferenceRace(view.team, view.teams);
     expect(race.rows.some(r => r.isUser)).toBe(true);
