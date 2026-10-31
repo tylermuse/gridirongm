@@ -125,6 +125,18 @@ export interface ShowTopicInput {
   calls?: Calls;
 }
 
+/** Storylines an episode covers after the game breakdown. Every line is
+ *  voiced and ElevenLabs bills per character, so this sets most of the cost. */
+export const SHOW_MAX_STORYLINES = 3;
+
+/** The game breakdown (deep topics, which lead) and the first storylines.
+ *  A prefix, so the player's topic indexes match the server's. */
+export function capShowTopics<T extends { depth?: 'deep' }>(topics: T[]): T[] {
+  let stories = 0;
+  const end = topics.findIndex(t => t.depth !== 'deep' && ++stories > SHOW_MAX_STORYLINES);
+  return end < 0 ? topics : topics.slice(0, end);
+}
+
 /** A pre-recorded two-shot of both hosts as an on-screen segment. */
 export function wideSegment(id: string, extra: { themeCard?: ShowThemeId } = {}): Extract<ShowSegment, { kind: 'phrase' }> | null {
   const w = WIDE_CLIPS[id];

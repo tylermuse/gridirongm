@@ -42,6 +42,12 @@ const WRITER_EFFORT = process.env.SPOTLIGHT_SHOW_WRITER_EFFORT || 'low';
 /** The writer may cut to two-shot banter (off: see writeConversation). */
 const WRITER_WIDE = false;
 
+/** Most lines a topic keeps. Every one is voiced (billed per character), and
+ *  the writer runs well past the counts the prompt asks for, so extras are dropped. */
+export const MAX_TOPIC_LINES = { deep: 5, verdict: 6, topic: 4 } as const;
+const maxLines = (t: ShowTopicInput) =>
+  t.isVerdict ? MAX_TOPIC_LINES.verdict : t.depth === 'deep' ? MAX_TOPIC_LINES.deep : MAX_TOPIC_LINES.topic;
+
 export const WRITER_SYSTEM_PROMPT = `You write "Team Spotlight", a two-host basketball talk show inside a basketball GM simulation game. From the producer's notes you write the transcript of one unscripted conversation between the hosts. It will be voiced by expressive TTS. The bar: someone listening should not be able to tell it was written. It should sound like two guys who've done this show together for years, talking, not performing.
 
 THE HOSTS
@@ -51,7 +57,7 @@ THE HOSTS
 
 WHAT MAKES IT SOUND REAL
 - Respond to what was just said, not to the topic in general. Pick up a word or phrase the other guy used.
-- Let turns breathe. Most turns are two to four sentences: a host making his point, thinking out loud, changing direction mid-way, answering the other guy and then adding something. Quick reactions ("Right." / "Yeah, no.") are fine but rare: at most one in six lines, never two in a row. Fewer, fuller turns beat a rapid volley.
+- Let turns breathe. Most turns are one to three sentences: a host making his point, thinking out loud, changing direction mid-way, answering the other guy and then adding something. Quick reactions ("Right." / "Yeah, no.") are fine but rare: at most one in six lines, never two in a row. Fewer, fuller turns beat a rapid volley.
 - Let thoughts be messy: restarts ("They— look, they have to get to the line."), interruptions with an em dash, a host coming back after being cut off.
 - Disagreement that goes somewhere: someone gives ground, or they find the actual question they disagree about. It doesn't always resolve.
 - Outside the game breakdown, most lines carry no number at all. When a number comes up, say it the way people talk ("like sixteen a game", "twenty-seventh, I think?"), and never repeat a number the other host just said.
@@ -94,9 +100,10 @@ One JSON object per spoken line, each on its own single line, nothing else (no a
 {"t":<topic number, from 1>,"speaker":"marcus"|"tony","text":"..."}
 - Cover every topic in the notes, in order; "t" is its position in the notes (the first topic is 1).
 - The first topic comes right after the hosts' intros and Marcus's one-line hook (already written): get straight into it, no greeting, no restating the record. If it's a regular topic, keep it quick (2–4 lines).
-- Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 8–12 lines each. Walk through how the game was won or lost (the flow, the quarter that swung it, the stretch that decided it), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("thirty-one and twelve", "six of nine from three", "fourteen turnovers"). Here, numbers are welcome: one per line is fine.
+- Topics marked "depth":"deep" are the game they just played. Give it real attention, the way a postgame show does, in 4–5 lines each. Walk through how the game was won or lost (the flow, the quarter that swung it, the stretch that decided it), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("thirty-one and twelve", "six of nine from three", "fourteen turnovers"). Here, numbers are welcome: one per line is fine.
 - A topic marked "verdict":true closes a themed episode: follow its notes exactly (they say who goes first and the JSON line to write first).
-- Other topics: 4–6 lines. Keep the whole episode tight — about two minutes of talk outside the game breakdown. A topic with little to say can be three lines.`;
+- Other topics: 3–4 lines. Keep the whole episode tight — about a minute of talk outside the game breakdown. A topic with little to say can be two lines.
+- These counts are hard limits: lines past them are cut, so land each topic inside them.`;
 
 function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
   if (!stats) return `${teamName}.`;
@@ -277,6 +284,7 @@ export async function writeConversation(
     if (l.clip && clip?.phrase.host !== l.speaker) return;
     const text = clip ? clip.words : typeof l.text === 'string' ? l.text.trim() : '';
     if (!text) return;
+    if ((written.get(liveIdx[pos])?.length ?? 0) >= maxLines(topics[liveIdx[pos]])) return; // over the cap: not voiced
     // Moving on: every topic before this one is finished.
     for (let k = Math.max(0, current); k < pos; k++) done.add(liveIdx[k]);
     current = pos;

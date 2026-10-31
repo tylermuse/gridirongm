@@ -9,6 +9,7 @@ import { SpotlightShowPoster, type PosterPlayer } from './SpotlightShowPoster';
 import {
   HOSTS,
   SHOW_CLIPS,
+  capShowTopics,
   type Host,
   type ShowClipId,
   type TimedShowSegment,
@@ -143,7 +144,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     remaining: sub.podcastCredits.remaining,
   });
   // The episode: the last game broken down first, then the storylines.
-  const topics: ShowTopic[] = useMemo(() => [...(game ?? []), ...storyTopics], [game, storyTopics]);
+  const topics: ShowTopic[] = useMemo(() => capShowTopics([...(game ?? []), ...storyTopics]), [game, storyTopics]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [segments, setSegments] = useState<TimedShowSegment[]>([]);
   /** The request (topics + stats) the loaded episode was made for. */
