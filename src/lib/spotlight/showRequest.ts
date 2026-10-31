@@ -1,7 +1,7 @@
 /** Request helpers shared by the Spotlight show routes (server-only). */
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import type { EpisodeInput } from './showEpisode';
-import type { ShowTopicInput } from './showScript';
+import { capShowTopics, type ShowTopicInput } from './showScript';
 import type { ShowStatLine } from './teamStats';
 import { sanitizeMoment } from './showMoment';
 
@@ -33,7 +33,8 @@ export function sanitizeStats(raw: unknown): ShowStatLine | null {
 export async function parseEpisode(request: Request): Promise<EpisodeInput | null> {
   const input = (await request.json()) as { topics?: ShowTopicInput[]; teamName?: string; stats?: unknown; moment?: unknown };
   if (!input.topics || !Array.isArray(input.topics) || !input.teamName) return null;
-  return { topics: input.topics, teamName: input.teamName, stats: sanitizeStats(input.stats), moment: sanitizeMoment(input.moment) };
+  // The player caps too; this keeps an older or modified client from running up the voice bill.
+  return { topics: capShowTopics(input.topics), teamName: input.teamName, stats: sanitizeStats(input.stats), moment: sanitizeMoment(input.moment) };
 }
 
 
