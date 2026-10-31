@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
 import { GlobalBooth } from './GlobalBooth';
+import { FiredModal } from './FiredModal';
 import { Button } from '@/components/ui/Button';
 import { useGameStore, flushPendingSave, useSaveLoadStatus, retrySaveLoad, continueWithoutSave } from '@/lib/engine/store';
 import { getTeamColorVars } from '@/lib/teamColors';
@@ -76,6 +77,7 @@ export function GameShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <GlobalBooth />
+      <FiredModal />
     </div>
   );
 }

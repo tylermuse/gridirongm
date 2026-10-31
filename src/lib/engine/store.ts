@@ -10,7 +10,7 @@ import type {
   LeagueState, Team, TeamRecord, Player, GameResult, PlayerStats, PlayerRatings,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
-  ExpansionTeamConfig, SocialPost, ImportedProspect, ApprovalState,
+  ExpansionTeamConfig, SocialPost, ImportedProspect, ApprovalState, PlayoffMatchup,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, backfillTeamSubPositions, isValidSubPositionForPosition, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type SubPosition, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
@@ -182,7 +182,8 @@ interface GameStore extends LeagueState {
   simAllPlayoffGames: () => void;
   // PRD-03: Re-signing phase
   advanceToResigning: () => void;
-  resignPlayer: (playerId: string, salary: number, years: number) => boolean;
+  acceptGmJob: (teamId: string) => void;
+  resignPlayer:(playerId: string, salary: number, years: number) => boolean;
   passOnResigning: (playerId: string) => void;
   passOnResigningBatch: (playerIds: string[]) => void;
   franchiseTagPlayer: (playerId: string) => boolean;
@@ -1551,6 +1552,69 @@ function computeHoldoutDemands(players: Player[], userTeamId: string, season: nu
       resolved: false,
     };
   });
+}
+
+/**
+ * The user-team half of the playoffs → re-signing transition: expiring
+ * contracts, their re-sign asks, and holdout demands. Shared by
+ * advanceToResigning and acceptGmJob (a fired GM who takes a new job enters
+ * re-signing with the new team's roster).
+ */
+function buildUserResigningSetup(
+  players: Player[],
+  rosterPlayers: Player[],
+  userTeam: Team,
+  season: number,
+): { expiringPlayers: Player[]; resigningPlayers: ResigningEntry[]; holdoutDemands: HoldoutEntry[]; holdoutNews: NewsItem[] } {
+  // Include players whose contract expires OR whose next year is all void years
+  // (void year contracts need to be re-signed before they auto-void)
+  const expiringPlayers = players.filter(p => {
+    if (p.teamId !== userTeam.id || p.retired) return false;
+    if (p.contract.yearsLeft === 1) return true;
+    // Check if only 1 real year left (rest are void)
+    if (p.contract.contractYears && p.contract.contractYears.length > 1) {
+      const realYears = p.contract.contractYears.filter(y => !y.isVoidYear).length;
+      if (realYears === 1) return true;
+    }
+    return false;
+  });
+
+  const userRoster = rosterPlayers.filter(p => p.teamId === userTeam.id && !p.retired);
+  const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, userTeam, userRoster));
+
+  // Compute holdout demands for under-contract stars
+  const holdoutDemands = computeHoldoutDemands(players, userTeam.id, season);
+  const holdoutNews: NewsItem[] = holdoutDemands.map(h => {
+    const hp = players.find(p => p.id === h.playerId);
+    if (!hp) return null;
+    return makeNews({
+      season,
+      week: 0,
+      type: 'system',
+      teamId: userTeam.id,
+      playerIds: [h.playerId],
+      headline: `${hp.firstName} ${hp.lastName} demands a new contract`,
+      body: `The ${hp.position} is unhappy with his current deal ($${hp.contract.salary}M/yr) and wants $${h.demandedSalary}M/yr for ${h.demandedYears} years. He will hold out if denied.`,
+      isUserTeam: true,
+    });
+  }).filter((n): n is NewsItem => n !== null);
+
+  return { expiringPlayers, resigningPlayers, holdoutDemands, holdoutNews };
+}
+
+/** How far a team got in this season's bracket, in the owner-objective vocabulary. */
+function playoffResultFor(bracket: PlayoffMatchup[] | null, teamId: string): string {
+  if (!bracket) return 'missed';
+  const inPlayoffs = bracket.some(m => m.homeTeamId === teamId || m.awayTeamId === teamId);
+  if (!inPlayoffs) return 'missed';
+  const sb = bracket.find(m => m.id === 'championship');
+  if (sb?.winnerId === teamId) return 'champion';
+  if (sb?.homeTeamId === teamId || sb?.awayTeamId === teamId) return 'runnerup';
+  const confGames = bracket.filter(m => m.round === 3);
+  if (confGames.some(m => m.homeTeamId === teamId || m.awayTeamId === teamId)) return 'conference';
+  const divGames = bracket.filter(m => m.round === 2);
+  if (divGames.some(m => m.homeTeamId === teamId || m.awayTeamId === teamId)) return 'divisional';
+  return 'wildcard';
 }
 
 // ---------------------------------------------------------------------------
@@ -4058,26 +4122,19 @@ export const useGameStore = create<GameStore>()(
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         if (!userTeam) return;
 
-        // Check if user has been fired BEFORE any offseason moves happen.
-        // GMs get fired at the end of a season, not after they've already
-        // started making offseason decisions.
+        // A fired GM can't advance — FiredModal owns the next step (take a
+        // new job or start a new league). Before this guard, every press of
+        // "Advance to Re-signing" re-ran the firing and logged another
+        // gm_fired (up to 63 per device-season in prod).
+        if (state.firedState?.fired) return;
+
+        // Owner approval can hit 0 during the season (−1 per loss). That GM
+        // is fired too, but only AFTER the season is closed out below
+        // (history, retirements, cap growth) — the same order as a firing
+        // triggered by the end-of-season review, so a fired GM who takes a
+        // new job can enter re-signing without re-running any of it.
         const userApprovalVal = userTeam?.approval?.ownerApproval ?? 50;
-        if (userApprovalVal <= 0) {
-          trackEvent('gm_fired', { season: state.season, seasons_completed: state.seasonHistory.length });
-          set({
-            firedState: {
-              fired: true,
-              season: state.season,
-              reason: 'Owner lost patience after repeated underperformance.',
-            },
-            newsItems: [...state.newsItems, makeNews({
-              season: state.season, week: 99, type: 'system',
-              headline: `${userTeam.city} ownership has fired the GM after a disastrous tenure. Your time is up.`,
-              isUserTeam: true,
-            })],
-          });
-          return; // Block offseason — user must choose next steps
-        }
+        const firedDuringSeason = userApprovalVal <= 0;
 
         // Process retirements BEFORE re-signing so retired players' cap is freed up
         const retiredIds = new Set<string>();
@@ -4123,39 +4180,9 @@ export const useGameStore = create<GameStore>()(
             })
           : state.teams;
 
-        // Include players whose contract expires OR whose next year is all void years
-        // (void year contracts need to be re-signed before they auto-void)
-        const expiringPlayers = playersAfterRetirement.filter(p => {
-          if (p.teamId !== state.userTeamId || p.retired) return false;
-          if (p.contract.yearsLeft === 1) return true;
-          // Check if only 1 real year left (rest are void)
-          if (p.contract.contractYears && p.contract.contractYears.length > 1) {
-            const realYears = p.contract.contractYears.filter(y => !y.isVoidYear).length;
-            if (realYears === 1) return true;
-          }
-          return false;
-        });
-
         const currentUserTeam = teamsAfterRetirement.find(t => t.id === state.userTeamId) ?? userTeam;
-        const currentUserRoster = state.players.filter(p => p.teamId === currentUserTeam.id && !p.retired);
-        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam, currentUserRoster));
-
-        // Compute holdout demands for under-contract stars
-        const holdoutDemands = computeHoldoutDemands(playersAfterRetirement, state.userTeamId, state.season);
-        const holdoutNews: NewsItem[] = holdoutDemands.map(h => {
-          const hp = playersAfterRetirement.find(p => p.id === h.playerId);
-          if (!hp) return null;
-          return makeNews({
-            season: state.season,
-            week: 0,
-            type: 'system',
-            teamId: state.userTeamId,
-            playerIds: [h.playerId],
-            headline: `${hp.firstName} ${hp.lastName} demands a new contract`,
-            body: `The ${hp.position} is unhappy with his current deal ($${hp.contract.salary}M/yr) and wants $${h.demandedSalary}M/yr for ${h.demandedYears} years. He will hold out if denied.`,
-            isUserTeam: true,
-          });
-        }).filter((n): n is NewsItem => n !== null);
+        const { expiringPlayers, resigningPlayers, holdoutDemands, holdoutNews } =
+          buildUserResigningSetup(playersAfterRetirement, state.players, currentUserTeam, state.season);
 
         // Grow salary cap for the upcoming offseason (so cap space is visible during re-signing)
         const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
@@ -4275,20 +4302,7 @@ export const useGameStore = create<GameStore>()(
         // Process end-of-season approval for user team
         const approvalNews: import('@/types').NewsItem[] = [];
         // Determine user's playoff result for approval
-        const userPR: string = (() => {
-          if (!state.playoffBracket) return 'missed';
-          const userInPlayoffs = state.playoffBracket.some(m =>
-            m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId);
-          if (!userInPlayoffs) return 'missed';
-          const sb = state.playoffBracket.find(m => m.id === 'championship');
-          if (sb?.winnerId === state.userTeamId) return 'champion';
-          if (sb?.homeTeamId === state.userTeamId || sb?.awayTeamId === state.userTeamId) return 'runnerup';
-          const confGames = state.playoffBracket.filter(m => m.round === 3);
-          if (confGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) return 'conference';
-          const divGames = state.playoffBracket.filter(m => m.round === 2);
-          if (divGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) return 'divisional';
-          return 'wildcard';
-        })();
+        const userPR = playoffResultFor(state.playoffBracket, state.userTeamId);
         let postUpdateFiredApproval: ApprovalState | null = null;
         const finalTeams = recalcTeams.map(t => {
           if (t.id !== state.userTeamId) return t;
@@ -4328,8 +4342,23 @@ export const useGameStore = create<GameStore>()(
           return { ...t, approval: updated };
         });
 
-        if (postUpdateFiredApproval) {
-          trackEvent('gm_fired', { season: state.season, seasons_completed: updatedSeasonHistory.length });
+        if (postUpdateFiredApproval || firedDuringSeason) {
+          // Once per firing. acceptGmJob re-runs this action for legacy saves
+          // that were fired before the season was closed out; it leaves the
+          // fired season on firedState (fired: false) so that pass isn't
+          // logged as a second firing.
+          if (state.firedState?.season !== state.season) {
+            trackEvent('gm_fired', {
+              season: state.season,
+              seasons_completed: updatedSeasonHistory.length,
+              tenure_seasons: finalTeams.find(t => t.id === state.userTeamId)?.approval?.tenureSeasons ?? 0,
+              // Approval going into the end-of-season review — the review
+              // itself zeroes ownerApproval as its firing signal.
+              final_approval: userApprovalVal,
+            });
+          }
+          // holdoutNews is left out: those demands belong to the team the
+          // user no longer runs (acceptGmJob builds the new team's).
           set({
             firedState: {
               fired: true,
@@ -4338,7 +4367,7 @@ export const useGameStore = create<GameStore>()(
             },
             teams: finalTeams,
             players: playersAfterRetirement,
-            newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews, makeNews({
+            newsItems: [...state.newsItems, ...retirementNews, ...approvalNews, makeNews({
               season: state.season, week: 99, type: 'system',
               headline: `${state.teams.find(t => t.id === state.userTeamId)?.city ?? 'The franchise'} ownership has fired the GM after a disastrous season. Your time is up.`,
               isUserTeam: true,
@@ -4359,6 +4388,81 @@ export const useGameStore = create<GameStore>()(
         });
 
         // Sync GM stats to leaderboard (post-playoffs, no draft data yet)
+        const gmPayload = buildGmSyncPayload(get());
+        if (gmPayload) syncGmStats(gmPayload);
+      },
+
+      // A fired GM takes over another team in the same league. Career record
+      // and seasonHistory carry over untouched; the new team starts a fresh
+      // owner relationship and the user goes straight into its re-signing.
+      acceptGmJob: (teamId: string) => {
+        let state = get();
+        if (!state.firedState?.fired || teamId === state.userTeamId) return;
+        if (!state.teams.some(t => t.id === teamId)) return;
+
+        // Saves fired by the old early-return path never closed out the
+        // season (history, retirements, cap growth). Do that now for the team
+        // the user actually ran; keeping the fired season on firedState stops
+        // advanceToResigning from logging a second gm_fired.
+        if (!state.seasonHistory.some(s => s.season === state.season)) {
+          set({ firedState: { ...state.firedState, fired: false } });
+          get().advanceToResigning();
+          state = get();
+          if (!state.firedState?.fired) return;
+        }
+
+        const fromTeam = state.teams.find(t => t.id === state.userTeamId);
+        const newTeam = state.teams.find(t => t.id === teamId)!;
+        const { expiringPlayers, resigningPlayers, holdoutDemands, holdoutNews } =
+          buildUserResigningSetup(state.players, state.players, newTeam, state.season);
+        const expiringIds = new Set(expiringPlayers.map(p => p.id));
+
+        // Closing out the season already grew the cap and recomputed every
+        // payroll, leaving the expiring deals out of the old team's so the
+        // user's re-sign view showed committed money. Move that view to the
+        // new team and give the old team the full payroll CPU teams carry.
+        const teams = state.teams.map(t => {
+          if (t.id === state.userTeamId) {
+            return {
+              ...t,
+              totalPayroll: Math.round(recalculateTeamPayroll(t, state.players) * 10) / 10,
+              approval: undefined,
+            };
+          }
+          if (t.id !== teamId) return t;
+          const expiringPayroll = state.players
+            .filter(p => expiringIds.has(p.id))
+            .reduce((sum, p) => sum + getCapHit(p.contract), 0);
+          return {
+            ...t,
+            totalPayroll: Math.round((recalculateTeamPayroll(t, state.players) - expiringPayroll) * 10) / 10,
+            approval: {
+              ...defaultApproval(),
+              objectives: generateSeasonObjectives(t, state.players, state.season + 1, playoffResultFor(state.playoffBracket, teamId)),
+            },
+          };
+        });
+
+        set({
+          userTeamId: teamId,
+          firedState: null,
+          phase: 'resigning',
+          resigningPlayers,
+          holdoutDemands,
+          teams,
+          newsItems: [...state.newsItems, ...holdoutNews, makeNews({
+            season: state.season, week: 99, type: 'system', teamId,
+            headline: `${newTeam.city} ${newTeam.name} hire a new GM`,
+            body: `Fresh off a firing in ${fromTeam?.city ?? 'another city'}, the new GM takes over the ${newTeam.name} for the ${state.season + 1} season.`,
+            isUserTeam: true,
+          })],
+        });
+        trackEvent('gm_hired', {
+          from_team: fromTeam?.abbreviation ?? null,
+          to_team: newTeam.abbreviation,
+          seasons_completed: state.seasonHistory.length,
+        });
+
         const gmPayload = buildGmSyncPayload(get());
         if (gmPayload) syncGmStats(gmPayload);
       },

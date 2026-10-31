@@ -46,6 +46,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const nextGamePlan = useGameStore(s => s.nextGamePlan);
   const setNextGamePlan = useGameStore(s => s.setNextGamePlan);
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
+  const isFired = useGameStore(s => !!s.firedState?.fired);
   const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
   const stableSBRef = useRef<boolean | null>(null);
@@ -371,8 +372,12 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                         store.advanceToResigning();
                       }
                       await flushToStorage();
+                      // A firing blocks the offseason: stay put and let
+                      // FiredModal (in GameShell) offer the way forward.
+                      if (useGameStore.getState().firedState?.fired) return;
                       router.push('/re-sign');
                     }}
+                    disabled={isFired}
                     size="sm"
                     className="relative z-20"
                   >

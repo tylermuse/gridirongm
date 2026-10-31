@@ -1001,7 +1001,7 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, firedState, rivalries } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, rivalries } = useGameStore();
   const isSpectator = useIsSpectator();
   const { isFoundingMember } = useSubscription();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -1010,83 +1010,7 @@ function Dashboard() {
   const userTeam = teams.find(t => t.id === userTeamId)!;
   const roster = players.filter(p => p.teamId === userTeamId);
 
-  if (firedState?.fired) {
-    // Find teams that might hire a new GM — teams with losing records or that also fired their GM
-    const hiringTeams = teams
-      .filter(t => t.id !== userTeamId) // not your old team
-      .filter(t => {
-        const record = t.record;
-        const wins = record.wins;
-        // Teams with bad records or middling teams looking for a change
-        return wins <= 7 || Math.random() < 0.15; // ~15% of good teams also have openings
-      })
-      .sort(() => Math.random() - 0.5) // randomize
-      .slice(0, 5); // show up to 5 options
-
-    return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 overflow-y-auto py-8">
-        <div className="bg-[var(--surface)] rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-8 text-center space-y-6">
-          <div className="text-6xl">🔥</div>
-          <h1 className="text-3xl font-black text-red-600">You&apos;ve Been Fired</h1>
-          <p className="text-[var(--text-sec)]">{firedState.reason}</p>
-          <p className="text-sm text-[var(--text-sec)]">Season {firedState.season} · {teams.find(t => t.id === userTeamId)?.city} {teams.find(t => t.id === userTeamId)?.name}</p>
-
-          <div className="border-t border-[var(--border)] pt-4 space-y-4">
-            <p className="text-sm font-bold">What do you want to do?</p>
-
-            {/* Option 1: Start fresh */}
-            <Button className="w-full" onClick={() => useGameStore.setState({ initialized: false, firedState: null })}>
-              Start a New League from 2026
-            </Button>
-
-            {/* Option 2: Get hired by another team */}
-            {hiringTeams.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs text-[var(--text-sec)] uppercase tracking-wider font-bold">Teams interested in hiring you</p>
-                {hiringTeams.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      // Switch user team to this one, reset approval
-                      const store = useGameStore.getState();
-                      useGameStore.setState({
-                        firedState: null,
-                        userTeamId: t.id,
-                        teams: store.teams.map(team =>
-                          team.id === t.id
-                            ? { ...team, approval: { fanApproval: 50, ownerApproval: 50, objectives: team.approval?.objectives ?? [], tenureSeasons: 0, warningIssued: false } }
-                            : team,
-                        ),
-                        newsItems: [...store.newsItems, {
-                          id: crypto.randomUUID(),
-                          season: store.season + 1,
-                          week: 0,
-                          type: 'system' as const,
-                          headline: `${t.city} ${t.name} hire new GM`,
-                          body: `The ${t.name} have hired a new General Manager to lead the franchise into the ${store.season + 1} season.`,
-                          isUserTeam: true,
-                        }],
-                      });
-                    }}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-[var(--border)] hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
-                  >
-                    <div>
-                      <div className="font-bold text-sm">{t.city} {t.name}</div>
-                      <div className="text-xs text-[var(--text-sec)]">{t.record.wins}-{t.record.losses} · {t.conference} {t.division}</div>
-                    </div>
-                    <span className="text-xs text-blue-600 font-medium">Accept Job →</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Listen for spotlight scroll requests (from the Booth's Watch buttons in GameShell or ?spotlight=1 query)
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- pre-existing on main; silenced only so this unrelated DraftCapitalCard edit isn't blocked by CI's whole-file lint (tech debt, not introduced here)
   useEffect(() => {
     function scrollToSpotlight() {
       spotlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
