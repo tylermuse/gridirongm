@@ -22,6 +22,10 @@ const DESCRIPTION =
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.bs-basketball.com'),
+  // Google Search Console ownership (same account token as bs-football.com).
+  verification: {
+    google: 'uF0bXo1i4U5gvcZAu6_dmeAl-RzfWExVckUr99OGR-A',
+  },
   title: { default: 'BS Hoops — Free Basketball GM Game', template: '%s · BS Hoops' },
   description: DESCRIPTION,
   applicationName: 'BS Hoops',
