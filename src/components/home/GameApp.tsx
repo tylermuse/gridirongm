@@ -12,7 +12,7 @@ import { buildGameTopics, gameTopicsForMoment } from '@/lib/spotlight/showGame';
 import { computeShowStatLine } from '@/lib/spotlight/teamStats';
 import { useAiCommentary } from '@/components/providers/useAiCommentary';
 
-import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
+import { useGameStore, computeLuxuryTax, whenSaveLoadSettles, retrySaveLoad } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
 import { setItem as idbSetItem } from '@bs/core/storage';
 import { pullCloudSave, getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
@@ -172,11 +172,19 @@ function TeamPicker() {
     checkSave();
   }, []);
 
-  function handleResume() {
+  async function handleResume() {
     setResumeLoading(true);
-    // The store auto-hydrates from localStorage via persist middleware.
-    // We just need to set initialized = true.
-    useGameStore.setState({ initialized: true });
+    // The store auto-hydrates from IndexedDB via the persist middleware; wait
+    // for that (retrying a failed load once) so Resume never opens the
+    // dashboard on the empty pre-load state.
+    let status = await whenSaveLoadSettles();
+    if (status === 'failed') status = await retrySaveLoad();
+    if (status === 'ready' && useGameStore.getState().teams.length > 0) {
+      useGameStore.setState({ initialized: true });
+    } else {
+      setResumeLoading(false);
+      setError('Your saved league could not be loaded. Reload the page to try again.');
+    }
   }
 
   // Pull a newer cloud save down onto this device. We write through the storage

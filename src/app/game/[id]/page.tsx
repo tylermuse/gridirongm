@@ -3,7 +3,7 @@
 import { use, useRef, useEffect, useState, useCallback, useMemo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/store';
+import { useGameStore, flushToStorage, flushPendingSave } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -1660,13 +1660,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinished, committed]);
 
-  // Safety net: write recovery snapshot if tab closes during/after game
+  // Safety net: write any queued autosave if the tab closes during/after game
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      flushToStorageSync();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('beforeunload', flushPendingSave);
+    return () => window.removeEventListener('beforeunload', flushPendingSave);
   }, []);
 
   // Guard conditions
