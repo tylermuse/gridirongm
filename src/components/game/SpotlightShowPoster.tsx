@@ -22,7 +22,7 @@ export type PosterPlayer = 'idle' | 'loading' | 'error' | 'exhausted' | 'locked'
  *    no generation cost) → an end card asking to upgrade / sign in.
  */
 export function SpotlightShowPoster({
-  team, episodeLabel, access, player, resetAt, ready, onPlay, onRetry,
+  team, episodeLabel, access, player, resetAt, ready, onPlay, onRetry, message,
 }: {
   team: Team;
   /** "Trade Deadline Special", "Week 9 Breakdown", … */
@@ -35,6 +35,8 @@ export function SpotlightShowPoster({
   ready: boolean;
   onPlay: () => void;
   onRetry: () => void;
+  /** Why the episode couldn't be produced (the server's words), if it said. */
+  message?: string | null;
 }) {
   const [teaser, setTeaser] = useState<'off' | 'playing' | 'done'>('off');
   const [buying, setBuying] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -137,7 +139,10 @@ export function SpotlightShowPoster({
               Out of episodes this month · resets {resetLabel}
             </span>
           ) : player === 'error' ? (
-            <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-red-700 shadow-lg">⚠️ Couldn&apos;t produce the show — tap to retry</span>
+            <>
+              <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-red-700 shadow-lg">⚠️ Couldn&apos;t produce the show — tap to retry</span>
+              {message && <span className="max-w-[85%] text-center text-xs font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">{message}</span>}
+            </>
           ) : (
             <>
               <span className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-white/95 shadow-xl transition-transform group-hover:scale-105">
