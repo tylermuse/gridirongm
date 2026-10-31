@@ -10,6 +10,7 @@ import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useBusyAction } from '@/components/ui/useBusyAction';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 // playerGen import removed — POSITION_WEIGHTS no longer needed
 import { POSITIONS, ROSTER_LIMITS, formatRecord } from '@/types';
@@ -176,6 +177,7 @@ function OnTheClockSection({
   simDraftPick,
   simToUserDraftPick,
   simToEndDraft,
+  simBusy,
   onSimAll,
   onDraft,
   onPlayerClick,
@@ -201,6 +203,8 @@ function OnTheClockSection({
   simDraftPick: () => void;
   simToUserDraftPick: () => void;
   simToEndDraft: () => void;
+  /** Key of the sim action in flight (shared lock), or null. */
+  simBusy?: string | null;
   onSimAll?: () => void;
   onDraft?: (playerId: string) => void;
   onPlayerClick?: (playerId: string) => void;
@@ -277,16 +281,16 @@ function OnTheClockSection({
                 style={isUserPick ? { color: 'var(--team-text-on-primary)', opacity: 0.85 } : undefined}
               >Rd {currentRound}, Pick {currentPickInRound}</span>
               {!isUserPick && (
-                <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
+                <Button onClick={simDraftPick} size="sm" variant="secondary" busy={simBusy === 'draft-pick'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
                   Sim Pick
                 </Button>
               )}
               {!isUserPick && (
-                <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
+                <Button onClick={simToUserDraftPick} size="sm" variant="secondary" busy={simBusy === 'draft-to-mine'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
                   Sim to My Pick
                 </Button>
               )}
-              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
+              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" busy={simBusy === 'draft-all'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
                 <span className="hidden sm:inline">Auto-Draft All</span>
                 <span className="sm:hidden">Auto All</span>
               </Button>
@@ -1140,6 +1144,9 @@ export default function DraftPage() {
   } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const draftYear = currentDraftYear ?? season;
+  // Shared sim lock (also used by the TopBar's Sim Pick): paint the busy state
+  // before the pick sims, and drop clicks that queue up while it runs.
+  const { busy: simBusy, run: runSim } = useBusyAction();
 
   // Detect draftResults entries whose player no longer exists. These are
   // "ghost picks" — they show in the table but with no player and no way to
@@ -1542,14 +1549,15 @@ export default function DraftPage() {
           allProspects={allProspects}
           draftComplete={draftComplete}
           isUserPick={isUserPick}
-          simDraftPick={simDraftPick}
-          simToUserDraftPick={simToUserDraftPick}
+          simDraftPick={() => runSim('draft-pick', simDraftPick)}
+          simToUserDraftPick={() => runSim('draft-to-mine', simToUserDraftPick)}
           simToEndDraft={simToEndDraft}
-          onSimAll={async () => {
+          simBusy={simBusy}
+          onSimAll={() => runSim('draft-all', async () => {
             simToEndDraft({ skipAdvance: true });
             await flushToStorage();
             router.push('/draft-recap');
-          }}
+          })}
           onDraft={(playerId) => draftPlayer(playerId)}
           onPlayerClick={(playerId) => setExpandedProspectId(playerId)}
           onTradePick={() => setShowTradeModal(true)}

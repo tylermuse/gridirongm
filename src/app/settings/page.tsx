@@ -9,7 +9,7 @@ import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { createClient } from '@bs/core/supabase/client';
 import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, pushCloudSaveNow } from '@bs/core/supabase/cloud-saves';
-import { getItem as idbGetItem } from '@bs/core/storage';
+import { getItem as idbGetItem, flushPendingWrites } from '@bs/core/storage';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -218,6 +218,7 @@ function CloudSyncCard() {
       // device — don't wait for the next in-game save.
       setPushing(true);
       try {
+        await flushPendingWrites();
         const raw = await idbGetItem('gridiron-gm-autosave');
         if (raw) {
           await pushCloudSaveNow('gridiron-gm-autosave', raw);

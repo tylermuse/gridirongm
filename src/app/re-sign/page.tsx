@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGameStore, computeFranchiseTagSalary, flushToStorage } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
+import { OfferSalaryInput } from '@/components/game/OfferSalaryInput';
 import { LEAGUE_MINIMUM_SALARY, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
@@ -422,50 +423,13 @@ export default function ReSignPage() {
                     <label className="text-xs text-[var(--text-sec)] block mb-1">
                       Salary: <span className="font-mono font-bold text-[var(--text)]">${offerSalary.toFixed(1)}M/yr</span>
                     </label>
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-sec)]">$</span>
-                        <input
-                          type="number"
-                          min={LEAGUE_MINIMUM_SALARY}
-                          max={Math.max(negotiation.askingSalary * 2, 5)}
-                          step={0.1}
-                          value={offerSalary}
-                          onChange={e => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val)) setOfferSalary(Math.round(val * 10) / 10);
-                          }}
-                          className="w-28 pl-6 pr-2 py-1.5 text-sm font-mono font-bold bg-[var(--surface)] border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-sec)]">M/yr</span>
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 0.85 * 10) / 10)}
-                          className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-                        >
-                          85%
-                        </button>
-                        <button
-                          onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 0.95 * 10) / 10)}
-                          className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-                        >
-                          95%
-                        </button>
-                        <button
-                          onClick={() => setOfferSalary(negotiation.askingSalary)}
-                          className="px-2 py-1 text-[10px] rounded bg-amber-100 text-amber-700 font-medium hover:bg-amber-200 transition-colors"
-                        >
-                          Match
-                        </button>
-                        <button
-                          onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 1.1 * 10) / 10)}
-                          className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-                        >
-                          110%
-                        </button>
-                      </div>
-                    </div>
+                    <OfferSalaryInput
+                      askingSalary={negotiation.askingSalary}
+                      value={offerSalary}
+                      onChange={setOfferSalary}
+                      minSalary={LEAGUE_MINIMUM_SALARY}
+                      maxSalary={Math.max(negotiation.askingSalary * 2, 5)}
+                    />
                     <div className="text-[10px] text-[var(--text-sec)] mt-1">
                       Asking: <span className="text-amber-600 font-medium">${Math.round(negotiation.askingSalary * 10) / 10}M/yr</span>
                     </div>

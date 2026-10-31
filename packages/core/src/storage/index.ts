@@ -6,8 +6,8 @@
  * Replaces localStorage (5MB cap) with IndexedDB (hundreds of MB+) for game
  * save data. Uses the `idb` library for a clean Promise-based API.
  *
- * Exports a Zustand-persist-compatible `idbStorage` adapter that the
- * apps/web store uses to back its persist middleware.
+ * The game store's persist middleware reads with getItem and autosaves through
+ * queueWrite (coalesced, see below); `idbStorage` is the raw string adapter.
  *
  * Browser-only — calling these from a Node/server context will throw or
  * be no-ops behind the `typeof window` guards.
@@ -76,15 +76,19 @@ function isEmptyRosterPayload(serialized: string): boolean {
   return serialized.includes('"teams":[]') && serialized.includes('"players":[]');
 }
 
-export async function setItem(key: string, value: string): Promise<void> {
+/** Guarded write of a serialized value. Shared by the public setItem and the
+ *  coalesced autosave writer below. */
+async function writeValue(key: string, value: string): Promise<void> {
   const db = await getDB();
   // Save-wipe guard (vulcan832 — overnight full save loss): a silent auth-token
   // expiry or hydration failure can reset the store to its initial empty state.
-  // Without this, the persist middleware / flushPersist would then stomp a good
-  // save with empty teams+players. Never let an empty-roster payload overwrite a
-  // save that still has data — bail loudly instead. Fast-pathed on the substring
-  // so normal writes skip both the parse and the extra read.
-  if (isEmptyRosterPayload(value)) {
+  // Without this, the next autosave would then stomp a good save with empty
+  // teams+players. Never let an empty-roster payload overwrite a save that still
+  // has data — bail loudly instead. Fast-pathed on the substring so normal
+  // writes skip both the parse and the extra read; the substrings can also
+  // appear nested inside a real save, so confirm the incoming roster really is
+  // empty before refusing the write.
+  if (isEmptyRosterPayload(value) && rosterCount(value) === 0) {
     const existing = await db.get(STORE_NAME, key);
     if (typeof existing === 'string' && rosterCount(existing) > 0) {
       console.error(
@@ -97,7 +101,16 @@ export async function setItem(key: string, value: string): Promise<void> {
   await db.put(STORE_NAME, value, key);
 }
 
+/** Write a serialized value. A direct write (or removeItem) supersedes any
+ *  queued autosave for that key — e.g. loading a slot over the autosave right
+ *  before a reload must not be stomped by the old in-memory league. */
+export async function setItem(key: string, value: string): Promise<void> {
+  pendingWrites.delete(key);
+  await writeValue(key, value);
+}
+
 export async function removeItem(key: string): Promise<void> {
+  pendingWrites.delete(key);
   const db = await getDB();
   await db.delete(STORE_NAME, key);
 }
@@ -119,57 +132,93 @@ export const idbStorage = {
 };
 
 // ---------------------------------------------------------------------------
-// Flush: force-write current Zustand state to IndexedDB
+// Coalesced persist storage
 // ---------------------------------------------------------------------------
 
-const PERSIST_KEY = 'gridiron-gm-autosave';
-
-/**
- * Force-write the current Zustand store state to IndexedDB, bypassing the
- * persist middleware's async queue. Call this before navigating away after
- * a store mutation to guarantee the write has landed.
- *
- * Accepts a getStateFn so we don't create a circular import with store.ts.
- * The caller passes `useGameStore.persist.getOptions()` or the raw state.
- *
- * @param serializedState - The JSON string to write (already partialize'd +
- *   serialized by the persist middleware). If not provided, falls back to
- *   triggering the persist middleware's rehydration-safe manual save.
- */
-export async function flushPersist(serializedState: string): Promise<void> {
-  await setItem(PERSIST_KEY, serializedState);
+/** The `{ state, version }` envelope zustand's persist middleware hands to a
+ *  PersistStorage. Typed structurally so core doesn't depend on zustand. */
+export interface PersistEnvelope<S = unknown> {
+  state: S;
+  version?: number;
 }
 
-/**
- * Synchronous fallback for beforeunload: writes a recovery copy to
- * localStorage. The app checks this during rehydration and prefers it
- * over stale IndexedDB data when present.
- */
-export function flushPersistSync(serializedState: string): void {
-  // Same save-wipe guard as setItem: never stash an empty-roster recovery
-  // snapshot (a rehydrate would prefer it over good IndexedDB data).
-  if (isEmptyRosterPayload(serializedState)) return;
-  try {
-    localStorage.setItem(PERSIST_KEY + '-recovery', serializedState);
-  } catch {
-    // localStorage full or unavailable — nothing we can do synchronously
-  }
-}
+const WRITE_DEBOUNCE_MS = 500;
+const WRITE_MAX_WAIT_MS = 2000;
 
-/**
- * Check for and consume a recovery snapshot written by beforeunload.
- * Returns the snapshot string if found, null otherwise.
- */
-export function consumeRecoverySnapshot(): string | null {
-  try {
-    const snapshot = localStorage.getItem(PERSIST_KEY + '-recovery');
-    if (snapshot) {
-      localStorage.removeItem(PERSIST_KEY + '-recovery');
+const pendingWrites = new Map<string, PersistEnvelope>();
+let writeTimer: ReturnType<typeof setTimeout> | null = null;
+let firstPendingAt = 0;
+let draining: Promise<void> | null = null;
+
+async function runDrain(): Promise<void> {
+  while (pendingWrites.size > 0) {
+    const [key, envelope] = pendingWrites.entries().next().value as [string, PersistEnvelope];
+    pendingWrites.delete(key);
+    try {
+      await writeValue(key, JSON.stringify(envelope));
+    } catch (err) {
+      console.error(`[storage] Autosave write failed ("${key}")`, err);
     }
-    return snapshot;
-  } catch {
-    return null;
   }
+}
+
+/** Start writing whatever is pending, one write at a time. Returns the running
+ *  drain if one is already going (it picks up anything queued meanwhile). */
+function drainWrites(): Promise<void> {
+  if (!draining) {
+    draining = runDrain().finally(() => {
+      draining = null;
+    });
+  }
+  return draining;
+}
+
+function scheduleDrain(): void {
+  const now = Date.now();
+  if (writeTimer) clearTimeout(writeTimer);
+  else firstPendingAt = now;
+  writeTimer = null;
+  const wait = firstPendingAt + WRITE_MAX_WAIT_MS - now;
+  if (wait <= 0) {
+    // A long burst (Sim Season's week-by-week loop) keeps re-arming the
+    // debounce and its own setTimeout(0) yields win the race against ours, so
+    // past the max wait, write as soon as the current task finishes.
+    queueMicrotask(() => void drainWrites());
+    return;
+  }
+  writeTimer = setTimeout(() => {
+    writeTimer = null;
+    void drainWrites();
+  }, Math.min(WRITE_DEBOUNCE_MS, wait));
+}
+
+/**
+ * Write any pending autosave now and resolve once it — and any write already
+ * in flight — has landed. Call before reading the autosave back out of
+ * IndexedDB, before navigating away, and when the tab is hidden.
+ */
+export async function flushPendingWrites(): Promise<void> {
+  if (writeTimer) {
+    clearTimeout(writeTimer);
+    writeTimer = null;
+  }
+  while (draining || pendingWrites.size > 0) await drainWrites();
+}
+
+/**
+ * Queue a zustand persist envelope for a coalesced write — call this from a
+ * PersistStorage's setItem. The persist middleware calls setItem on every store
+ * update, and a single sim fires several in a row; serializing and writing a
+ * 10–20MB league each time piled up enough copies in memory to get the tab
+ * killed on phones (Tyler 10/31: crash mid-sim → reload → "lost" progress).
+ * Instead, keep only the latest envelope per key, serialize it once the burst
+ * settles (at most WRITE_MAX_WAIT_MS later), and never have more than one write
+ * in flight.
+ */
+export function queueWrite(key: string, envelope: PersistEnvelope): void {
+  if (typeof indexedDB === 'undefined') return; // server render
+  pendingWrites.set(key, envelope);
+  scheduleDrain();
 }
 
 // ---------------------------------------------------------------------------
