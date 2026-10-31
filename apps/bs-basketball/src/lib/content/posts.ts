@@ -984,6 +984,345 @@ export const blogPosts: BlogPost[] = [
 <p>None of this requires a download. Open <a href="/">BS Hoops</a>, pick a team, or <a href="/rosters">import a real roster</a> and browse every franchise under <a href="/rosters/2026">2026 rosters</a>. Coming from another game? See <a href="/vs/basketball-gm">BS Hoops vs Basketball GM</a>, <a href="/vs/nba-2k-myleague">BS Hoops vs NBA 2K MyLeague</a>, our <a href="/alternatives/basketball-gm">Basketball GM alternatives</a> list, and the roundup of the <a href="/best/basketball-gm-games">best basketball GM games</a>. Then apply tip 1, and you are already ahead of most first-time GMs.</p>
 `,
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 'owner-objectives-approval-and-job-security',
+    title: 'Owner Objectives, Approval and the Hot Seat: How Ownership Grades You in BS Hoops',
+    seoTitle: 'Basketball GM Owner Approval Guide — Objectives, Job Security & Getting Fired',
+    metaDescription:
+      'Exactly how BS Hoops grades your season: the 41-win baseline, playoff bonuses, the 2–3 owner objectives and their +4/+1/−4 weights, the 20-point firing line, the three-season grace period, and how to survive a rebuild.',
+    keywords: ['basketball gm owner approval', 'basketball gm getting fired', 'owner objectives basketball gm', 'gm job security sim game'],
+    publishDate: '2026-11-05',
+    category: 'strategy',
+    readingTime: 7,
+    summary:
+      'Your owner scores every season with one formula: wins against a 41-win baseline, a playoff bonus, and 2–3 objectives worth up to ±10. Here is the math, the firing rule, and how to plan a rebuild that keeps your job.',
+    related: ['rebuild-or-contend-timeline', 'first-season-beginners-guide', 'salary-cap-aprons-and-exceptions'],
+    content: `
+<p>Ignore the owner in BS Hoops and every save ends the same way: a note on the Awards page that ownership has let you go. The grading is not a black box. It is a short formula with fixed weights, and once you know them you can plan a three-year rebuild that never gets near the line.</p>
+
+<h2>The approval score: results first</h2>
+<p>You start every tenure at <strong>50 owner approval</strong> on a 0–100 scale. At the end of each season the owner applies one swing based on results:</p>
+<ul>
+<li><strong>Wins:</strong> every win above or below 41 is worth 0.6 points. A 51-win season is +6; a 31-win season is −6.</li>
+<li><strong>Playoffs:</strong> a flat bonus by how far you went — +25 for a title, +16 for losing the Finals, +10 for a conference-finals exit, +5 for the second round, 0 for a first-round loss, and <strong>−12 for missing</strong> entirely (a play-in loss counts as missing).</li>
+</ul>
+<p>The two are added, rounded, and clamped to ±30. A 50-win team that loses in the second round earns about +10. A 25-win team that misses the playoffs takes −22. A 60-win champion would compute to +36, but the clamp caps it at +30. The floor is reached at 11 wins or fewer with no playoffs.</p>
+<p>Fan approval moves on a slightly different formula (0.5 per win, 1.3× the playoff bonus, clamped from −30 to +35), but in the current build it only affects the number you see. Job security is owner approval alone.</p>
+
+<h2>Where the objectives come from</h2>
+<p>Before each season the owner hands you two or three objectives. They are generated from your team's context, not at random, and they are frozen once the season starts. The engine first decides your <strong>posture</strong>:</p>
+<ol>
+<li>It ranks all 30 teams by the average OVR of their top eight players. Your rank becomes a 0–1 roster score (1st = 1.0, 30th = 0.0).</li>
+<li>If you have a previous season, your wins are converted to a 0–1 score as (wins − 20) ÷ 45, so 20 wins is 0 and 65 is 1.</li>
+<li>The blended score is 65% roster and 35% last season. At or above 0.66 you are a <strong>contender</strong>; below 0.36 you are a <strong>rebuild</strong>; anything between is <strong>balanced</strong> — unless your top eight average 24.5 years old or younger and the score is under 0.5, in which case you are treated as a rebuild.</li>
+</ol>
+<p>Your expected wins are 41 + (score − 0.5) × 44, which runs from about 19 for the worst context to about 63 for the best. The objectives are then built from the posture:</p>
+<table>
+<thead><tr><th>Posture</th><th>Objective 1</th><th>Objective 2</th><th>Objective 3</th></tr></thead>
+<tbody>
+<tr><td>Contend</td><td>Win X+ games (expected ±2, clamped 48–62)</td><td>Win a playoff round — or reach the Conference Finals if you rank top three and went that deep last year</td><td>Stay under the tax if payroll is within 3% of the tax line; otherwise a coin-flip between developing a young player and nothing</td></tr>
+<tr><td>Balanced</td><td>Win X+ games (clamped 38–50)</td><td>Make the playoffs</td><td>Stay under the tax if near it; otherwise develop a young player</td></tr>
+<tr><td>Rebuild</td><td>Improve by 8 wins (last season +8, max 50) — or win X+ (clamped 22–36) if you won 43 or more</td><td>Develop a young player</td><td>Stay under the tax if near it; otherwise stay within a budget</td></tr>
+</tbody>
+</table>
+<p>The <strong>develop</strong> objective picks your best candidate who is 24 or younger, rated under 75, and at least four points below his potential. If he is already 70+ the target is 75; otherwise it is his current OVR plus four. The <strong>budget</strong> objective is your current payroll plus coach dead money, rounded up to the next $5M, and never below the cap.</p>
+<p>A worked example: you rank 26th of 30 in top-eight talent (roster score 0.14) and won 28 games last year (season score 0.18). Blended, that is 0.15 — a rebuild. Your objectives will be "Improve by 8+ wins (36+)", "Develop [your best prospect] to X OVR", and a budget or tax line. Rank fifth with 50 wins instead, and the blend is 0.79: a contender with a win target around 54 and a playoff-round objective.</p>
+
+<h2>How objectives are graded</h2>
+<p>Each objective grades <em>met</em>, <em>partial</em> or <em>missed</em>, worth <strong>+4, +1 and −4</strong> owner approval. The total is clamped to ±10 and added on top of the results swing, which is why the header comment in the engine calls objectives "meaningful but never dominant": they decide borderline seasons.</p>
+<table>
+<thead><tr><th>Objective</th><th>Met</th><th>Partial</th></tr></thead>
+<tbody>
+<tr><td>Win X+</td><td>Hit the number</td><td>Within 4 wins</td></tr>
+<tr><td>Improve by 8</td><td>Hit the number</td><td>Any improvement on last season</td></tr>
+<tr><td>Make the playoffs</td><td>In the 16-team bracket</td><td>Lost in the play-in</td></tr>
+<tr><td>Win a playoff round</td><td>One series win</td><td>Made the bracket</td></tr>
+<tr><td>Reach the Conference Finals</td><td>Two series wins</td><td>One series win</td></tr>
+<tr><td>Stay under the tax</td><td>Payroll at or under the line</td><td>Within $5M over</td></tr>
+<tr><td>Stay within budget</td><td>At or under</td><td>Within 5% over</td></tr>
+<tr><td>Develop to X OVR</td><td>Post-offseason OVR hits X</td><td>Gained 3+ or finished within 2 of X</td></tr>
+</tbody>
+</table>
+<p>Two traps: the develop objective is graded on the player's rating <em>after</em> offseason development (trade him and it grades as missed), and the budget objective counts dead money owed to coaches you fired.</p>
+
+<h2>The firing rule</h2>
+<p>Job security tiers are read straight off your approval: 60+ is <em>safe</em>, 45–59 <em>warm</em>, 30–44 <em>hot</em>, and under 30 a <em>final warning</em>. The line that matters is <strong>20</strong>. A season that ends with approval below 20 is a strike. Two consecutive strikes fires you — but <strong>never in your first three seasons</strong> with a team. Any season that ends at 20 or above resets the count.</p>
+<p>Put together, the earliest you can be fired is at the end of season four, and only if seasons three and four both finished below 20. When you are fired, the save clears your team and offers the five teams with the worst records as openings; take one and your tenure clock restarts, so the three-season grace applies again.</p>
+
+<h2>Planning a rebuild that keeps the job</h2>
+<p>Here is a deliberate three-year teardown, starting at 50 approval:</p>
+<ul>
+<li><strong>Year 1, 25 wins, missed playoffs:</strong> results −22. Rebuild objectives: develop met (+4), improve partial (+1), budget met (+4) = +9. Net −13 → <strong>37</strong> (hot).</li>
+<li><strong>Year 2, 28 wins:</strong> results −20, objectives +9 again → <strong>26</strong> (final warning, but above 20 — no strike).</li>
+<li><strong>Year 3, 36 wins:</strong> results −15; improve met this time (+4), develop met (+4), tax met (+4) = +12, clamped to +10 → <strong>21</strong>. Still above the line.</li>
+<li><strong>Year 4, 46 wins, first-round exit:</strong> results +3, objectives +9 → <strong>33</strong>. Out of danger and the grace period no longer matters.</li>
+</ul>
+<p>Miss every objective instead and the same seasons run 50 → 18 → 0 → 0: below the line after year one, spared by the grace period through year three, fired after year four. The objectives are the entire margin between those paths, and they are built to be achievable — "improve by 8" from 25 wins is 33 wins.</p>
+
+<h3>Rules of thumb</h3>
+<ul>
+<li>A deep playoff run forgives a mediocre regular season: 44 wins plus a conference-finals trip is +12, better than 55 wins and a first-round exit (+8).</li>
+<li>Missing the playoffs costs 12 — the same as 20 wins. The play-in does not help the owner score; it only helps the "make the playoffs" objective grade as partial.</li>
+<li>The tax objective has a $5M partial band; the budget objective's band is 5% of the target (about $8–10M). If you are going to miss one, miss it by less than that.</li>
+</ul>
+<p>The owner asks a contender to win and a rebuild to grow; the <a href="/blog/rebuild-or-contend-timeline">rebuild-or-contend framework</a> is how you decide which one you want to be before he decides for you.</p>
+<p><a href="/">Start a franchise in BS Hoops</a> and see what your owner asks for in year one.</p>
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 'coaching-staff-schemes-contracts-and-carousel',
+    title: 'Your Coaching Staff in BS Hoops: What a Head Coach Actually Changes, What He Costs, and When to Fire Him',
+    seoTitle: 'Basketball GM Coaching Guide — Schemes, Development Coaches, Contracts & the Carousel',
+    metaDescription:
+      'How coaches work in BS Hoops: the two ratings that actually matter, how a development coach adds up to 15% growth, coach salaries from $4M to $12M, dead money when you fire one, extension discounts, and how the AI carousel decides who gets fired.',
+    keywords: ['basketball gm coaching staff', 'basketball gm hire coach', 'player development coach sim', 'coaching carousel basketball gm'],
+    publishDate: '2026-11-12',
+    category: 'development',
+    readingTime: 7,
+    summary:
+      'A head coach brings a scheme and a development rating; a development coach adds up to ±15% to young players’ growth. Everything else on his card is price. Here is how to hire, extend and fire with the real numbers.',
+    related: ['game-plans-and-pace', 'player-development-and-aging', 'owner-objectives-approval-and-job-security'],
+    content: `
+<p>Every team in BS Hoops carries exactly two coaches: a <strong>head coach</strong> and a <strong>player-development coach</strong>. Both have contracts, both can be fired, and both are an owner expense rather than a cap charge. The Staff page lists four ratings for each; the engine reads only some of them. Here is which numbers do something, what a coach costs, and how the AI carousel decides when a good coach hits the market.</p>
+
+<h2>What a head coach actually does</h2>
+<p>A head coach has four ratings — offense, defense, development and morale — and his overall is their average. In the current engine, two things about him feed the simulation:</p>
+<ol>
+<li><strong>His scheme.</strong> Five-Out, Horns, Princeton, Triangle or Flow. Each is a fixed set of multipliers on pace, three-point rate, post-ups and defensive intensity that is always on, stacking with whatever game plan you set. The full table is in the <a href="/blog/game-plans-and-pace">game-plan guide</a>; the short version is that Five-Out plays 4% faster with 15% more threes, Flow plays 10% faster, Triangle plays 12% slower with 30% more post-ups and 20% fewer threes, and Horns and Triangle both play 5% more intense defense.</li>
+<li><strong>His development rating.</strong> At the offseason rollover, every player on his roster who is 24 or younger has his growth multiplied by 1 + (development − 70) ÷ 100 × 0.5, floored at 1. That is nothing at 70 or below, +5% at 80, +10% at 90, and +13% at the 96 cap.</li>
+</ol>
+<p>The offense, defense and morale ratings do not currently alter any possession, shot or turnover. They matter only through the coach's overall, which sets his salary. So a 60-offense, 60-defense, 90-development coach is a bargain for a rebuilding team, and an 85-across-the-board coach is paying for two ratings that do not do anything yet.</p>
+
+<h3>The scheme-fit badge</h3>
+<p>The roster page shows a ±OVR "fit" next to each player under your coach's scheme — Five-Out wants a three-point rating of 81+ for a "great" fit and marks anyone under 60 as poor; Triangle wants post scoring and a big; Flow wants speed and handles; Princeton wants IQ and passing; Horns is nearly neutral. The badge does not change ratings in the sim. It tells you whether the scheme will generate the shots he is good at.</p>
+
+<h2>What a development coach does</h2>
+<p>The player-development coach has one rating that matters, also called development, on a 40–90 scale centered on 65. For players 24 and younger it multiplies offseason growth by 0.85 at 40, 1.0 at 65, and 1.15 at 90. It applies only to upward drift: a 31-year-old declines the same whether your development coach is a 40 or a 90.</p>
+<p>The two coaches multiply. A 96-development head coach (×1.13) plus a 90 development coach (×1.15) gives a young player about <strong>30% more growth</strong> every summer: a 20-year-old expecting +5.4 (age drift plus potential pull, per the <a href="/blog/player-development-and-aging">development guide</a>) gets roughly +7 instead. A vacant slot is neutral, so a development coach below 65 is worse than none.</p>
+
+<h2>Where coaches come from and what they cost</h2>
+<p>Generated head coaches come in three tiers: about 15% <em>elite</em> (ratings built around 82), 35% <em>solid</em> (around 71) and 50% <em>journeymen</em> (around 61), each rating jittered −8 to +12. The hiring market shows every unemployed coach plus six fresh candidates, sorted by overall, and is re-rolled each season and phase — check it at the draft and again in free agency.</p>
+<p>Head-coach pay runs <strong>$4M to $12M</strong> a year on the $165M cap, and scales with the cap. The formula is 80% overall (on a 55–92 scale) plus 35% reputation, capped at 1.0 of the $8M range above the $4M floor. Reputation comes from the résumé: career win percentage above .450 counts double, each title adds 0.25, each Coach of the Year 0.15, each conference-finals run 0.06. A 92-overall coach with no history asks about $10.4M; a 70 asks about $6.6M; a 61 about $5.0M. Development coaches cost $0.5M to $2M by their development rating.</p>
+<p>Standard deals: head coaches sign 3 years (4 if 82+ overall), with a 45% chance of one extra year, maximum 5. Development coaches sign 2 or 3. Salaries rise 3% a year and every year is guaranteed.</p>
+
+<h2>Firing a coach: dead money and the interim</h2>
+<p>You can fire either coach at any time from the Staff page. Every remaining guaranteed year becomes dead money on your Finances page. It is an owner expense, so it does not touch the cap or the luxury tax — but it does count against the owner's <em>stay within budget</em> objective, as the <a href="/blog/owner-objectives-approval-and-job-security">owner guide</a> explains. Firing a $10M coach with three years left books about $30.9M of dead money across those seasons.</p>
+<p>A fired head coach is replaced immediately by an <strong>interim</strong>: a fresh coach with 6 points shaved off every rating, on a one-year, non-guaranteed deal at 60% of his market rate. Because it is non-guaranteed, replacing the interim costs nothing — so firing a bad coach midseason is a two-step move: eat his dead money now, hire the real replacement when the market refreshes in the offseason.</p>
+<p>If a coach's deal lapses and you do nothing, he stays on a one-year market deal at season start — you will not lose him by accident, but you pay full price.</p>
+
+<h2>Extensions: the hometown discount</h2>
+<p>Extending a coach prices his next deal at market times a situation premium based on your team's success — win percentage plus 0.03 per playoff round reached:</p>
+<ul>
+<li>Success of .600 or better: <strong>0.95× market</strong> (he likes it here).</li>
+<li>.450 to .599: 1.05× market.</li>
+<li>Below .450: <strong>1.15× market</strong> — a premium to stay with a loser.</li>
+</ul>
+<p>Three refusals exist. An 80+ overall coach will not take two or more years from a team under .400. No coach takes a five-year deal from a team under .300. And no coach signs past age 74. The practical rule: extend your good coach <em>during</em> a winning season, before his deal expires, and never try to lock up an elite coach while you are tanking.</p>
+
+<h2>The AI carousel</h2>
+<p>After every season (and after development, so the staff that coached the year gets credit for it), the 29 AI teams run their own staff decisions. Your team is never touched. For head coaches:</p>
+<table>
+<thead><tr><th>Situation</th><th>What the AI does</th></tr></thead>
+<tbody>
+<tr><td>Interim</td><td>Always let go</td></tr>
+<tr><td>Contract expiring</td><td>Re-signed if under 70 years old and (won 50%+, or 75+ overall and won 40%+, or made the playoffs); otherwise let go</td></tr>
+<tr><td>Under contract, won under 30%</td><td>Fired 55% of the time (25% if it was his first season)</td></tr>
+<tr><td>Under contract, won 30–39%</td><td>Fired 35% (12% in his first season)</td></tr>
+<tr><td>Under contract, 40–49% and missed the playoffs</td><td>Fired 18%, but only after three seasons</td></tr>
+</tbody>
+</table>
+<p>All of those odds are multiplied by 0.6 for a coach rated 82 or better. Development coaches are re-signed if they rate 60+ and are under 70; a sub-50 development coach on a sub-.400 team is fired 30% of the time. Vacancies are filled from the market by picking the best overall with a little noise. Coaches retire at 68 if unemployed; the market keeps the 12 best unemployed coaches per role and retires the rest.</p>
+<p>Good coaches do hit the market: a 20-win team fires its 84-overall coach about a third of the time (55% × 0.6). Check unemployed coaches before fresh candidates — but a fired coach keeps his résumé, so a strong one may ask more than a fresh candidate with the same overall.</p>
+
+<h2>The staffing rule</h2>
+<p>Rebuilding: buy the highest development ratings you can find in both slots, and pick the scheme that fits your two best prospects — an 80+ development coach is the best $2M you will spend. Contending: match the scheme to your top three players and ignore overall; your core is past 24 and the development ratings do nothing for them. Either way, a 90-development pair costs about $12M of owner money, never touches the cap, and compounds across a rookie contract.</p>
+<p><a href="/">Open BS Hoops</a>, check your Staff page, and see what your coaches are actually rated.</p>
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 're-signing-negotiation-mood-and-bird-rights',
+    title: 'Re-Signing Your Own Players in BS Hoops: Mood, Negotiation Patience and Bird Rights',
+    seoTitle: 'Basketball GM Re-Sign Guide — Player Mood, Contract Negotiation & Bird Rights',
+    metaDescription:
+      'How re-sign talks work in BS Hoops: the market-salary table by OVR, the six moods and what drives them, loyalty, the 2–4 rounds of patience, lowball penalties, the final-round midpoint rule, Bird rights, and how the free-agent acceptance bar differs.',
+    keywords: ['basketball gm re-sign players', 'basketball gm contract negotiation', 'bird rights basketball gm', 'player mood basketball sim'],
+    publishDate: '2026-11-19',
+    category: 'salary-cap',
+    readingTime: 8,
+    summary:
+      'A player’s ask is market salary times a loyalty multiplier, his floor is 80–95% of market, and you get two to four rounds before he walks. Here is the arithmetic, and why the free-agent bar is a different formula.',
+    related: ['salary-cap-aprons-and-exceptions', 'player-development-and-aging', 'rotation-bench-order-and-minutes'],
+    content: `
+<p>The offseason in BS Hoops runs Draft → Re-sign → Cuts → Free Agency, and the Re-sign step is where most of your payroll gets decided. Anyone you do not re-sign walks to the free-agent pool when the season starts. Talks are not a coin flip: each player builds a negotiation profile from his market value, mood, tenure and your record, then responds to offers by fixed rules. Learn them and you stop overpaying loyal starters and stop insulting the ones who are leaving anyway.</p>
+
+<h2>Step 1: his market salary</h2>
+<p>Everything starts from a market salary that is a percentage of the cap by OVR, times an age multiplier, times a position multiplier, with ±5% noise fixed per player and season.</p>
+<table>
+<thead><tr><th>OVR</th><th>% of cap</th><th>On a $165M cap</th></tr></thead>
+<tbody>
+<tr><td>94+</td><td>36%</td><td>$59.4M (clamped to his max)</td></tr>
+<tr><td>91–93</td><td>33%</td><td>$54.5M</td></tr>
+<tr><td>88–90</td><td>30%</td><td>$49.5M</td></tr>
+<tr><td>85–87</td><td>25.5%</td><td>$42.1M</td></tr>
+<tr><td>82–84</td><td>20.5%</td><td>$33.8M</td></tr>
+<tr><td>80–81</td><td>15.5%</td><td>$25.6M</td></tr>
+<tr><td>78–79</td><td>11.5%</td><td>$19.0M</td></tr>
+<tr><td>76–77</td><td>9%</td><td>$14.9M</td></tr>
+<tr><td>74–75</td><td>6.5%</td><td>$10.7M</td></tr>
+<tr><td>72–73</td><td>4.5%</td><td>$7.4M</td></tr>
+<tr><td>70–71</td><td>3%</td><td>$5.0M</td></tr>
+<tr><td>67–69</td><td>1.8%</td><td>$3.0M</td></tr>
+<tr><td>Under 67</td><td>1.2%</td><td>$2.0M</td></tr>
+</tbody>
+</table>
+<p>Age multiplies that: 0.85 at 21 and under, 0.95 at 22–24, 1.0 at 25–28, 0.92 at 29–31, 0.78 at 32–34, 0.55 at 35–37, 0.35 at 38+. Position nudges it: centers 1.08, small forwards 1.05, point guards 1.0, power forwards 0.98, shooting guards 0.95. The result is clamped to his service-time band — minimum $1.35M for a rookie up to $3.87M for a ten-year veteran, maximum 25%, 30% or 35% of the cap at 0–6, 7–9 and 10+ years.</p>
+<p>He also has a preferred length: 88+ OVR players want 5 years (4 at 30+, 3 at 33+); 72–87 want 4 (3 at 30+, 2 at 33+ for the lower band); fringe players want 2 (1 at 30+). Extensions run 1–5 years.</p>
+<p>Example: an 82-OVR, 27-year-old small forward is 20.5% × 1.0 × 1.05 × $165M ≈ <strong>$35.5M a year for 4 years</strong>; a 76-OVR, 30-year-old point guard is 9% × 0.92 × $165M ≈ <strong>$13.7M for 3 years</strong>. Extensions are priced on the cap of the season they start, which <a href="/blog/first-season-beginners-guide">grows about 7% a year</a>.</p>
+
+<h2>Step 2: his mood</h2>
+<p>The Mood chip on the roster is derived live from role, contract and team form. The six states, in the order the engine checks them:</p>
+<ul>
+<li><strong>Angry</strong> — 80+ OVR and not in the starting five.</li>
+<li><strong>Unhappy</strong> — one of the five best OVRs on the roster but not starting.</li>
+<li><strong>Restless</strong> — 72+ OVR with one year or less on his deal.</li>
+<li><strong>Thrilled</strong> — 23 or younger, 8+ points below his potential, and starting.</li>
+<li><strong>Happy</strong> — 23 or younger with 6+ points of upside, or starting despite not being top-five in talent.</li>
+<li><strong>Content</strong> — everyone else.</li>
+</ul>
+<p>The biggest input is the starting lineup you set. Restless is normal in a contract year; Angry is a lineup problem you can fix before talks open.</p>
+
+<h2>Step 3: loyalty, patience and the two numbers that matter</h2>
+<p>From mood and tenure the engine builds a <strong>loyalty</strong> score from 0 to 1:</p>
+<ul>
+<li>+0.09 per season with the team, up to +0.35</li>
+<li>+0.10 for full Bird rights</li>
+<li>+0.15 if the team is at or above .500</li>
+<li>+0.10 if he is a starter</li>
+<li>+0.15 if Thrilled or Happy; −0.20 if Unhappy; −0.35 if Angry</li>
+</ul>
+<p>Loyalty sets three things. His <strong>patience</strong> is 2 + 2 × loyalty, plus 0.5 for a veteran (32+) and minus 0.5 for a young star (26 or younger and 78+), rounded and clamped to 2–4 rounds. His <strong>anchor</strong> (opening ask) is market × (1 + 0.10 × (1 − loyalty)), plus 4% if he is a young star and another 4% if Angry. His <strong>reservation</strong> (walk-away floor) is market × (0.80 + 0.12 × (1 − loyalty)), plus 3% for a young star and minus 3% for a veteran. Both get ±2% jitter and are clamped to his legal min and max. The <strong>lowball line</strong> is 80% of the reservation.</p>
+<p>Two archetypes make it concrete, on a $20M market player:</p>
+<table>
+<thead><tr><th></th><th>Loyal starter (loyalty ≈ 0.85)</th><th>Angry star, year one, losing team (loyalty 0)</th></tr></thead>
+<tbody>
+<tr><td>Patience</td><td>4 rounds</td><td>2 rounds</td></tr>
+<tr><td>Opening ask</td><td>≈ $20.3M</td><td>≈ $23.6M (×1.18)</td></tr>
+<tr><td>Walk-away floor</td><td>≈ $16.4M (×0.82)</td><td>≈ $19.0M (×0.95)</td></tr>
+<tr><td>Lowball line</td><td>≈ $13.1M</td><td>≈ $15.2M</td></tr>
+</tbody>
+</table>
+<p>That is the whole value of loyalty: a loyal player signs for 18% under market with four chances to get there; a disgruntled one will not go below 95% and gives you two.</p>
+
+<h2>Step 4: the round rules</h2>
+<p>Each offer is one round. Your offer's <strong>effective value</strong> is the salary times a years-fit factor — 5% off for every year away from his preferred length, floored at 80%. Then:</p>
+<ol>
+<li><strong>Accept</strong> if effective value ≥ the higher of his reservation and 97% of his current ask. On his <em>final</em> round of patience, the bar drops to the midpoint between his reservation and his current ask.</li>
+<li><strong>Lowball</strong> if effective value is below the lowball line: patience −1, his floor hardens 3%, his ask does not move. A second lowball ends talks.</li>
+<li><strong>Counter</strong> otherwise: patience −1, and his ask concedes (0.35 + 0.2 × loyalty) of the gap toward your offer, never below his floor. Running out of patience on a counter also ends talks.</li>
+</ol>
+<p>Once talks end, "Offer what he wants" still works — at <strong>110% of his anchor</strong>. For the angry star above, that is about $26M a year to undo a failed negotiation.</p>
+<h3>The efficient path</h3>
+<p>Against a loyal player, open just above his floor (around 85% of market) and let him counter: he concedes about half the gap each round and you have four, so your third offer near 90% of market lands. Against a low-loyalty player, do not fish: open above his lowball line, then on round two offer the midpoint of his floor and current ask — the final-round rule accepts exactly that. Fewer years than he wants costs 5% per year in effective value.</p>
+
+<h2>Bird rights: what they do here</h2>
+<p>Bird rights do three things here: a full-Bird player gets +0.10 loyalty in re-sign talks; if he reaches free agency, your offer bypasses the cap and the exceptions entirely (capped at his market ask) and his acceptance bar drops 4 points; and the AI treats his old team as the favorite to keep him. One honest caveat: in the current build Bird rights exist only on real-roster imports — players with two or more seasons left on their deal at import carry full rights — and are not earned over time in a generated league. Check the tag on the free-agent board before you count on them.</p>
+<p>The re-sign step itself has no cap gate. An extension can take you over the cap, the tax or the aprons; the only limits are his service-time minimum and maximum and the 1–5 year range. What the aprons take away is covered in the <a href="/blog/salary-cap-aprons-and-exceptions">cap guide</a>.</p>
+
+<h2>If he reaches free agency, the math changes</h2>
+<p>A free agent does not negotiate round by round. He has one acceptance total: market × a tier fraction (1.02 for 80+, 0.96 for 74–79, 0.90 for 68–73, 0.82 below), adjusted by your team's appeal — a .700 team gets about 3.6 points off, a .300 team pays 3.6 more — minus 4 points if you hold his Bird rights, clamped to 72–120%. At or above that total he signs on the spot; a fair-but-short offer draws a counter; anything under 45% of market is brushed off. Asks decay to 50% by day 30 of the window, but his old team's AI fights for him the whole time. The Re-sign step is almost always the cheaper room.</p>
+
+<h2>Re-sign checklist</h2>
+<ul>
+<li>Fix the lineup first: a top-five talent on the bench costs 20–35 points of loyalty.</li>
+<li>Extend a year early — market is priced on OVR, so a 22-year-old gets more expensive every summer.</li>
+<li>Never lowball twice. Getting a player back after talks end costs 110% of his anchor.</li>
+<li>Veterans (32+) settle 3% lower with an extra half-round of patience — that is where the discounts are.</li>
+</ul>
+<p><a href="/">Open BS Hoops</a> and check the Mood column on your roster before your next re-sign window.</p>
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    slug: 'injuries-suspensions-and-roster-depth',
+    title: 'Injuries in BS Hoops: The Real Odds, How Long Players Miss, and When to Play Through',
+    seoTitle: 'Basketball GM Injuries Guide — Injury Odds, Severity, Playing Through & Depth',
+    metaDescription:
+      'The exact injury model in BS Hoops: a 1.2% per-game base rate scaled by minutes, the 68/21/9/2 severity split, how many games each tier costs, the 2.2× risk of playing through, foul-out suspensions and fines, and how to build a roster that absorbs it.',
+    keywords: ['basketball gm injuries', 'basketball sim injury rate', 'play through injury basketball gm', 'roster depth basketball gm'],
+    publishDate: '2026-11-26',
+    category: 'roster',
+    readingTime: 7,
+    summary:
+      'A 32-minute starter has about a 59% chance of getting hurt at some point in an 82-game season; two in three injuries cost a game or two, one in fifty ends the year. The real numbers, and how to build around them.',
+    related: ['rotation-bench-order-and-minutes', 'game-plans-and-pace', 'rebuild-or-contend-timeline'],
+    content: `
+<p>Injuries in BS Hoops are rolled after every game for every player who logged minutes, with a fixed base rate scaled by how much he played. The model is small enough to hold in your head, and once you do, decisions that feel like luck — how deep to go, whether to play a banged-up starter, what a ninth man is worth — turn into arithmetic.</p>
+
+<h2>The per-game roll</h2>
+<p>The base chance of an injury is <strong>1.2% per game at 36 minutes</strong>. Minutes scale it linearly — a 24-minute player is at two thirds of the rate, an 18-minute player at half — capped at 1.4× for overtime nights of 50+ minutes. Players already hurt are skipped, and a player who did not play cannot get hurt.</p>
+<p>In the default rotation a starter plays about 32 minutes (see the <a href="/blog/rotation-bench-order-and-minutes">rotation guide</a>), so his per-game chance is about 1.07%. A second-unit player at 16 minutes is around 0.53%. Over 82 games:</p>
+<table>
+<thead><tr><th>Role</th><th>Minutes</th><th>Per game</th><th>Expected injuries / season</th><th>Chance of at least one</th></tr></thead>
+<tbody>
+<tr><td>Starter</td><td>32</td><td>1.07%</td><td>0.87</td><td>≈ 59%</td></tr>
+<tr><td>Starter, "ride the starters"</td><td>~41</td><td>1.37%</td><td>1.12</td><td>≈ 68%</td></tr>
+<tr><td>Second unit</td><td>16</td><td>0.53%</td><td>0.44</td><td>≈ 35%</td></tr>
+</tbody>
+</table>
+<p>Add it up across a ten-man rotation and a team takes roughly <strong>six to seven injuries a season</strong>. That is the planning number: not "will someone get hurt" but "which six or seven games' worth of absences will I absorb, and who covers them."</p>
+
+<h2>Severity: what an injury costs you</h2>
+<p>When the roll hits, a second roll sets the severity. The return date is in days of the season calendar; at about 3.5 games a week, one day is roughly half a game.</p>
+<table>
+<thead><tr><th>Severity</th><th>Share</th><th>Days out</th><th>Games missed (approx.)</th></tr></thead>
+<tbody>
+<tr><td>Day-to-day</td><td>68%</td><td>2–5</td><td>1–2</td></tr>
+<tr><td>Minor</td><td>21%</td><td>7–14</td><td>3–7</td></tr>
+<tr><td>Major</td><td>9%</td><td>21–45</td><td>10–22</td></tr>
+<tr><td>Season-ending</td><td>2%</td><td>Rest of the year, including playoffs</td><td>All</td></tr>
+</tbody>
+</table>
+<p>Multiply through: of a team's six or seven injuries a year, about 0.6 are major and about 0.13 are season-ending. In plain terms, roughly one team in eight loses a rotation player for the year each season, and most teams see one long absence. Nearly 90% of injuries are gone within two weeks of the calendar. The body part (ankle, knee, hamstring and so on) is flavor; severity is what is rolled.</p>
+<p>In the real-roster league the same rates apply to everyone, so a 36-year-old star is no more fragile than a rookie. Age shows up in the <a href="/blog/player-development-and-aging">decline curve</a>, not the injury table.</p>
+
+<h2>What happens to your lineup</h2>
+<p>An injured player is removed from the pool before the lineup is built for each game. He does not play and he is not auto-slotted. The sim then resolves your lineup from the healthy players in your bench order: if a starter is out, the next player at his position group steps up and everyone below shifts. That is why bench slots 6 through 10 matter even though they rarely play when healthy — they are the players who become your second unit the week your sixth man goes down.</p>
+<p>If injuries leave you with fewer than five healthy bodies, the engine presses day-to-day and minor cases back into service automatically. Players with a major or season-ending injury never suit up, so with 13 or more on the roster you will essentially always field a team.</p>
+<p>Two places injuries do <em>not</em> reach: ratings and trade value. An injured player's OVR is unchanged, and the trade evaluator prices OVR, age, potential and contract without reading the injury list. The power rankings, by contrast, are computed from healthy players, so a 55-win roster with a major injury will drop in the rankings before it drops in the standings.</p>
+
+<h2>Playing through an injury</h2>
+<p>For day-to-day and minor injuries you can choose to <strong>play through</strong>: the injury is cleared and he is available immediately, but for the next <strong>10 days</strong> his injury roll is multiplied by <strong>2.2</strong>. For a 32-minute starter that is about 2.35% per game instead of 1.07% — roughly 11% odds of a new injury over the five or so games in the window, versus about 5% if he had been healthy. And the new injury rolls severity fresh: a 9% chance it is major, 2% that it ends his season.</p>
+<p>So the trade is about 6 extra percentage points of injury risk in exchange for one to seven games of availability. Because severity is re-rolled, that extra 6% carries roughly a 1-in-185 added chance of a major injury and about 1-in-800 of a season-ender. The expected cost is small; the tail is not. Three rules follow:</p>
+<ul>
+<li><strong>Play through day-to-day injuries in the playoffs</strong> and in any late-season game that decides seeding. Two games of a star is worth the risk when the games are worth more — home court is worth about a point a game more in the playoffs than in the regular season.</li>
+<li><strong>Sit minor injuries in November.</strong> Three to seven regular-season games are not worth doubling a starter's injury odds for ten days when one new injury in nine is a 10-to-22-game absence.</li>
+<li><strong>Weigh the replacement, not the star.</strong> The cost of sitting him is the gap between him and the next player in his position group on your bench. If that gap is three OVR points, sit him every time; if it is fifteen and the game matters, the 2.2× is worth paying.</li>
+</ul>
+
+<h2>Suspensions and fines</h2>
+<p>Discipline uses the same availability system as injuries. After every game, each player who <strong>fouled out</strong> (six personal fouls) is rolled: a 5% chance of a suspension — one game three quarters of the time, two games otherwise — and an 8% chance of a fine between $15,000 and $110,000. Fines are news only and never bench anyone. A suspended player is unavailable exactly like an injured one and cannot be played through. Foul-outs are rare enough that suspensions are a once-a-season event for most teams, but the one time it lands on your starting center before a back-to-back, the same bench-order logic decides who starts.</p>
+
+<h2>League Rules: tuning the model</h2>
+<p>League Rules expose two dials: an injury rate multiplier from 0 to 3 (0 switches injuries off; at 3 a starter is at 3.2% per game) and a duration multiplier from 0.25 to 3 that stretches every return date except season-enders. Both default to 1.</p>
+
+<h2>Building a roster that absorbs it</h2>
+<ul>
+<li><strong>Pay for the ninth and tenth men, not the fourteenth.</strong> Six to seven injuries a year means your second unit will start real games. A 72-OVR ninth man on a $7M market deal is insurance you will use; the 13th through 15th spots can be minimums.</li>
+<li><strong>Position coverage over raw OVR at the bottom.</strong> The starter who gets hurt is replaced by the next player in his position group. Three guards, four forwards and two centers in your top nine means no injury forces a 65-OVR center into 30 minutes.</li>
+<li><strong>Riding the starters costs about 0.25 injuries a season per starter.</strong> It is worth it in a playoff series and not worth it in January.</li>
+<li><strong>Do not trade for a player because he is "due" to stay healthy.</strong> Every game is an independent roll. Last year's injuries tell you nothing about this year's.</li>
+</ul>
+<p>The distribution is narrow: six or seven injuries a year, most of them short, one long one most seasons. Build the bench for that and set the order so the right players step up, and the week your sixth man goes down is a footnote instead of a lost month.</p>
+<p><a href="/">Open BS Hoops</a> and check your injury report before you sim the next week.</p>
+`,
+  },
 ];
 
 function todayIso(): string {
