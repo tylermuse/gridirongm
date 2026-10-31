@@ -47,10 +47,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const nextGamePlan = useGameStore(s => s.nextGamePlan);
   const setNextGamePlan = useGameStore(s => s.setNextGamePlan);
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
-  const weeklyRecapCount = useGameStore(s => s.weeklyRecaps.length);
-  // Shared sim lock: paints a busy state before the (synchronous) sim runs and
-  // disables every sim button until it's done, so queued clicks can't re-sim.
-  const { busy: simBusy, run: runSim } = useBusyAction();
   const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
   const stableSBRef = useRef<boolean | null>(null);
@@ -105,6 +101,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const maxWeek = schedule.length > 0 ? Math.max(...schedule.map(g => g.week)) : 18;
 
   const pendingTradeCount = tradeProposals.filter(p => p.status === 'pending').length;
+
+  const weeklyRecapCount = useGameStore(s => s.weeklyRecaps.length);
+  // Shared sim lock: paints a busy state before the (synchronous) sim runs and
+  // disables every sim button until it's done, so queued clicks can't re-sim.
+  const { busy: simBusy, run: runSim } = useBusyAction();
 
   const thisWeekGames = schedule.filter(g => g.week === week);
   const weekAllPlayed = thisWeekGames.length > 0 && thisWeekGames.every(g => g.played);
