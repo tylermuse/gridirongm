@@ -78,7 +78,9 @@ const logoOf = (t: Team) => (
   <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} logoUrl={t.logoUrl} size="fill" />
 );
 
-type Phase = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'ended' | 'error' | 'exhausted' | 'locked';
+// 'failed': the stream broke off once the player was up — the stage stays,
+// with a notice where the episode ran out (never the sign-off).
+type Phase = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'ended' | 'error' | 'exhausted' | 'locked' | 'failed';
 
 const CLIP_IDS = Object.keys(SHOW_CLIPS) as ShowClipId[];
 
@@ -177,6 +179,10 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // The episode's voices arrive block by block (NDJSON); a line whose block
   // hasn't landed yet waits for it.
   const streamDone = useRef(true);
+  // The stream broke off before the episode was complete (the server's
+  // message): what arrived plays, then the show stops on a notice.
+  const streamError = useRef<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const waitingFor = useRef<number | null>(null);
   const [buffering, setBuffering] = useState(false);
   // Holding at the end of what's written so far: keep the last graphic up.
@@ -528,12 +534,16 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       // Still being written: hold on the episode's graphic (never a frozen
       // host) until the next lines land.
       if (!streamDone.current) { waitingFor.current = i; setBuffering(true); setHolding(true); setVisibleVideo(null); return; }
+      if (streamError.current != null) { setPhase('failed'); return; }
       setPhase('ended');
       playMusic('outro');
       return;
     }
     const prev = segs[i - 1];
     const seg = segs[i];
+    // The stream broke off before this line was voiced: stop here rather
+    // than skip ahead through a conversation with holes in it.
+    if (seg.kind === 'tts' && streamDone.current && streamError.current != null && !buffersRef.current.has(i)) { setPhase('failed'); return; }
     setHolding(false);
     setTwoShot(null);
     segIdxRef.current = i;
@@ -783,10 +793,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // ── Controls ───────────────────────────────────────────────────────
   async function handleOpen() {
     // The player stays mounted on the dashboard across sims: reuse the
-    // loaded episode only if it's for this same Spotlight.
-    if (segmentsRef.current.length && loadedFor.current === requestBody) { setPhase('ready'); return; }
+    // loaded episode only if it's for this same Spotlight (and didn't break off).
+    if (segmentsRef.current.length && loadedFor.current === requestBody && streamError.current == null) { setPhase('ready'); return; }
     const episode = requestBody;
     loadedFor.current = episode;
+    streamError.current = null;
+    setErrorMsg(null);
     segmentsRef.current = [];
     setSegments([]);
     segIdxRef.current = 0;
@@ -840,8 +852,18 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       const dec = new TextDecoder();
       let buf = '';
       let gotScript = false;
+      let ended = false; // the server said done (or error)
       const pending: Promise<void>[] = [];
       const finish = () => { streamDone.current = true; resumeWaiting(); };
+      // The episode won't be complete (the server's error, or the stream
+      // just stopped). Before the opening is ready that's a plain error;
+      // once the player is up, what arrived plays and it stops on a notice.
+      const fail = (message?: string) => {
+        if (loadedFor.current !== episode) return;
+        streamError.current = message || 'The show was cut off. Try again in a little while.';
+        setErrorMsg(streamError.current);
+        setPhase(p => (p === 'loading' ? 'error' : p === 'ready' ? 'failed' : p));
+      };
       void (async () => {
         try {
           for (;;) {
@@ -867,14 +889,16 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 setLipsWanted(n => n + 1);
               } else if (msg.type === 'block' && msg.audio && msg.lines) {
                 pending.push(addBlock(ctx, msg as BlockMsg).catch(() => {}));
-              } else if (msg.type === 'error' && !gotScript) {
-                setPhase('error');
+              } else if (msg.type === 'done') {
+                ended = true;
+              } else if (msg.type === 'error' && !ended) {
+                ended = true;
+                fail(msg.message);
               }
             }
           }
-        } catch {
-          if (!gotScript) setPhase('error');
-        }
+        } catch { /* dropped: handled below */ }
+        if (!ended) fail();
         await Promise.all(pending);
         finish();
       })();
@@ -923,6 +947,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     setPhase('idle');
     setSegIdx(0);
     segIdxRef.current = 0;
+  }
+
+  /** After the stream broke off: a fresh request (the broken episode is never reused). */
+  function handleRetry() {
+    handleClose();
+    void handleOpen();
   }
 
   // ── Seeking ────────────────────────────────────────────────────────
@@ -1006,6 +1036,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       ready={poster.ready}
       onPlay={handleOpen}
       onRetry={() => { setPhase('idle'); void handleOpen(); }}
+      message={errorMsg}
     />
   ) : null;
   if (posterEl && posterState !== 'open') return posterEl;
@@ -1027,7 +1058,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   }
   if (phase === 'error') {
     return (
-      <button onClick={() => setPhase('idle')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
+      <button onClick={() => setPhase('idle')} title={errorMsg ?? undefined} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
         ⚠️ Retry show
       </button>
     );
@@ -1084,9 +1115,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     const other = topicTeam(topics[gfx.topicIdx], team, teams);
     return other.id !== team.id && namesTeam(gfx.text, other) ? other : null;
   })();
-  const shot = tts && phase !== 'ended' ? shots[segIdx] : undefined;
+  // Signed off, or stopped where the episode broke off: the last picture holds.
+  const over = phase === 'ended' || phase === 'failed';
+  const shot = tts && !over ? shots[segIdx] : undefined;
   // A line whose two-shot clip is in plays on camera instead.
-  const lipsOn = !!tts && phase !== 'ended' && twoShot?.seg === segIdx;
+  const lipsOn = !!tts && !over && twoShot?.seg === segIdx;
   const ots = shot?.kind === 'ots' && !lipsOn;
   const otsSrc = ots && shot?.kind === 'ots' ? OTS_SRC(shot.listener) : null;
   const onGfx = !!(tts || vo || (holding && phase === 'playing')) && !ots && !lipsOn;
@@ -1316,7 +1349,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           ))}
 
           {/* Theme opener: the theme's title card over the two-shot */}
-          {seg?.kind === 'phrase' && seg.themeCard && phase !== 'ended' && (
+          {seg?.kind === 'phrase' && seg.themeCard && !over && (
             <ThemeCard key={seg.phraseId} theme={seg.themeCard} ms={Math.max(0, clock - segStart.current)} />
           )}
 
@@ -1349,7 +1382,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           )}
 
           {/* Captions (topic graphics carry the line as a pull quote instead) */}
-          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic' && !ots && !lipsOn) && !vo && <ShowCaption text={captionOf(seg, (clock - segStart.current) / 1000)} />}
+          {seg && !over && !(tts && tts.visual === 'graphic' && !ots && !lipsOn) && !vo && <ShowCaption text={captionOf(seg, (clock - segStart.current) / 1000)} />}
 
           {/* Waiting on a line's voices (rare: they stream in during the open) */}
           {buffering && phase === 'playing' && (
@@ -1367,6 +1400,22 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
               {phase === 'ready' ? '▶ Start the show' : phase === 'paused' ? '▶ Resume' : '↺ Watch again'}
             </button>
           )}
+
+          {/* The episode broke off: what arrived has played. Say why; offer another go. */}
+          {phase === 'failed' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 p-4">
+              <div role="alert" className="max-w-sm rounded-xl bg-white/95 px-4 py-3 text-center shadow-lg">
+                <div className="text-[clamp(12px,1.6vw,15px)] font-bold text-[#1e3a5f]">⚠️ This episode couldn&apos;t be finished</div>
+                {errorMsg && <p className="mt-1 text-[clamp(10px,1.3vw,13px)] text-slate-600">{errorMsg}</p>}
+                <button
+                  onClick={handleRetry}
+                  className="mt-2.5 rounded-full bg-[#1e3a5f] px-5 py-2 text-sm font-bold text-white shadow hover:bg-[#244873]"
+                >
+                  ↻ Try again
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Controls */}
@@ -1377,7 +1426,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         >
           <button
             onClick={phase === 'playing' ? handlePause : handleStart}
-            disabled={phase === 'ended'}
+            disabled={over}
             className={`shrink-0 rounded-full bg-purple-600 text-sm text-white hover:bg-purple-700 disabled:opacity-40 ${full ? 'order-2 h-8 w-8' : 'h-9 w-9'}`}
             aria-label={phase === 'playing' ? 'Pause' : 'Play'}
           >
