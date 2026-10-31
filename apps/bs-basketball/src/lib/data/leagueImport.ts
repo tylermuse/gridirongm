@@ -25,6 +25,7 @@ import type { PlayerId, TeamId } from '@bs/core/adapter';
 import { HOOPS_LEAGUE_TEAMS, type BasketballTeamTemplate } from './teams';
 import { consensus2026Rank, consensus2026Value } from './draft2026';
 import { makeBasketballTeam } from '../league/createLeague';
+import { realHeadCoachesFromFile, type RealHeadCoachEntry } from '../coaching/realHeadCoaches';
 
 // ===========================================================================
 // Source schema (loose — input is untrusted JSON)
@@ -98,6 +99,9 @@ export interface BbgmLeagueFile {
   draftPicks?: BbgmDraftPick[];
   schedule?: BbgmScheduledGame[];
   bsRealResults?: BbgmGame[];
+  /** BS-only: the real current head coach per team, keyed by the file's team
+   *  abbreviation (written weekly by scripts/weekly_roster_update.py). */
+  bsCoaches?: Record<string, RealHeadCoachEntry>;
   gameAttributes?: Array<{ key: string; value: unknown }> | Record<string, unknown>;
 }
 
@@ -134,6 +138,8 @@ export interface ImportedHoopsLeague {
    *  a schedule): the real results so far and the remaining real schedule, so
    *  the league opens on the next game day instead of the offseason. */
   seasonInProgress: ImportedSeasonInProgress | null;
+  /** Real head coaches keyed by our team id, when the file carries `bsCoaches`. */
+  realHeadCoaches: Record<TeamId, RealHeadCoachEntry> | null;
 }
 
 export interface ImportedSeasonGame {
@@ -739,7 +745,17 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     seasonInProgress = { games };
   }
 
-  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds, draftComplete, seasonInProgress };
+  // --- Real head coaches (BS-only block), re-keyed from file abbrev to our team id ---
+  let realHeadCoaches: Record<TeamId, RealHeadCoachEntry> | null = null;
+  const fileCoaches = realHeadCoachesFromFile(file.bsCoaches);
+  for (const t of file.teams) {
+    const entry = t.abbrev ? fileCoaches[t.abbrev.toUpperCase()] : undefined;
+    const teamId = tidToTeamId.get(t.tid);
+    if (!entry || !teamId) continue;
+    (realHeadCoaches ??= {})[teamId] = entry;
+  }
+
+  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds, draftComplete, seasonInProgress, realHeadCoaches };
 }
 
 // ===========================================================================

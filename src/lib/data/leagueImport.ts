@@ -2,6 +2,7 @@ import type { GameResult, Player, PlayerRatings, PlayerStats, Position, Team } f
 import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed } from '@/types';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from '@/lib/engine/salary';
 import { LEAGUE_TEAMS } from './teams';
+import { realHeadCoachesFromFile, type RealHeadCoachEntry } from './realHeadCoaches';
 
 function uuid(): string {
   return crypto.randomUUID();
@@ -147,6 +148,9 @@ interface FbgmLeagueFile {
   draftPicks?: FbgmDraftPick[];
   schedule?: FbgmScheduledGame[];
   bsRealSeason?: FbgmRealSeason;
+  /** BS-only: the real current head coach per team, keyed by the file's team
+   *  abbreviation (written weekly by scripts/weekly_roster_update.py). */
+  bsCoaches?: Record<string, RealHeadCoachEntry>;
 }
 
 function clamp(value: number, min = 20, max = 99): number {
@@ -292,6 +296,8 @@ export interface ImportedLeagueData {
   /** The real season so far, when the file carries one (NFL 2026 roster). A
    *  regular-season start picks up here instead of a generated Week 1. */
   realSeason?: RealSeasonState;
+  /** Real head coaches keyed by team abbreviation, when the file carries them. */
+  realHeadCoaches?: Record<string, RealHeadCoachEntry>;
 }
 
 export interface RealSeasonState {
@@ -679,7 +685,9 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
   const realSeason = convertRealSeason(league, season, teamByTid, new Set(players.map(p => p.id)));
 
-  return { season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds, realSeason };
+  const realHeadCoaches = realHeadCoachesFromFile(league.bsCoaches);
+
+  return { season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds, realSeason, realHeadCoaches };
 }
 
 /**

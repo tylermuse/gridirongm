@@ -67,6 +67,9 @@ export interface CoachSportData {
   retired?: boolean;
   /** Stop-gap coach named after a firing / departure. */
   interim?: boolean;
+  /** Real-world head coach from the roster file's `bsCoaches` block (name,
+   *  age and hire season are real; ratings and scheme are simulated). */
+  real?: boolean;
 }
 
 export function coachData(coach: BaseCoach): CoachSportData {

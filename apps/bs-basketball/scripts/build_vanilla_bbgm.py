@@ -19,7 +19,7 @@ This variant starts the 2026-27 season from opening night instead:
     games, scaled by MARGIN_TO_RATING and capped at ±MAX_NUDGE rating points,
     applied to every skill rating (never height) of every rostered player's
     current-season row. 5 games at +10 → +3; 5 games at -4 → -1.
-  - the BS-only `bsRealResults` block dropped
+  - the BS-only `bsRealResults` and `bsCoaches` blocks dropped
 
 Served by the rosters-page "Download JSON" button (used for BBGM). The in-app
 "Start a league with this roster" button keeps the untouched main file.
@@ -46,6 +46,7 @@ def clamp(v, lo, hi):
 def main():
     d = json.load(open(SRC))
     played = d.pop('bsRealResults', []) or []
+    d.pop('bsCoaches', None)  # BS-only real head coaches; stock BBGM has no coaches
     active = {t['tid'] for t in d['teams'] if not t.get('disabled') and 0 <= t['tid'] < 30}
 
     # 1. Records back to 0-0.
