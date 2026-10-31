@@ -627,12 +627,32 @@ export function createLiveCoachEngine(
       state.awaitingXpChoice = true;
       // Don't do XP or kickoff yet — wait for user's call
     } else {
-      // Opponent scored — auto-pick XP
-      const k = offKey().k;
-      const epGood = Math.random() < 0.95;
-      if (epGood) addScore(1);
-      bump(k, { extraPointAttempts: 1, extraPointsMade: epGood ? 1 : 0 });
-      events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
+      // Opponent (CPU) scored — decide XP vs 2-point conversion using the same
+      // situational logic as the full sim (playByPlay.ts). Previously the CPU
+      // always kicked the XP on this path, so it never went for 2 when trailing
+      // late (fishyboi0707 bug, Oct 30: CPU down 8 kicked XP with ~30s left).
+      const scoreDiffAfterTD = state.possession === 'home'
+        ? state.homeScore - state.awayScore
+        : state.awayScore - state.homeScore;
+      // Go for 2 when: down by 2 (ties it), down by 5 (makes it 3), down by 8+
+      // late, or up by 1 late (go up 3).
+      const goFor2 = scoreDiffAfterTD === -2 || scoreDiffAfterTD === -5 ||
+        (scoreDiffAfterTD <= -8 && state.quarter >= 4) ||
+        (scoreDiffAfterTD === 1 && state.quarter >= 4 && state.timeSecs <= 300);
+      if (goFor2) {
+        const twoPointSuccess = Math.random() < 0.48; // NFL average ~48%
+        if (twoPointSuccess) addScore(2);
+        const abbr = state.possession === 'home' ? homeTeam.abbreviation : awayTeam.abbreviation;
+        events.push(makeEvent('extra_point', twoPointSuccess
+          ? `Two-point conversion is GOOD! ${abbr} goes for two and gets it!`
+          : `Two-point conversion FAILS. ${abbr} comes up short.`, 0, false));
+      } else {
+        const k = offKey().k;
+        const epGood = Math.random() < 0.95;
+        if (epGood) addScore(1);
+        bump(k, { extraPointAttempts: 1, extraPointsMade: epGood ? 1 : 0 });
+        events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
+      }
       doKickoffEvents(events);
     }
   }

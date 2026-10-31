@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { listLeagues, deleteLeague, renameLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
@@ -61,6 +61,35 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
   async function handleWatchLive() {
     const res = await watchNextUserGame();
     if (res) setWatching({ userGameId: res.userGameId, dayGameIds: res.dayGameIds });
+  }
+
+  // God Mode "Force Win / Force Loss". Each click forces one game, re-renders
+  // the whole dashboard and saves the league; spam-clicking stacked those up
+  // (69 rage clicks/week). Paint a busy state first, ignore clicks while one is
+  // in flight, and hold the lock briefly so clicks queued during the work land
+  // on a disabled button instead of forcing extra games.
+  const forcingRef = useRef(false);
+  const [forcing, setForcing] = useState<'win' | 'loss' | null>(null);
+  async function handleForceGame(win: boolean) {
+    if (forcingRef.current) return;
+    forcingRef.current = true;
+    setForcing(win ? 'win' : 'loss');
+    const started = Date.now();
+    try {
+      // Let the busy state paint before the synchronous work starts.
+      await new Promise<void>(resolve => {
+        let done = false;
+        const finish = () => { if (!done) { done = true; resolve(); } };
+        requestAnimationFrame(() => setTimeout(finish, 0));
+        setTimeout(finish, 150);
+      });
+      await useLeagueStore.getState().forceUserGame(win);
+    } finally {
+      const left = 500 - (Date.now() - started);
+      if (left > 0) await new Promise(r => setTimeout(r, left));
+      forcingRef.current = false;
+      setForcing(null);
+    }
   }
   const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
   const saveIds = useMemo(() => saves.map(s => s.id), [saves]);
@@ -302,8 +331,14 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
                 <span className="font-bold" style={{ color: 'var(--accent)' }}>🛠️ God Mode</span>
                 <span className="text-[var(--text-sec)]">Force your next game:</span>
-                <button onClick={() => void useLeagueStore.getState().forceUserGame(true)} className="rounded-md px-2.5 py-1 text-xs font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>Force Win</button>
-                <button onClick={() => void useLeagueStore.getState().forceUserGame(false)} className="rounded-md px-2.5 py-1 text-xs font-bold border" style={{ borderColor: 'var(--border)' }}>Force Loss</button>
+                <button onClick={() => void handleForceGame(true)} disabled={!!forcing} aria-busy={forcing === 'win' || undefined} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 disabled:cursor-progress" style={{ background: 'var(--accent)', color: '#fff' }}>
+                  {forcing === 'win' && <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+                  Force Win
+                </button>
+                <button onClick={() => void handleForceGame(false)} disabled={!!forcing} aria-busy={forcing === 'loss' || undefined} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold border disabled:opacity-60 disabled:cursor-progress" style={{ borderColor: 'var(--border)' }}>
+                  {forcing === 'loss' && <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+                  Force Loss
+                </button>
               </div>
             )}
             <InjuryReport league={league} team={userTeam as BasketballTeam} />

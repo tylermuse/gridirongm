@@ -7,6 +7,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { coarseOvrBucket } from '@bs/core/billing';
 import { PlayerModal } from '@/components/game/PlayerModal';
+import { OfferSalaryInput } from '@/components/game/OfferSalaryInput';
 import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { SpectatorBanner } from '@/components/game/SpectatorBanner';
@@ -174,14 +175,23 @@ export default function FreeAgencyPage() {
   const [retiredError, setRetiredError] = useState<string | null>(null);
   const msgFeedRef = useRef<HTMLDivElement>(null);
   // The negotiation panel renders above the FA table, so clicking Negotiate on a
-  // player further down opened it off-screen and read as a dead click.
+  // player further down opened it off-screen and read as a dead click. Every
+  // Negotiate click (even for the player already in talks) bumps this nonce:
+  // bring the panel into view and pulse it so the click visibly lands.
   const negotiationPanelRef = useRef<HTMLDivElement>(null);
-  const negotiationPlayerId = negotiation?.playerId;
+  const [negotiationNonce, setNegotiationNonce] = useState(0);
   useEffect(() => {
-    if (!negotiationPlayerId) return;
+    if (!negotiationNonce) return;
     const el = negotiationPanelRef.current;
-    if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [negotiationPlayerId]);
+    if (!el) return;
+    if (el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('ring-2', 'ring-blue-500');
+    const t = setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500'), 900);
+    return () => {
+      clearTimeout(t);
+      el.classList.remove('ring-2', 'ring-blue-500');
+    };
+  }, [negotiationNonce]);
 
   // Auto-initialize pursuitState for existing saves that entered FA before
   // this feature was added. Per-tier allocation: free=3, premium=9,
@@ -381,6 +391,13 @@ export default function FreeAgencyPage() {
 
   function startNegotiation(player: typeof agents[0]) {
     if (faRefusals.includes(player.id)) return;
+    // Switching players mid-talks is the same as ✕ then Negotiate. A player who
+    // already rejected you still walks (normally done by the 2s auto-dismiss).
+    if (negotiation?.outcome === 'rejected') {
+      const rejectedId = negotiation.playerId;
+      setWalkedAwayIds(prev => new Set(prev).add(rejectedId));
+    }
+    setNegotiationNonce(n => n + 1);
     const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci, player.subPosition);
     const salary = Math.round(baseSal * decay * 10) / 10;
     const hasIntel = !!effectivePursuitState?.intelReports[player.id];
@@ -417,8 +434,9 @@ export default function FreeAgencyPage() {
         });
         return;
       }
-      // Auto-dismiss after a brief moment so the user sees the confirmation
-      setTimeout(() => setNegotiation(null), 1500);
+      // Auto-dismiss after a brief moment so the user sees the confirmation —
+      // unless they've already moved on to talks with someone else.
+      setTimeout(() => setNegotiation(n => (n?.playerId === updated.playerId ? null : n)), 1500);
     }
   }
 
@@ -700,7 +718,7 @@ export default function FreeAgencyPage() {
 
             {/* Negotiation panel */}
             {negotiation && (
-              <div ref={negotiationPanelRef} className="scroll-mt-20">
+              <div ref={negotiationPanelRef} className="scroll-mt-20 rounded-xl transition-shadow">
               <Card>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -779,50 +797,13 @@ export default function FreeAgencyPage() {
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <div className="relative">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-sec)]">$</span>
-                                <input
-                                  type="number"
-                                  min={LEAGUE_MINIMUM_SALARY}
-                                  max={Math.max(negotiation.askingSalary * 2, 5)}
-                                  step={0.1}
-                                  value={offerSalary}
-                                  onChange={e => {
-                                    const val = parseFloat(e.target.value);
-                                    if (!isNaN(val)) setOfferSalary(Math.round(val * 10) / 10);
-                                  }}
-                                  className="w-28 pl-6 pr-2 py-1.5 text-sm font-mono font-bold bg-[var(--surface)] border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                />
-                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-sec)]">M/yr</span>
-                              </div>
-                              <div className="flex gap-1">
-                                <button
-                                  onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 0.85 * 10) / 10)}
-                                  className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-                                >
-                                  85%
-                                </button>
-                                <button
-                                  onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 0.95 * 10) / 10)}
-                                  className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-                                >
-                                  95%
-                                </button>
-                                <button
-                                  onClick={() => setOfferSalary(negotiation.askingSalary)}
-                                  className="px-2 py-1 text-[10px] rounded bg-amber-100 text-amber-700 font-medium hover:bg-amber-200 transition-colors"
-                                >
-                                  Match
-                                </button>
-                                <button
-                                  onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 1.1 * 10) / 10)}
-                                  className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-                                >
-                                  110%
-                                </button>
-                              </div>
-                            </div>
+                            <OfferSalaryInput
+                              askingSalary={negotiation.askingSalary}
+                              value={offerSalary}
+                              onChange={setOfferSalary}
+                              minSalary={LEAGUE_MINIMUM_SALARY}
+                              maxSalary={Math.max(negotiation.askingSalary * 2, 5)}
+                            />
                             <div className="text-[10px] text-[var(--text-sec)]">
                               Asking: <span className="text-amber-600 font-medium">${Math.round(negotiation.askingSalary * 10) / 10}M/yr</span>
                             </div>
@@ -952,7 +933,12 @@ export default function FreeAgencyPage() {
                             <span className="text-[var(--text-sec)] text-xs">🔒</span>
                           )}
                         </td>
-                        <td className="py-2.5 text-right pr-2" onClick={e => e.stopPropagation()}>
+                        {/* No stopPropagation on the cell itself: the padding around
+                            the button used to swallow clicks while inheriting the
+                            row's pointer cursor, so the tracker logged them as dead
+                            "Negotiate" clicks. Only the button is shielded now; the
+                            rest of the cell expands the row like the rest of it. */}
+                        <td className="py-2.5 text-right pr-2">
                           {isRefused ? (
                             <span
                               className="inline-block px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded cursor-help"
@@ -965,15 +951,15 @@ export default function FreeAgencyPage() {
                               Refuses
                             </span>
                           ) : (
-                            <div className="flex items-center gap-1 justify-end">
-                              <Button
-                                size="sm"
-                                disabled={!!negotiation && negotiation.outcome === 'pending'}
-                                onClick={() => startNegotiation(p)}
-                              >
+                            // Was disabled while another negotiation was pending, but
+                            // Button's disabled style is pointer-events:none, so the
+                            // click fell through to the cell and did nothing (73 dead
+                            // clicks/week). Now it switches the talks to this player.
+                            <span className="inline-flex" onClick={e => e.stopPropagation()}>
+                              <Button size="sm" onClick={() => startNegotiation(p)}>
                                 Negotiate
                               </Button>
-                            </div>
+                            </span>
                           )}
                         </td>
                       </tr>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -144,7 +144,8 @@ export default function ExpansionPage() {
       cancelExpansionDraft();
 
       setStep('redirect');
-      window.location.href = '/';
+      // Autosaves are coalesced, so land the takeover before the hard navigation.
+      void flushToStorage().finally(() => { window.location.href = '/'; });
     } catch (outerErr) {
       outerThrew = true;
       console.error('[expansion-takeover] outer throw escaped handler:', outerErr);
@@ -508,7 +509,7 @@ export default function ExpansionPage() {
               })}
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={() => { cancelExpansionDraft(); window.location.href = '/'; }}>
+                <Button onClick={() => { cancelExpansionDraft(); void flushToStorage().finally(() => { window.location.href = '/'; }); }}>
                   Continue to Season
                 </Button>
                 {expansionDraft.expansionTeamIds.map(expId => {

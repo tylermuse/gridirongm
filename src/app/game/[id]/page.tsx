@@ -3,7 +3,7 @@
 import { use, useRef, useEffect, useState, useCallback, useMemo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/store';
+import { useGameStore, flushToStorage, flushPendingSave } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -1660,14 +1660,45 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinished, committed]);
 
-  // Safety net: write recovery snapshot if tab closes during/after game
+  // Safety net: write any queued autosave if the tab closes during/after game
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      flushToStorageSync();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('beforeunload', flushPendingSave);
+    return () => window.removeEventListener('beforeunload', flushPendingSave);
   }, []);
+
+  // "Continue →" on the Game Over banner. It used to await a full
+  // flushToStorage() (stringify the whole league + IndexedDB write — the
+  // auto-commit above already started one) before router.push, with no
+  // feedback: >1s of nothing on big saves/slow phones (123 dead clicks/week),
+  // and if the write rejected the push never ran at all. Now: spinner
+  // immediately, a capped wait on the flush, and navigation regardless.
+  const continueHref = isPlayoffGame ? '/playoffs' : '/';
+  const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
+  useEffect(() => {
+    if (isFinished) router.prefetch(continueHref);
+  }, [isFinished, continueHref, router]);
+  const handleContinue = useCallback(async () => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    try {
+      await Promise.race([
+        flushToStorage(),
+        new Promise<void>(resolve => setTimeout(resolve, 2500)),
+      ]);
+    } catch (err) {
+      // The in-memory store already has the result; the persist middleware
+      // retries on the next change. Don't strand the user on this page.
+      console.error('[Continue] flushToStorage failed:', err);
+    }
+    router.push(continueHref);
+    // If the navigation stalls, give the button back after a while.
+    setTimeout(() => {
+      leavingRef.current = false;
+      setLeaving(false);
+    }, 8000);
+  }, [continueHref, router]);
 
   // Guard conditions
   if (phase !== 'regular' && phase !== 'playoffs') {
@@ -1963,7 +1994,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   <Button
                     variant="primary"
                     size="md"
-                    onClick={async () => { await flushToStorage(); router.push(isPlayoffGame ? '/playoffs' : '/'); }}
+                    busy={leaving}
+                    onClick={handleContinue}
                   >
                     Continue →
                   </Button>

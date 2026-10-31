@@ -1800,6 +1800,300 @@ export const blogPosts: BlogPost[] = [
 <p>Ready to run a front office? <a href="/">Play BS Football free in your browser</a> and manage the cap your way.</p>
 `,
   },
+  // ─── owner-approval-explained ───
+  {
+    slug: "owner-approval-explained",
+    title: "Owner Approval Explained: How to Keep Your GM Job in BS Football",
+    seoTitle: "Owner Approval & Objectives Explained — How to Avoid Getting Fired",
+    metaDescription:
+      "How owner objectives are set, how approval moves after every game and season, and exactly where the firing line is in BS Football — with the real numbers.",
+    keywords: [
+      "owner approval football gm",
+      "gm fired football management game",
+      "owner objectives bs football",
+    ],
+    publishDate: "2026-11-04",
+    category: "strategy",
+    readingTime: 7,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "Why Your Football GM Rebuild Keeps Failing", href: "/blog/football-gm-rebuild-tips" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+      { label: "Advanced Salary Cap Management", href: "/blog/advanced-cap-management" },
+      { label: "Trade Deadline Strategy", href: "/blog/trade-deadline-strategy" },
+    ],
+    content: `
+<p>Every GM in BS Football reports to an owner, and every owner keeps score. Most players only notice the approval meter when it turns red and a warning lands in their inbox. By then the math has already been working against them for a season or two. This guide explains how objectives are assigned, how approval actually moves, and where the firing line sits — so you can manage your job security the same way you manage your cap.</p>
+
+<h2>How Your Objectives Are Set</h2>
+<p>At the start of every season the owner hands you two or three objectives. They are not random. The game looks at the average overall rating of your top 22 players — your starters, not your whole 53-man roster — and at how last season ended, then sets a win target to match.</p>
+<ul>
+<li><strong>Elite roster (starter average 72+), or you just played in the championship game:</strong> the target is 10–12 wins.</li>
+<li><strong>Solid roster (64–71), or a divisional/conference playoff run last year:</strong> 7–9 wins.</li>
+<li><strong>Everyone else:</strong> 4–6 wins.</li>
+</ul>
+<p>A deep playoff run also inflates how good the owner <em>thinks</em> your roster is. A title adds the equivalent of about six rating points to that starter average when the targets are set, so a champion with an aging core is still expected to win big the following year. That is the trap a lot of back-to-back attempts fall into.</p>
+<p>Your owner's personality shifts the win target by one game. A <strong>win-now</strong> owner adds a win; a <strong>frugal</strong> owner subtracts one. You can see the personality on the staff page — it is worth knowing before you plan a season.</p>
+<p>The second objective depends on context. Very strong rosters (78+ starter average) or defending finalists get "win the championship." Good rosters get "reach the conference championship" or "make the playoffs." Bad teams coming off a missed postseason get a development goal instead: either "develop two players by 5+ overall" if you have at least two young high-potential players, or "draft and start a rookie" if you do not. And if you enter the season over the cap, a third objective appears automatically: get under it.</p>
+
+<h2>How Approval Moves During the Season</h2>
+<p>Owner approval nudges by one point per game — up for a win, down for a loss. Fan approval is louder: two points per game, four if it is a rivalry, with an extra two for a blowout in either direction. Fans react to roster moves too: trading away a star costs five fan points, bringing one in earns five, and a star free-agent signing earns four.</p>
+<p>The owner cares less about headlines and more about discipline. Going over the cap costs three owner points. A trade the game grades as lopsided against you costs four. Neither will get you fired on its own, but they compound with a bad season.</p>
+
+<h2>The End-of-Season Math</h2>
+<p>This is where tenure is really decided. At season's end, each objective is graded:</p>
+<ul>
+<li><strong>Completed:</strong> +10 owner, +5 fan.</li>
+<li><strong>Failed:</strong> −15 owner, −8 fan.</li>
+</ul>
+<p>Note the asymmetry — a failed objective costs more than a completed one earns. Two completed and one failed is only a net +5.</p>
+<p>Then the playoff result lands on top: a championship is +25 owner (and resets fan approval to 95), a runner-up finish is +10, any other playoff appearance is +5, and missing the playoffs is −5.</p>
+<p>Finances matter as well. A profit above $50M earns +3. Losses are punished on a sliding scale: worse than −$25M costs 5, worse than −$75M costs 10, and a catastrophe beyond −$150M costs 20. Winning still trumps money — a title outweighs any deficit — but a losing team that is also bleeding cash hits the floor fast.</p>
+<p>Finally, both meters regress 10% toward 50. Approval of 90 becomes 86; approval of 20 becomes 23. The game is gently pulling you back to the middle every year, which means a great season buys you less runway than you think, and a bad one is slightly more survivable than it looks.</p>
+
+<h2>Where the Firing Line Is</h2>
+<p>If owner approval finishes a season below 25, you get a formal warning. Finish below 25 again the next season and you are fired. Climb back to 40 or higher and the warning is cleared — you get a fresh slate.</p>
+<p>Work the numbers backward. Say you sit at 50, miss the playoffs (−5) and fail two objectives (−30): that is 15, warning issued. The following year you need to get back above 25 after regression. One completed objective (+10) and a wild-card appearance (+5) from 15 gets you to 30 before regression, then 32. You survive, barely. Fail everything again and you are done.</p>
+
+<h2>Practical Rules for Job Security</h2>
+<h3>Treat the win target as the real objective</h3>
+<p>The win objective is always present, and the swing between hitting it and missing it is 25 owner points. Nothing else you control reliably moves the needle that far. If you are two games short in Week 14, that is the moment to make a deal, not the week after.</p>
+<h3>Rebuild under a frugal owner if you can</h3>
+<p>A frugal owner lowers the win target by a game and does not expect a superteam. That is the owner you want when you are tearing a roster down. A win-now owner raises the bar and leaves you less margin.</p>
+<h3>Never enter a season over the cap</h3>
+<p>Being over the cap costs approval when it happens, adds a third objective you can fail, and signals to the owner that you cannot run the business. Clean it up in the offseason — the cap guide below covers the restructures and cuts that get you there.</p>
+<h3>Bank approval in good years</h3>
+<p>A title season can push owner approval into the 90s. Because of regression, you will drift back toward the middle, but that cushion is what lets you take a step back for a retool without a warning. Spend it deliberately.</p>
+<h3>Do not panic-trade</h3>
+<p>A lopsided trade costs four owner points on its own, and the fan base will punish you for moving a star. Two or three reactive moves in a bad year can turn a warning season into a firing.</p>
+
+<h2>The Bottom Line</h2>
+<p>Owner approval in BS Football is a deterministic system, not a mood ring. Objectives come from your starter quality and last season's result, adjusted for owner personality. Completed objectives earn less than failed ones cost, playoff results and profit stack on top, everything regresses toward 50, and two straight seasons under 25 ends your tenure. Plan a season with those numbers in front of you and you will rarely be surprised by the owner.</p>
+<p>Think you can keep the job? <a href="/">Play BS Football free in your browser</a> and find out.</p>
+`,
+  },
+  // ─── player-mood-and-resigning ───
+  {
+    slug: "player-mood-and-resigning",
+    title: "Player Mood and Re-Signing: Why Your Best Player Won't Take Your Money",
+    seoTitle: "Player Mood & Re-Signing Guide — Discounts, Holdouts, Franchise Tag",
+    metaDescription:
+      "What moves player mood in BS Football, how it changes asking prices, when a player walks, and how the franchise tag is priced — with the actual multipliers.",
+    keywords: [
+      "re-signing players football gm",
+      "player mood football management game",
+      "franchise tag strategy bs football",
+    ],
+    publishDate: "2026-11-11",
+    category: "salary-cap",
+    readingTime: 8,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "Free Agency Strategy", href: "/blog/free-agency-strategy" },
+      { label: "Advanced Salary Cap Management", href: "/blog/advanced-cap-management" },
+      { label: "Building Around a Rookie-Contract Quarterback", href: "/blog/rookie-quarterback-window" },
+      { label: "Owner Approval Explained", href: "/blog/owner-approval-explained" },
+    ],
+    content: `
+<p>You offered your Pro Bowl edge rusher the exact number on his card and he told you he wanted to "see what the market has to offer." That is not bad luck. Re-signing in BS Football runs on a mood system that has been quietly tracking every week of the season, and by the time you open the re-sign screen the price and the odds are already set. Here is how it works and how to use it.</p>
+
+<h2>What Moves Player Mood</h2>
+<p>Every player carries a mood score from 0 to 100, starting around 70. It updates each week based on a handful of things, and they stack:</p>
+<ul>
+<li><strong>Team record:</strong> a winning percentage of .600 or better adds a point; .350 or worse costs two. Losing hurts more than winning helps.</li>
+<li><strong>Role:</strong> starters gain a point a week. Backups are neutral. Players buried third or deeper on the depth chart lose a point.</li>
+<li><strong>Pay:</strong> a player earning less than 70% of his market value loses a point a week. Cheap veterans on bargain deals get unhappy on their own.</li>
+<li><strong>Streaks and rivalries:</strong> a three-game winning streak adds a point and a three-game skid costs one. Beating a rival lifts the whole locker room; losing to one — especially a blowout — stings.</li>
+</ul>
+<p>Over a 17-game season, a buried, underpaid player on a losing team can shed 60 or more points. A starter on a winner drifts upward. Sustained discontent eventually produces a formal trade request, which also makes the player more attractive to AI offers.</p>
+
+<h2>How Mood Sets the Asking Price</h2>
+<p>When a contract expires, the asking price starts from the player's market value and gets multiplied:</p>
+<ul>
+<li>Mood below 30: <strong>+15%</strong>. Mood 30–39: <strong>+8%</strong>.</li>
+<li>Mood below 20: the player <strong>refuses to re-sign at any price</strong>. He will only take a one-year deal to test the market.</li>
+<li>Team record: a losing team (under .400) pays a 10% premium; a winning team (over .650) gets a 5% hometown discount.</li>
+<li>Age 32 and up: a 10% discount. Older players accept a little less, not a lot.</li>
+</ul>
+<p>Asking years come from age: 34+ wants two years, 32–33 wants three, 30–31 wants three or four, and younger players want longer. Players want security, which is exactly what makes the one-year franchise tag a real trade-off rather than a free option.</p>
+
+<h2>Inside the Negotiation</h2>
+<p>Once you sit down, you have a limited number of rounds and the player has limited patience. A content player (mood 70+) gives you three or four rounds. Mood under 50 gets you two or three; under 30 gets you two. An extension negotiated mid-contract is friendlier — the player is not going anywhere yet, so you get more rounds.</p>
+<p>Three "priority" discounts apply if they fit the player's stated motivation: ring-chasers take 6% less from a team at .550 or better, role-seekers take 5% less if they would start, and loyal players take 8% less to return to their own team. A Premium Intel Report knocks another 12% off the asking price and adds a round of patience, which is the single biggest lever in the system.</p>
+<p>The part that surprises people: a strong offer is not an automatic yes. A content player who is offered at or above his asking price will, about 8% of the time, hold out for a small sweetener — a little more term or roughly a 5% bump. He is not unhappy, just savvy. Pay the bump and he signs. Unhappy players want that bump every time, even at full asking price.</p>
+<p>Lowballing is where deals die. After the first round, any offer that leaves the player under 95% satisfied carries a walkaway chance: 6% baseline for a content player, 15% if he is unhappy, 25% if he is angry. Add 8% if he is an 80+ overall, 4% for 70–79, another 8% once you are into a third round, and 12% more if your offer was under 80% of his ask. A frustrated star in round three with a cheap offer on the table is walking more often than not.</p>
+
+<h2>The Franchise Tag, Priced</h2>
+<p>The tag is a guaranteed one-year deal. For a true star (85+ overall) it costs the average of the top five salaries at his position — or his market value plus 10%, whichever is higher. For a 75–84 player it blends between market value and that positional average. Below that, the tag is capped near market value with a small premium, so you will never see a backup command a star's tag number.</p>
+<p>Use it when the negotiation odds are against you: an elite player with sagging mood on a team coming off a losing year. The tag skips the walkaway roll entirely. The cost is one year of certainty at a premium and a player who still wants a long-term deal next spring. AI teams use it the same way — on their best expiring player rated 70 or better.</p>
+
+<h2>Managing Mood Before It Costs You</h2>
+<h3>Fix the depth chart in September, not March</h3>
+<p>A good player stuck at third string loses a point every week. If a contract is expiring and the player is clearly a starter-caliber talent, start him or trade him. Letting him rot on the bench guarantees a premium or a refusal at re-sign time.</p>
+<h3>Extend ascending players before they outgrow their deals</h3>
+<p>The moment a player's salary drops under 70% of his market value, he starts losing mood every week. An early extension costs cap room now but keeps the mood meter — and the eventual price — under control. Extensions also get the friendlier negotiation rules.</p>
+<h3>Win, or at least avoid collapse</h3>
+<p>The record effects are lopsided: .350 costs twice what .600 earns. A tanking season does not just cost you draft position math; it also makes every expiring contract more expensive and every star more likely to walk.</p>
+<h3>Check the mood before you open talks</h3>
+<p>If the number is under 20, do not waste the rounds — tag him or trade him. Under 40, buy the Intel Report or accept the premium. Over 85, you have a 5% discount coming; do not overpay out of habit.</p>
+
+<h2>The Bottom Line</h2>
+<p>Re-signing in BS Football is decided during the season, not at the table. Mood is built from record, role, pay and streaks; it sets the asking price, the number of rounds you get, and the odds the player walks. Keep your expiring players starting and fairly paid, use the Intel Report and priority discounts when they fit, reserve the franchise tag for the stars you cannot afford to lose to a bad roll, and never lowball a star past round two.</p>
+<p>Ready to run a front office? <a href="/">Play BS Football free in your browser</a>.</p>
+`,
+  },
+  // ─── coaching-staff-guide ───
+  {
+    slug: "coaching-staff-guide",
+    title: "Coaching Staff Guide: Scheme Fit, Position Coaches, and When to Fire",
+    seoTitle: "Coaching Staff Guide — Scheme Fit, Development Bonuses & Firing Costs",
+    metaDescription:
+      "How coaches affect team strength and player development in BS Football, what each scheme wants from your roster, and what firing a coach really costs.",
+    keywords: [
+      "football gm coaching staff",
+      "scheme fit football management game",
+      "hire fire coaches bs football",
+    ],
+    publishDate: "2026-11-18",
+    category: "strategy",
+    readingTime: 8,
+    schema: "Article",
+    internalLinks: [
+      { label: "Game Planning 101", href: "/blog/game-planning-scheme" },
+      { label: "Player Development Guide", href: "/blog/player-development-guide" },
+      { label: "Finding Late-Round Steals", href: "/blog/late-round-draft-steals" },
+      { label: "Owner Approval Explained", href: "/blog/owner-approval-explained" },
+    ],
+    content: `
+<p>Your coaching staff is the most underused screen in BS Football. Most GMs glance at it once, see a head coach with a decent rating, and never return. But coaches change how strong your team plays every Sunday, how fast your young players grow, and how much cap room you have to spend — and the mechanics behind all three are specific enough to plan around.</p>
+
+<h2>What a Coaching Staff Does</h2>
+<p>You carry a head coach, an offensive coordinator, a defensive coordinator, and position coaches for the quarterbacks, running backs, receivers, offensive line, defensive line, and defensive backs. Each has an overall rating, a personality, two or three specialties, a scheme, and a contract.</p>
+<p>Two things flow from that staff into the simulation.</p>
+<h3>Team strength</h3>
+<p>The average rating of your coaches adds directly to your team's power rating. A staff averaging 50 adds nothing; a staff averaging 80 adds about three points. That sounds small, but it is the equivalent of upgrading several starters, and it applies to every game you play.</p>
+<p>On top of that, each player is graded for how well he fits your coordinators' schemes: a great fit is worth +2, a poor fit −1, and the roster-wide average (scaled by 0.8) is added to team power. A roster built for your scheme is worth roughly half a point to a full point. A roster fighting its scheme can cost you that much.</p>
+<h3>Player development</h3>
+<p>Position coaches drive progression. A player's development rate is multiplied by a factor from 0.90 to 1.15 depending on his position coach's rating: a 40-rated coach is a 10% drag, a 65 is neutral, a 90 is a 15% boost. An empty position-coach slot is the same as a terrible one — a 10% penalty for every player at that position. If you are rebuilding through the draft and have an unfilled or weak coach at the position you just spent three picks on, you are leaving development on the table.</p>
+
+<h2>Scheme Fit: What Each System Wants</h2>
+<p>Your OC runs one of five offensive schemes and your DC one of five defensive schemes. Fit is graded against the traits that matter to each. In practice, roughly 20–30% of a roster grades as a great fit and 5–15% as poor, so most players land neutral — the goal is to move your starters into the great column.</p>
+<p><strong>Offense</strong></p>
+<ul>
+<li><strong>Spread:</strong> an accurate quarterback, fast receivers, a receiving tight end.</li>
+<li><strong>West Coast:</strong> a smart, accurate quarterback, route-running receivers, a receiving back.</li>
+<li><strong>Power Run:</strong> a strong back, mauling linemen, a blocking tight end.</li>
+<li><strong>Air Raid:</strong> a big arm, speed at receiver, pass-protecting linemen.</li>
+<li><strong>RPO:</strong> an athletic quarterback, an agile back, route-running receivers, versatile linemen.</li>
+</ul>
+<p><strong>Defense</strong></p>
+<ul>
+<li><strong>Man Press:</strong> fast, physical corners, coverage safeties, pass-rushing linemen.</li>
+<li><strong>Cover 3:</strong> zone corners, rangy safeties, zone linebackers.</li>
+<li><strong>Tampa 2, 3-4 Blitz, Zone Blitz:</strong> each leans on its own mix of linebacker range, interior pressure, and disguise — check the fit labels on the staff page after a hire.</li>
+</ul>
+<p>Scheme fit also shows up in trade evaluation: when you shop for players, a great fit adds 20 points to a target's score and a poor fit subtracts 10, so the trade finder will naturally surface players who match your coordinators. Use it.</p>
+
+<h2>What Coaches Cost</h2>
+<p>Head coaches and coordinators sign three- to five-year deals. An 80+ rated coordinator or head coach earns $8–12M a year; a 60–79 earns $4–7M; below that, $2–4M. Position coaches are cheap by comparison — one- to three-year deals at $0.5M to $3M depending on quality.</p>
+<p>Here is the part that matters when you want to make a change: roughly 60% of a coach's remaining contract is guaranteed. Fire him early and that guaranteed money hits your books as dead cap, paid out as a lump sum. Firing a $10M head coach with four years left is a $24M charge. Firing a $2M position coach with two years left is $2.4M. Owners notice — a money-losing season erodes owner approval — and so does your cap sheet.</p>
+
+<h2>When to Fire, When to Keep</h2>
+<h3>Fire coordinators whose scheme fights your roster</h3>
+<p>If your franchise quarterback is an accurate, cerebral passer and your OC is running Air Raid, you are paying a fit penalty on your most important player every week. Changing the coordinator is cheaper than changing the quarterback.</p>
+<h3>Upgrade position coaches aggressively</h3>
+<p>They are the cheapest contracts on the staff and they compound. A 15% development swing on a rookie class, every year, is worth far more than the $1–2M difference between an average and a great position coach. Never leave a slot empty.</p>
+<h3>Be careful with early head-coach firings</h3>
+<p>The dead money on a long head-coach deal is real. If the coach is mediocre but the contract is short, letting it expire is usually better than eating 60% of it. If he is actively bad and you have four years left, bite the bullet — but do it in an offseason when you can absorb the charge.</p>
+<h3>Promote from within when it fits</h3>
+<p>You can promote a coordinator to head coach. The salary lands midway between his current pay and the market for the new role, which is often cheaper than hiring an outside candidate at full price — and his scheme comes with him, so your roster fit does not reset.</p>
+<h3>Read the owner's personality</h3>
+<p>The staff page shows your owner's personality. A win-now owner expects contention every year and fires quickly; a frugal one will not love a $12M head coach. Match your staff spending to the owner you have.</p>
+
+<h2>A Simple Staff-Building Order</h2>
+<ol>
+<li>Fill every position-coach slot. Empty slots are a 10% development penalty.</li>
+<li>Pick coordinators whose schemes match your quarterback and your best defensive talent — not the other way around.</li>
+<li>Spend on the head coach last. The rating bonus is real, but it is the most expensive contract to get wrong.</li>
+<li>Use scheme fit in the trade finder to move the rest of the roster toward the system you chose.</li>
+</ol>
+
+<h2>The Bottom Line</h2>
+<p>Coaches in BS Football add up to three points of team strength through rating, up to a point more through scheme fit, and swing player development by 25% from worst to best at each position. Their contracts are 60% guaranteed, so firing early has a price. Build the staff around your quarterback, never leave a position-coach slot empty, and let scheme fit guide your trades.</p>
+<p>Build a staff you believe in — <a href="/">play BS Football free in your browser</a>.</p>
+`,
+  },
+  // ─── expansion-franchise-guide ───
+  {
+    slug: "expansion-franchise-guide",
+    title: "Expansion Franchise Guide: Surviving Year One With a 32nd Team",
+    seoTitle: "Expansion Franchise Guide — How the Expansion Draft Works in BS Football",
+    metaDescription:
+      "Start a new franchise from scratch in BS Football. How protection lists and the expansion draft work, what your year-one roster really looks like, and a three-year plan.",
+    keywords: [
+      "expansion team football gm",
+      "expansion draft football management game",
+      "start new franchise bs football",
+    ],
+    publishDate: "2026-11-25",
+    category: "strategy",
+    readingTime: 8,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "Why Your Football GM Rebuild Keeps Failing", href: "/blog/football-gm-rebuild-tips" },
+      { label: "Draft Strategy Guide", href: "/blog/draft-strategy-guide" },
+      { label: "Free Agency Strategy", href: "/blog/free-agency-strategy" },
+      { label: "Coaching Staff Guide", href: "/blog/coaching-staff-guide" },
+      { label: "Owner Approval Explained", href: "/blog/owner-approval-explained" },
+    ],
+    content: `
+<p>Taking over an existing franchise means inheriting someone else's contracts, someone else's quarterback, and someone else's mistakes. Starting an expansion team means inheriting nothing — a $300M cap with $0 on it, three years of draft picks, and a roster assembled from what 30 other teams were willing to leave unprotected. It is the purest rebuild in BS Football, and it rewards GMs who understand how the expansion draft actually works.</p>
+
+<h2>When and How Expansion Happens</h2>
+<p>Expansion is only available during the offseason — the re-signing, free agency, draft, or general offseason phases. You pick a city, name, colors, conference and division, and you can add one team or two. Once the new franchise exists, you choose whether to keep running your current team or take over the expansion club.</p>
+<p>The new team starts with a full, freshly generated coaching staff, a complete set of draft picks (all seven rounds for each of the next three drafts), default owner and fan approval, and an empty roster that the expansion draft fills.</p>
+
+<h2>Protection Lists</h2>
+<p>Before the draft, every existing team protects part of its roster. The protection limit depends on roster size: 15 players if the roster is larger than 45, 12 if it is larger than 40, otherwise 10. For a standard 53-man roster, that is 15 protected and 38 exposed.</p>
+<p>AI teams protect automatically, and the rule they use tells you exactly who will be available. They sort by overall rating, with two thumbs on the scale: quarterbacks get an enormous bonus (effectively always protected), and players 26 and under get a five-point bump. So the exposed pool is tilted toward <strong>older players and non-quarterbacks</strong>. If you are running an existing team when expansion happens, you set your own list — and that same logic applies to what you should keep.</p>
+
+<h2>How the Expansion Draft Picks</h2>
+<p>The expansion team takes exactly one player from every existing team — one per team, no doubling up. For each team, the draft looks at that club's unprotected players and ranks them by overall, with a 10-point boost for any position where the expansion roster is still under its minimum. It then picks from the top three with weighted odds: the best available is chosen most often, but the second and third get real chances. You do not always get the best exposed player on each roster.</p>
+<p>If two expansion teams are added, the second one drafts in reverse team order so neither club gets all the best leftovers.</p>
+<p>After the draft, any position still below its roster minimum is filled with generated players, and the roster is padded to 53 with more of them. These filler players are rated 55–62 overall, aged 24 to 28, with one to four years of experience. They are replacement-level by design.</p>
+
+<h2>What Your Year-One Roster Really Looks Like</h2>
+<p>Do the math. About 30 of your 53 players are each the best (or second- or third-best) unprotected player from a different team — typically veterans in the 60s and low 70s, because anything better and younger was protected. The remaining 20-plus are 55–62 fillers. Your quarterback is almost certainly a backup somewhere else last year, because starting quarterbacks are never exposed.</p>
+<p>That is a roster whose top-22 starter average is likely in the low 60s, which means your owner will set a win target of 4–6 games and hand you a development objective — probably "draft and start a rookie," since you will not have two high-potential young players yet. Those are achievable goals. Hit them and you bank approval while the real roster is being built.</p>
+
+<h2>Your Real Asset: $300M of Cap Space</h2>
+<p>The drafted veterans bring their existing contracts, and the fillers are cheap, so you will enter free agency with more room than any team in the league. This is your weapon, and there are two ways to use it.</p>
+<h3>Buy a quarterback and a few cornerstones</h3>
+<p>Free agency prices rise for losing teams (a 10% premium on re-signs for sub-.400 clubs) but a brand-new franchise has no record yet. Spend on the one or two positions that matter most — quarterback first, then an edge rusher or a cornerback — and accept that the rest of the roster is a placeholder.</p>
+<h3>Absorb bad contracts for picks</h3>
+<p>Teams over the cap will pay in draft capital to move money. With $200M-plus of room, you can take on a contract nobody wants and collect the pick that comes with it. Your year-one win total does not matter much; your 2027 and 2028 draft hauls do.</p>
+
+<h2>A Three-Year Plan</h2>
+<h3>Year one: survive and stockpile</h3>
+<p>Meet the 4–6 win target. Start a rookie to satisfy the development objective. Fill every position-coach slot — an empty slot is a 10% drag on development, and development is the whole point this year. Convert cap space into extra picks wherever you can. Do not extend any of the drafted veterans unless they are 26 or under.</p>
+<h3>Year two: draft the core</h3>
+<p>With your own first-rounder near the top of the board plus whatever you bought, this is the draft that decides the franchise. Take the quarterback if you did not buy one. Spend Deep Scouts on the picks that matter. Let the veterans from the expansion draft walk as their deals expire; they were never the plan.</p>
+<h3>Year three: contend for a playoff spot</h3>
+<p>By now the owner's win target will have climbed with your roster. That is fine — the cap room you preserved in years one and two is what lets you add two or three starters in one free-agency cycle and make the jump. Your young core is still cheap, which is the rookie-contract window every dynasty is built on.</p>
+
+<h2>Mistakes to Avoid</h2>
+<ul>
+<li><strong>Spending all the cap in year one.</strong> A 60-rated roster plus three expensive free agents is still a 63-rated roster, and now you have no room for the players you draft.</li>
+<li><strong>Paying the drafted veterans.</strong> They are older, non-quarterback, and were exposed for a reason. Let them go.</li>
+<li><strong>Ignoring the coaching staff.</strong> Your generated staff is random. Check the scheme your coordinators run before you draft or sign a quarterback, and upgrade position coaches early — they are cheap and they compound.</li>
+<li><strong>Chasing the win target with trades.</strong> Lopsided trades cost owner approval, and the owner already gave you a low bar. Hit it the honest way.</li>
+</ul>
+
+<h2>The Bottom Line</h2>
+<p>An expansion franchise in BS Football starts with one good-but-old player from every team, twenty replacement-level fillers, a backup quarterback, a full coaching staff, three drafts' worth of picks and a completely empty cap sheet. Everything about year one is designed to be survivable — low win target, development goals, no record to inflate prices. The GMs who struggle are the ones who try to win immediately. The ones who build something treat year one as a draft-capital accumulation exercise and year two as the real beginning.</p>
+<p>Ready to build from nothing? <a href="/">Play BS Football free in your browser</a> and launch a 32nd team.</p>
+`,
+  },
 ];
 
 export function getPublishedPosts(): BlogPost[] {

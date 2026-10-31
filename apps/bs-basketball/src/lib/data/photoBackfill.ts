@@ -14,7 +14,7 @@
  * circuits — so it's safe to run on every hydrate.
  */
 
-import type { BasketballLeagueState } from '@/lib/persistence/db';
+import type { BasketballLeagueState } from '../persistence/db';
 import type { BasketballPlayer } from '@bs/sport-basketball';
 
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
