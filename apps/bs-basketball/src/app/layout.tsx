@@ -22,6 +22,10 @@ const DESCRIPTION =
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.bs-basketball.com'),
+  // Google Search Console ownership token for tylermuse@gmail.com (URL-prefix property https://www.bs-basketball.com/).
+  verification: {
+    google: 'Do8MGt6TMbIBNT-ON76eVnGFQ_WWXe-JXs1cgtxZDYM',
+  },
   title: { default: 'BS Hoops — Free Basketball GM Game', template: '%s · BS Hoops' },
   description: DESCRIPTION,
   applicationName: 'BS Hoops',

@@ -104,44 +104,64 @@ export function SpotlightShowPoster({
         />
       )}
 
-      {/* Lower third: whose show this is. */}
+      {/* Lower third: whose show this is. Slimmer on phones, where the poster is
+          only ~190px tall; the overlays below center above it (pb-14), not under it. */}
       {teaser !== 'done' && (
         <div className="absolute left-3 right-3 bottom-3 sm:left-5 sm:bottom-5 sm:right-auto flex items-stretch overflow-hidden rounded-lg bg-white/95 shadow-md">
           <div className="w-1.5 shrink-0" style={{ background: team.primaryColor }} />
-          <div className="flex items-center gap-2.5 px-3 py-2">
-            <div className="h-9 w-9 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 px-2.5 py-1.5 sm:px-3 sm:py-2">
+            <div className="h-7 w-7 sm:h-9 sm:w-9 shrink-0">
               <ShowTeamLogo team={team} />
             </div>
             <div className="min-w-0">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Team Spotlight · {episodeLabel}</div>
-              <div className="truncate text-sm font-bold text-slate-900">{team.city} {team.name} <span className="font-semibold text-slate-500">· {record}</span></div>
+              <div className="truncate text-[10px] font-bold uppercase tracking-wider text-purple-700">Team Spotlight · {episodeLabel}</div>
+              <div className="truncate text-[13px] sm:text-sm font-bold text-slate-900">{team.city} {team.name} <span className="font-semibold text-slate-500">· {record}</span></div>
             </div>
           </div>
         </div>
       )}
 
+      {/* Out of episodes: the notice and the buy-a-pack button as one centered
+          stack (pinned separately, the pack button ran into the lower third on phones). */}
+      {teaser === 'off' && exhausted && !gated && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 pb-14 sm:pb-0 bg-black/10">
+          <span className="rounded-full bg-white/95 px-4 py-2 text-center text-sm font-semibold text-slate-600 shadow-lg">
+            Out of episodes this month · resets {resetLabel}
+          </span>
+          {EPISODE_PACK.priceId && (
+            <>
+              <button
+                onClick={() => void buyPack()}
+                disabled={buying === 'loading'}
+                className="rounded-full bg-purple-600 px-4 py-2 text-sm font-bold text-white shadow-lg hover:bg-purple-700 disabled:opacity-60 transition-colors"
+              >
+                {buying === 'loading' ? 'Opening checkout…' : `Get ${EPISODE_PACK.credits} more episodes · ${EPISODE_PACK.priceLabel}`}
+              </button>
+              {buying === 'error' && <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-red-700">Couldn&apos;t open checkout — try again</span>}
+              <span className="text-[11px] font-semibold text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">They never expire.</span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Play / state overlay */}
-      {teaser === 'off' && (
+      {teaser === 'off' && !(exhausted && !gated) && (
         <button
           onClick={player === 'error' ? onRetry : play}
-          disabled={access === 'checking' || busy || (exhausted && !gated)}
+          disabled={access === 'checking' || busy}
           aria-label={`Play Team Spotlight — ${team.city} ${team.name}`}
-          className="group absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/10 hover:bg-black/20 transition-colors disabled:cursor-default"
+          className="group absolute inset-0 flex flex-col items-center justify-center gap-2 pb-14 sm:pb-0 bg-black/10 hover:bg-black/20 transition-colors disabled:cursor-default"
         >
           {busy ? (
             <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-purple-700 shadow-lg">
               <span className="animate-pulse">📺</span> {player === 'loading' ? 'Producing your episode…' : 'Loading this week’s Spotlight…'}
             </span>
-          ) : exhausted && !gated ? (
-            <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-slate-600 shadow-lg">
-              Out of episodes this month · resets {resetLabel}
-            </span>
           ) : player === 'error' ? (
             <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-red-700 shadow-lg">⚠️ Couldn&apos;t produce the show — tap to retry</span>
           ) : (
             <>
-              <span className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-white/95 shadow-xl transition-transform group-hover:scale-105">
-                <svg viewBox="0 0 24 24" className="ml-1 h-8 w-8 sm:h-10 sm:w-10 fill-purple-600"><path d="M8 5v14l11-7z" /></svg>
+              <span className="flex h-14 w-14 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-white/95 shadow-xl transition-transform group-hover:scale-105">
+                <svg viewBox="0 0 24 24" className="ml-1 h-7 w-7 sm:h-10 sm:w-10 fill-purple-600"><path d="M8 5v14l11-7z" /></svg>
               </span>
               <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow">
                 {gated ? 'Watch the preview' : 'Watch your episode'}
@@ -149,21 +169,6 @@ export function SpotlightShowPoster({
             </>
           )}
         </button>
-      )}
-
-      {/* Out of episodes: buy a pack. Outside the (disabled) play button. */}
-      {teaser === 'off' && exhausted && !gated && EPISODE_PACK.priceId && (
-        <div className="absolute inset-x-0 bottom-[14%] flex flex-col items-center gap-1">
-          <button
-            onClick={e => { e.stopPropagation(); void buyPack(); }}
-            disabled={buying === 'loading'}
-            className="rounded-full bg-purple-600 px-4 py-2 text-sm font-bold text-white shadow-lg hover:bg-purple-700 disabled:opacity-60 transition-colors"
-          >
-            {buying === 'loading' ? 'Opening checkout…' : `Get ${EPISODE_PACK.credits} more episodes · ${EPISODE_PACK.priceLabel}`}
-          </button>
-          {buying === 'error' && <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-red-700">Couldn&apos;t open checkout — try again</span>}
-          <span className="text-[11px] font-semibold text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">They never expire.</span>
-        </div>
       )}
 
       {/* End of the teaser: the ask. */}
