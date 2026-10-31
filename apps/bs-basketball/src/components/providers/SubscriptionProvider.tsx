@@ -127,6 +127,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // If Supabase isn't configured, there's no auth to wait for — start loaded.
   // This avoids a synchronous setState inside the effect below.
   const [loading, setLoading] = useState<boolean>(() => supabase != null);
+  // Whose profile + subscription have been read. Until it's the signed-in
+  // user's, entitlement isn't known and podcastCredits is still the 0-left
+  // placeholder (the show read that as "Out of episodes", even for admins).
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   // Signup attribution: record this device's first visit, then write it once
   // for a newly signed-up user (no-op for everyone else). Never blocks render.
@@ -234,6 +238,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setCurrentSubscriptionTier(resolvedTier);
       setCurrentSubscriptionAllocations(getHoopsScoutingAllocations(resolvedTier, admin || isFounder));
       setPodcastCredits(computeCredits(resolvedTier, admin, profile));
+      setLoadedFor(userId);
     },
     [supabase, computeCredits],
   );
@@ -284,7 +289,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription: authSub },
     } = supabase.auth.onAuthStateChange(
-      async (authEvent: AuthChangeEvent, session: Session | null) => {
+      (authEvent: AuthChangeEvent, session: Session | null) => {
         const newUser = session?.user ?? null;
         setUser(newUser);
         if (newUser) {
@@ -293,7 +298,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             // token refresh and tab focus, not just on an actual sign-in.
             trackAuthEvent(newUser);
           }
-          await fetchSubscription(newUser);
+          // Deferred, never awaited here: supabase-js awaits this callback while
+          // holding its auth lock (session recovery, token refresh, tab focus),
+          // and the profile query needs that lock — awaiting it deadlocked the
+          // client with the user set but no profile loaded.
+          setTimeout(() => void fetchSubscription(newUser), 0);
         } else {
           setTier('free');
           setCurrentSubscriptionTier('free');
@@ -357,7 +366,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     tier: effectiveTier,
     isAdmin: effectiveIsAdmin,
     isFoundingMember: effectiveIsFoundingMember,
-    loading,
+    loading: loading || (!!user && loadedFor !== user.id),
     // Founders + admins always get premium features even if their tier resolved
     // to 'free' for any reason (e.g. profiles row missing on a brand-new account).
     hasFeature: (feature: Feature) =>
