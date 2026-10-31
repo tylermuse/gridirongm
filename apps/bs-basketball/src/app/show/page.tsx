@@ -23,8 +23,10 @@ export default function ShowPage() {
     );
   }
 
+  // Wide like the rest of the in-game pages (and Football's dashboard
+  // Spotlight) — max-w-2xl left the video show a postage stamp on desktop.
   return (
-    <main className="max-w-2xl mx-auto p-5 sm:p-8">
+    <main className="max-w-5xl mx-auto p-5 sm:p-8">
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
       <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-4">
         <h1 className="text-3xl sm:text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>The Show</h1>
