@@ -16,6 +16,7 @@ import { eventsFromPlayLog, hasPlayLog } from '@/lib/live/fromPlayLog';
 import { computeEventBeats } from '@/lib/live/beats';
 import { computeMoments, type MomentTone } from '@/lib/live/moments';
 import { winProbability, secondsLeftInGame } from '@/lib/live/winProbability';
+import { useLiveGameTelemetry } from '@/lib/telemetry/useLiveGameTelemetry';
 import type { BaseGameResult } from '@bs/core/adapter';
 import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
@@ -259,6 +260,18 @@ export function LiveViewer({
     }
   }, [real, last, speed, broadcastDriving]);
 
+  // Gameplay telemetry: one view per opened game, one finish when it reaches
+  // the final. `pregame` is set exactly for the user's own Watch Live games;
+  // the box-score replay opens without it.
+  const liveTelemetry = useLiveGameTelemetry({
+    gameId: userGameId,
+    ready: !!game && !!home && !!away && events.length > 0,
+    atEnd,
+    mode: pregame ? 'live' : 'replay',
+    playoff: !!(game?.sportData as { isPlayoff?: boolean } | undefined)?.isPlayoff,
+    realLog: real,
+  });
+
   // Space toggles pause.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -302,10 +315,11 @@ export function LiveViewer({
   const shots = events.slice(0, cursor).filter(e => e.shot && e.quarter === (last?.quarter ?? 1));
 
   function setSpeedFn(s: Speed) {
-    if (s === 'max') { broadcast.stop(); halftimeAudio.stop(); setCursor(events.length); setHalftimeOpen(false); }
+    if (s === 'max') { liveTelemetry.markSkipped(); broadcast.stop(); halftimeAudio.stop(); setCursor(events.length); setHalftimeOpen(false); }
     setSpeed(s);
   }
   function jumpTo(target: number) {
+    if (target >= events.length) liveTelemetry.markSkipped();
     setCursor(target);
     setHalftimeOpen(false);
     halftimeAudio.stop();
