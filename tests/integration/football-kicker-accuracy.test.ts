@@ -23,23 +23,34 @@ describe('fieldGoalMakeProbability', () => {
     expect(bucket(20, 29, 75)).toBeGreaterThan(0.97);
     expect(bucket(30, 39, 75)).toBeCloseTo(0.92, 1);
     expect(bucket(40, 49, 75)).toBeCloseTo(0.78, 1);
-    expect(bucket(50, 55, 75)).toBeCloseTo(0.65, 1);
+    expect(bucket(50, 55, 75)).toBeCloseTo(0.60, 1);
   });
 
   it('rating tiers land in NFL ranges', () => {
-    expect(overall(65)).toBeGreaterThan(0.76);
-    expect(overall(65)).toBeLessThan(0.81);
+    expect(overall(65)).toBeGreaterThan(0.74);
+    expect(overall(65)).toBeLessThan(0.79);
     expect(overall(75)).toBeGreaterThan(0.83);
     expect(overall(75)).toBeLessThan(0.87);
     expect(overall(85)).toBeGreaterThan(0.91);
     expect(overall(92)).toBeLessThan(0.96);
   });
 
-  it('is monotonic in distance and rating, bounded', () => {
-    for (let d = 18; d < 65; d++) expect(fieldGoalMakeProbability(d + 1, 75)).toBeLessThanOrEqual(fieldGoalMakeProbability(d, 75));
+  it('poor kicker misses the majority of long FGs (spec acceptance)', () => {
+    // A 45-rated kicker should make well under half of 50-55y attempts.
+    expect(bucket(50, 55, 45)).toBeLessThan(0.50);
+    // ...while an average kicker still drains short ones.
+    expect(bucket(18, 34, 75)).toBeGreaterThan(0.90);
+  });
+
+  it('is monotonic, bounded, and collapses past ~60y with no floor', () => {
+    for (let d = 18; d < 74; d++) expect(fieldGoalMakeProbability(d + 1, 75)).toBeLessThanOrEqual(fieldGoalMakeProbability(d, 75));
     expect(fieldGoalMakeProbability(45, 85)).toBeGreaterThan(fieldGoalMakeProbability(45, 65));
     expect(fieldGoalMakeProbability(18, 99)).toBeLessThanOrEqual(0.995);
-    expect(fieldGoalMakeProbability(70, 20)).toBeGreaterThanOrEqual(0.05);
+    // The old de-facto 35% long-range base and the hard 0.05 floor are gone:
+    // 65+ yard kicks are near-impossible and 80-yarders cannot be made at all.
+    expect(fieldGoalMakeProbability(65, 75)).toBeLessThan(0.20);
+    expect(fieldGoalMakeProbability(70, 20)).toBeLessThan(0.03);
+    expect(fieldGoalMakeProbability(80, 99)).toBe(0);
   });
 });
 
