@@ -7,6 +7,8 @@
  * Port of BS Football's showGame. Football also draws a scoring timeline
  * (every touchdown/field goal); Hoops box scores have no play log, so the
  * `gameFlow` graphic isn't produced here (the types stay for the shared UI).
+ * Hoops draws the line score instead (`gameQuarters`): the quarter-by-quarter
+ * board that comes up when the hosts talk about how the game swung.
  */
 import type { BasketballStats } from '@bs/sport-basketball';
 import type { BasketballLeagueState } from '../persistence/db';
@@ -32,6 +34,16 @@ export interface GameTopic {
   gameLabel?: string;
   /** Every score in order (football only; never set in Hoops). */
   gameFlow?: GameFlow;
+  /** The line score: points per quarter, for the quarter-by-quarter board. */
+  gameQuarters?: GameQuarters;
+}
+
+/** A game's line score from the team's side: Q1–Q4, then any overtimes. */
+export interface GameQuarters {
+  us: { teamId: string; abbreviation: string; color: string };
+  them: { teamId: string; abbreviation: string; color: string };
+  /** [us, them] points in each period. */
+  periods: [number, number][];
 }
 
 export interface FlowPlay {
@@ -90,6 +102,28 @@ function gameTiles(s: S): TileStat[] {
     t('ts', 'FG', `${n(s.fieldGoalsMade)}-${n(s.fieldGoalsAttempted)}`, `${pct(n(s.fieldGoalsMade), n(s.fieldGoalsAttempted))}%`),
     t('fg3', '3PT', `${n(s.threePointsMade)}-${n(s.threePointsAttempted)}`),
   ];
+}
+
+function colorDistance(a: string | undefined, b: string): number {
+  const rgb = (h: string) => {
+    const x = h.replace('#', '');
+    const f = x.length === 3 ? x.split('').map(c => c + c).join('') : x;
+    return [0, 2, 4].map(i => parseInt(f.slice(i, i + 2), 16) || 0);
+  };
+  const [p, q] = [rgb(a ?? ''), rgb(b)];
+  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+}
+
+/** The line score, with team colors that tell the two apart. */
+function gameQuartersOf(qs: [number, number][], team: ShowTeam, opp: ShowTeam): GameQuarters | null {
+  if (qs.length < 4) return null;
+  // Two navy teams: the opponent's second color, so the board reads.
+  const themColor = colorDistance(team.primaryColor, opp.primaryColor ?? '') < 90 ? opp.secondaryColor : opp.primaryColor;
+  return {
+    us: { teamId: team.id, abbreviation: team.abbreviation, color: team.primaryColor || '#1e3a5f' },
+    them: { teamId: opp.id, abbreviation: opp.abbreviation, color: !themColor || colorDistance(themColor, '#ffffff') < 60 ? '#94a3b8' : themColor },
+    periods: qs,
+  };
 }
 
 function totals(box: Record<string, S>, ids: Set<string>) {
@@ -166,6 +200,7 @@ export function buildGameTopics(league: BasketballLeagueState, team: ShowTeam, t
 
   // How it swung: quarter by quarter, and the quarter that decided it.
   const qs = (sd.quarterScores ?? []).map(q => (home ? [q.home, q.away] : [q.away, q.home]) as [number, number]);
+  const gameQuarters = gameQuartersOf(qs, team, opp);
   const qName = (i: number) => (i >= 4 ? (i === 4 ? 'overtime' : `overtime ${i - 3}`) : `Q${i + 1}`);
   const flow = qs.map(([m, t], i) => `${qName(i)}: ${ab} ${m}, ${opp.abbreviation} ${t}`).join('; ');
   const swing = qs.map(([m, t], i) => ({ i, d: m - t })).sort((x, y) => (won ? y.d - x.d : x.d - y.d))[0];
@@ -189,6 +224,7 @@ export function buildGameTopics(league: BasketballLeagueState, team: ShowTeam, t
     gameTeam,
     gameCompare,
     gameLabel: `${label} · ${ab} vs ${opp.abbreviation}`,
+    ...(gameQuarters ? { gameQuarters } : {}),
   };
   const topics: GameTopic[] = [{
     headline: `${label}: ${ab} ${us}, ${opp.abbreviation} ${them}`,

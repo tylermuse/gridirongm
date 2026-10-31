@@ -51,7 +51,7 @@ type ShowTopic = {
   exchanges: { speakerId: string; text: string }[];
   teamIds?: string[];
   playerIds?: string[];
-} & Partial<Pick<GameTopic, 'depth' | 'gameLines' | 'gameTeam' | 'gameCompare' | 'gameLabel' | 'gameFlow'>>;
+} & Partial<Pick<GameTopic, 'depth' | 'gameLines' | 'gameTeam' | 'gameCompare' | 'gameLabel' | 'gameFlow' | 'gameQuarters'>>;
 
 interface SpotlightShowPlayerProps {
   topics: ShowTopic[];
@@ -1129,7 +1129,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     focus?.kind === 'player' ? focus.tiles ?? gfxTopic?.gameTeam ?? null
       : focus?.kind === 'unit' ? focus.tiles
         : focus?.kind === 'team' ? (focusTeam ? focusTeamStats?.stats ?? null : gfxTopic?.gameTeam ?? stats?.stats ?? null)
-          : focus?.kind === 'moment' ? null
+          : focus?.kind === 'moment' || focus?.kind === 'quarters' ? null
             : gfxTopic?.gameTeam ?? null;
   const tilesLabel =
     focus?.kind === 'player' && focus.tiles ? focus.label
@@ -1137,7 +1137,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         : focusTeam ? `${focusTeam.abbreviation} · League ranks`
           : gfxTopic?.gameTeam ? gfxTopic.gameLabel
             : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
-  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'schedule' || focus.kind === 'moment' ? [] : focus.mentioned;
+  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'schedule' || focus.kind === 'moment' || focus.kind === 'quarters' ? [] : focus.mentioned;
   // Game breakdown: the scores on a timeline, the one being discussed called out.
   const flowData = focus?.kind === 'moment' ? gfxTopic?.gameFlow ?? null : null;
   const flow = flowData && focus?.kind === 'moment' ? (() => {
@@ -1152,6 +1152,18 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       usArt: t(flowData.us.teamId) ? logoOf(t(flowData.us.teamId)!) : null,
       themArt: t(flowData.them.teamId) ? logoOf(t(flowData.them.teamId)!) : null,
       scorer: scorer ? { key: scorer.id, name: `${scorer.firstName} ${scorer.lastName}`, pos: scorer.position, art: <ShowPlayerAvatar player={scorer} teamColor={scorer.teamId ? t(scorer.teamId)?.primaryColor : undefined} /> } : null,
+    };
+  })() : null;
+  // How the game swung: the line score, the quarters being discussed lit.
+  const qData = focus?.kind === 'quarters' ? gfxTopic?.gameQuarters ?? null : null;
+  const quarters = qData && focus?.kind === 'quarters' ? (() => {
+    const t = (id: string) => teams.find(x => x.id === id);
+    return {
+      ...qData,
+      hot: focus.hot,
+      label: gfxTopic?.gameLabel,
+      usArt: t(qData.us.teamId) ? logoOf(t(qData.us.teamId)!) : null,
+      themArt: t(qData.them.teamId) ? logoOf(t(qData.them.teamId)!) : null,
     };
   })() : null;
   // A game's team box score reads as a side-by-side: us left, them right.
@@ -1247,6 +1259,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 sched={sched}
                 compare={compare}
                 flow={flow}
+                quarters={quarters}
                 tilesLabel={tilesLabel}
                 tilesMs={onGfx ? clock - Math.max(blockStart.current, playerStart.current) : 60_000}
                 mentioned={mentioned}
@@ -1489,6 +1502,7 @@ function lookOf(f: Focus): string {
     case 'standings': return `standings:${f.scope}`;
     case 'schedule': return 'schedule';
     case 'moment': return `moment:${f.play ?? ''}`;
+    case 'quarters': return `quarters:${f.hot.join(',')}`;
     default: return 'none';
   }
 }

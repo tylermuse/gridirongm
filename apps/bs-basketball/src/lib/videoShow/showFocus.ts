@@ -9,13 +9,16 @@
  *    numbers, ranked against every team;
  *  - a team stat ("the defense ranks 27th") → the team stat line;
  *  - standings / schedule talk → those boards;
+ *  - in a postgame breakdown, how the game swung ("lost the first quarter by
+ *    16", "came back in the second half") → the line score, with the
+ *    quarters the line is about lit;
  *  - nothing measurable → no stats; the show cuts to a shot of the hosts.
  */
 import type { ShowPlayer, ShowTeam } from './types';
 import { computePlayerStatLine, playerStatsMentioned, showSeasonStats, statSpanLabel, type TileStat } from './playerStats';
 import { statsMentioned } from './teamStats';
 import { playerNamedIn, type VisualTopic } from './showVisuals';
-import type { GameFlow } from './showGame';
+import type { GameFlow, GameQuarters } from './showGame';
 
 export type Unit = 'backcourt' | 'frontcourt' | 'bench';
 
@@ -28,6 +31,8 @@ export type Focus =
   | { kind: 'schedule' }
   /** Football's scoring timeline (never produced in Hoops; kept for the shared UI). */
   | { kind: 'moment'; play: number | null; quarter?: number }
+  /** The game's line score; `hot` = the periods the line is about (1–4, 5+ = OT). */
+  | { kind: 'quarters'; hot: number[] }
   | { kind: 'none' };
 
 /** Playoff-race / standings talk → the standings board. */
@@ -144,6 +149,7 @@ export interface FocusContext {
     gameTeam?: TileStat[];
     gameLabel?: string;
     gameFlow?: GameFlow;
+    gameQuarters?: GameQuarters;
   };
   play?: number;
   earlierPlays?: (number | undefined)[];
@@ -187,6 +193,45 @@ const GAME_WORDS: [string, RegExp][] = [
   ['to', /\bturnovers?\b|\bturned it over\b|\bcareless\b/i],
 ];
 
+const ORD: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4 };
+const NUM = String.raw`(\d+|ten|eleven|twelve|\w+teen|twenty(-\w+)?|thirty(-\w+)?)`;
+/** A stretch of the game a line names → the periods it's about. Most specific
+ *  first: a match is blanked out so "out of halftime" isn't also "halftime". */
+const PERIOD_WORDS: [number[], RegExp][] = [
+  [[3, 4], /\bsecond half\b|\b(out of|after|coming out of) (the )?half(time)?\b|\b(last|final) two quarters\b|\bboth (of the )?(last|final) two\b/gi],
+  [[2, 3, 4], /\b(last|final) three quarters\b/gi],
+  [[1, 2], /\bfirst half\b|\b(at|by|into|before|going into) (the )?half(time)?\b|\bhalftime\b|\bthe half\b|\bfirst two quarters\b/gi],
+  [[1], /\bfirst quarter\b|\bopening quarter\b|\bQ1\b|\b(slow|fast|bad|hot|cold|rough|terrible|great|awful|sluggish) starts?\b|\bstart(ed|s)? slow\b|\bout of the gates?\b|\bopening (minutes|stretch|period)\b|\bfrom the (opening )?(tip|jump)\b/gi],
+  [[2], /\bsecond quarter\b|\bQ2\b/gi],
+  [[3], /\bthird quarter\b|\bQ3\b/gi],
+  [[4], /\b(fourth|final|last) quarter\b|\bQ4\b|\bthe fourth\b(?! (straight|consecutive|time|seed|best|worst|place|game|loss|win|year|season|pick))|\bcrunch time\b|\bdown the stretch\b|\bclosing (minutes|stretch)\b|\bthe final (minutes|stretch)\b/gi],
+];
+const OVERTIME = /\bovertime\b|\bOT\b|\bextra (period|session)\b/;
+/** How the game went, no quarter named: the swings, the lead, the hole. */
+const SWING = new RegExp([
+  String.raw`\bquarters?\b|\bhalves\b|\bby quarter\b`,
+  String.raw`\bcame back\b|\bcome-?backs?\b|\brall(y|ied|ies)\b|\bclawed back\b|\bchipp(ed|ing) away\b`,
+  String.raw`\b(dig|digs|digging|dug)\b[^.]{0,30}\bhole\b|\b(in|out of) (a|the|that) (\w+ )?hole\b`,
+  String.raw`\b(were|was|got|being|fell|trailed) (down|behind)\b|\bdown (by )?${NUM}\b|\bup (by )?${NUM}\b|\btrail(ed|ing)\b`,
+  String.raw`\bblew (it|the lead|a lead|a \w+-point lead)\b|\bbiggest lead\b|\bpulled away\b|\bran away\b|\bwire[- ]to[- ]wire\b`,
+  String.raw`\bback[- ]and[- ]forth\b|\bseesaw\b|\bmomentum\b|\bclos(ed|ing) (it )?out\b|\bfinish(ed)? strong\b|\bthe lead\b(?! guard)|\bouts?cored\b`,
+].join('|'), 'i');
+
+/** A line about how the game swung → the line score, the periods it names lit. */
+function quartersOf(text: string, q: GameQuarters): Extract<Focus, { kind: 'quarters' }> | null {
+  const hot = new Set<number>();
+  let rest = text.replace(/\b(first|second|third|fourth) and (first|second|third|fourth) quarters\b/gi, (_, a: string, b: string) => {
+    hot.add(ORD[a.toLowerCase()]); hot.add(ORD[b.toLowerCase()]);
+    return ' ';
+  });
+  for (const [ps, re] of PERIOD_WORDS) {
+    rest = rest.replace(re, () => { ps.forEach(p => hot.add(p)); return ' '; });
+  }
+  if (q.periods.length > 4 && OVERTIME.test(text)) for (let p = 5; p <= q.periods.length; p++) hot.add(p);
+  if (hot.size) return { kind: 'quarters', hot: [...hot].sort((a, b) => a - b) };
+  return SWING.test(text) ? { kind: 'quarters', hot: [] } : null;
+}
+
 /** Words that name a team (city, nickname, abbreviation): never read as a player's name. */
 const teamWordCache = new WeakMap<ShowTeam[], Set<string>>();
 function teamWords(teams: ShowTeam[]): Set<string> {
@@ -215,12 +260,17 @@ function focusOf(text: string, c: FocusContext): Focus | null {
   if (named) return playerFocus(named, text, c.players, c.topic);
   // A game breakdown: the game's box score, not season unit or team ranks.
   if (c.topic?.gameTeam) {
+    const mentioned = GAME_WORDS.filter(([, re]) => re.test(text)).map(([k]) => k);
+    // How it swung: the line score — unless the line is really about a
+    // box-score number and names no stretch of the game.
+    const q = c.topic.gameQuarters ? quartersOf(text, c.topic.gameQuarters) : null;
+    if (q && (q.hot.length || !mentioned.some(k => k !== 'pts'))) return q;
     for (const [role, re] of ROLE_WORDS) {
       if (!re.test(text)) continue;
       const p = starter(role, c.team, c.players);
       if (p) return playerFocus(p, text, c.players, c.topic);
     }
-    return { kind: 'team', mentioned: GAME_WORDS.filter(([, re]) => re.test(text)).map(([k]) => k) };
+    return { kind: 'team', mentioned };
   }
   const race = standingsOf(text) ?? scheduleOf(text);
   if (race) return race;
@@ -258,7 +308,7 @@ export function focusForLine(text: string, c: FocusContext): Focus {
   if (prev?.kind === 'player') return playerFocus(prev.player, text, c.players, c.topic);
   if (prev?.kind === 'unit') return { ...prev, mentioned: unitMentioned(text, prev.tiles) };
   if (prev?.kind === 'team') return { kind: 'team', mentioned: [], ...(prev.teamId ? { teamId: prev.teamId } : {}) };
-  if (prev?.kind === 'standings' || prev?.kind === 'schedule') return prev;
+  if (prev?.kind === 'standings' || prev?.kind === 'schedule' || prev?.kind === 'quarters') return prev;
   // The headline sets the subject.
   if (c.topic?.headline) {
     const f = focusOf(c.topic.headline, c);
