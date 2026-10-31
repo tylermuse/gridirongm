@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
+import { useBusyAction } from '@/components/ui/useBusyAction';
 import { GamePlanModal } from './GamePlanModal';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
@@ -101,6 +102,20 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const maxWeek = schedule.length > 0 ? Math.max(...schedule.map(g => g.week)) : 18;
 
   const pendingTradeCount = tradeProposals.filter(p => p.status === 'pending').length;
+
+  const weeklyRecapCount = useGameStore(s => s.weeklyRecaps.length);
+  // Shared sim lock: paints a busy state before the (synchronous) sim runs and
+  // disables every sim button until it's done, so queued clicks can't re-sim.
+  const { busy: simBusy, run: runSim } = useBusyAction();
+
+  const thisWeekGames = schedule.filter(g => g.week === week);
+  const weekAllPlayed = thisWeekGames.length > 0 && thisWeekGames.every(g => g.played);
+  // Mirrors simWeek's opening-week roster gate in the store: over 53 going into
+  // the first simmed week, simWeek refuses (one deduped alert, then silence) —
+  // the Sim Week dead/rage clicks on /roster. Disable the sim and say why.
+  const rosterOverBy = phase === 'regular' && !isSpectator && userTeam && (week === 1 || weeklyRecapCount === 0)
+    ? Math.max(0, userTeam.roster.length - 53)
+    : 0;
 
   const handleSimWeek = useCallback(async () => {
     const beforeIds = new Set(useGameStore.getState().tradeProposals.filter(p => p.status === 'pending').map(p => p.id));
@@ -255,7 +270,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'regular' && !pathname.startsWith('/game/') && (
               <>
-                {!isSpectator && pendingTradeCount > 0 && (
+                {/* Hidden on /trades itself: there it was a link to the page
+                    you're already on — 80 dead clicks/week. */}
+                {!isSpectator && pendingTradeCount > 0 && !pathname.startsWith('/trades') && (
                   <span className="hidden sm:inline">
                     <Link href="/trades">
                       <Button size="sm" variant="secondary">
@@ -298,24 +315,41 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Button>
                   );
                 })()}
-                <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform" disabled={schedule.filter(g => g.week === week).length > 0 && schedule.filter(g => g.week === week).every(g => g.played)}>
+                {rosterOverBy > 0 && (
+                  <span
+                    className="hidden sm:inline text-[11px] font-semibold text-red-600 whitespace-nowrap"
+                    title="The active roster must be at 53 before the regular season starts. Use Auto-cut to 53 on the Roster page, or release / demote players to the practice squad."
+                  >
+                    Roster {53 + rosterOverBy}/53 · cut {rosterOverBy} to sim
+                  </span>
+                )}
+                <Button
+                  onClick={() => runSim('sim-week', handleSimWeek)}
+                  size="sm"
+                  className="active:scale-95 transition-transform"
+                  busy={simBusy === 'sim-week'}
+                  disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
+                >
                   Sim Week {week}
                 </Button>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
                   <Button
-                    onClick={handleSimToDeadline}
+                    onClick={() => runSim('sim-deadline', handleSimToDeadline)}
                     variant="secondary"
                     size="sm"
+                    busy={simBusy === 'sim-deadline'}
+                    disabled={!!simBusy}
                     className="active:scale-95 transition-transform"
                   >
                     Sim to Deadline
                   </Button>
                 )}
                 <Button
-                  onClick={handleSimSeason}
+                  onClick={() => runSim('sim-season', handleSimSeason)}
                   variant="secondary"
                   size="sm"
-                  disabled={!!simProgress}
+                  busy={simBusy === 'sim-season'}
+                  disabled={!!simProgress || rosterOverBy > 0 || !!simBusy}
                   className="active:scale-95 transition-transform"
                 >
                   {simProgress ? `Week ${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
@@ -337,27 +371,30 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       </Button>
                     )}
                     <Button
-                      onClick={simNextPlayoffGame}
+                      onClick={() => runSim('playoff-next', simNextPlayoffGame)}
                       size="sm"
-                      disabled={!nextPlayoffGame}
+                      busy={simBusy === 'playoff-next'}
+                      disabled={!nextPlayoffGame || !!simBusy}
                       className="active:scale-95 transition-transform"
                     >
                       Sim Next Game
                     </Button>
                     <Button
-                      onClick={onlyUserGameLeftInRound ? simNextPlayoffGame : simPlayoffRound}
+                      onClick={() => runSim('playoff-round', onlyUserGameLeftInRound ? simNextPlayoffGame : simPlayoffRound)}
                       size="sm"
                       variant="secondary"
-                      disabled={!nextPlayoffGame}
+                      busy={simBusy === 'playoff-round'}
+                      disabled={!nextPlayoffGame || !!simBusy}
                       className="active:scale-95 transition-transform"
                     >
                       {onlyUserGameLeftInRound ? 'Sim My Game' : 'Sim Round'}
                     </Button>
                     <Button
-                      onClick={simAllPlayoffGames}
+                      onClick={() => runSim('playoff-all', simAllPlayoffGames)}
                       size="sm"
                       variant="secondary"
-                      disabled={!nextPlayoffGame}
+                      busy={simBusy === 'playoff-all'}
+                      disabled={!nextPlayoffGame || !!simBusy}
                       className="active:scale-95 transition-transform"
                     >
                       Sim Remaining
@@ -473,22 +510,24 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 {draftOrder.length > 0 ? (
                   <>
                     {draftOrder[0] !== userTeamId && (
-                      <Button onClick={simDraftPick} size="sm" variant="secondary">
+                      <Button onClick={() => runSim('draft-pick', simDraftPick)} size="sm" variant="secondary" busy={simBusy === 'draft-pick'} disabled={!!simBusy}>
                         Sim Pick
                       </Button>
                     )}
                     {draftOrder[0] !== userTeamId && (
-                      <Button onClick={simToUserDraftPick} size="sm" variant="secondary">
+                      <Button onClick={() => runSim('draft-to-mine', simToUserDraftPick)} size="sm" variant="secondary" busy={simBusy === 'draft-to-mine'} disabled={!!simBusy}>
                         Sim to My Pick
                       </Button>
                     )}
                     <Button
-                      onClick={async () => {
+                      onClick={() => runSim('draft-all', async () => {
                         simToEndDraft({ skipAdvance: true });
                         await flushToStorage();
                         router.push('/draft-recap');
-                      }}
+                      })}
                       size="sm"
+                      busy={simBusy === 'draft-all'}
+                      disabled={!!simBusy}
                     >
                       Auto-Draft All
                     </Button>
@@ -543,13 +582,31 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
       {/* Mobile bottom action bar — thumb-accessible */}
       {phase === 'regular' && !pathname.startsWith('/game/') && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)] border-t border-[var(--border)] px-3 py-2 flex items-center justify-center gap-2 sm:hidden safe-bottom">
-          <Button onClick={handleSimWeek} size="sm" className="flex-1 active:scale-95 transition-transform">
+          {rosterOverBy > 0 && (
+            <span className="text-[11px] font-semibold text-red-600 leading-tight shrink-0">
+              Cut {rosterOverBy}<br />to sim
+            </span>
+          )}
+          <Button
+            onClick={() => runSim('sim-week', handleSimWeek)}
+            size="sm"
+            className="flex-1 active:scale-95 transition-transform"
+            busy={simBusy === 'sim-week'}
+            disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
+          >
             {simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Week ${week}`}
           </Button>
-          <Button onClick={handleSimSeason} size="sm" variant="secondary" className="flex-1 active:scale-95 transition-transform" disabled={!!simProgress}>
+          <Button
+            onClick={() => runSim('sim-season', handleSimSeason)}
+            size="sm"
+            variant="secondary"
+            className="flex-1 active:scale-95 transition-transform"
+            busy={simBusy === 'sim-season'}
+            disabled={!!simProgress || rosterOverBy > 0 || !!simBusy}
+          >
             {simProgress ? `${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
           </Button>
-          {pendingTradeCount > 0 && (
+          {pendingTradeCount > 0 && !pathname.startsWith('/trades') && (
             <Link href="/trades">
               <Button size="sm" variant="secondary">
                 Trades ({pendingTradeCount})
