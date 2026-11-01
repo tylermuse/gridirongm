@@ -11,6 +11,19 @@ function getServiceClient() {
   );
 }
 
+/** Wall-clock each report so the page can say which one is slow, not just which one died. */
+async function timed<T>(label: string, p: PromiseLike<T>, timings: Record<string, number>): Promise<T> {
+  const t0 = Date.now();
+  try {
+    return await p;
+  } finally {
+    timings[label] = Date.now() - t0;
+  }
+}
+
+/** PostgREST's message when an RPC isn't in the schema cache — i.e. its migration hasn't been applied. */
+const MISSING_FN = /Could not find the function|does not exist/i;
+
 export async function GET(request: NextRequest) {
   try {
     // Verify the caller is an admin
@@ -50,41 +63,47 @@ export async function GET(request: NextRequest) {
     const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
     const since = new Date(Date.now() - days * 86400000).toISOString();
 
-    // All aggregation happens in Postgres (see
-    // supabase/migrations/20260712_analytics_aggregates.sql).
+    // All aggregation happens in Postgres. Since 20261025_analytics_rollups every
+    // report reads the small rollup tables (analytics_device_minutes,
+    // analytics_page_hours, analytics_ui_days) that a trigger on analytics_events
+    // keeps current; the raw 650 MB table is only touched for the live feed and
+    // the rare sim3d / signup rows that have their own partial indexes.
     //
     // Do NOT be tempted to go back to `.select()`-ing rows and tallying them
     // here: PostgREST caps row-returning requests at `db-max-rows` (1000 on
     // Supabase hosted), so any JS-side aggregate over a table this size is
     // computed on an arbitrary truncated slice and silently under-reports.
-    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, interactionsRes] = await Promise.all([
-      service.rpc('admin_analytics_summary', { p_since: since }),
+    const timings: Record<string, number> = {};
+    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, interactionsRes, healthRes] = await Promise.all([
+      timed('summary', service.rpc('admin_analytics_summary', { p_since: since }), timings),
 
-      service.from('analytics_events')
+      timed('recentEvents', service.from('analytics_events')
         .select('event, properties, created_at, user_id')
         // hovers + time-on-page rows would bury everything else in the live feed
         .not('event', 'in', '(ui_hover,page_engagement)')
         .order('created_at', { ascending: false })
-        .limit(50),
+        .limit(50), timings),
 
-      service.from('subscriptions')
+      timed('subscriptions', service.from('subscriptions')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['active', 'trialing']),
+        .in('status', ['active', 'trialing']), timings),
 
       // DAU / WAU / MAU — rolling windows, independent of `period`.
       // See supabase/migrations/20260930_active_user_metrics.sql.
-      service.rpc('admin_active_users', { p_app: 'bs-football' }),
-      service.rpc('admin_active_users', { p_app: 'bs-hoops' }),
+      timed('activeUsers', service.rpc('admin_active_users', { p_app: 'bs-football' }), timings),
+      timed('hoopsActiveUsers', service.rpc('admin_active_users', { p_app: 'bs-hoops' }), timings),
       // 3D live sim launch experiment: free-for-all from 2026-10-23, compare 3D-on vs 3D-off devices (migration 20261023_sim3d_cohorts)
-      service.rpc('admin_sim3d_cohorts', { p_since: since }),
+      timed('sim3dCohorts', service.rpc('admin_sim3d_cohorts', { p_since: since }), timings),
       // Feature usage from automatic click/hover capture (migration 20261024_ui_interactions)
-      service.rpc('admin_interaction_report', { p_since: since, p_app: 'bs-football' }),
+      timed('interactions', service.rpc('admin_interaction_report', { p_since: since, p_app: 'bs-football' }), timings),
+      // Is the rollup pipeline applied, backfilled, and still being fed? (migration 20261101_analytics_rollup_health)
+      timed('health', service.rpc('admin_analytics_health'), timings),
     ]);
 
-    // A failed summary used to return all zeros and drop every other section,
-    // which made a statement timeout look like "no data". Now the cards zero
-    // out but everything else still renders, and the page shows the warning.
-    const summary = (summaryRes.error ? {} : (summaryRes.data ?? {})) as {
+    // A failed summary (typically a statement timeout) must not masquerade as
+    // data: every card it feeds is null, and the page renders "—". It used to
+    // zero them out, which read as "0 registered accounts" to a founder.
+    const summary = (summaryRes.error ? null : (summaryRes.data ?? null)) as {
       totalUsers?: number;
       newUsers?: number;
       grandfatheredUsers?: number;
@@ -96,7 +115,8 @@ export async function GET(request: NextRequest) {
       signupEvents?: number;
       signupsByDay?: Record<string, number>;
       topPages?: { path: string; count: number }[];
-    };
+    } | null;
+    const num = (v: number | undefined): number | null => (summary && typeof v === 'number' ? v : null);
 
     // Conversion = subscribers / users who are actually ABLE to subscribe.
     //
@@ -107,36 +127,51 @@ export async function GET(request: NextRequest) {
     //
     // Also deliberately NOT the raw `signup` event count: those rows are
     // duplicated ~2.6x per human by the old supabase SIGNED_IN re-fire bug.
-    const convertibleUsers = summary.convertibleUsers ?? 0;
+    const convertibleUsers = num(summary?.convertibleUsers);
     const totalSubscriptions = subscriptionCountRes.count ?? 0;
-    const conversionRate = convertibleUsers > 0 ? totalSubscriptions / convertibleUsers : 0;
+    const conversionRate = convertibleUsers === null ? null : convertibleUsers > 0 ? totalSubscriptions / convertibleUsers : 0;
+
+    // Rollup pipeline health. `applied: null` = the health function itself is
+    // missing (20261101 not applied), so we can't tell; the warning says so.
+    const rollups = healthRes.error
+      ? { applied: null as null, error: MISSING_FN.test(healthRes.error.message)
+          ? 'admin_analytics_health() is missing — apply supabase/migrations/20261101_analytics_rollup_health.sql'
+          : healthRes.error.message }
+      : (healthRes.data ?? { applied: null as null, error: 'empty response' });
 
     return NextResponse.json({
       period,
-      totalUsers: summary.totalUsers ?? 0,               // all-time, from auth.users
-      newUsers: summary.newUsers ?? 0,                   // in-window
-      grandfatheredUsers: summary.grandfatheredUsers ?? 0,
+      // Server clock, so the page can do "N minutes ago" math without calling Date.now() in render.
+      generatedAt: new Date().toISOString(),
+      totalUsers: num(summary?.totalUsers),               // all-time, from auth.users
+      newUsers: num(summary?.newUsers),                   // in-window
+      grandfatheredUsers: num(summary?.grandfatheredUsers),
       convertibleUsers,
-      activeUsers: summary.activeUsers ?? 0,             // in-window
-      uniqueDevices: summary.uniqueDevices ?? 0,         // in-window, upper bound on humans
-      sessions: summary.sessions ?? 0,
-      pageViews: summary.pageViews ?? 0,
+      activeUsers: num(summary?.activeUsers),             // in-window
+      uniqueDevices: num(summary?.uniqueDevices),         // in-window, upper bound on humans
+      sessions: num(summary?.sessions),
+      pageViews: num(summary?.pageViews),
       conversionRate,
       totalSubscriptions,
-      signupsByDay: summary.signupsByDay ?? {},
-      topPages: summary.topPages ?? [],
+      // null (not {} / []) when the summary failed, so the page can say "didn't load" instead of "no page views yet"
+      signupsByDay: summary ? (summary.signupsByDay ?? {}) : null,
+      topPages: summary ? (summary.topPages ?? []) : null,
       recentEvents: recentEventsRes.data ?? [],
       // null if the migration hasn't been applied yet — the page hides the row.
       activeUsersRolling: activeRes.error ? null : (activeRes.data ?? null),
       hoopsActiveUsersRolling: hoopsActiveRes.error ? null : (hoopsActiveRes.data ?? null),
       sim3dCohorts: sim3dRes.error ? null : (sim3dRes.data ?? null),
       interactions: interactionsRes.error ? null : (interactionsRes.data ?? null),
+      rollups,
+      timingsMs: timings,
       warnings: ([
         ['Summary cards', summaryRes.error],
         ['Recent activity', recentEventsRes.error],
-        ['Active users', activeRes.error],
+        ['Active users (Football)', activeRes.error],
+        ['Active users (Hoops)', hoopsActiveRes.error],
         ['3D sim cohorts', sim3dRes.error],
         ['Feature usage', interactionsRes.error],
+        ['Rollup health', healthRes.error],
       ] as const)
         .filter(([, e]) => e)
         .map(([label, e]) => `${label}: ${e!.message}`),
