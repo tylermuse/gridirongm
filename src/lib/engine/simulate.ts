@@ -731,6 +731,9 @@ function simulateDrive(
    *  instead of the NFL-average fresh start — used to carry field position over
    *  after a non-punt change of possession. */
   startFieldPosition?: number,
+  /** Running score margin (offense − defense) and quarter at the start of the
+   *  drive. Used for the late-game 2-point-conversion decision after a TD. */
+  scoringContext?: { margin: number; quarter: number },
 ): DriveResult {
   const plays: PlayResult[] = [];
   let fieldPosition = startFieldPosition !== undefined
@@ -748,6 +751,20 @@ function simulateDrive(
     plays.push(play);
 
     if (play.touchdown) {
+      // Late-game 2-point conversion: when the TD leaves the scoring team down
+      // by 2 or 5 (any time), or down 8+ in Q4/OT, go for two instead of the
+      // automatic PAT — mirrors the goFor2 logic already live in
+      // liveCoachEngine.ts + playByPlay.ts. (fishyboi0707, Oct 30: the CPU kept
+      // kicking the PAT while trailing by 8 late instead of going for two.)
+      if (scoringContext) {
+        const diffAfterTd = scoringContext.margin + 6;
+        const goFor2 = diffAfterTd === -2 || diffAfterTd === -5 ||
+          (diffAfterTd <= -8 && scoringContext.quarter >= 4);
+        if (goFor2) {
+          const twoPtGood = Math.random() < 0.48; // NFL average ~48%
+          return { points: twoPtGood ? 8 : 6, plays, finalFieldPosition: 100 };
+        }
+      }
       // Extra point
       if (kicker) {
         // Kicker rating now meaningfully moves the XP: a 50-rated kicker sits
@@ -947,7 +964,7 @@ export function simulateGame(
       } else {
         desc = `${tdPlay.yards} yd touchdown`;
       }
-      desc += ` (${pts === 7 ? 'XP good' : 'XP missed'})`;
+      desc += ` (${pts === 8 ? '2-PT good' : pts === 7 ? 'XP good' : 'XP missed'})`;
     } else if (fgPlay && fgPlay.kicker) {
       desc = fgPlay.yards > 0
         ? `${fgPlay.kicker.firstName[0]}. ${fgPlay.kicker.lastName} ${fgPlay.yards}-yard field goal`
@@ -1053,7 +1070,7 @@ export function simulateGame(
     // uses the offensive sliders, their defense uses the defensive sliders.
     const homePlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
     const awayDefPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
-    const homeDrive = simulateDrive(restStarters(effectiveHomeRoster, homeBlowout), restStarters(effectiveAwayRoster, awayBlowout), mcafeeMode, rivalryIntensity, homePlan, awayDefPlan, nextStart);
+    const homeDrive = simulateDrive(restStarters(effectiveHomeRoster, homeBlowout), restStarters(effectiveAwayRoster, awayBlowout), mcafeeMode, rivalryIntensity, homePlan, awayDefPlan, nextStart, { margin: homeScore - awayScore, quarter });
     nextStart = carryOver(homeDrive);
     const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
@@ -1073,7 +1090,7 @@ export function simulateGame(
     // Away offense drives — same scoring fatigue
     const awayPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
     const homeDefPlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
-    const awayDrive = simulateDrive(restStarters(effectiveAwayRoster, awayBlowout), restStarters(effectiveHomeRoster, homeBlowout), mcafeeMode, rivalryIntensity, awayPlan, homeDefPlan, nextStart);
+    const awayDrive = simulateDrive(restStarters(effectiveAwayRoster, awayBlowout), restStarters(effectiveHomeRoster, homeBlowout), mcafeeMode, rivalryIntensity, awayPlan, homeDefPlan, nextStart, { margin: awayScore - homeScore, quarter });
     nextStart = carryOver(awayDrive);
     const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;

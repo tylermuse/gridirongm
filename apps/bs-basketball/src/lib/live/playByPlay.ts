@@ -131,6 +131,13 @@ function flavorFor(team: BasketballTeam, side: Side, box: Record<string, Partial
   for (const pid of team.playerIds) {
     const s = box[pid];
     if (!s) continue;
+    // A player who fouled out (6 personal fouls) is off the floor for the rest
+    // of the game, so he shouldn't keep popping up as the actor in reconstructed
+    // flavor plays. His real baskets still appear (they happened before he left
+    // and the running score must reconcile); only the cosmetic non-scoring
+    // flavor is suppressed. (crypticer., Oct 26: fouled-out player still shown
+    // active in the live viewer.)
+    if ((s.personalFouls ?? 0) >= 6) continue;
     for (let i = 0; i < (s.blocks ?? 0); i++) out.push({ side, playerId: pid, verb: 'rejects the shot', kind: 'block' });
     for (let i = 0; i < (s.steals ?? 0); i++) out.push({ side, playerId: pid, verb: 'picks off the pass', kind: 'steal' });
     for (let i = 0; i < Math.min(2, s.turnovers ?? 0); i++) out.push({ side, playerId: pid, verb: 'turns it over', kind: 'turnover' });
