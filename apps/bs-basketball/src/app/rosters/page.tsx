@@ -36,6 +36,10 @@ const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
 // ratings nudged by results so far. BS Hoops keeps the mid-season main file.
 const NBA_VANILLA_FILE = '/rosters/BBGM_NBA_Roster_2026_Vanilla.json';
 const nbaVanillaUrl = `${NBA_VANILLA_FILE}?v=${CACHE_BUST}`;
+// Frozen clean opening-night file (no nudge, no injuries) for re-simming the
+// season from scratch. Built once; the weekly refresh does not touch it.
+const NBA_OPENING_FILE = '/rosters/BBGM_NBA_Roster_2026_OpeningNight.json';
+const nbaOpeningUrl = `${NBA_OPENING_FILE}?v=1`;
 const LAST_UPDATED = 'October 31, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
@@ -62,7 +66,7 @@ function HowToUse() {
           <div>
             <div className="font-bold text-[var(--text)] mb-1">For Basketball GM:</div>
             <ol className="list-decimal list-inside space-y-1 text-[var(--text-sec)]">
-              <li>Download the JSON above (the BBGM version starts at opening night with the full real schedule).</li>
+              <li>Download a JSON above — <strong>Current</strong> for this week&apos;s rosters and injuries, <strong>Opening Night</strong> for a clean re-sim. Both start at opening night with the full real 2026-27 schedule.</li>
               <li>Go to <a href="https://play.basketball-gm.com" target="_blank" rel="noopener noreferrer" className="font-medium hover:underline" style={{ color: 'var(--accent)' }}>play.basketball-gm.com</a></li>
               <li>Click <strong>Create new league</strong></li>
               <li>Under <strong>Customize</strong>, choose <strong>Upload league file</strong> and select the downloaded JSON</li>
@@ -106,15 +110,17 @@ export default function RostersPage() {
     }
   }
 
-  function downloadNba() {
+  function downloadFile(href: string, name: string) {
     const a = document.createElement('a');
-    a.href = nbaVanillaUrl;
-    a.download = 'BBGM_NBA_Roster_2026.json';
+    a.href = href;
+    a.download = name;
     a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   }
+  const downloadNba = () => downloadFile(nbaVanillaUrl, 'BBGM_NBA_Roster_2026_Current.json');
+  const downloadOpening = () => downloadFile(nbaOpeningUrl, 'BBGM_NBA_Roster_2026_OpeningNight.json');
 
   async function choose(teamId: TeamId) {
     await pickUserTeam(teamId);
@@ -232,8 +238,18 @@ export default function RostersPage() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Download JSON
+                Download: Current (BBGM)
               </Button>
+              <Button variant="secondary" disabled={loading} onClick={downloadOpening}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download: Opening Night (BBGM)
+              </Button>
+              <p className="text-[11px] text-[var(--text-sec)] leading-snug">
+                <strong>Current</strong> = this week&apos;s moves, contracts and injuries, ratings nudged by results so far.{' '}
+                <strong>Opening Night</strong> = frozen clean baseline for re-simming the season: no injuries, no nudge.
+              </p>
             </div>
           </div>
 
