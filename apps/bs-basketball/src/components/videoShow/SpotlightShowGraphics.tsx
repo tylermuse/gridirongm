@@ -13,7 +13,7 @@ import { HOSTS, type Host } from '@/lib/videoShow/showScript';
 import { ordinal, rankTone, type ShowStatLine } from '@/lib/videoShow/teamStats';
 import type { TileStat } from '@/lib/videoShow/playerStats';
 import type { ScheduleRow, StandingsRow } from '@/lib/videoShow/showStandings';
-import type { GameFlow } from '@/lib/videoShow/showGame';
+import type { GameFlow, GameQuarters } from '@/lib/videoShow/showGame';
 import { THEMES, type Calls, type ShowThemeId, type Verdict } from '@/lib/videoShow/showThemes';
 
 export const TWO_SHOT_SRC = '/show/two_shot.jpg';
@@ -82,6 +82,9 @@ interface GraphicProps {
   /** A game's scores on a timeline, one called out (the key moment being
    *  discussed) — shown instead of tiles. */
   flow?: FlowView | null;
+  /** A game's line score, the quarters being discussed lit — shown instead
+   *  of tiles. */
+  quarters?: QuartersView | null;
   /** Player this line is about → photo card beside the quote. */
   player?: { art: ReactNode; name: string; detail: string; key: string } | null;
   /** Since that player came on screen. */
@@ -406,6 +409,126 @@ function FlowBoard({ f, blockMs, lineMs, text }: { f: FlowView; blockMs: number;
   );
 }
 
+export type QuartersView = GameQuarters & {
+  /** Periods the line is about (1-based; 5+ = overtime). */
+  hot: number[];
+  label?: string;
+  usArt: ReactNode;
+  themArt: ReactNode;
+};
+
+const periodName = (i: number) => (i < 4 ? `Q${i + 1}` : i === 4 ? 'OT' : `${i - 3}OT`);
+const signed = (m: number) => (m > 0 ? `+${m}` : m < 0 ? `−${-m}` : '0');
+
+/** The line score: each team's points by quarter, then under it who won
+ *  each quarter and by how much (bars up: the team; down: the opponent).
+ *  The quarters the line is about are lit. */
+function QuartersBoard({ q, blockMs, lineMs, text }: { q: QuartersView; blockMs: number; lineMs: number; text: string }) {
+  const n = q.periods.length;
+  const us = q.periods.reduce((s, [a]) => s + a, 0);
+  const them = q.periods.reduce((s, [, b]) => s + b, 0);
+  const margins = q.periods.map(([a, b]) => a - b);
+  const peak = Math.max(4, ...margins.map(Math.abs));
+  // The game's margin after each period.
+  const after = margins.map((_, i) => margins.slice(0, i + 1).reduce((s, m) => s + m, 0));
+  const worst = Math.min(0, ...after);
+  const best = Math.max(0, ...after);
+  const won = margins.filter(m => m > 0).length;
+  const lit = (i: number) => q.hot.includes(i + 1);
+  const cols = { gridTemplateColumns: `minmax(0,1.5fr) repeat(${n}, minmax(0,1fr)) minmax(0,1.3fr)` };
+  const cell = (i: number) => `transition-colors duration-300 ${lit(i) ? 'bg-orange-50' : ''}`;
+  const row = (side: 0 | 1) => {
+    const t = side === 0 ? q.us : q.them;
+    const total = side === 0 ? us : them;
+    return (
+      <div className="grid items-stretch" style={cols}>
+        <div className="flex items-center gap-[0.45em] px-[0.8em] py-[0.15em]">
+          <span className="h-[1.6em] w-[1.6em] shrink-0">{side === 0 ? q.usArt : q.themArt}</span>
+          <span className="text-[1em] font-extrabold text-[#1e3a5f]">{t.abbreviation}</span>
+        </div>
+        {q.periods.map((pts, i) => {
+          const mine = pts[side], theirs = pts[1 - side];
+          return (
+            <div key={i} className={`flex items-center justify-center text-[1.2em] tabular-nums ${cell(i)} ${mine > theirs ? 'font-extrabold text-[#0f1f35]' : 'font-semibold text-slate-400'}`}>
+              {countUp(String(mine), anim(blockMs, 250 + i * 90, 600))}
+            </div>
+          );
+        })}
+        <div className={`flex items-center justify-end border-l border-slate-100 pr-[0.8em] text-[1.45em] tabular-nums ${total > (side === 0 ? them : us) ? 'font-black text-[#0f1f35]' : 'font-bold text-slate-400'}`}>
+          {countUp(String(total), anim(blockMs, 300 + n * 90, 700))}
+        </div>
+      </div>
+    );
+  };
+  const chips = [
+    n >= 2 && `Halftime: ${q.us.abbreviation} ${q.periods[0][0] + q.periods[1][0]}, ${q.them.abbreviation} ${q.periods[0][1] + q.periods[1][1]}`,
+    worst < 0 && (us > them ? `Came back from ${-worst} down` : `Down ${-worst} after ${periodName(after.indexOf(worst))}`),
+    best > 0 && us < them && `Led by ${best} after ${periodName(after.indexOf(best))}`,
+    `Won ${won} of ${n} quarters`,
+  ].filter((x): x is string => !!x).slice(0, 3);
+  return (
+    <>
+      <div className="my-auto min-h-0 py-[0.2em]">
+        <div className="mb-[0.3em] text-[0.62em] font-bold uppercase tracking-[0.22em] text-slate-500" style={{ opacity: anim(blockMs, 0, 300) }}>
+          {q.label ? `${q.label} · ` : ''}Scoring by quarter
+        </div>
+        <div className="overflow-hidden rounded-[0.7em] bg-white shadow-[0_6px_18px_rgba(15,23,42,0.12)]" style={{ opacity: anim(blockMs, 100, 350) }}>
+          <div className="grid border-b border-slate-100 text-[0.6em] font-bold uppercase tracking-[0.16em]" style={cols}>
+            <div />
+            {q.periods.map((_, i) => (
+              <div key={i} className={`py-[0.35em] text-center ${cell(i)} ${lit(i) ? 'text-orange-600' : 'text-slate-500'}`}>{periodName(i)}</div>
+            ))}
+            <div className="border-l border-slate-100 py-[0.35em] pr-[1.3em] text-right text-slate-500">Final</div>
+          </div>
+          {row(0)}
+          <div className="border-t border-slate-50">{row(1)}</div>
+          {/* Who won each quarter: up for the team, down for the opponent. */}
+          <div className="grid border-t border-slate-100" style={cols}>
+            <div className="relative h-[5em] whitespace-nowrap font-bold uppercase leading-none tracking-[0.06em]">
+              <span className="absolute left-[1.45em] top-[0.45em] text-[0.55em]" style={{ color: q.us.color }}>▲ {q.us.abbreviation} won it</span>
+              <span className="absolute bottom-[0.45em] left-[1.45em] text-[0.55em]" style={{ color: q.them.color }}>▼ {q.them.abbreviation} won it</span>
+            </div>
+            {margins.map((m, i) => {
+              const grow = anim(blockMs, 500 + i * 120, 500);
+              // Up to ~2/3 of the half: the number sits at the edge past it.
+              const h = (Math.abs(m) / peak) * 31 * grow;
+              return (
+                <div key={i} className={`relative ${cell(i)}`}>
+                  <div className="absolute inset-x-[0.4em] top-1/2 h-px bg-slate-300" />
+                  {m !== 0 && (
+                    <div
+                      className={`absolute left-1/2 w-[30%] -translate-x-1/2 ${m > 0 ? 'rounded-t-[0.2em]' : 'rounded-b-[0.2em]'}`}
+                      style={{ background: m > 0 ? q.us.color : q.them.color, height: `${h}%`, ...(m > 0 ? { bottom: '50%' } : { top: '50%' }), boxShadow: lit(i) ? '0 0 0 0.12em #ea580c' : undefined }}
+                    />
+                  )}
+                  <div
+                    className={`absolute inset-x-0 text-center text-[0.62em] font-extrabold leading-none tabular-nums ${lit(i) ? 'text-orange-600' : 'text-slate-500'}`}
+                    style={{ opacity: grow, ...(m >= 0 ? { top: '0.25em' } : { bottom: '0.25em' }) }}
+                  >
+                    {signed(m)}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex flex-col items-end justify-center border-l border-slate-100 pr-[0.8em] leading-none">
+              <span className="text-[0.5em] font-bold uppercase tracking-[0.16em] text-slate-400">Margin</span>
+              <span className={`text-[1.1em] font-black tabular-nums ${us > them ? 'text-emerald-600' : 'text-red-600'}`} style={{ opacity: anim(blockMs, 600 + n * 120, 400) }}>{signed(us - them)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-[0.45em] flex flex-wrap gap-[0.5em] text-[0.7em] font-bold text-[#1e3a5f]" style={{ opacity: anim(blockMs, 900, 400) }}>
+          {chips.map(c => <span key={c} className="rounded-full bg-white px-[0.8em] py-[0.2em] shadow">{c}</span>)}
+        </div>
+      </div>
+      {text && (
+        <div key={text} className="line-clamp-2 text-[0.78em] font-semibold leading-snug text-slate-500" style={{ opacity: anim(lineMs, 120, 380) }}>
+          {text}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function ShowGraphic(p: GraphicProps) {
   const { variant, blockMs } = p;
   // Slow push-in on the studio two-shot for the whole block — never static.
@@ -508,6 +631,8 @@ export function ShowGraphic(p: GraphicProps) {
               </>
             ) : p.flow ? (
               <FlowBoard f={p.flow} blockMs={p.tilesMs} lineMs={p.lineMs} text={p.text} />
+            ) : p.quarters ? (
+              <QuartersBoard q={p.quarters} blockMs={p.tilesMs} lineMs={p.lineMs} text={p.text} />
             ) : p.compare ? (
               <>
                 <div className="my-auto min-h-0 overflow-hidden py-[0.3em]">
