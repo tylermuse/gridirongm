@@ -1,27 +1,44 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { NewsFeed } from '@/components/feed/NewsFeed';
+import { NewsTabs } from '@/components/feed/NewsTabs';
 import { BuzzFeed } from '@/components/feed/BuzzFeed';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
+import { buildFeed, type FeedItem } from '@/lib/feed/buildFeed';
 import { getTransactions, type TransactionEntry } from '@/lib/transactions';
 
 /**
  * /news — league moments feed with All / My Team / Transactions / Injuries /
  * Social tabs. Social renders the Hoops Buzz timeline (same generator as /buzz).
- * Deep-linkable via ?tab=social etc.
+ * Deep-linkable via ?tab=social etc. The News / Recap strip on top flips to the
+ * season recap (football parity).
  */
 type Tab = 'all' | 'my_team' | 'injuries' | 'transactions' | 'social';
 const TABS: readonly Tab[] = ['all', 'my_team', 'injuries', 'transactions', 'social'];
 const INJURY_KINDS = new Set(['injury', 'suspension', 'fine']);
 
+const injuryFilter = (item: FeedItem) => INJURY_KINDS.has(item.kind);
+
+function NewsLoading() {
+  return (
+    <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
+      <Skeleton className="h-8 w-40 mb-4" />
+      <SkeletonList rows={8} />
+    </main>
+  );
+}
+
 // useSearchParams() needs a Suspense boundary for static export.
 export default function NewsPage() {
   return (
-    <Suspense fallback={<main className="max-w-2xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>}>
+    <Suspense fallback={<NewsLoading />}>
       <NewsPageInner />
     </Suspense>
   );
@@ -34,6 +51,9 @@ function NewsPageInner() {
   const [tab, setTab] = useState<Tab>(TABS.includes(initial as Tab) ? (initial as Tab) : 'all');
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
+  // Derive the feed once: it feeds both the list and the My Team count bubble.
+  const feed = useMemo(() => (league ? buildFeed(league) : []), [league]);
+
   // Game ids involving the user team — for the My Team filter.
   const userGameIds = useMemo(() => {
     const set = new Set<string>();
@@ -41,41 +61,44 @@ function NewsPageInner() {
     if (league && uid) for (const g of league.games) if (g.homeTeamId === uid || g.awayTeamId === uid) set.add(g.id);
     return set;
   }, [league]);
+  const userTeamId = league?.userTeamId ?? null;
+  const myTeamFilter = useCallback(
+    (item: FeedItem) => (!!item.gameId && userGameIds.has(item.gameId)) || (!!item.teamId && item.teamId === userTeamId),
+    [userGameIds, userTeamId],
+  );
+  const myTeamCount = useMemo(() => feed.filter(myTeamFilter).length, [feed, myTeamFilter]);
 
-  if (loading) return <main className="max-w-2xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  if (loading) return <NewsLoading />;
   if (!league) {
     return (
-      <main className="max-w-2xl mx-auto p-8">
+      <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
         <p className="mb-4">{error ?? 'No league loaded.'}</p>
-        <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
+        <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Start or load a league</Link>
       </main>
     );
   }
 
   const txns = getTransactions(league);
   const hasTeam = !!league.userTeamId;
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'all', label: 'All' },
-    ...(hasTeam ? [{ key: 'my_team' as Tab, label: 'My Team' }] : []),
-    { key: 'injuries', label: 'Injuries' },
-    { key: 'transactions', label: 'Transactions' },
-    { key: 'social', label: 'Social' },
+  const tabs: { value: Tab; label: string; badge?: number }[] = [
+    { value: 'all', label: 'All' },
+    ...(hasTeam ? [{ value: 'my_team' as Tab, label: 'My Team', badge: myTeamCount }] : []),
+    { value: 'injuries', label: 'Injuries' },
+    { value: 'transactions', label: 'Transactions' },
+    { value: 'social', label: 'Social' },
   ];
 
   return (
-    <main className="max-w-2xl mx-auto p-5 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-4">
-        <h1 className="text-3xl sm:text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>League News</h1>
-        <span className="text-sm text-[var(--text-sec)]">Season {league.currentSeason} · Day {league.currentTick}</span>
-      </header>
+    <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
+      <NewsTabs />
+      <PageHeader
+        title="League News"
+        subtitle={`Season ${league.currentSeason} · Day ${league.currentTick}`}
+        className="mb-4"
+      />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
-          {tabs.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5" style={tab === t.key ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{t.label}</button>
-          ))}
-        </div>
+      <div className="mb-4 max-w-full overflow-x-auto no-scrollbar">
+        <SegmentedControl options={tabs} value={tab} onChange={setTab} size="sm" />
       </div>
 
       {tab === 'social' ? (
@@ -83,11 +106,11 @@ function NewsPageInner() {
       ) : tab === 'transactions' ? (
         <TransactionsList txns={txns} />
       ) : tab === 'my_team' ? (
-        <NewsFeed league={league} filter={item => (!!item.gameId && userGameIds.has(item.gameId)) || (!!item.teamId && item.teamId === league.userTeamId)} />
+        <NewsFeed league={league} items={feed} filter={myTeamFilter} />
       ) : tab === 'injuries' ? (
-        <NewsFeed league={league} filter={item => INJURY_KINDS.has(item.kind)} />
+        <NewsFeed league={league} items={feed} filter={injuryFilter} />
       ) : (
-        <NewsFeed league={league} />
+        <NewsFeed league={league} items={feed} />
       )}
 
       <footer className="mt-8 rounded-xl border bg-[var(--surface)] p-4 text-xs leading-relaxed text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>

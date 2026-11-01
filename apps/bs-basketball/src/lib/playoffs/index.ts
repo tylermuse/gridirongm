@@ -5,6 +5,7 @@ export {
   simPlayoffDay,
   simPlayoffRound,
   simAllPlayoffs,
+  currentPlayoffRound,
   type SimPlayoffDayResult,
   type SimPlayoffBatchResult,
 } from './bracket';

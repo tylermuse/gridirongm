@@ -17,7 +17,7 @@ const SEVERITY_COLOR: Record<string, string> = {
 
 /** Surfaces the injury system (parity audit #12). Renders nothing when the team
  *  is healthy so it doesn't clutter the dashboard. */
-export function InjuryReport({ league, team }: { league: LeagueState; team: BasketballTeam }) {
+export function InjuryReport({ league, team, className = 'mb-6' }: { league: LeagueState; team: BasketballTeam; className?: string }) {
   const playThroughInjury = useLeagueStore(s => s.playThroughInjury);
   const injuries = getInjuries(league);
   const playThrough = getPlayThrough(league);
@@ -43,9 +43,9 @@ export function InjuryReport({ league, team }: { league: LeagueState; team: Bask
   if (injured.length === 0 && suspended.length === 0 && gritty.length === 0) return null;
 
   return (
-    <Card className="mb-6">
+    <Card className={className}>
       <CardHeader><CardTitle>🏥 Availability Report</CardTitle><span className="text-xs text-[var(--text-sec)]">{injured.length + suspended.length} out</span></CardHeader>
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 max-h-36 overflow-y-auto">
         {injured.map(({ p, rec }) => {
           // Day-to-day / minor knocks are game-time decisions, not "out" — show
           // GTD (amber) so the availability report matches the roster + lineup.

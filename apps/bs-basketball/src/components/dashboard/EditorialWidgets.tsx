@@ -49,8 +49,7 @@ export function EditorialWidgets({ league, team }: { league: LeagueState; team: 
           {star && (
             <button
               onClick={() => setModalPlayerId(star.id)}
-              className="w-full text-left rounded-lg p-3 mb-3 transition-colors hover:bg-[var(--surface-2)]"
-              style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
+              className="w-full text-left rounded-lg p-3 mb-3 transition-colors bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_16%,transparent)]"
             >
               <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-0.5">Your standout</div>
               <div className="font-bold">{star.name} <span className="text-[var(--text-sec)] font-normal">· {star.position}</span></div>

@@ -7,6 +7,9 @@ import { useSupabaseUser } from '@/lib/auth/useSupabaseUser';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { listLeagues, getLeagueJson, importLeagueJson, type LeagueSaveMeta } from '@/lib/persistence/db';
 import { readCloudIndex, pushLeagueNow, pullLeagueJson, removeCloudLeague, type CloudLeagueMeta } from '@/lib/persistence/cloud';
+import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/modals/ConfirmModal';
+import { settingsLinkClass } from './SettingsControls';
 
 /**
  * Cloud Saves (parity with BS Football's CloudSyncCard, extended for Hoops'
@@ -22,6 +25,8 @@ export function CloudSavesPanel() {
   const [local, setLocal] = useState<LeagueSaveMeta[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // Branded confirm (replaces window.confirm) for the two destructive paths.
+  const [pendingConfirm, setPendingConfirm] = useState<{ kind: 'restore' | 'remove'; meta: CloudLeagueMeta } | null>(null);
 
   const refresh = useCallback(async () => {
     setLocal(await listLeagues());
@@ -55,10 +60,16 @@ export function CloudSavesPanel() {
     if (next) await syncAll();
   }
 
-  async function restore(meta: CloudLeagueMeta) {
+  function restore(meta: CloudLeagueMeta) {
     const localCopy = local.find(l => l.id === meta.id);
-    if (localCopy && localCopy.updatedAt > meta.updatedAt
-      && !window.confirm(`This device has a NEWER copy of "${meta.displayName}". Replace it with the cloud copy?`)) return;
+    if (localCopy && localCopy.updatedAt > meta.updatedAt) {
+      setPendingConfirm({ kind: 'restore', meta });
+      return;
+    }
+    void doRestore(meta);
+  }
+
+  async function doRestore(meta: CloudLeagueMeta) {
     setBusy(meta.id);
     setMsg(null);
     const json = await pullLeagueJson(meta.id);
@@ -70,8 +81,7 @@ export function CloudSavesPanel() {
     await refresh();
   }
 
-  async function remove(meta: CloudLeagueMeta) {
-    if (!window.confirm(`Remove the cloud copy of "${meta.displayName}"? Copies on your devices are not affected.`)) return;
+  async function doRemove(meta: CloudLeagueMeta) {
     setBusy(meta.id);
     const ok = await removeCloudLeague(meta.id);
     setBusy(null);
@@ -104,13 +114,14 @@ export function CloudSavesPanel() {
             role="switch"
             aria-checked={enabled}
             aria-label={enabled ? 'Turn off cloud saves' : 'Turn on cloud saves'}
-            className="shrink-0 relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-60"
-            style={{ background: enabled ? 'var(--accent)' : 'var(--surface-2)', border: '1px solid var(--border)' }}
+            className={`shrink-0 relative inline-flex h-7 w-12 items-center rounded-full border border-[var(--border)] transition-colors disabled:opacity-60 ${
+              enabled ? 'bg-[var(--accent)] hover:bg-[var(--accent-strong)]' : 'bg-[var(--surface-2)] hover:bg-[var(--border)]'
+            }`}
           >
             <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         ) : !loading && (
-          <Link href="/login" className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>Sign in</Link>
+          <Link href="/login" className={`shrink-0 ${settingsLinkClass('primary', 'sm')}`}>Sign in</Link>
         )}
       </div>
 
@@ -135,10 +146,10 @@ export function CloudSavesPanel() {
                       {here ? ' · on this device' : ''}
                     </div>
                   </div>
-                  <button onClick={() => void restore(m)} disabled={!!busy} className="rounded-md px-2.5 py-1 text-xs font-bold text-white disabled:opacity-50" style={{ background: 'var(--accent)' }}>
-                    {busy === m.id ? '…' : here ? 'Replace local' : 'Restore'}
-                  </button>
-                  <button onClick={() => void remove(m)} disabled={!!busy} className="rounded-md px-2 py-1 text-xs font-semibold text-[var(--text-sec)] hover:text-[var(--foreground)] disabled:opacity-50" title="Remove cloud copy">
+                  <Button size="sm" variant="primary" busy={busy === m.id} disabled={!!busy} onClick={() => restore(m)}>
+                    {here ? 'Replace local' : 'Restore'}
+                  </Button>
+                  <button onClick={() => setPendingConfirm({ kind: 'remove', meta: m })} disabled={!!busy} className="rounded-md px-2 py-1 text-xs font-semibold text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-50" title="Remove cloud copy">
                     ✕
                   </button>
                 </div>
@@ -148,6 +159,24 @@ export function CloudSavesPanel() {
         </div>
       )}
       {msg && <p className="text-xs mt-3 font-semibold">{msg}</p>}
+
+      <ConfirmModal
+        open={!!pendingConfirm}
+        onClose={() => setPendingConfirm(null)}
+        title={pendingConfirm?.kind === 'remove' ? 'Remove cloud copy?' : 'Replace newer local copy?'}
+        body={pendingConfirm && (pendingConfirm.kind === 'remove'
+          ? <>Remove the cloud copy of <b>{pendingConfirm.meta.displayName}</b>? Copies on your devices are not affected.</>
+          : <>This device has a <b>newer</b> copy of <b>{pendingConfirm.meta.displayName}</b>. Replace it with the cloud copy?</>)}
+        confirmLabel={pendingConfirm?.kind === 'remove' ? 'Remove' : 'Replace local'}
+        tone="danger"
+        onConfirm={() => {
+          const c = pendingConfirm;
+          setPendingConfirm(null);
+          if (!c) return;
+          if (c.kind === 'remove') void doRemove(c.meta);
+          else void doRestore(c.meta);
+        }}
+      />
     </section>
   );
 }

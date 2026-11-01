@@ -8,6 +8,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { fmtMoney } from '@/lib/dashboard/summary';
@@ -22,6 +24,12 @@ import {
 import { coachCareer } from '@/lib/coaching/career';
 import type { BaseCoach } from '@bs/core/adapter';
 import { resolveBasketballPDCEffect, type BasketballPlayer, type BasketballTeam } from '@bs/sport-basketball';
+
+const MARKET_ROLE_OPTIONS: ReadonlyArray<{ value: StaffRole; label: string }> = [
+  { value: 'HC', label: 'Head coaches' },
+  { value: 'PDC', label: 'Dev coaches' },
+];
+const EXT_YEAR_OPTIONS = [1, 2, 3, 4, 5].map(n => ({ value: String(n), label: String(n) }));
 
 /**
  * /staff — the user's head coach + player-development coach (ratings,
@@ -45,11 +53,12 @@ export default function StaffPage() {
 
   const pool = useMemo(() => (league ? coachingMarket(league, marketRole, 6) : []), [league, marketRole]);
 
-  if (loading && !league) return <Shell><p className="opacity-60">Loading…</p></Shell>;
-  if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
+  if (loading && !league) return <Shell><PageHeader title="Staff" /><p className="opacity-60">Loading…</p></Shell>;
+  if (!league) return <Shell><PageHeader title="Staff" /><p>{error ?? 'No league loaded.'}</p></Shell>;
   if (!team) {
     return (
       <Shell>
+        <PageHeader title="Staff" />
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState icon="🧑‍🏫" title="No team yet" message="Pick a team from the League page to manage its staff." />
         </div>
@@ -98,9 +107,7 @@ export default function StaffPage() {
 
   return (
     <Shell>
-      <h1 className="text-2xl sm:text-3xl font-black mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
-        {team.city} {team.name} — Staff
-      </h1>
+      <PageHeader title={`${team.city} ${team.name} Staff`} subtitle="Head coach, player-development coach and the coaching market" className="mb-4" />
 
       {expiring.length > 0 && (
         <div className="mb-4 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: '#f59e0b', background: 'color-mix(in srgb, #f59e0b 10%, var(--surface))' }}>
@@ -176,15 +183,7 @@ export default function StaffPage() {
       <Card className="!p-0 overflow-hidden mb-4">
         <CardHeader className="px-4 pt-3">
           <CardTitle>Coaching market</CardTitle>
-          <div className="flex gap-1">
-            {(['HC', 'PDC'] as StaffRole[]).map(r => (
-              <button key={r} onClick={() => setMarketRole(r)}
-                className="px-3 py-1 rounded-full text-xs font-semibold"
-                style={{ background: marketRole === r ? 'var(--accent)' : 'var(--surface-2)', color: marketRole === r ? '#fff' : 'var(--text-sec)' }}>
-                {r === 'HC' ? 'Head coaches' : 'Dev coaches'}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl options={MARKET_ROLE_OPTIONS} value={marketRole} onChange={setMarketRole} variant="secondary" size="sm" />
         </CardHeader>
         <div className="pb-2">
           {pool.map(c => {
@@ -197,7 +196,7 @@ export default function StaffPage() {
               <div key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-2 border-t" style={{ borderColor: 'var(--border)' }}>
                 <div className="min-w-0">
                   <div className="font-semibold truncate flex items-center gap-1.5">
-                    <Link href={`/coach/${c.id}`} className="hover:underline">{c.firstName} {c.lastName}</Link>
+                    <Link href={`/coach/${c.id}`} className="hover:text-[var(--accent)] transition-colors">{c.firstName} {c.lastName}</Link>
                     {marketRole === 'HC' && <Chip tone="blue">{SCHEME_LABELS[sc]}</Chip>}
                     {rec.rows.length > 0 && <Chip tone="slate">Veteran {rec.wins}-{rec.losses}</Chip>}
                   </div>
@@ -230,7 +229,7 @@ export default function StaffPage() {
 
       <LeagueCoachesTable />
 
-      <p className="mt-3 text-xs text-[var(--text-sec)]">Per-player scheme fit shows on the <Link href="/roster" className="font-semibold" style={{ color: 'var(--accent)' }}>Roster</Link>. Coaching salaries and dead money appear in <Link href="/finances" className="font-semibold" style={{ color: 'var(--accent)' }}>Finances</Link>.</p>
+      <p className="mt-3 text-xs text-[var(--text-sec)]">Per-player scheme fit shows on the <Link href="/roster" className="font-semibold text-[var(--accent)] hover:underline">Roster</Link>. Coaching salaries and dead money appear in <Link href="/finances" className="font-semibold text-[var(--accent)] hover:underline">Finances</Link>.</p>
 
       {/* Hire confirmation */}
       <ConfirmModal
@@ -291,13 +290,11 @@ export default function StaffPage() {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-[var(--text-sec)]">Years</span>
-              {[1, 2, 3, 4, 5].map(n => (
-                <button key={n} onClick={() => { setExtYears(n); setExtResult(null); }}
-                  className="w-8 h-8 rounded-lg text-sm font-bold"
-                  style={{ background: extYears === n ? 'var(--accent)' : 'var(--surface-2)', color: extYears === n ? '#fff' : 'var(--foreground)' }}>
-                  {n}
-                </button>
-              ))}
+              <SegmentedControl
+                options={EXT_YEAR_OPTIONS}
+                value={String(extYears)}
+                onChange={v => { setExtYears(Number(v)); setExtResult(null); }}
+              />
             </div>
             <p>
               Asking <b>{fmtMoney(extQuote.terms.salary)}/yr</b> for {extQuote.terms.years} year{extQuote.terms.years > 1 ? 's' : ''},{' '}
@@ -331,7 +328,7 @@ function CoachHeader({ coach, season, badge }: { coach: BaseCoach; season: numbe
         {coach.firstName[0]}{coach.lastName[0]}
       </div>
       <div className="min-w-0">
-        <Link href={`/coach/${coach.id}`} className="text-lg font-bold hover:underline">{coach.firstName} {coach.lastName}</Link>
+        <Link href={`/coach/${coach.id}`} className="text-lg font-bold hover:text-[var(--accent)] transition-colors">{coach.firstName} {coach.lastName}</Link>
         {interim && <span className="ml-2"><Chip tone="amber">Interim</Chip></span>}
         <div className="text-sm text-[var(--text-sec)]">
           Age {coach.age} · {coachOverall(coach)} {coach.role === 'PDC' ? 'DEV' : 'OVR'} · {fmtMoney(coachSalary(coach, season))}/yr
@@ -408,8 +405,12 @@ function LeagueCoachesTable() {
     return (typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number)) * dir;
   });
   const head = (key: SortKey, label: string, cls = '') => (
-    <th className={`px-2 py-2 font-semibold cursor-pointer select-none ${cls}`} onClick={() => { if (sort === key) setDir(d => (d === 1 ? -1 : 1)); else { setSort(key); setDir(key === 'team' ? 1 : -1); } }}>
-      {label}{sort === key ? (dir === 1 ? ' ▲' : ' ▼') : ''}
+    <th
+      className={`px-2 py-2 font-semibold cursor-pointer select-none transition-colors hover:text-[var(--text)] ${sort === key ? 'text-[var(--accent)]' : ''} ${cls}`}
+      aria-sort={sort === key ? (dir === 1 ? 'ascending' : 'descending') : undefined}
+      onClick={() => { if (sort === key) setDir(d => (d === 1 ? -1 : 1)); else { setSort(key); setDir(key === 'team' ? 1 : -1); } }}
+    >
+      {label}{sort === key ? (dir === 1 ? ' ↑' : ' ↓') : ''}
     </th>
   );
   return (
@@ -432,13 +433,13 @@ function LeagueCoachesTable() {
             {sorted.map(r => (
               <tr key={r.team.id} className="border-t" style={{ borderColor: 'var(--border)', background: r.team.id === league.userTeamId ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : undefined }}>
                 <td className="px-2 py-1.5 pl-4">
-                  <Link href={`/team/${r.team.id}`} className="flex items-center gap-1.5 font-semibold">
+                  <Link href={`/team/${r.team.id}`} className="flex items-center gap-1.5 font-semibold hover:text-[var(--accent)] transition-colors">
                     <TeamLogo abbreviation={r.team.abbreviation} primaryColor={r.team.primaryColor} secondaryColor={r.team.secondaryColor} size="xs" />
                     {r.team.abbreviation}
                   </Link>
                 </td>
                 <td className="px-2 py-1.5">
-                  {r.hc ? <Link href={`/coach/${r.hc.id}`} className="hover:underline">{r.hc.firstName} {r.hc.lastName}</Link> : '—'}
+                  {r.hc ? <Link href={`/coach/${r.hc.id}`} className="font-semibold hover:text-[var(--accent)] transition-colors">{r.hc.firstName} {r.hc.lastName}</Link> : '—'}
                   {r.hc && coachData(r.hc).interim && <span className="ml-1 text-[10px] font-bold" style={{ color: '#f59e0b' }}>INT</span>}
                   {r.titles > 0 && <span className="ml-1 text-[10px]" title={`${r.titles} title${r.titles > 1 ? 's' : ''}`}>🏆{r.titles > 1 ? r.titles : ''}</span>}
                 </td>
@@ -447,7 +448,7 @@ function LeagueCoachesTable() {
                 <td className="px-2 py-1.5 tabular-nums text-right">{fmtMoney(r.salary)}</td>
                 <td className="px-2 py-1.5 tabular-nums text-right">{r.end || '—'}</td>
                 <td className="px-2 py-1.5 tabular-nums text-right pr-4">
-                  {r.pdc ? <Link href={`/coach/${r.pdc.id}`} className="hover:underline" title={`${r.pdc.firstName} ${r.pdc.lastName}`}>{r.pdc.ratings.development}</Link> : '—'}
+                  {r.pdc ? <Link href={`/coach/${r.pdc.id}`} className="hover:text-[var(--accent)] transition-colors" title={`${r.pdc.firstName} ${r.pdc.lastName}`}>{r.pdc.ratings.development}</Link> : '—'}
                 </td>
               </tr>
             ))}
@@ -478,9 +479,8 @@ function RatingTile({ label, value }: { label: string; value: number }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="max-w-4xl mx-auto p-4 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <div className="mt-2">{children}</div>
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      {children}
     </main>
   );
 }

@@ -20,18 +20,20 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export function TeamLeaders({ league, team }: { league: LeagueState; team: BasketballTeam }) {
   const leaders = useMemo(() => teamLeaders(league, team), [league, team]);
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
-  if (leaders.length === 0) return null;
-
   return (
     <Card className="mb-6">
       <SectionHeader title="Team Leaders" icon="⭐" action={{ label: 'Stats →', href: '/stats' }} />
+      {/* Keep the card before tip-off (football does) so the dashboard
+          doesn't reflow after the first sim. */}
+      {leaders.length === 0 && (
+        <div className="text-sm text-[var(--text-sec)] text-center py-4">Season hasn&apos;t started — sim some games!</div>
+      )}
       <div className="grid sm:grid-cols-2 gap-2">
         {leaders.map(l => (
           <button
             key={l.category}
             onClick={() => setModalPlayerId(l.player.id)}
-            className="flex items-center gap-3 rounded-lg p-2.5 text-left hover:bg-[var(--surface-2)] transition-colors"
-            style={{ background: 'var(--surface-2)' }}
+            className="flex items-center gap-3 rounded-lg p-2.5 text-left bg-[var(--surface-2)] hover:bg-[var(--border)] transition-colors"
           >
             <div className="min-w-0 flex-1">
               <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)]">{l.category}</div>

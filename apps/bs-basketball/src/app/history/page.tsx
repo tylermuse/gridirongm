@@ -5,7 +5,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import {
   getSeasonHistory,
@@ -35,6 +37,12 @@ const ROUND_LABEL: Record<number, string> = {
   0: 'Missed playoffs', 1: 'First Round', 2: 'Conf. Semis', 3: 'Conf. Finals', 4: 'Finals',
 };
 
+const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
+  { value: 'seasons', label: 'Seasons' },
+  { value: 'franchise', label: 'Franchise Records' },
+  { value: 'league', label: 'League Records' },
+];
+
 export default function HistoryPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const [tab, setTab] = useState<Tab>('seasons');
@@ -45,14 +53,12 @@ export default function HistoryPage() {
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
 
   return (
-    <main className="max-w-6xl mx-auto p-4 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <header className="flex flex-wrap items-baseline gap-4 mt-2 mb-6">
-        <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>League History</h1>
-        <p className="text-sm text-[var(--text-sec)]">
-          Season {league.currentSeason} · {history.length} season{history.length === 1 ? '' : 's'} in the books
-        </p>
-      </header>
+    <main className="max-w-6xl mx-auto p-3 sm:p-5 md:p-8">
+      <PageHeader
+        title="League History"
+        subtitle={`Season ${league.currentSeason} · ${history.length} season${history.length === 1 ? '' : 's'} in the books`}
+        className="mb-6"
+      />
 
       {history.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
@@ -60,12 +66,8 @@ export default function HistoryPage() {
         </div>
       ) : (
         <>
-          <div className="mb-5 inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
-            {([['seasons', 'Seasons'], ['franchise', 'Franchise Records'], ['league', 'League Records']] as const).map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)} className="px-3 py-1.5" style={tab === k ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>
-                {label}
-              </button>
-            ))}
+          <div className="mb-5 max-w-full overflow-x-auto no-scrollbar">
+            <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} />
           </div>
           {tab === 'seasons' && <SeasonsTab league={league} history={history} />}
           {tab === 'franchise' && <FranchiseTab league={league} />}
@@ -126,56 +128,168 @@ const Empty = ({ children }: { children: ReactNode }) => (
 );
 
 // ===========================================================================
-// Seasons tab — timeline + drill-down
+// Seasons tab — W–L sparkline + outcome-coded timeline + drill-down
 // ===========================================================================
 
-function SeasonsTab({ league, history }: { league: League; history: SeasonHistoryEntry[] }) {
-  const teams = useTeams(league);
-  const [selected, setSelected] = useState<number>(history[0].season);
-  const drill = useMemo(() => getSeasonDrillDown(league, selected), [league, selected]);
-  const userTeamId = league.userTeamId ?? null;
+/** How the user's team finished a season. 'unknown' = a legacy archive with no
+ *  per-team playoff rounds (only the Finals pair is known); 'none' = no user
+ *  team (spectator save). */
+type Outcome = 'champion' | 'playoffs' | 'missed' | 'unknown' | 'none';
 
+function userOutcome(h: SeasonHistoryEntry, uid: string | null): { outcome: Outcome; round: number } {
+  if (!uid) return { outcome: 'none', round: 0 };
+  if (h.champion === uid) return { outcome: 'champion', round: 4 };
+  if (h.runnerUp === uid) return { outcome: 'playoffs', round: 4 };
+  if (!h.playoffRound) return { outcome: 'unknown', round: 0 };
+  const round = h.playoffRound[uid] ?? 0;
+  return { outcome: round > 0 ? 'playoffs' : 'missed', round };
+}
+
+/** Outcome pill — alpha tints so it reads in both themes (no light pastels). */
+function ResultPill({ outcome, round }: { outcome: Outcome; round: number }) {
+  if (outcome === 'none' || outcome === 'unknown') return null;
+  const cls = outcome === 'champion'
+    ? 'bg-amber-500/15 text-amber-600'
+    : outcome === 'playoffs'
+      ? 'bg-green-500/15 text-green-600'
+      : 'bg-[var(--surface-2)] text-[var(--text-sec)]';
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
-      <div className="relative">
-        <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-[var(--border)]" />
-        <div className="space-y-2">
-          {history.map(h => {
-            const active = h.season === selected;
-            const champ = h.champion ? teams.get(h.champion) : undefined;
-            const userRec = userTeamId ? h.teamRecords?.find(r => r.teamId === userTeamId) : undefined;
-            const userChamp = !!userTeamId && h.champion === userTeamId;
+    <span className={`inline-flex items-center font-semibold rounded-full uppercase tracking-wide px-2 py-0.5 text-[10px] whitespace-nowrap ${cls}`}>
+      {outcome === 'champion' ? '🏆 Champion' : ROUND_LABEL[round] ?? '—'}
+    </span>
+  );
+}
+
+const CARD_TONE: Record<Outcome, string> = {
+  champion: 'border-amber-500/40 bg-amber-500/10 hover:border-amber-500/70',
+  playoffs: 'border-green-500/30 bg-green-500/10 hover:border-green-500/60',
+  missed: 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/50',
+  unknown: 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/50',
+  none: 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/50',
+};
+
+const DOT_TONE: Record<Outcome, string> = {
+  champion: 'bg-amber-500 border-amber-500',
+  playoffs: 'bg-green-500 border-green-500',
+  missed: 'bg-[var(--surface-2)] border-[var(--border)]',
+  unknown: 'bg-[var(--surface-2)] border-[var(--border)]',
+  none: 'bg-[var(--surface-2)] border-[var(--border)]',
+};
+
+/** The user's W–L across archived seasons, oldest → newest. Bar height is the
+ *  win %, color is above/below .500 (amber for title years). */
+function WinLossSparkline({ history, userTeamId }: { history: SeasonHistoryEntry[]; userTeamId: string }) {
+  const points = [...history]
+    .sort((a, b) => a.season - b.season)
+    .map(h => {
+      const rec = h.teamRecords?.find(r => r.teamId === userTeamId);
+      return rec ? { season: h.season, wins: rec.wins, losses: rec.losses, champ: h.champion === userTeamId } : null;
+    })
+    .filter((p): p is { season: number; wins: number; losses: number; champ: boolean } => !!p);
+  if (points.length === 0) return null;
+  return (
+    <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Your Win–Loss by Season</div>
+      <div className="overflow-x-auto no-scrollbar">
+        <div className="flex items-end gap-2 h-[104px]">
+          {points.map(p => {
+            const total = p.wins + p.losses;
+            const pct = total > 0 ? p.wins / total : 0;
+            const color = p.champ ? 'bg-amber-500' : pct >= 0.5 ? 'bg-green-500' : 'bg-red-500';
             return (
-              <div key={h.season} className="flex items-start gap-3">
-                <div className="relative z-10 pt-4 shrink-0">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-sm"
-                    style={{ background: userChamp ? '#f59e0b' : active ? 'var(--accent)' : 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                    {userChamp ? '🏆' : ''}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelected(h.season)}
-                  className="flex-1 min-w-0 text-left rounded-xl border p-3 transition-colors bg-[var(--surface)]"
-                  style={{ borderColor: active ? 'var(--accent)' : 'var(--border)', boxShadow: active ? 'inset 3px 0 0 var(--accent)' : undefined }}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-bold">{h.season}</span>
-                    {userRec && (
-                      <span className="text-xs tabular-nums text-[var(--text-sec)]">You: {userRec.wins}-{userRec.losses}</span>
-                    )}
-                  </div>
-                  <div className="text-xs flex items-center gap-1 text-[var(--text-sec)]">
-                    <TeamChip team={champ} /> <span>won it all</span>
-                  </div>
-                </button>
+              <div key={p.season} className="flex flex-col items-center justify-end gap-1 flex-1 min-w-[32px] max-w-[64px] h-full">
+                <span className="text-[9px] font-mono text-[var(--text-sec)] tabular-nums">{p.wins}-{p.losses}</span>
+                <div
+                  className={`w-full rounded-t-sm ${color}`}
+                  style={{ height: Math.max(6, pct * 64) }}
+                  title={`${p.season}: ${p.wins}-${p.losses} (${(pct * 100).toFixed(0)}%)${p.champ ? ' · Champions' : ''}`}
+                />
+                <span className="text-[9px] font-mono text-[var(--text-sec)] tabular-nums">{p.season}</span>
               </div>
             );
           })}
         </div>
       </div>
-
-      {drill ? <SeasonDetail league={league} d={drill} /> : <Empty>Season not found.</Empty>}
     </div>
+  );
+}
+
+function SeasonsTab({ league, history }: { league: League; history: SeasonHistoryEntry[] }) {
+  const teams = useTeams(league);
+  // Newest season open by default; tapping the open card collapses it.
+  const [selected, setSelected] = useState<number | null>(history[0].season);
+  const drill = useMemo(() => (selected == null ? null : getSeasonDrillDown(league, selected)), [league, selected]);
+  const userTeamId = league.userTeamId ?? null;
+
+  return (
+    <>
+      {userTeamId && <WinLossSparkline history={history} userTeamId={userTeamId} />}
+      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6">
+        <div className="relative min-w-0">
+          <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-[var(--border)]" />
+          <div className="space-y-2">
+            {history.map(h => {
+              const active = h.season === selected;
+              const champ = h.champion ? teams.get(h.champion) : undefined;
+              const userRec = userTeamId ? h.teamRecords?.find(r => r.teamId === userTeamId) : undefined;
+              const { outcome, round } = userOutcome(h, userTeamId);
+              return (
+                <div key={h.season} className="flex items-start gap-3">
+                  <div className="relative z-10 pt-4 shrink-0">
+                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs shadow-sm ${DOT_TONE[outcome]}`}>
+                      {outcome === 'champion' ? '🏆' : ''}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <button
+                      type="button"
+                      aria-expanded={active}
+                      onClick={() => setSelected(active ? null : h.season)}
+                      className={`w-full text-left rounded-xl border p-3 transition-colors ${
+                        active ? 'border-[var(--accent)] bg-[var(--accent)]/10' : CARD_TONE[outcome]
+                      }`}
+                      style={active ? { boxShadow: 'inset 3px 0 0 var(--accent)' } : undefined}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-bold">{h.season}</span>
+                        <ResultPill outcome={outcome} round={round} />
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        {userRec ? (
+                          <span className="tabular-nums">
+                            <span className="font-bold text-green-600">{userRec.wins}</span>
+                            <span className="text-[var(--text-sec)]">-</span>
+                            <span className="font-bold text-red-600">{userRec.losses}</span>
+                          </span>
+                        ) : <span />}
+                        <span className="flex items-center gap-1 text-[var(--text-sec)] min-w-0">
+                          <TeamChip team={champ} /> <span className="whitespace-nowrap">won it all</span>
+                        </span>
+                      </div>
+                    </button>
+                    {/* Mobile: the season opens inline under its card. */}
+                    {active && drill && (
+                      <div className="md:hidden mt-2">
+                        <SeasonDetail league={league} d={drill} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Desktop: the open season sits in the side column. */}
+        <div className="hidden md:block min-w-0">
+          {drill ? <SeasonDetail league={league} d={drill} /> : (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] py-12 text-center text-sm text-[var(--text-sec)]">
+              Select a season to view details.
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -395,9 +509,7 @@ function FranchiseTab({ league }: { league: League }) {
                   <span className="w-12 font-bold tabular-nums">{s.season}</span>
                   <span className="tabular-nums font-semibold">{s.wins}-{s.losses}</span>
                   <span className="ml-auto">
-                    {s.champion
-                      ? <Badge variant="amber">Champion</Badge>
-                      : <Badge variant={s.playoffRound > 0 ? 'green' : 'default'}>{ROUND_LABEL[s.playoffRound] ?? '—'}</Badge>}
+                    <ResultPill outcome={s.champion ? 'champion' : s.playoffRound > 0 ? 'playoffs' : 'missed'} round={s.playoffRound} />
                   </span>
                 </Row>
               ))}
@@ -566,14 +678,19 @@ function LeagueTab({ league }: { league: League }) {
 }
 
 function Loading() {
-  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return (
+    <main className="max-w-6xl mx-auto p-3 sm:p-5 md:p-8">
+      <Skeleton className="h-8 w-48 mb-6" />
+      <SkeletonList rows={6} />
+    </main>
+  );
 }
 
 function NotFound({ message }: { message: string }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
-      <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
+      <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Start or load a league</Link>
     </main>
   );
 }

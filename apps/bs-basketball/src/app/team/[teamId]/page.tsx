@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -11,8 +11,13 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerName } from '@/components/modals/PlayerModalProvider';
+import {
+  NAME_CLS, OvrChip, PotValue, PotHeader, ContractText, TwoWayChip, ResponsiveName,
+  SortTh, PlainTh, useRosterSort, contractInfo, injuryStatus,
+} from '@/components/roster/RosterCells';
 import { getTransactions } from '@/lib/transactions';
 import { getInjuries, SEVERITY_LABEL, canPlayThrough } from '@/lib/injuries';
+import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import type {
   BasketballPlayer,
@@ -24,8 +29,10 @@ import type { BaseGameResult } from '@bs/core/adapter';
 /**
  * /team/[teamId] — team dashboard.
  *
- * Top row: Team Stats card + Next Game card (2-col on desktop).
- * Then: Recent Games card (full width), Roster table (full width).
+ * Hero (record + cap space), then Team Stats + Next Game (2-col on desktop),
+ * injuries / activity / recent games, and a sortable roster table. Sim
+ * controls live in the top bar; the only sim button here is the Next Game
+ * card's.
  */
 
 type GameResult = BaseGameResult<BasketballStats>;
@@ -35,22 +42,25 @@ interface TeamSportData {
   division: string;
 }
 
-type SortKey = 'overall' | 'age' | 'position' | 'name' | 'ppg' | 'rpg' | 'apg' | 'gp';
+type SortKey = 'overall' | 'age' | 'position' | 'name' | 'pot' | 'contract' | 'ppg' | 'rpg' | 'apg' | 'gp';
 
 // MOBILE-1: progressive column hiding on phone. At 390px we keep Name +
-// Pos + OVR + PPG (the headline stat); Age/GP/RPG/APG re-emerge at sm;
-// 3PT/DEF/REB only at md. Sortable headers + body rows share the same
+// Pos + OVR + PPG (the headline stat); Age/POT/Contract/GP/RPG/APG re-emerge
+// at sm; 3PT/DEF/REB only at md. Sortable headers + body rows share the same
 // `hidden` classes so the table stays aligned.
-const SORTABLE: { key: SortKey; label: string; align?: 'left' | 'right'; cls?: string }[] = [
+const SORTABLE: { key: SortKey; label: ReactNode; align: 'left' | 'center' | 'right'; cls?: string }[] = [
   { key: 'name',     label: 'Name',     align: 'left'  },
   { key: 'position', label: 'Pos',      align: 'left'  },
   { key: 'age',      label: 'Age',      align: 'right', cls: 'hidden sm:table-cell' },
-  { key: 'overall',  label: 'OVR',      align: 'right' },
+  { key: 'overall',  label: 'OVR',      align: 'center' },
+  { key: 'pot',      label: <PotHeader />, align: 'right', cls: 'hidden sm:table-cell' },
+  { key: 'contract', label: 'Contract', align: 'right', cls: 'hidden sm:table-cell' },
   { key: 'gp',       label: 'GP',       align: 'right', cls: 'hidden sm:table-cell' },
   { key: 'ppg',      label: 'PPG',      align: 'right' },
   { key: 'rpg',      label: 'RPG',      align: 'right', cls: 'hidden sm:table-cell' },
   { key: 'apg',      label: 'APG',      align: 'right', cls: 'hidden sm:table-cell' },
 ];
+const ALIGN_CLS = { left: 'text-left', center: 'text-center', right: 'text-right' } as const;
 
 /** Per-game value, guarding the 0-games case. */
 function perGameStat(s: BasketballStats, key: 'points' | 'totalRebounds' | 'assists'): number {
@@ -65,9 +75,8 @@ export default function TeamPage() {
   const params = useParams<{ teamId: string }>();
   const router = useRouter();
   const { league, loading, error } = useLeagueOrHydrate();
-  const { pickUserTeam, simNextUserGame, simDay } = useLeagueStore();
-  const [sortKey, setSortKey] = useState<SortKey>('overall');
-  const [sortDesc, setSortDesc] = useState(true);
+  const { pickUserTeam, simNextUserGame } = useLeagueStore();
+  const { sortKey, sortDir, onSort } = useRosterSort<SortKey>('overall', 'desc', ['name', 'position']);
   const [simming, setSimming] = useState(false);
 
   const team: BasketballTeam | null = useMemo(() => {
@@ -121,6 +130,7 @@ export default function TeamPage() {
     [league],
   );
 
+  const season = league?.currentSeason ?? 0;
   const sorted = useMemo(() => {
     const arr = [...roster];
     arr.sort((a, b) => {
@@ -132,24 +142,17 @@ export default function TeamPage() {
         case 'age':      diff = a.age - b.age; break;
         case 'position': diff = a.sportData.position.localeCompare(b.sportData.position); break;
         case 'name':     diff = `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`); break;
+        case 'pot':      diff = a.development.potential - b.development.potential; break;
+        case 'contract': diff = (contractInfo(a, season)?.aav ?? 0) - (contractInfo(b, season)?.aav ?? 0); break;
         case 'gp':       diff = sa.gamesPlayed - sb.gamesPlayed; break;
         case 'ppg':      diff = perGameStat(sa, 'points') - perGameStat(sb, 'points'); break;
         case 'rpg':      diff = perGameStat(sa, 'totalRebounds') - perGameStat(sb, 'totalRebounds'); break;
         case 'apg':      diff = perGameStat(sa, 'assists') - perGameStat(sb, 'assists'); break;
       }
-      return sortDesc ? -diff : diff;
+      return sortDir === 'desc' ? -diff : diff;
     });
     return arr;
-  }, [roster, sortKey, sortDesc, statsMap]);
-
-  function toggleSort(key: SortKey) {
-    if (key === sortKey) {
-      setSortDesc(d => !d);
-    } else {
-      setSortKey(key);
-      setSortDesc(true);
-    }
-  }
+  }, [roster, sortKey, sortDir, statsMap, season]);
 
   if (loading) return <Loading />;
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
@@ -162,14 +165,17 @@ export default function TeamPage() {
   const oppPpg = gamesPlayed > 0 ? team.record.pointsAgainst / gamesPlayed : 0;
   const avgOvr = roster.length ? avg(roster.map(p => p.ratings.overall)) : 0;
   const last5 = team.record.streak.slice(-5);
+  const cap = teamCap(league, team);
+  const injuries = getInjuries(league);
+  const day = league.currentTick;
 
   // Team lookup for opponent rendering.
   const teamById = new Map((league.teams as BasketballTeam[]).map(t => [t.id, t]));
 
   return (
-    <main className="max-w-5xl mx-auto p-5 sm:p-8">
-      <Link href="/league" className="text-sm font-semibold opacity-70 hover:opacity-100">
-        ← League
+    <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8">
+      <Link href="/standings" className="text-sm font-semibold opacity-70 hover:opacity-100">
+        ← Standings
       </Link>
 
       <header
@@ -198,36 +204,18 @@ export default function TeamPage() {
           </p>
         </div>
 
-        <div className="relative ml-auto flex flex-wrap gap-2">
+        <div className="relative ml-auto flex flex-wrap items-center gap-3">
+          {/* Cap space (football parity) — on a dark scrim so the green/red
+              reads on any team color. */}
+          <div className="rounded-xl px-3 py-2 text-right" style={{ background: 'rgba(0,0,0,0.32)' }}>
+            <div className={`text-xl font-black tabular-nums leading-tight ${cap.capRoom >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {cap.capRoom >= 0 ? fmtMoney(cap.capRoom) : `−${fmtMoney(-cap.capRoom)}`}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-white/80">{cap.capRoom >= 0 ? 'Cap space' : 'Over the cap'}</div>
+            <div className="text-[11px] tabular-nums text-white/80">{fmtMoney(cap.payroll)} / {fmtMoney(cap.cap)}</div>
+          </div>
           {isUserTeam ? (
-            <>
-              <Button
-                variant="primary"
-                disabled={simming || !nextGame}
-                onClick={async () => {
-                  setSimming(true);
-                  const gameId = await simNextUserGame();
-                  setSimming(false);
-                  if (gameId) router.push(`/game/${gameId}`);
-                }}
-              >
-                {simming ? 'Simming…' : 'Sim Next Game →'}
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={simming}
-                onClick={async () => {
-                  setSimming(true);
-                  await simDay();
-                  setSimming(false);
-                }}
-              >
-                Sim Day
-              </Button>
-              <Link href={`/team/${team.id}/lineup`}>
-                <Button variant="secondary">Edit Lineup</Button>
-              </Link>
-            </>
+            <Button variant="secondary" onClick={() => router.push('/roster')}>Edit Lineup</Button>
           ) : league.userTeamId ? null : (
             <Button variant="primary" onClick={() => void pickUserTeam(team.id)}>
               Pick This Team
@@ -253,8 +241,7 @@ export default function TeamPage() {
             <Stat label="Avg OVR" value={roster.length ? avgOvr.toFixed(1) : '—'} />
             <Stat
               label="Last 5"
-              value={last5.length ? last5.join('') : '—'}
-              mono
+              value={last5.length ? <Last5Dots results={last5} /> : '—'}
             />
           </div>
         </Card>
@@ -290,8 +277,6 @@ export default function TeamPage() {
 
       {/* Injury report */}
       {(() => {
-        const injuries = getInjuries(league);
-        const day = league.currentTick;
         const hurt = team.playerIds
           .map(id => injuries[id])
           .filter((inj): inj is NonNullable<typeof inj> => !!inj && inj.returnDay > day);
@@ -408,22 +393,24 @@ export default function TeamPage() {
         </CardHeader>
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-sm">
-            <thead className="text-[var(--text-sec)]">
+            <thead>
               <tr>
                 {SORTABLE.map(col => (
-                  <th
+                  <SortTh
                     key={col.key}
-                    className={`px-3 py-2 cursor-pointer select-none ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.cls ?? ''}`}
-                    onClick={() => toggleSort(col.key)}
+                    k={col.key}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={onSort}
+                    className={`${ALIGN_CLS[col.align]} ${col.cls ?? ''}`}
                   >
                     {col.label}
-                    {sortKey === col.key && <span className="ml-1 opacity-60">{sortDesc ? '▼' : '▲'}</span>}
-                  </th>
+                  </SortTh>
                 ))}
                 {/* Rating peeks — secondary context, only at md+. */}
-                <th className="px-3 py-2 text-right opacity-60 hidden md:table-cell">3PT</th>
-                <th className="px-3 py-2 text-right opacity-60 hidden md:table-cell">DEF</th>
-                <th className="px-3 py-2 text-right opacity-60 hidden md:table-cell">REB</th>
+                <PlainTh className="text-right opacity-70 hidden md:table-cell">3PT</PlainTh>
+                <PlainTh className="text-right opacity-70 hidden md:table-cell">DEF</PlainTh>
+                <PlainTh className="text-right opacity-70 hidden md:table-cell">REB</PlainTh>
               </tr>
             </thead>
             <tbody>
@@ -431,27 +418,34 @@ export default function TeamPage() {
                 const s = statsForPlayer(statsMap, p.id);
                 const gp = s.gamesPlayed;
                 const pg = (v: number) => (gp > 0 ? (v / gp).toFixed(1) : '—');
+                const inj = injuryStatus(injuries[p.id], day);
                 return (
                   <tr key={p.id} className="border-t hover:bg-[var(--surface-2)] transition-colors" style={{ borderColor: 'var(--border)' }}>
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/player/${p.id}`}
-                        className="font-semibold hover:underline"
-                        style={{ color: 'var(--accent)' }}
-                      >
-                        {p.firstName} {p.lastName}
-                      </Link>
+                    <td className="px-2 py-2">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <PlayerName playerId={p.id} className={`${NAME_CLS} truncate`}>
+                          <ResponsiveName firstName={p.firstName} lastName={p.lastName} />
+                        </PlayerName>
+                        <TwoWayChip player={p} />
+                      </span>
+                      {inj && (
+                        <span className={`block text-[10px] ${inj.gtd ? 'text-amber-600' : 'text-red-600'}`}>
+                          {inj.bodyPart} · {inj.text}
+                        </span>
+                      )}
                     </td>
-                    <td className="px-3 py-2">{p.sportData.position}</td>
-                    <td className="px-3 py-2 text-right hidden sm:table-cell">{p.age}</td>
-                    <td className="px-3 py-2 text-right font-bold">{p.ratings.overall}</td>
-                    <td className="px-3 py-2 text-right tabular-nums hidden sm:table-cell">{gp || '—'}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pg(s.points)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums hidden sm:table-cell">{pg(s.totalRebounds)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums hidden sm:table-cell">{pg(s.assists)}</td>
-                    <td className="px-3 py-2 text-right opacity-70 hidden md:table-cell">{p.ratings.threePoint}</td>
-                    <td className="px-3 py-2 text-right opacity-70 hidden md:table-cell">{Math.round((p.ratings.perimeterDefense + p.ratings.interiorDefense) / 2)}</td>
-                    <td className="px-3 py-2 text-right opacity-70 hidden md:table-cell">{p.ratings.rebounding}</td>
+                    <td className="px-2 py-2 text-xs font-bold text-[var(--text-sec)]">{p.sportData.position}</td>
+                    <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{p.age}</td>
+                    <td className="px-2 py-2 text-center"><OvrChip value={p.ratings.overall} /></td>
+                    <td className="px-2 py-2 text-right hidden sm:table-cell"><PotValue pot={p.development.potential} /></td>
+                    <td className="px-2 py-2 text-right text-xs hidden sm:table-cell"><ContractText player={p} season={season} /></td>
+                    <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{gp || '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{pg(s.points)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{pg(s.totalRebounds)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{pg(s.assists)}</td>
+                    <td className="px-2 py-2 text-right opacity-70 hidden md:table-cell">{p.ratings.threePoint}</td>
+                    <td className="px-2 py-2 text-right opacity-70 hidden md:table-cell">{Math.round((p.ratings.perimeterDefense + p.ratings.interiorDefense) / 2)}</td>
+                    <td className="px-2 py-2 text-right opacity-70 hidden md:table-cell">{p.ratings.rebounding}</td>
                   </tr>
                 );
               })}
@@ -503,8 +497,8 @@ function NextGamePanel({
       </div>
       <div className="ml-auto shrink-0">
         {isUserTeam ? (
-          <Button variant="primary" disabled={simming} onClick={onSim}>
-            {simming ? 'Simming…' : 'Sim Next Game →'}
+          <Button variant="primary" busy={simming} onClick={onSim}>
+            Sim Next Game →
           </Button>
         ) : (
           <Badge variant="default" size="md">Upcoming</Badge>
@@ -528,25 +522,40 @@ function formatGameDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function Stat({ label, value, mono }: { label: string; value: string | number; mono?: boolean }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }}>
-      <div className={`text-lg font-extrabold ${mono ? 'font-mono' : ''}`} style={{ color: 'var(--accent)' }}>{value}</div>
+      <div className="text-lg font-extrabold min-h-7 flex items-center" style={{ color: 'var(--accent)' }}>{value}</div>
       <div className="text-[10px] opacity-70 uppercase tracking-wide">{label}</div>
     </div>
   );
 }
 
+/** Last-5 results as colored dots (oldest → newest) instead of a "WWLWL" string. */
+function Last5Dots({ results }: { results: string[] }) {
+  return (
+    <span className="inline-flex items-center gap-1" role="img" aria-label={`Last ${results.length}: ${results.join(' ')}`}>
+      {results.map((r, i) => (
+        <span
+          key={i}
+          className={`w-2.5 h-2.5 rounded-full ${r === 'W' ? 'bg-green-500' : r === 'L' ? 'bg-red-500' : 'bg-[var(--border)]'}`}
+          title={r === 'W' ? 'Win' : r === 'L' ? 'Loss' : r}
+        />
+      ))}
+    </span>
+  );
+}
+
 function Loading() {
-  return <main className="max-w-5xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8"><p className="opacity-60">Loading…</p></main>;
 }
 
 function NotFound({ message }: { message: string }) {
   return (
-    <main className="max-w-5xl mx-auto p-8">
+    <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
-      <Link href="/league" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-        ← Back to league
+      <Link href="/standings" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
+        ← Back to standings
       </Link>
     </main>
   );

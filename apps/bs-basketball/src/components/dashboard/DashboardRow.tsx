@@ -5,6 +5,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { standingsSlice, teamCap, teamStatLine, fmtMoney } from '@/lib/dashboard/summary';
 import { teamStatRanks, type RankedStat } from '@/lib/dashboard/leaders';
+import { getMaxRoster } from '@/lib/rules/leagueRules';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
@@ -17,7 +18,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
  */
 export function DashboardRow({ league, team }: { league: LeagueState; team: BasketballTeam }) {
   return (
-    <div className="grid md:grid-cols-3 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
       <MiniStandings league={league} team={team} />
       <CapCard league={league} team={team} />
       <TeamStatsCard league={league} team={team} />
@@ -73,6 +74,12 @@ function CapCard({ league, team }: { league: LeagueState; team: BasketballTeam }
         <CapRow label="Payroll" value={fmtMoney(cap.payroll)} />
         <CapRow label="Cap room" value={(cap.capRoom >= 0 ? '+' : '') + fmtMoney(cap.capRoom)} color={cap.capRoom >= 0 ? '#10b981' : '#f97316'} />
         <CapRow label="Tax bill" value={fmtMoney(cap.taxBill)} color={cap.taxBill > 0 ? '#dc2626' : undefined} />
+        {/* Football's finances card closes with the roster count. */}
+        <CapRow
+          label="Roster"
+          value={`${team.playerIds.length} / ${getMaxRoster(league)}`}
+          color={team.playerIds.length > getMaxRoster(league) ? '#dc2626' : undefined}
+        />
       </dl>
       <div className="mt-3 text-xs font-semibold inline-block rounded px-2 py-0.5" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }}>
         {apron}
@@ -100,7 +107,7 @@ function TeamStatsCard({ league, team }: { league: LeagueState; team: Basketball
         <CardTitle>Team Stats</CardTitle>
       </CardHeader>
       {s.gamesPlayed === 0 ? (
-        <p className="text-sm text-[var(--text-sec)]">No games played yet.</p>
+        <div className="text-sm text-[var(--text-sec)] text-center py-4">Season hasn&apos;t started — sim some games!</div>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 mb-2">

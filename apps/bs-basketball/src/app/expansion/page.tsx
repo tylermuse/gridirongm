@@ -527,7 +527,7 @@ function ErrorLine({ message }: { message: string }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="max-w-5xl mx-auto p-5 sm:p-8" style={{ color: 'var(--foreground)' }}>
+    <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8" style={{ color: 'var(--foreground)' }}>
       <Link href="/settings" className="text-sm font-semibold opacity-70 hover:opacity-100">← Settings</Link>
       <h1 className="text-3xl font-extrabold mt-2 mb-1" style={{ color: 'var(--accent)' }}>League Expansion</h1>
       <p className="text-sm text-[var(--text-sec)] mb-5">Add one or two franchises between the draft and the new season.</p>

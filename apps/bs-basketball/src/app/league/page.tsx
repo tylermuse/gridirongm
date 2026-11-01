@@ -5,13 +5,15 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /league — every team grouped by conference + division.
  *
- * v1: simple visual grid; no standings yet (season hasn't been simmed).
- * Each team card is a Link to /team/[id].
+ * A simple "All Teams" directory (records live on /standings). Each team card
+ * is a Link to /team/[id].
  */
 
 const DIVISIONS_BY_CONFERENCE = {
@@ -34,15 +36,16 @@ export default function LeaguePage() {
 
   if (loading) {
     return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="opacity-60">Loading league…</p>
+      <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8">
+        <Skeleton className="h-8 w-40 mb-6" />
+        <SkeletonList rows={10} />
       </main>
     );
   }
 
   if (!league) {
     return (
-      <main className="max-w-4xl mx-auto p-8">
+      <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
         <EmptyState
           icon="🏀"
           title="Couldn’t load a league"
@@ -50,8 +53,8 @@ export default function LeaguePage() {
           action={{ label: 'Retry', onClick: () => void continueLatest() }}
         />
         <div className="text-center">
-          <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-            ← Back to home
+          <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+            Start or load a league
           </Link>
         </div>
       </main>
@@ -59,38 +62,25 @@ export default function LeaguePage() {
   }
 
   return (
-    <main className="max-w-5xl mx-auto p-8">
-      <header className="mb-8">
-        <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
-          ← Home
-        </Link>
-        <div className="flex flex-wrap items-baseline gap-4 mt-2">
-          <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
-            {league.displayName}
-          </h1>
+    <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8">
+      <PageHeader
+        title="All Teams"
+        subtitle={`${league.displayName} · ${league.teams.length} teams · Season ${league.currentSeason} · Day ${league.currentTick}`}
+        right={(
           <Link
             href="/standings"
-            className="ml-auto px-3 py-1 rounded font-semibold text-sm"
-            style={{ background: 'var(--muted)' }}
+            className="px-3 py-1.5 rounded-lg font-semibold text-sm bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] transition-colors"
           >
             Standings →
           </Link>
-        </div>
-        <p className="opacity-70 mt-1">
-          {league.teams.length} teams · Season {league.currentSeason} · Day {league.currentTick}
-        </p>
-      </header>
+        )}
+        className="mb-8"
+      />
 
       <div className="grid gap-8 md:grid-cols-2">
         {(Object.keys(DIVISIONS_BY_CONFERENCE) as ('Eastern' | 'Western')[]).map(conf => (
           <section key={conf}>
-            <h2
-              className="text-2xl font-bold mb-3 pb-1 border-b"
-              style={{
-                color: 'var(--accent-alt)',
-                borderColor: 'var(--accent-alt)',
-              }}
-            >
+            <h2 className="text-lg font-black font-display uppercase tracking-tight mb-3 pb-1 border-b border-[var(--border)]">
               {conf} Conference
             </h2>
 
@@ -107,8 +97,9 @@ export default function LeaguePage() {
                       <li key={t.id}>
                         <Link
                           href={`/team/${t.id}`}
-                          className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-[var(--surface)] hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all"
-                          style={{ borderColor: 'var(--border)' }}
+                          className={`group flex items-center gap-3 px-3 py-2 rounded-lg border hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all ${
+                            t.id === league.userTeamId ? 'border-[var(--accent)]/50 bg-[var(--accent)]/5' : 'border-[var(--border)] bg-[var(--surface)]'
+                          }`}
                         >
                           <TeamLogo
                             abbreviation={t.abbreviation}
@@ -116,7 +107,7 @@ export default function LeaguePage() {
                             secondaryColor={t.secondaryColor}
                             size="sm"
                           />
-                          <span className="font-semibold text-sm">{t.city}</span>
+                          <span className="font-semibold text-sm group-hover:text-[var(--accent)] transition-colors">{t.city}</span>
                           <span className="text-xs text-[var(--text-sec)] truncate">{t.name}</span>
                         </Link>
                       </li>

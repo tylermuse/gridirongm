@@ -9,6 +9,8 @@ import { gmRankings, type GmRanking } from '@/lib/rankings/gmRankings';
 import { GlobalLeaderboard } from '@/components/gm/GlobalLeaderboard';
 import { GmAwards } from '@/components/gm/GmAwards';
 import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { RankingsTabs } from '@/components/awards/RankingsTabs';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -26,12 +28,12 @@ export default function GmRankingsPage() {
     return m;
   }, [league]);
 
-  if (loading) return <main className="max-w-3xl mx-auto p-5 sm:p-8"><Skeleton className="h-8 w-44 mb-4" /><SkeletonList rows={10} /></main>;
+  if (loading) return <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8"><Skeleton className="h-8 w-44 mb-4" /><SkeletonList rows={10} /></main>;
   if (!league) {
     return (
-      <main className="max-w-3xl mx-auto p-8">
+      <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
         <p className="mb-4">{error ?? 'No league loaded.'}</p>
-        <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
+        <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Start or load a league</Link>
       </main>
     );
   }
@@ -39,13 +41,12 @@ export default function GmRankingsPage() {
   const userRow = ranked.find(r => r.isUser) ?? null;
 
   return (
-    <main className="max-w-3xl mx-auto p-5 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-2">
-        <h1 className="text-3xl sm:text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>GM Rankings</h1>
-        <span className="text-sm text-[var(--text-sec)]">Season {league.currentSeason}</span>
-      </header>
-      <p className="text-sm text-[var(--text-sec)] mb-5">Front offices ranked by results, roster talent, young-core upside, cap health, and franchise legacy.</p>
+    <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
+      <RankingsTabs />
+      <PageHeader
+        title="GM Rankings"
+        subtitle={`Season ${league.currentSeason} · front offices ranked by results, roster talent, young-core upside, cap health, and franchise legacy.`}
+      />
 
       {/* Cross-player global board + awards (opt-in, online). Render nothing if online accounts aren't configured. */}
       <GlobalLeaderboard />
@@ -67,13 +68,14 @@ export default function GmRankingsPage() {
                 <li key={r.teamId}>
                   <Link
                     href={`/team/${r.teamId}`}
-                    className="flex items-center gap-3 p-3 rounded-xl border bg-[var(--surface)] hover:border-[var(--accent)] transition-colors"
-                    style={{ borderColor: r.isUser ? 'var(--accent)' : 'var(--border)', background: r.isUser ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}
+                    className={`group flex items-center gap-3 p-3 rounded-xl border transition-colors hover:border-[var(--accent)] ${
+                      r.isUser ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-[var(--border)] bg-[var(--surface)]'
+                    }`}
                   >
                     <span className="w-7 text-center font-black tabular-nums text-[var(--text-sec)]">{r.rank}</span>
                     <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <div className={`truncate ${r.isUser ? 'font-bold' : 'font-semibold'}`}>{team.city} {team.name}</div>
+                      <div className={`truncate group-hover:text-[var(--accent)] transition-colors ${r.isUser ? 'font-bold' : 'font-semibold'}`}>{team.city} {team.name}</div>
                       <div className="text-xs" style={{ color: r.tier.color }}>{r.tier.label} · {r.record}</div>
                     </div>
                     <span className="text-xl font-black tabular-nums" style={{ color: 'var(--accent)' }}>{r.score.toFixed(0)}</span>

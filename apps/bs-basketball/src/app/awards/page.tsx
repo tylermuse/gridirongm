@@ -6,6 +6,9 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
+import { RankingsTabs } from '@/components/awards/RankingsTabs';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { computeSeasonAwards, computeHonors, type SeasonAwards, type SeasonHonors, type AllLeagueTeam } from '@/lib/awards';
 import { getBracket } from '@/lib/playoffs';
@@ -79,26 +82,20 @@ export default function AwardsPage() {
   const playerById = league.players as Record<string, BasketballPlayer>;
 
   return (
-    <main className="max-w-6xl mx-auto p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
-        ← Home
-      </Link>
+    <main className="max-w-6xl mx-auto p-3 sm:p-5 md:p-8">
+      <RankingsTabs />
       {/* STYLE-4: the Live Award Race link only makes sense while a race is
           still on. Once the playoffs have crowned a champion (bracket.complete)
-          the season is over and the trophies above are final — drop the link
-          so it doesn't dangle as a stale CTA on the awards ceremony page. */}
-      {!bracket?.complete && (
-        <div className="mt-2">
+          the season is over and the trophies are final — drop the link so it
+          doesn't dangle as a stale CTA on the awards ceremony page. */}
+      <PageHeader
+        title="Awards"
+        subtitle={`Season ${league.currentSeason}`}
+        right={!bracket?.complete ? (
           <Link href="/award-race" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>📊 Live Award Race →</Link>
-        </div>
-      )}
-
-      <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
-        <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
-          Awards
-        </h1>
-        <p className="text-sm opacity-70">Season {league.currentSeason}</p>
-      </header>
+        ) : undefined}
+        className="mb-6"
+      />
 
       {!awards || !league.games.some(g => g.status === 'played') ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
@@ -387,15 +384,20 @@ function NotAwarded({ def }: { def: AwardDef }) {
 }
 
 function Loading() {
-  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return (
+    <main className="max-w-6xl mx-auto p-3 sm:p-5 md:p-8">
+      <Skeleton className="h-8 w-40 mb-6" />
+      <SkeletonList rows={6} />
+    </main>
+  );
 }
 
 function NotFound({ message }: { message: string }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
-      <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-        ← Home
+      <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+        Start or load a league
       </Link>
     </main>
   );

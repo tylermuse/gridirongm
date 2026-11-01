@@ -17,10 +17,11 @@ interface BadgeProps {
 const variants = {
   default: 'bg-[var(--surface-2)] text-[var(--text-sec)]',
   orange:  'bg-[var(--accent)] text-white',
-  green:   'bg-green-100 text-green-700',
-  red:     'bg-red-100 text-red-700',
-  amber:   'bg-amber-100 text-amber-700',
-  blue:    'bg-blue-100 text-blue-700',
+  // Alpha tints rather than light pastels so the chips also read on the dark theme.
+  green:   'bg-green-500/15 text-green-600',
+  red:     'bg-red-500/15 text-red-600',
+  amber:   'bg-amber-500/15 text-amber-600',
+  blue:    'bg-blue-500/15 text-blue-600',
 };
 
 export function Badge({ children, variant = 'default', size = 'sm', className = '' }: BadgeProps) {

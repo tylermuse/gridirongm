@@ -2,6 +2,7 @@
 
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { conferenceOf, divisionOf, teamCap, fmtMoney } from '@/lib/dashboard/summary';
+import { getContrastText } from '@/lib/ui/ratingColor';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
@@ -20,6 +21,12 @@ export function TeamHero({ league, team }: { league: LeagueState; team: Basketba
     ? { text: `${fmtMoney(room)} room`, color: '#10b981' }
     : { text: `${fmtMoney(-room)} over`, color: '#f97316' };
   const { wins, losses } = team.record;
+  // Light team colors (gold, yellow, imported pastels) made the forced white
+  // text unreadable — pick dark or white text from the primary's luminance,
+  // as football does.
+  const text = getContrastText(team.primaryColor);
+  const onLight = text !== '#fff';
+  const recordChip = wins > losses ? '#16a34a' : wins < losses ? '#dc2626' : null;
 
   return (
     <div
@@ -41,15 +48,20 @@ export function TeamHero({ league, team }: { league: LeagueState; team: Basketba
         <div className="shrink-0 rounded-2xl bg-black/15 p-2">
           <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xl" />
         </div>
-        <div className="min-w-0 flex-1 text-white">
-          <div className="text-[11px] uppercase tracking-[0.25em] text-white/70">You manage</div>
+        <div className="min-w-0 flex-1" style={{ color: text }}>
+          <div className="text-[11px] uppercase tracking-[0.25em] opacity-70">You manage</div>
           <h1 className="text-3xl sm:text-4xl font-black leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
             {team.city} {team.name}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <span className="rounded-full bg-white/15 px-2.5 py-0.5 font-bold tabular-nums">{wins}–{losses}</span>
-            <span className="text-white/80">{conferenceOf(team)} · {divisionOf(team)}</span>
-            <span className="rounded-full px-2.5 py-0.5 font-bold" style={{ background: `color-mix(in srgb, ${capChip.color} 30%, transparent)`, color: '#fff' }}>
+            <span
+              className="rounded-full px-2.5 py-0.5 font-bold tabular-nums"
+              style={recordChip ? { background: recordChip, color: '#fff' } : { background: onLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.15)' }}
+            >
+              {wins}–{losses}
+            </span>
+            <span className="opacity-80">{conferenceOf(team)} · {divisionOf(team)}</span>
+            <span className="rounded-full px-2.5 py-0.5 font-bold" style={{ background: `color-mix(in srgb, ${capChip.color} ${onLight ? 85 : 30}%, transparent)`, color: '#fff' }}>
               {capChip.text}
             </span>
           </div>

@@ -1,12 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { PlayersTabs } from '@/components/players/PlayersTabs';
 import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 /**
  * /players — league-wide, filterable, sortable player database (P1 #11).
@@ -88,7 +88,7 @@ export default function PlayersPage() {
   return (
     <Shell>
       <PlayersTabs />
-      <h1 className="text-3xl sm:text-4xl font-black mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>Player Search</h1>
+      <PageHeader title="Player Search" className="mb-4" />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-3">
@@ -188,9 +188,8 @@ function ovrColor(v: number): string {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="max-w-4xl mx-auto p-5 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <div className="mt-2">{children}</div>
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      {children}
     </main>
   );
 }

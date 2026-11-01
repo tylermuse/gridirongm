@@ -4,9 +4,11 @@
  * NewsFeed — vertical list of derived "league moments".
  *
  * Pure derivation from league state via buildFeed(). Items render as cards with
- * an event icon, a category chip, a team-color chip, and a season·day tag.
- * Game items deep-link to the box score; player items open a PlayerModal. The
- * full (uncapped) view groups items under day headers.
+ * an event icon, a category chip, a team-color chip, and a season·day tag. Each
+ * card carries a 3px category-colored left border, and the user team's items
+ * get an accent tint + "Your Team" badge (football parity). Game items
+ * deep-link to the box score; player items open a PlayerModal. The full
+ * (uncapped) view groups items under day headers.
  */
 
 import { useMemo, useState } from 'react';
@@ -25,6 +27,9 @@ interface NewsFeedProps {
   max?: number;
   /** Optional predicate to scope the feed (e.g. just the user team's moments). */
   filter?: (item: FeedItem) => boolean;
+  /** Precomputed buildFeed() output, so a page that also needs the feed (e.g.
+   *  for a tab count) doesn't derive it twice. Omit to derive here. */
+  items?: FeedItem[];
 }
 
 const CAT: Record<FeedKind, { label: string; tone: ChipTone }> = {
@@ -40,7 +45,18 @@ const CAT: Record<FeedKind, { label: string; tone: ChipTone }> = {
   schedule_notice: { label: 'Schedule', tone: 'slate' },
 };
 
-export function NewsFeed({ league, max, filter }: NewsFeedProps) {
+/** Left-border color per chip tone — same hues as the Chip itself. */
+const TONE_HEX: Record<ChipTone, string> = {
+  accent: 'var(--accent)',
+  green: '#10b981',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  blue: '#3b82f6',
+  violet: '#8b5cf6',
+  slate: '#64748b',
+};
+
+export function NewsFeed({ league, max, filter, items: precomputed }: NewsFeedProps) {
   const router = useRouter();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
@@ -51,12 +67,13 @@ export function NewsFeed({ league, max, filter }: NewsFeedProps) {
   }, [league]);
 
   const items = useMemo(() => {
-    let all = buildFeed(league);
+    let all = precomputed ?? buildFeed(league);
     if (filter) all = all.filter(filter);
     return max ? all.slice(0, max) : all;
-  }, [league, max, filter]);
+  }, [league, max, filter, precomputed]);
 
   const season = league?.currentSeason ?? 0;
+  const userTeamId = league?.userTeamId ?? null;
   const grouped = !max; // full view groups by day
 
   if (items.length === 0) {
@@ -76,6 +93,7 @@ export function NewsFeed({ league, max, filter }: NewsFeedProps) {
     const clickable = !!item.gameId || !!item.playerId;
     const cat = CAT[item.kind];
     const team = item.teamId ? teamById.get(item.teamId) : undefined;
+    const isUser = !!userTeamId && item.teamId === userTeamId;
     return (
       <div
         key={item.id}
@@ -83,7 +101,12 @@ export function NewsFeed({ league, max, filter }: NewsFeedProps) {
         role={clickable ? 'button' : undefined}
         tabIndex={clickable ? 0 : undefined}
         onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(item); } } : undefined}
-        className={`flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] ${
+        // The inline left-border color outranks the hover border class, so the
+        // category stripe survives the accent hover outline.
+        style={{ borderLeftColor: TONE_HEX[cat.tone] }}
+        className={`flex items-start gap-3 p-3 rounded-xl border border-l-[3px] ${
+          isUser ? 'border-[var(--accent)]/40 bg-[var(--accent)]/5' : 'border-[var(--border)] bg-[var(--surface)]'
+        } ${
           clickable ? 'cursor-pointer hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]' : ''
         }`}
       >
@@ -92,9 +115,19 @@ export function NewsFeed({ league, max, filter }: NewsFeedProps) {
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
             <Chip tone={cat.tone}>{cat.label}</Chip>
             {team && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-1.5 py-0.5" style={{ background: `color-mix(in srgb, ${team.primaryColor} 18%, transparent)`, color: team.primaryColor }}>
+              // Team color as a soft fill with normal text — the raw primary
+              // as text is unreadable for near-black teams in dark mode.
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-1.5 py-0.5 text-[var(--text)]"
+                style={{ background: `color-mix(in srgb, ${team.primaryColor} 15%, transparent)` }}
+              >
                 <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />
                 {team.abbreviation}
+              </span>
+            )}
+            {isUser && (
+              <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-[var(--accent)]/15 text-[var(--accent)]">
+                Your Team
               </span>
             )}
             <span className="ml-auto text-[10px] uppercase tracking-widest text-[var(--text-sec)] tabular-nums">S{season} · Day {Math.floor(item.day)}</span>

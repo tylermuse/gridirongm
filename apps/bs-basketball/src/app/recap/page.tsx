@@ -1,12 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
+import { NewsTabs } from '@/components/feed/NewsTabs';
 import { buildRecap, type RecapAward, type SeasonRecap } from '@/lib/recap';
 import { RecapShow } from '@/components/recap/RecapShow';
 import { seasonObjectiveGrades } from '@/lib/owner/objectives';
@@ -43,13 +46,14 @@ export default function RecapPage() {
   const runner = recap.runnerUp ? teamById.get(recap.runnerUp) : null;
 
   return (
-    <Shell>
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <p className="text-sm opacity-70">{recap.season} season in review</p>
-        <Button variant="secondary" className="ml-auto" onClick={() => downloadRecapImage(recap, teamById)}>
+    <Shell
+      subtitle={`${recap.season} season in review`}
+      right={(
+        <Button variant="secondary" onClick={() => downloadRecapImage(recap, teamById)}>
           ⬇ Download image
         </Button>
-      </div>
+      )}
+    >
 
       {/* Champion hero */}
       <section
@@ -61,7 +65,7 @@ export default function RecapPage() {
         {champ ? (
           <div className="flex items-center justify-center gap-3 mt-2">
             <TeamLogo abbreviation={champ.abbreviation} primaryColor={champ.primaryColor} secondaryColor={champ.secondaryColor} size="xl" />
-            <span className="text-3xl font-black" style={{ color: 'var(--accent)' }}>{champ.city} {champ.name}</span>
+            <span className="text-3xl font-black text-[var(--text)]">{champ.city} {champ.name}</span>
           </div>
         ) : <div className="text-2xl font-bold mt-2">—</div>}
         {runner && (
@@ -216,25 +220,30 @@ function downloadRecapImage(recap: SeasonRecap, teamById: Map<string, Basketball
   a.click();
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, subtitle, right }: { children: ReactNode; subtitle?: ReactNode; right?: ReactNode }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <h1 className="text-4xl font-extrabold mt-2 mb-6" style={{ color: 'var(--accent)' }}>Season Recap</h1>
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      <NewsTabs />
+      <PageHeader title="Season Recap" subtitle={subtitle} right={right} className="mb-6" />
       {children}
     </main>
   );
 }
 
 function Loading() {
-  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return (
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      <Skeleton className="h-8 w-48 mb-4" />
+      <SkeletonList rows={6} />
+    </main>
+  );
 }
 
 function NotFound({ message }: { message: string }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
-      <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
+      <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Start or load a league</Link>
     </main>
   );
 }

@@ -38,10 +38,10 @@ export function SuitorIntel({ league, playerId, teamById }: { league: Basketball
         <span className="font-semibold">🕵️ Suitor intel</span>
         <span className="text-[var(--text-sec)]">Who&apos;s bidding, rough offers, and what he wants.</span>
         <button
+          type="button"
           disabled={left <= 0}
           onClick={e => { e.stopPropagation(); void reveal(playerId); }}
-          className="ml-auto rounded-md px-2.5 py-1 font-bold text-white disabled:opacity-40"
-          style={{ background: 'var(--accent)' }}
+          className="ml-auto rounded-md px-2.5 py-1 font-bold text-white bg-[var(--accent)] hover:bg-[var(--accent-strong)] transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-[var(--accent)]"
         >
           {left <= 0
             ? 'No reports left this window'

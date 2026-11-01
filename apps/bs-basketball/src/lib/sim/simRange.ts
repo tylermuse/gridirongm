@@ -37,6 +37,33 @@ function earliestScheduledDay(league: LeagueState): number {
   return min;
 }
 
+/** Sim ONE more day of a bulk range, or null when the range is done (no games
+ *  left, or the next scheduled day is past `targetDay`; null = end of the
+ *  regular season). Lets the store sim a range day by day and repaint between
+ *  days instead of freezing the page for the whole range. */
+export function simRangeStep(league: LeagueState, targetDay: number | null): { league: LeagueState; gamesSimmed: number } | null {
+  const next = earliestScheduledDay(league);
+  if (!isFinite(next)) return null;
+  if (targetDay != null && next > targetDay) return null;
+  const r = simNextDay(league);
+  if (!r) return null;
+  return { league: r.league, gamesSimmed: r.gamesSimmed };
+}
+
+/** How many distinct game days a range covers — the denominator for the
+ *  "Day 12/40" progress readout. */
+export function scheduledDaysThrough(league: LeagueState, targetDay: number | null): number {
+  const days = new Set<number>();
+  for (const g of league.games) {
+    if (g.status !== 'scheduled') continue;
+    const d = (g.sportData as { dayOfSeason?: number; isPlayoff?: boolean } | undefined);
+    if (d?.isPlayoff || typeof d?.dayOfSeason !== 'number') continue;
+    if (targetDay != null && d.dayOfSeason > targetDay) continue;
+    days.add(d.dayOfSeason);
+  }
+  return days.size;
+}
+
 /** Sim every scheduled day up to and including `targetDay` (null = end of the
  *  regular season). */
 export function simThroughDay(league: LeagueState, targetDay: number | null): SimRangeResult {
@@ -45,10 +72,7 @@ export function simThroughDay(league: LeagueState, targetDay: number | null): Si
   let gamesSimmed = 0;
   // Hard cap well above a 170-day season — a runaway-loop backstop.
   for (let guard = 0; guard < 400; guard++) {
-    const next = earliestScheduledDay(l);
-    if (!isFinite(next)) break;
-    if (targetDay != null && next > targetDay) break;
-    const r = simNextDay(l);
+    const r = simRangeStep(l, targetDay);
     if (!r) break;
     l = r.league;
     daysSimmed += 1;

@@ -12,6 +12,7 @@ import {
   type BasketballPlayer,
   type BasketballTeam,
 } from '@bs/sport-basketball';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 /**
  * /compare — side-by-side player comparison (Tier 3.3).
@@ -23,7 +24,7 @@ import {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>}>
+    <Suspense fallback={<main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8"><p className="opacity-60">Loading…</p></main>}>
       <CompareInner />
     </Suspense>
   );
@@ -45,10 +46,10 @@ function CompareInner() {
     return m;
   }, [league]);
 
-  if (loading) return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  if (loading) return <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8"><p className="opacity-60">Loading…</p></main>;
   if (!league) {
     return (
-      <main className="max-w-4xl mx-auto p-8">
+      <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
         <p className="mb-4">{error ?? 'No league loaded.'}</p>
         <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
       </main>
@@ -60,13 +61,9 @@ function CompareInner() {
   const b = bId ? playerById[bId] ?? null : null;
 
   return (
-    <main className="max-w-4xl mx-auto p-5 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <div className="mt-2"><PlayersTabs /></div>
-      <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
-        <h1 className="text-3xl sm:text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>Compare</h1>
-        <p className="text-sm opacity-70">Two players, head to head.</p>
-      </header>
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      <PlayersTabs />
+      <PageHeader title="Compare" subtitle="Two players, head to head." className="mb-6" />
 
       {/* Pickers + headers */}
       <div className="grid grid-cols-2 gap-3 sm:gap-6 mb-5">
