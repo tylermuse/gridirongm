@@ -212,7 +212,26 @@ function buildSnapshot(
     const withPlayThroughs = eligible.filter(
       p => !injuries[p.id] || injuries[p.id].returnDay <= day || canPlayThrough(injuries[p.id]),
     );
-    players = withPlayThroughs.length >= 5 ? withPlayThroughs : eligible;
+    if (withPlayThroughs.length >= 5) {
+      players = withPlayThroughs;
+    } else {
+      // Still short of a legal five. Pad from whoever's left, but pull the
+      // least-hurt bodies first and press a major / season-ending injury into
+      // service ONLY when the team genuinely can't field five without one. The
+      // old fallback here was raw `eligible`, which re-admitted EVERY injury
+      // severity — so a season-ending-injured player could be auto-started.
+      // (crypticer., Oct 26: injured player still appearing in games. The engine
+      // builds its on-court pool from availablePlayers, so excluding them here
+      // keeps them off the floor.)
+      const severityRank = (p: BasketballPlayer): number => {
+        const inj = injuries[p.id];
+        if (!inj || inj.returnDay <= day || canPlayThrough(inj)) return 0; // healthy / can play through
+        return inj.severity === 'season_ending' ? 2 : 1; // majors before season-enders
+      };
+      players = [...eligible]
+        .sort((a, b) => severityRank(a) - severityRank(b))
+        .slice(0, Math.max(5, withPlayThroughs.length));
+    }
     lineup = resolveLineup(team, players);
   }
   return { team, availablePlayers: players, lineup, coach };
