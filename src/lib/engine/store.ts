@@ -16,6 +16,7 @@ import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTI
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { applyEraHeadCoach } from '@/lib/data/eraCoachingStaff';
+import { applyRealHeadCoach } from '@/lib/data/realHeadCoaches';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
 import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats, recalculateOvr, generateCollegeStats } from './playerGen';
 import { resetUsedNames } from '../data/names';
@@ -3006,6 +3007,15 @@ export const useGameStore = create<GameStore>()(
                   coach.history = backfillCoachHistory(coach, team.id, imported.teams, imported.season);
                 }
               }
+            }
+          }
+          // Live roster file: rename each team's HC to the real current head
+          // coach (bsCoaches, refreshed weekly from ESPN). Runs after the history
+          // backfill so a real coach's résumé isn't invented stints elsewhere.
+          // Coordinators and position coaches stay autogen.
+          if (imported.realHeadCoaches) {
+            for (const team of imported.teams) {
+              applyRealHeadCoach(team.coaches, team, imported.realHeadCoaches, imported.season);
             }
           }
 

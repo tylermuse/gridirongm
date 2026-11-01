@@ -39,6 +39,7 @@ def main():
     # BS Football-only real-season block (box scores keyed for BS); stock FBGM
     # reads the real records, schedule and stats rows it needs elsewhere.
     d.pop("bsRealSeason", None)
+    d.pop("bsCoaches", None)  # BS-only real head coaches; stock FBGM has no coaches
     json.dump(d, open(DST, "w"), ensure_ascii=False, allow_nan=False)
     print(json.dumps({"vanilla": DST, "prospectsShifted": npros, "draftPicksShifted": ndp}))
 

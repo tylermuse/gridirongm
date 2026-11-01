@@ -20,6 +20,8 @@ The Hoops counterpart of scripts/weekly_roster_update.py + build_midseason_start
   - bakes real W-L into team.seasons, loads the real remaining schedule
     (`schedule`) and the completed results (`games`, scores only — no box
     scores), so the league opens on the next real game day
+  - refreshes the BS-only `bsCoaches` block: the real head coach per team
+    (ESPN core API; `--coaches-only` rewrites just that block + the vanilla file)
   - refreshes the rosters-page card (LAST_UPDATED, CACHE_BUST)
   - writes a dated changelog to apps/bs-basketball/roster-updates/
 
@@ -45,6 +47,7 @@ MAX_ROSTER = 15
 MIN_CONTRACT = 1300        # $K — BBGM minContract in the file
 GAMES_PER_TEAM = 82
 DRY = '--dry-run' in sys.argv
+COACHES_ONLY = '--coaches-only' in sys.argv
 
 ESPN_ABBREV = {'GS': 'GSW', 'NY': 'NYK', 'SA': 'SAS', 'NO': 'NOP', 'UTAH': 'UTA', 'WSH': 'WAS'}
 ESPN_SLUG = {'GSW': 'gs', 'NYK': 'ny', 'SAS': 'sa', 'NOP': 'no', 'UTA': 'utah', 'WAS': 'wsh'}
@@ -161,6 +164,51 @@ def fetch_schedule():
     if len(games) < 1100:
         sys.exit(f'ESPN schedule returned only {len(games)} games — aborting.')
     return sorted(games, key=lambda g: (g['date'], g['id']))
+
+
+# ---------- real head coaches (BS-only `bsCoaches` block) ----------
+# ESPN's core API lists the current head coach per team; only head coaches are
+# published (the player-development assistant stays auto-generated in the app).
+# `experience` = completed seasons as an NBA head coach (0 = first year).
+def fetch_coaches(abbrevs):
+    """{file abbrev: {"name","experience","age"?}} for every team, or {} on failure."""
+    core = f'https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/seasons/{SEASON}'
+    tl = curl('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams')
+    ids = {}
+    for t in ((tl.get('sports') or [{}])[0].get('leagues') or [{}])[0].get('teams', []):
+        tm = t.get('team') or {}
+        if tm.get('id') and tm.get('abbreviation'):
+            ids[ESPN_ABBREV.get(tm['abbreviation'], tm['abbreviation'])] = tm['id']
+    out = {}
+    for ab in abbrevs:
+        eid = ids.get(ab)
+        if not eid:
+            continue
+        refs = curl(f'{core}/teams/{eid}/coaches').get('items') or []
+        if not refs:
+            continue
+        c = curl(refs[0]['$ref'].replace('http://', 'https://'))
+        name = ' '.join(x for x in (c.get('firstName'), c.get('lastName')) if x).strip()
+        if not name:
+            continue
+        entry = {'name': name, 'experience': int(c.get('experience') or 0)}
+        dob = (c.get('dateOfBirth') or '')[:4]
+        if dob.isdigit():
+            entry['age'] = START_YEAR - int(dob)
+        out[ab] = entry
+    return out
+
+
+def apply_coaches(d, abbrevs, log):
+    """Replace d['bsCoaches'] with the live ESPN head coaches; keep the old block if ESPN fails."""
+    coaches = fetch_coaches(abbrevs)
+    if len(coaches) < 28:
+        old = d.get('bsCoaches') or {}
+        log.append(f'Head coaches: ESPN returned only {len(coaches)}/30 — kept the existing {len(old)}')
+        return len(old)
+    d['bsCoaches'] = coaches
+    log.append(f'Head coaches: {len(coaches)} real NBA head coaches from ESPN')
+    return len(coaches)
 
 
 # ---------- season roll (once) ----------
@@ -434,6 +482,17 @@ def update_page(today):
 def main():
     d = json.load(open(ROSTER))
     log = []
+    if COACHES_ONLY:
+        # Just the bsCoaches block, in place: no roster / schedule / page / changelog changes.
+        abbrevs = sorted(t['abbrev'] for t in d['teams'] if not t.get('disabled') and 0 <= t['tid'] < 30)
+        n = apply_coaches(d, abbrevs, log)
+        print('\n'.join(log))
+        if DRY:
+            return
+        json.dump(d, open(ROSTER, 'w'), ensure_ascii=False, allow_nan=False)
+        subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_vanilla_bbgm.py')], check=True)
+        print(json.dumps({'coaches': n, 'sample': dict(list((d.get('bsCoaches') or {}).items())[:5])}))
+        return
     roll_to_regular_season(d, log)
     tid_by_abbrev = {t['abbrev']: t['tid'] for t in d['teams'] if not t.get('disabled') and 0 <= t['tid'] < 30}
     assert len(tid_by_abbrev) == 30, tid_by_abbrev
@@ -445,6 +504,7 @@ def main():
     moves, released, created, trimmed = reconcile(d, rosters, tid_by_abbrev, log)
     rec, remaining_dates, through = build_season(d, games, tid_by_abbrev, log)
     hurt = apply_injuries(d, injuries, remaining_dates, log)
+    apply_coaches(d, sorted(tid_by_abbrev), log)
 
     today = datetime.date.today()
     standings = sorted(((rec[tid]['won'], rec[tid]['lost'], ab) for ab, tid in tid_by_abbrev.items()), key=lambda x: (-x[0], x[1]))
