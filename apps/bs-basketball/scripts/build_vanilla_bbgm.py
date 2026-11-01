@@ -25,11 +25,21 @@ Served by the rosters-page "Download JSON" button (used for BBGM). The in-app
 "Start a league with this roster" button keeps the untouched main file.
 Run after weekly_roster_update.py so it derives from the final roster.
 """
-import json, os
+import json, os, sys
 
 APP = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SRC = os.path.join(APP, 'public', 'rosters', 'BBGM_NBA_Roster_2026_Updated.json')
 DST = os.path.join(APP, 'public', 'rosters', 'BBGM_NBA_Roster_2026_Vanilla.json')
+
+# --opening-night SRC DST: the frozen "clean re-sim" variant. Same opening-night
+# start and full schedule, but NO performance nudge and ALL injuries cleared, so
+# the season replays from a neutral baseline. Built once from the first in-season
+# snapshot (Oct 25, 2026 — ESPN rosters/contracts four days after opening night)
+# and never rebuilt by the weekly refresh.
+OPENING_NIGHT = '--opening-night' in sys.argv
+if OPENING_NIGHT:
+    i = sys.argv.index('--opening-night')
+    SRC, DST = sys.argv[i + 1], sys.argv[i + 2]
 
 SEASON = 2027
 SHRINK = 10            # games of regression: weight = n / (n + SHRINK)
@@ -45,6 +55,7 @@ def clamp(v, lo, hi):
 
 def main():
     d = json.load(open(SRC))
+    d.pop('bsCoaches', None)
     played = d.pop('bsRealResults', []) or []
     active = {t['tid'] for t in d['teams'] if not t.get('disabled') and 0 <= t['tid'] < 30}
 
@@ -78,9 +89,14 @@ def main():
         g['day'] = day_map[g['day']]
     d['schedule'] = full
 
-    # 3. Performance nudge from the real results so far.
+    # 3. Performance nudge from the real results so far (skipped for the
+    #    opening-night variant, which also clears the injury report).
+    if OPENING_NIGHT:
+        for p in d['players']:
+            if p.get('injury'):
+                p['injury'] = {'type': 'Healthy', 'gamesRemaining': 0}
     margin = {tid: [] for tid in active}
-    for g in played:
+    for g in (played if not OPENING_NIGHT else []):
         a, b = g['teams'][0], g['teams'][1]
         if a['tid'] in margin: margin[a['tid']].append(a['pts'] - b['pts'])
         if b['tid'] in margin: margin[b['tid']].append(b['pts'] - a['pts'])
@@ -103,11 +119,17 @@ def main():
                 touched += 1
 
     abbrev = {t['tid']: t['abbrev'] for t in d['teams']}
-    d.setdefault('meta', {})['vanilla'] = (
-        'Stock-BBGM download variant: season starts at opening night with the full real 2026-27 schedule; '
-        f'records reset; current injuries kept; ratings nudged by real results so far (avg margin shrunk by n/(n+{SHRINK}), '
-        f'capped ±{MAX_NUDGE}). Nudges: ' + ', '.join(f'{abbrev[t]} {k:+d}' for t, k in sorted(nudge.items(), key=lambda x: -x[1]) if k)
-    )
+    if OPENING_NIGHT:
+        d.setdefault('meta', {})['openingNight'] = (
+            'Frozen clean opening-night variant for re-simming 2026-27 in stock BBGM: full real schedule, records reset, '
+            'no performance nudge, injury report cleared. Rosters/contracts as of the first in-season refresh (2026-10-25).')
+        d['meta'].pop('vanilla', None)
+    else:
+      d.setdefault('meta', {})['vanilla'] = (
+          'Stock-BBGM download variant: season starts at opening night with the full real 2026-27 schedule; '
+          f'records reset; current injuries kept; ratings nudged by real results so far (avg margin shrunk by n/(n+{SHRINK}), '
+          f'capped ±{MAX_NUDGE}). Nudges: ' + ', '.join(f'{abbrev[t]} {k:+d}' for t, k in sorted(nudge.items(), key=lambda x: -x[1]) if k)
+      )
     json.dump(d, open(DST, 'w'), ensure_ascii=False, allow_nan=False)
     print(f'Wrote {DST}: schedule {len(full)} games over {len(day_map)} days ({len(played)} replayed), '
           f'{touched} player rating rows nudged; team nudges: ' +
