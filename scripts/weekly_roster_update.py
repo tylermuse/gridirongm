@@ -8,6 +8,8 @@ Pulls current ESPN data and updates the 2026 roster in place:
   - reconciles each team's roster (signings / cuts / IR / practice squad / un-retirements)
     against ESPN active rosters (active + IR + practice squad kept on the team)
   - sets per-player injuries from the ESPN injury report (Out / Doubtful / IR)
+  - refreshes the BS-only `bsCoaches` block (real head coach per team, ESPN core API);
+    `--coaches-only` rewrites just that block and the vanilla variant
   - refreshes the rosters-page card: title date, lastUpdated, cacheBust, and a
     "records through Week N" note with the division leaders
   - writes a dated changelog with full standings + a move/injury summary
@@ -93,6 +95,43 @@ def fetch_espn():
             injured.append({'name':ath.get('displayName'),'pos':(ath.get('position') or {}).get('abbreviation'),
                             'status':a.get('status'),'type':(a.get('details') or {}).get('type') or a.get('type')})
     return week, teams, injured, ok
+
+# ---------- real head coaches (BS-only `bsCoaches` block) ----------
+# ESPN's core API lists the current head coach per team. Only head coaches are
+# published; coordinators / position coaches stay auto-generated in the app.
+# `experience` = seasons as an NFL head coach including this one.
+COACH_SEASON = 2026
+def fetch_coaches():
+    """{file abbrev: {"name","experience","age"?}} for every team, or {} on failure."""
+    core = f"https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/{COACH_SEASON}"
+    tl = curl("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams")
+    ids = {}
+    for t in ((tl.get('sports') or [{}])[0].get('leagues') or [{}])[0].get('teams', []):
+        tm = t.get('team') or {}
+        if tm.get('id') and tm.get('abbreviation'): ids[tm['abbreviation'].upper()] = tm['id']
+    out = {}
+    for ab in sorted(a.upper() for a in TID_ABBR.values()):
+        eid = ids.get(ab)
+        if not eid: continue
+        refs = curl(f"{core}/teams/{eid}/coaches").get('items') or []
+        if not refs: continue
+        c = curl(refs[0]['$ref'].replace('http://', 'https://'))
+        name = ' '.join(x for x in (c.get('firstName'), c.get('lastName')) if x).strip()
+        if not name: continue
+        entry = {"name": name, "experience": int(c.get('experience') or 0)}
+        dob = (c.get('dateOfBirth') or '')[:4]
+        if dob.isdigit(): entry["age"] = COACH_SEASON - int(dob)
+        out[ab] = entry
+    return out
+
+def apply_coaches(d):
+    """Replace d['bsCoaches'] with the live ESPN head coaches; keep the old block if ESPN fails."""
+    coaches = fetch_coaches()
+    if len(coaches) < 30:
+        print(f"coaches: only {len(coaches)}/32 fetched from ESPN; keeping existing bsCoaches ({len(d.get('bsCoaches') or {})})", file=sys.stderr)
+        return len(d.get('bsCoaches') or {})
+    d['bsCoaches'] = coaches
+    return len(coaches)
 
 # ---------- name matching (ported from the reconciliation) ----------
 SUF={'jr','sr','ii','iii','iv','v'}
@@ -267,7 +306,17 @@ def append_rating_changes(fn, n=12):
        "","### Biggest risers"]+[fmt(e) for e in ranked[::-1][:n] if e["delta"]>0]+["","### Biggest fallers"]+[fmt(e) for e in ranked[:n] if e["delta"]<0]
     open(fn,'a').write("\n"+"\n".join(L)+"\n")
 
+def coaches_only():
+    """`--coaches-only`: refresh just the bsCoaches block in place (no roster, page, or changelog changes)."""
+    d=json.load(open(ROSTER))
+    n=apply_coaches(d)
+    json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
+    subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)
+    print(json.dumps({"coaches":n,"sample":dict(list((d.get('bsCoaches') or {}).items())[:5])}))
+
 def main():
+    if '--coaches-only' in sys.argv:
+        coaches_only(); return
     today=datetime.date.today()
     week, teams, injured, ok = fetch_espn()
     if len(ok)<30:
@@ -277,6 +326,7 @@ def main():
     moves,unret,cuts,jset = reconcile(d, teams, ok)
     nov = apply_overrides(d)
     ninj = apply_injuries(d, injured)
+    ncoach = apply_coaches(d)
     assert len(d['players'])==n0
     json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
     cb = update_page(week, teams, today)
@@ -284,7 +334,7 @@ def main():
     subprocess.run([sys.executable,"scripts/build_midseason_start.py"],check=True)
     subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variant
     append_rating_changes(fn)
-    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"cacheBust":cb,"changelog":fn,"players":n0}))
+    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":
     main()

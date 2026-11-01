@@ -83,6 +83,7 @@ import { setTeamLineup } from '../lineup';
 import { installCoach, fireCoach as fireCoachLib, extendCoach as extendCoachLib, type ExtensionResult } from '../coaching/contracts';
 import { userExpiringCoaches } from '../coaching/carousel';
 import type { StaffRole } from '../coaching/coaches';
+import { applyRealHeadCoaches } from '../coaching/realHeadCoaches';
 import { createRng } from '@bs/sport-basketball';
 import { clearGmFired, getGmFired } from '../approval';
 import { trackEvent } from '@bs/core/analytics/track';
@@ -401,6 +402,9 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
   }
   // Flag custom-roster leagues so they're excluded from the global GM board.
   league = { ...league, sportData: { ...(league.sportData as object), imported: true, pickOwnership } };
+  // Live roster file: each team's generated HC becomes the real current head
+  // coach (bsCoaches, refreshed weekly from ESPN). Dev coaches stay autogen.
+  league = applyRealHeadCoaches(league, imported.realHeadCoaches);
 
   // MID-season snapshot (file in the regular season with a real schedule): the
   // league opens on the next real game day with real records so far.
