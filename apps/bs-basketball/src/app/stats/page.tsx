@@ -4,7 +4,12 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { PlayerModal } from '@/components/modals/PlayerModal';
+import { Badge } from '@/components/ui/Badge';
+import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { PlayerName, usePlayerModal } from '@/components/modals/PlayerModalProvider';
+import { TeamRosterModal } from '@/components/modals/TeamRosterModal';
 import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
 import { regularSeasonStatsByTeam, type TeamSeasonAggregate } from '@/lib/stats/teamSeasonStats';
 import { powerScore } from '@/lib/stats/powerScore';
@@ -13,15 +18,17 @@ import { SkeletonList } from '@/components/ui/Skeleton';
 import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * /stats — three tabs:
- *   1. Leaders — per-game + shooting % leaderboards (chip-selectable category)
- *   2. Teams  — offensive + defensive shooting splits per team (FG%, 3P%, AST,
- *               TOV vs. Opp FG%, Opp 3P%, STL, BLK)
- *   3. Power  — compact ranked table by the same formula `/power-rankings` uses
- *               (`@/lib/stats/powerScore`), with a link out to the rich card view
+ * /stats — League Stats, three tabs (football parity):
+ *   1. League Leaders — per-game + shooting % leaderboards (chip-selectable
+ *      category) as a table: # · Player · Pos · Team · GP · stat
+ *   2. Team Stats     — ratings + offensive/defensive shooting splits per team
+ *   3. Power Rankings — compact ranked table by the same formula
+ *      `/power-rankings` uses (`@/lib/stats/powerScore`), with a link out to
+ *      the rich card view
  *
  * Aggregated from box scores (player.seasonStats isn't maintained), qualified
- * by games / attempts so small samples don't top the boards.
+ * by games / attempts so small samples don't top the boards. Player names open
+ * the shared player card; team chips / names open the team roster modal.
  */
 
 interface Cat {
@@ -59,11 +66,24 @@ const CATEGORIES: Cat[] = [
 
 type Tab = 'leaders' | 'teams' | 'power';
 
+const TAB_OPTIONS = [
+  { value: 'leaders', label: 'League Leaders' },
+  { value: 'teams', label: 'Team Stats' },
+  { value: 'power', label: 'Power Rankings' },
+] as const satisfies ReadonlyArray<{ value: Tab; label: string }>;
+
+const WIN_C = '#10b981';
+const LOSS_C = '#dc2626';
+
+/** Shared table-header style (football: `text-xs uppercase tracking-wider`). */
+const HEAD_ROW = 'text-xs uppercase tracking-wider text-[var(--text-sec)]';
+
 export default function StatsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
+  const openPlayer = usePlayerModal();
   const [tab, setTab] = useState<Tab>('leaders');
   const [catKey, setCatKey] = useState('pts');
-  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
 
   const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : new Map()), [league]);
   const adv = useMemo(() => (league ? buildAdvancedContext(league) : null), [league]);
@@ -90,7 +110,7 @@ export default function StatsPage() {
     return rows.sort((a, b) => b.value - a.value).slice(0, 20);
   }, [league, statsMap, catKey, adv]);
 
-  if (loading) return <Shell><SkeletonList rows={8} /></Shell>;
+  if (loading && !league) return <Shell><SkeletonList rows={8} /></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
 
   const anyGames = league.games.some(g => g.status === 'played');
@@ -126,16 +146,24 @@ export default function StatsPage() {
     .map(team => ({ team, score: powerScore(team) }))
     .sort((a, b) => b.score - a.score);
 
+  const teamName = (t: BasketballTeam, isUser: boolean) => (
+    <button
+      type="button"
+      onClick={() => setViewTeamId(t.id)}
+      className={`flex items-center gap-2 text-left transition-colors hover:text-[var(--accent)] ${isUser ? 'text-[var(--accent)] font-bold' : 'font-semibold'}`}
+    >
+      <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
+      <span className="whitespace-nowrap">{t.city} {t.name}</span>
+    </button>
+  );
+
   return (
     <Shell>
-      <div className="flex flex-wrap items-baseline gap-3 mb-5">
-        <h1 className="text-3xl sm:text-4xl font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>Stats</h1>
-        <div className="ml-auto inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
-          {(['leaders', 'teams', 'power'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} className="px-3 py-1.5 capitalize" style={tab === t ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{t === 'power' ? 'Power' : t}</button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        quickNav="stats"
+        title="League Stats"
+        subtitle={`Season ${league.currentSeason} · regular season`}
+      />
 
       {!anyGames ? (
         // EPIC-I: stronger empty state. The bare one-liner left ~60% of the
@@ -147,14 +175,14 @@ export default function StatsPage() {
           <h2 className="text-lg font-black mb-1" style={{ fontFamily: 'var(--font-display)' }}>No games yet</h2>
           <p className="text-sm text-[var(--text-sec)] max-w-md mb-5">
             League leaders, team rankings, and play-by-play stats populate once games are played.
-            Sim a week to see who&apos;s balling out.
+            Sim a day from the top bar to see who&apos;s balling out.
           </p>
           <Link
             href="/"
             className="text-sm font-bold rounded-lg px-4 py-2 text-white transition active:scale-95"
             style={{ background: 'var(--accent)' }}
           >
-            ← Back to dashboard
+            Go to dashboard →
           </Link>
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-[var(--text-sec)] max-w-2xl">
             {[
@@ -169,162 +197,241 @@ export default function StatsPage() {
             ))}
           </div>
         </div>
-      ) : tab === 'leaders' ? (
-        <>
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {CATEGORIES.map(c => (
-              <button key={c.key} onClick={() => setCatKey(c.key)} className="text-xs font-bold rounded-full px-3 py-1 border transition active:scale-95"
-                style={catKey === c.key ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
-                {c.label}
-              </button>
-            ))}
-          </div>
-          <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            {leaders.map((r, i) => {
-              // EPIC-H: the leaderboard row was just a name + single number,
-              // leaving a lot of horizontal slack. Add a secondary stat line
-              // (PPG/RPG/APG · MPG · GP) so the row earns its width.
-              const s = statsMap.get(r.player.id) as BasketballStats | undefined;
-              const gp = s?.gamesPlayed ?? 0;
-              const secondary = gp > 0 && s
-                ? `${(s.points / gp).toFixed(1)} / ${(s.totalRebounds / gp).toFixed(1)} / ${(s.assists / gp).toFixed(1)} · ${(s.minutes / gp).toFixed(1)} MP · ${gp} GP`
-                : null;
-              return (
-                <button key={r.player.id} onClick={() => setModalPlayerId(r.player.id)}
-                  className="w-full flex items-center gap-3 px-4 py-2 border-t first:border-t-0 text-left text-sm hover:bg-[var(--surface-2)] transition-colors"
-                  style={{ borderColor: 'var(--border)', background: r.player.rosterSlot?.teamId === userTeamId ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
-                  <span className="w-6 text-xs tabular-nums text-[var(--text-sec)]">{i + 1}</span>
-                  <TeamCrest teamId={r.player.rosterSlot?.teamId} teamById={teamById} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold truncate">{r.player.firstName} {r.player.lastName}</div>
-                    {secondary && (
-                      <div className="text-[10px] text-[var(--text-sec)] tabular-nums truncate">{secondary}</div>
-                    )}
-                  </div>
-                  <span className="text-xs text-[var(--text-sec)] w-7 shrink-0">{r.player.sportData.position}</span>
-                  <span className="text-base font-black tabular-nums w-16 text-right shrink-0" style={{ color: 'var(--accent)' }}>{cat.fmt(r.value)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ) : tab === 'teams' ? (
-        <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-sm min-w-[960px]">
-            <thead>
-              <tr className="text-[var(--text-sec)] text-xs border-b" style={{ borderColor: 'var(--border)' }}>
-                <th className="px-3 py-2 text-left">Team</th>
-                <th className="px-2 py-2 text-right">PPG</th>
-                <th className="px-2 py-2 text-right">Opp</th>
-                <th className="px-2 py-2 text-right">Diff</th>
-                <th className="px-2 py-2 text-right" title="Points scored per 100 possessions">ORtg</th>
-                <th className="px-2 py-2 text-right" title="Points allowed per 100 possessions">DRtg</th>
-                <th className="px-2 py-2 text-right" title="ORtg − DRtg">Net</th>
-                <th className="px-2 py-2 text-right" title="Possessions per 48 minutes">Pace</th>
-                <th className="px-2 py-2 text-right hidden sm:table-cell">FG%</th>
-                <th className="px-2 py-2 text-right hidden sm:table-cell">3P%</th>
-                <th className="px-2 py-2 text-right hidden md:table-cell">AST</th>
-                <th className="px-2 py-2 text-right hidden md:table-cell">TOV</th>
-                <th className="px-2 py-2 text-right hidden sm:table-cell">oFG%</th>
-                <th className="px-2 py-2 text-right hidden sm:table-cell">o3P%</th>
-                <th className="px-2 py-2 text-right hidden md:table-cell">STL</th>
-                <th className="px-2 py-2 text-right hidden md:table-cell">BLK</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teamRows.map((r, i) => (
-                <tr key={r.team.id} className="border-t" style={{ borderColor: 'var(--border)', background: r.team.id === userTeamId ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
-                  <td className="px-3 py-2">
-                    <Link href={`/team/${r.team.id}`} className="flex items-center gap-2 hover:underline">
-                      <span className="text-xs tabular-nums text-[var(--text-sec)] w-4">{i + 1}</span>
-                      <TeamLogo abbreviation={r.team.abbreviation} primaryColor={r.team.primaryColor} secondaryColor={r.team.secondaryColor} size="xs" />
-                      <span className="truncate">{r.team.city}</span>
-                    </Link>
-                  </td>
-                  <td className="px-2 py-2 text-right tabular-nums">{r.ppg.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{r.oppPpg.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums font-semibold" style={{ color: r.diff >= 0 ? '#10b981' : '#dc2626' }}>{r.diff >= 0 ? '+' : ''}{r.diff.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{r.ortg.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{r.drtg.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums font-semibold" style={{ color: r.net >= 0 ? '#10b981' : '#dc2626' }}>{r.net >= 0 ? '+' : ''}{r.net.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-[var(--text-sec)]">{r.pace.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{(r.fgPct * 100).toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{(r.tpPct * 100).toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden md:table-cell">{r.astPg.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden md:table-cell">{r.tovPg.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{(r.oppFgPct * 100).toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{(r.oppTpPct * 100).toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden md:table-cell">{r.stlPg.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums hidden md:table-cell">{r.blkPg.toFixed(1)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       ) : (
         <>
-          <div className="flex items-baseline justify-between mb-2">
-            <span className="text-xs text-[var(--text-sec)]">winPct·100 + diff/10 + last-5 wins·2</span>
-            <Link href="/power-rankings" className="text-xs font-bold hover:underline" style={{ color: 'var(--accent)' }}>
-              See full rankings →
-            </Link>
-          </div>
-          <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[var(--text-sec)] text-xs border-b" style={{ borderColor: 'var(--border)' }}>
-                  <th className="px-3 py-2 text-center w-10">#</th>
-                  <th className="px-3 py-2 text-left">Team</th>
-                  <th className="px-3 py-2 text-center hidden sm:table-cell">Record</th>
-                  <th className="px-3 py-2 text-center hidden md:table-cell">Form</th>
-                  <th className="px-3 py-2 text-right">Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {powerRows.map((r, i) => {
-                  const isUser = r.team.id === userTeamId;
-                  const recentStreak = (r.team.record.streak ?? []) as string[];
-                  return (
-                    <tr key={r.team.id} className="border-t" style={{ borderColor: 'var(--border)', background: isUser ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
-                      <td className="px-3 py-2 text-center">
-                        <span className="text-sm font-bold tabular-nums" style={i < 3 ? { color: '#d97706' } : { color: 'var(--text-sec)' }}>{i + 1}</span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <Link href={`/team/${r.team.id}`} className="flex items-center gap-2 hover:underline">
-                          <TeamLogo abbreviation={r.team.abbreviation} primaryColor={r.team.primaryColor} secondaryColor={r.team.secondaryColor} size="xs" />
-                          <span className="truncate">{r.team.city} {r.team.name}</span>
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2 text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{r.team.record.wins}-{r.team.record.losses}</td>
-                      <td className="px-3 py-2 text-center tabular-nums hidden md:table-cell text-[var(--text-sec)]">
-                        {recentStreak.length === 0 ? '—' : recentStreak.slice(-5).join('')}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: 'var(--accent)' }}>{r.score.toFixed(1)}</td>
+          <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} variant="primary" className="mb-5 max-w-full overflow-x-auto no-scrollbar" />
+
+          {tab === 'leaders' && (
+            <Card>
+              <CardHeader className="mb-3">
+                <CardTitle>League Leaders</CardTitle>
+                <span className="text-xs text-[var(--text-sec)]">{cat.label}{cat.unit ? ` · ${cat.unit}` : ''}</span>
+              </CardHeader>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {CATEGORIES.map(c => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setCatKey(c.key)}
+                    className={`text-xs font-bold rounded-full px-3 py-1 border transition-colors active:scale-95 ${
+                      catKey === c.key
+                        ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                        : 'border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              {leaders.length === 0 ? (
+                <p className="text-sm text-[var(--text-sec)] text-center py-8">No qualified players yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className={HEAD_ROW}>
+                        <th className="text-center pb-2 w-8">#</th>
+                        <th className="text-left pb-2">Player</th>
+                        <th className="text-center pb-2">Pos</th>
+                        <th className="text-center pb-2">Team</th>
+                        <th className="text-center pb-2">GP</th>
+                        <th className="text-right pb-2 pr-2 whitespace-nowrap">{cat.unit ?? cat.label}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaders.map((r, i) => {
+                        // EPIC-H: a secondary stat line (PPG/RPG/APG · MPG) so
+                        // the row earns its width.
+                        const s = statsMap.get(r.player.id) as BasketballStats | undefined;
+                        const gp = s?.gamesPlayed ?? 0;
+                        const secondary = gp > 0 && s
+                          ? `${(s.points / gp).toFixed(1)} / ${(s.totalRebounds / gp).toFixed(1)} / ${(s.assists / gp).toFixed(1)} · ${(s.minutes / gp).toFixed(1)} MP`
+                          : null;
+                        const teamId = r.player.rosterSlot?.teamId;
+                        const t = teamId ? teamById.get(teamId) : undefined;
+                        const isUser = !!teamId && teamId === userTeamId;
+                        return (
+                          <tr
+                            key={r.player.id}
+                            onClick={() => openPlayer(r.player.id)}
+                            className={`border-t border-[var(--border)] cursor-pointer transition-colors hover:bg-[var(--surface-2)] ${isUser ? 'bg-[var(--accent)]/5' : ''}`}
+                          >
+                            <td className="py-2 text-center text-xs tabular-nums text-[var(--text-sec)]">{i + 1}</td>
+                            <td className="py-2 pr-2 min-w-0">
+                              <div className="flex items-baseline gap-1 min-w-0">
+                                <PlayerName
+                                  playerId={r.player.id}
+                                  firstName={r.player.firstName}
+                                  lastName={r.player.lastName}
+                                  className={`font-semibold truncate transition-colors hover:text-[var(--accent)] ${isUser ? 'text-[var(--accent)]' : ''}`}
+                                />
+                                {isUser && <span className="text-xs shrink-0" style={{ color: 'var(--accent)' }}>(You)</span>}
+                              </div>
+                              {secondary && (
+                                <div className="text-[10px] text-[var(--text-sec)] tabular-nums truncate">{secondary}</div>
+                              )}
+                            </td>
+                            <td className="py-2 text-center"><Badge>{r.player.sportData.position}</Badge></td>
+                            <td className="py-2 text-center">
+                              {t ? (
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); setViewTeamId(t.id); }}
+                                  title={`View ${t.city} ${t.name} roster`}
+                                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--border)]/50"
+                                >
+                                  <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
+                                  <span className="hidden sm:inline text-xs font-bold text-[var(--text-sec)]">{t.abbreviation}</span>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-[var(--text-sec)]">FA</span>
+                              )}
+                            </td>
+                            <td className="py-2 text-center tabular-nums text-[var(--text-sec)]">{r.gp}</td>
+                            <td className="py-2 pr-2 text-right text-base font-black tabular-nums" style={{ color: 'var(--accent)' }}>{cat.fmt(r.value)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {tab === 'teams' && (
+            <Card>
+              <CardHeader className="mb-3">
+                <CardTitle>Team Statistics</CardTitle>
+                <span className="text-xs text-[var(--text-sec)]">Per game · sorted by point differential</span>
+              </CardHeader>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[1040px] sticky-col">
+                  <thead>
+                    <tr className={HEAD_ROW}>
+                      <th className="px-2 pb-2 text-left">Team</th>
+                      <th className="px-2 pb-2 text-right">PPG</th>
+                      <th className="px-2 pb-2 text-right">Opp</th>
+                      <th className="px-2 pb-2 text-right">Diff</th>
+                      <th className="px-2 pb-2 text-right" title="Points scored per 100 possessions">ORtg</th>
+                      <th className="px-2 pb-2 text-right" title="Points allowed per 100 possessions">DRtg</th>
+                      <th className="px-2 pb-2 text-right" title="ORtg − DRtg">Net</th>
+                      <th className="px-2 pb-2 text-right" title="Possessions per 48 minutes">Pace</th>
+                      <th className="px-2 pb-2 text-right">FG%</th>
+                      <th className="px-2 pb-2 text-right">3P%</th>
+                      <th className="px-2 pb-2 text-right">AST</th>
+                      <th className="px-2 pb-2 text-right">TOV</th>
+                      <th className="px-2 pb-2 text-right" title="Opponent FG%">oFG%</th>
+                      <th className="px-2 pb-2 text-right" title="Opponent 3P%">o3P%</th>
+                      <th className="px-2 pb-2 text-right">STL</th>
+                      <th className="px-2 pb-2 text-right">BLK</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {teamRows.map((r, i) => {
+                      const isUser = r.team.id === userTeamId;
+                      return (
+                        <tr key={r.team.id} className={`border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-2)] ${isUser ? 'bg-[var(--accent)]/5' : ''}`}>
+                          {/* Pinned cell is opaque (sticky-col), so it carries the user tint itself. */}
+                          <td className="px-2 py-2" style={isUser ? { background: 'color-mix(in srgb, var(--accent) 5%, var(--surface))' } : undefined}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs tabular-nums text-[var(--text-sec)] w-5 shrink-0">{i + 1}</span>
+                              {teamName(r.team, isUser)}
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.ppg.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.oppPpg.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-semibold" style={{ color: r.diff >= 0 ? WIN_C : LOSS_C }}>{r.diff >= 0 ? '+' : ''}{r.diff.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.ortg.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.drtg.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-semibold" style={{ color: r.net >= 0 ? WIN_C : LOSS_C }}>{r.net >= 0 ? '+' : ''}{r.net.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-[var(--text-sec)]">{r.pace.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{(r.fgPct * 100).toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{(r.tpPct * 100).toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.astPg.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.tovPg.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{(r.oppFgPct * 100).toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{(r.oppTpPct * 100).toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.stlPg.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.blkPg.toFixed(1)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {tab === 'power' && (
+            <Card>
+              <CardHeader className="mb-3">
+                <div>
+                  <CardTitle>Power Rankings</CardTitle>
+                  {/* Plain-English read of lib/stats/powerScore.ts:
+                      winPct·100 + season point diff ÷ 10 + 2 per win in the last 5. */}
+                  <p className="text-xs text-[var(--text-sec)] mt-0.5">
+                    Score = win % (as 0–100) + season point differential ÷ 10 + 2 per win in the last 5 games.
+                    Record drives it; margin and recent form nudge teams up or down.
+                  </p>
+                </div>
+                <Link href="/power-rankings" className="text-xs font-bold hover:underline shrink-0" style={{ color: 'var(--accent)' }}>
+                  See full rankings →
+                </Link>
+              </CardHeader>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[520px] sticky-col">
+                  <thead>
+                    <tr className={HEAD_ROW}>
+                      <th className="px-2 pb-2 text-left">Team</th>
+                      <th className="px-2 pb-2 text-center">Record</th>
+                      <th className="px-2 pb-2 text-right" title="Season point differential">Diff</th>
+                      <th className="px-2 pb-2 text-center" title="Last five results, oldest → newest">Last 5</th>
+                      <th className="px-2 pb-2 pr-2 text-right">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {powerRows.map((r, i) => {
+                      const isUser = r.team.id === userTeamId;
+                      const last5 = ((r.team.record.streak ?? []) as string[]).slice(-5);
+                      const pd = r.team.record.pointsFor - r.team.record.pointsAgainst;
+                      return (
+                        <tr key={r.team.id} className={`border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-2)] ${isUser ? 'bg-[var(--accent)]/5' : ''}`}>
+                          {/* Pinned cell is opaque (sticky-col), so it carries the user tint itself. */}
+                          <td className="px-2 py-2" style={isUser ? { background: 'color-mix(in srgb, var(--accent) 5%, var(--surface))' } : undefined}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold tabular-nums w-5 shrink-0 text-center" style={{ color: i < 3 ? '#d97706' : 'var(--text-sec)' }}>{i + 1}</span>
+                              {teamName(r.team, isUser)}
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-center tabular-nums text-[var(--text-sec)]">{r.team.record.wins}-{r.team.record.losses}</td>
+                          <td className="px-2 py-2 text-right tabular-nums" style={{ color: pd > 0 ? WIN_C : pd < 0 ? LOSS_C : undefined }}>{pd > 0 ? '+' : ''}{pd}</td>
+                          <td className="px-2 py-2 text-center tabular-nums font-semibold tracking-wider">
+                            {last5.length === 0 ? <span className="text-[var(--text-sec)]">—</span> : last5.map((c, k) => (
+                              <span key={k} style={{ color: c === 'W' ? WIN_C : c === 'L' ? LOSS_C : undefined }}>{c}</span>
+                            ))}
+                          </td>
+                          <td className="px-2 py-2 pr-2 text-right tabular-nums font-semibold" style={{ color: 'var(--accent)' }}>{r.score.toFixed(1)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
         </>
       )}
 
-      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
+      <TeamRosterModal
+        teamId={viewTeamId}
+        onClose={() => setViewTeamId(null)}
+        onPlayerClick={pid => { setViewTeamId(null); openPlayer(pid); }}
+      />
     </Shell>
   );
 }
 
-function TeamCrest({ teamId, teamById }: { teamId?: string; teamById: Map<string, BasketballTeam> }) {
-  const t = teamId ? teamById.get(teamId) : null;
-  if (!t) return <span className="w-5" />;
-  return <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />;
-}
-
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="max-w-5xl mx-auto p-5 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <div className="mt-2">{children}</div>
-    </main>
-  );
+  return <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8">{children}</main>;
 }

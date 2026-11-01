@@ -38,7 +38,7 @@ export default function GmProfilePage({ params }: { params: Promise<{ userId: st
   }, [userId]);
 
   return (
-    <main className="max-w-2xl mx-auto p-8">
+    <main className="max-w-2xl mx-auto p-3 sm:p-5 md:p-8">
       <Link href="/gm-rankings" className="text-sm font-semibold opacity-70 hover:opacity-100">← GM Rankings</Link>
       {loading ? (
         <p className="mt-4 opacity-60">Loading…</p>

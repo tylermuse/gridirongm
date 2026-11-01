@@ -11,18 +11,20 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { NewsFeed } from '@/components/feed/NewsFeed';
 import { TeamHero } from '@/components/dashboard/TeamHero';
 import { TradeOffersBanner } from '@/components/dashboard/TradeOffersBanner';
-import { OwnerObjectives } from '@/components/dashboard/OwnerObjectives';
+import { OwnerObjectivesCard } from '@/components/owner/OwnerObjectivesCard';
 import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
 import { DashboardRow } from '@/components/dashboard/DashboardRow';
 import { EditorialWidgets } from '@/components/dashboard/EditorialWidgets';
 import { TeamSpotlight } from '@/components/show/TeamSpotlight';
 import { HoopsVideoShow } from '@/components/videoShow/HoopsVideoShow';
 import { TeamLeaders } from '@/components/dashboard/TeamLeaders';
-import { LiveViewer } from '@/components/live/LiveViewer';
+import { useWatchLive } from '@/components/live/WatchLiveProvider';
 import { CloudRestoreBanner } from '@/components/settings/CloudRestoreBanner';
 import { ApprovalRings, TrophyCase } from '@/components/dashboard/MetaWidgets';
 import { InjuryReport } from '@/components/dashboard/InjuryReport';
 import { GamePlanModal } from '@/components/modals/GamePlanModal';
+import { ConfirmModal } from '@/components/modals/ConfirmModal';
+import { Modal } from '@/components/modals/Modal';
 import { nextAction } from '@/lib/ui/nextAction';
 import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
@@ -53,15 +55,12 @@ import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
  */
 
 export default function HomeApp({ intro }: { intro?: ReactNode }) {
-  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason, watchNextUserGame } = useLeagueStore();
+  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason } = useLeagueStore();
   const router = useRouter();
-  const [watching, setWatching] = useState<{ userGameId: string; dayGameIds: string[] } | null>(null);
+  // The live viewer lives in the shell (WatchLiveProvider) so the top bar can
+  // offer Watch Live on every page.
+  const { watchLive } = useWatchLive();
   const [gamePlanOpen, setGamePlanOpen] = useState(false);
-
-  async function handleWatchLive() {
-    const res = await watchNextUserGame();
-    if (res) setWatching({ userGameId: res.userGameId, dayGameIds: res.dayGameIds });
-  }
 
   // God Mode "Force Win / Force Loss". Each click forces one game, re-renders
   // the whole dashboard and saves the league; spam-clicking stacked those up
@@ -138,19 +137,25 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm('Delete this saved league? This cannot be undone.')) return;
-    await deleteLeague(id);
-    const all = await listLeagues();
-    setSaves(all);
+  // In-app modals instead of window.confirm / window.prompt (native dialogs
+  // block the page and look nothing like the rest of the game).
+  const [deleteTarget, setDeleteTarget] = useState<LeagueSaveMeta | null>(null);
+  const [renameTarget, setRenameTarget] = useState<LeagueSaveMeta | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    await deleteLeague(deleteTarget.id);
+    setDeleteTarget(null);
+    setSaves(await listLeagues());
   }
 
-  async function handleRename(id: string, current: string) {
-    const name = window.prompt('Rename this league', current);
-    if (name == null || !name.trim()) return;
-    await renameLeague(id, name);
-    const all = await listLeagues();
-    setSaves(all);
+  async function confirmRename() {
+    const name = renameDraft.trim();
+    if (!renameTarget || !name) return;
+    await renameLeague(renameTarget.id, name);
+    setRenameTarget(null);
+    setSaves(await listLeagues());
   }
 
   // ---------------- League loaded ----------------
@@ -164,7 +169,7 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
       ? (league.teams.find(t => t.id === bracket.championTeamId) as BasketballTeam | undefined)
       : undefined;
     return (
-      <div className="max-w-6xl mx-auto px-5 py-12">
+      <div className="max-w-6xl mx-auto p-3 sm:p-5 md:p-8">
         {userTeam ? (
           <>
             <TeamHero league={league} team={userTeam as BasketballTeam} />
@@ -179,7 +184,7 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
           // and the league name is the smaller meta label underneath.
           <div className="flex flex-wrap items-baseline gap-4 mb-6">
             <h1
-              className="text-5xl sm:text-6xl font-black tracking-tight"
+              className="text-2xl font-black font-display uppercase tracking-tight"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
             >
               {league.currentSeason} {nextAction(league).phaseLabel}
@@ -273,7 +278,10 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
             (the openings list, the draft banner, "Enter League") all asking
             for the same click. Sequence it: take a job first, *then* surface
             the draft / season-over CTAs once they have a team. */}
-        {fired && !league.userTeamId ? null : draft ? (
+        {/* The draft object lives for the whole offseason, so only point at
+            /draft while the draft itself is live; re-sign / FA steps are
+            driven by the top bar (football has no dashboard CTA for them). */}
+        {fired && !league.userTeamId ? null : draft && !draft.complete ? (
           <div
             className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
             style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
@@ -282,18 +290,16 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
             <div className="min-w-0 flex-1">
               <div className="font-bold">{draft.season} Draft is on the clock</div>
               <div className="text-sm text-[var(--text-sec)]">
-                {draft.complete
-                  ? 'The draft is done — finalize rosters and tip off the season.'
-                  : `Pick ${draft.currentPick + 1} of ${draft.picks.length}. Make your selections, then start the season.`}
+                {`Pick ${draft.currentPick + 1} of ${draft.picks.length}. Make your selections, then start the season.`}
               </div>
             </div>
             <Link href="/draft">
               <Button variant="primary" size="lg">
-                {draft.complete ? 'Finish Offseason →' : 'Continue Draft →'}
+                Continue Draft →
               </Button>
             </Link>
           </div>
-        ) : seasonOver && (
+        ) : !draft && seasonOver && (
           <div
             className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
             style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
@@ -324,9 +330,21 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
           </div>
         )}
 
+        {/* Dashboard order mirrors football's: approval + owner objectives
+            right under the hero, the achievements strip, next game beside
+            the availability report, then the standings / cap / stats row,
+            leaders + news, and the show last. */}
         {userTeam && (
           <>
-            <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void handleWatchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} />
+            <div className="flex flex-col md:flex-row gap-4 mb-4 md:items-stretch">
+              <ApprovalRings team={userTeam as BasketballTeam} className="md:w-60 shrink-0" />
+              <OwnerObjectivesCard league={league} team={userTeam as BasketballTeam} className="flex-1 min-w-0" />
+            </div>
+            <TrophyCase league={league} team={userTeam as BasketballTeam} />
+            <div className="grid gap-4 mb-6 md:grid-flow-col md:auto-cols-fr">
+              <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void watchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} className="" />
+              <InjuryReport league={league} team={userTeam as BasketballTeam} className="" />
+            </div>
             {isGodMode(league) && (
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
                 <span className="font-bold" style={{ color: 'var(--accent)' }}>🛠️ God Mode</span>
@@ -341,53 +359,35 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
                 </button>
               </div>
             )}
-            <InjuryReport league={league} team={userTeam as BasketballTeam} />
             <DashboardRow league={league} team={userTeam as BasketballTeam} />
-            <div className="mb-4"><HoopsVideoShow league={league} /></div>
-            <div className="mb-6"><TeamSpotlight league={league} compact /></div>
             <TeamLeaders league={league} team={userTeam as BasketballTeam} />
-            <EditorialWidgets league={league} team={userTeam as BasketballTeam} />
-            <div className="grid md:grid-cols-[1fr_15rem] gap-4 mb-6 items-start">
-              <TrophyCase league={league} team={userTeam as BasketballTeam} />
-              <ApprovalRings team={userTeam as BasketballTeam} />
-            </div>
           </>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-4 mb-6">
           {/* Main column */}
           <div className="lg:col-span-2">
-            {userTeam && <OwnerObjectives league={league} team={userTeam as BasketballTeam} />}
+            {userTeam && <EditorialWidgets league={league} team={userTeam as BasketballTeam} />}
 
-            {/* R2-3: bottom action row collapses while the user is between
-                jobs (fired + no replacement team). Only "Back to menu" remains
-                so they can bail out to save management — every other button
-                points to surfaces that require a team. */}
-            <div className="flex flex-wrap gap-3">
-              {(!fired || !!league.userTeamId) && (
-                <>
-                  <Link href="/league">
-                    <Button variant="primary" size="lg">Enter League →</Button>
-                  </Link>
-                  <Link href="/standings">
-                    <Button variant="secondary" size="lg">Standings</Button>
-                  </Link>
-                </>
-              )}
-              {fired && !league.userTeamId && (
+            {/* No bottom button row when you run a team — like football's
+                dashboard, the sidebar already covers navigation and the
+                old "Enter League →" pointed back at the league you're in.
+                Between jobs (fired, or spectating) keep the escape hatches. */}
+            {!userTeam && (
+              <div className="flex flex-wrap gap-3">
                 <Link href="/standings">
-                  <Button variant="secondary" size="lg">Browse Standings</Button>
+                  <Button variant="secondary" size="lg">{fired ? 'Browse Standings' : 'Standings'}</Button>
                 </Link>
-              )}
-              {userTeam && (
-                <Link href={`/team/${userTeam.id}`}>
-                  <Button variant="secondary" size="lg">My Team</Button>
-                </Link>
-              )}
-              <Button variant="ghost" size="lg" onClick={clearActive}>
-                ← Back to menu
-              </Button>
-            </div>
+                {!fired && (
+                  <Link href="/league">
+                    <Button variant="secondary" size="lg">All Teams</Button>
+                  </Link>
+                )}
+                <Button variant="ghost" size="lg" onClick={clearActive}>
+                  ← Back to menu
+                </Button>
+              </div>
+            )}
 
           </div>
 
@@ -403,9 +403,14 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
           </aside>
         </div>
 
-        {watching && (
-          <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} pregame />
+        {/* Team Spotlight closes the dashboard, as on football. */}
+        {userTeam && (
+          <>
+            <div className="mb-4"><HoopsVideoShow league={league} /></div>
+            <div className="mb-6"><TeamSpotlight league={league} compact /></div>
+          </>
         )}
+
         {userTeam && (
           <GamePlanModal teamId={userTeam.id} open={gamePlanOpen} onClose={() => setGamePlanOpen(false)} />
         )}
@@ -445,7 +450,27 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
           <p className="text-white/70 text-base sm:text-xl mt-4 max-w-xl">
             30 cities. 60 prospects. One banner. Build your dynasty and run the franchise.
           </p>
-          <div className="text-white/40 text-xs mt-6 animate-pulse">↓ pick your team</div>
+          {/* Football's hero CTA: a real button down to the team picker, plus
+              "Continue" when a save exists. */}
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => document.getElementById('team-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="px-7 py-3.5 rounded-xl font-bold text-white shadow-lg transition-all hover:brightness-110 active:scale-[0.98]"
+              style={{ background: 'var(--accent)', boxShadow: '0 10px 25px -5px rgba(230,107,0,0.45)' }}
+            >
+              Pick your team — play free →
+            </button>
+            {saves.length > 0 && (
+              <button
+                onClick={() => void continueLatest()}
+                disabled={loading}
+                className="px-5 py-3.5 rounded-xl font-semibold text-white border border-white/25 bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                Continue your league →
+              </button>
+            )}
+          </div>
+          <p className="text-white/45 text-xs mt-4">Play free as a guest — no download. Create a free account to save across devices.</p>
         </div>
       </div>
 
@@ -479,7 +504,7 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
                   Continue League
                 </div>
                 <div className="text-xs text-[var(--text-sec)]">
-                  Season {saves[0].currentSeason} · {saves[0].currentPhase} · {saves[0].teamCount} teams
+                  Season {saves[0].currentSeason} · {humanPhase(saves[0].currentPhase)} · {saves[0].teamCount} teams
                 </div>
               </div>
             </div>
@@ -508,15 +533,15 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
                 <div className="flex-1 min-w-0">
                   <div className="font-bold truncate">{s.displayName}</div>
                   <div className="text-xs text-[var(--text-sec)] truncate">
-                    Season {s.currentSeason} · {s.currentPhase} · {s.teamCount} teams · {s.playerCount} players
+                    Season {s.currentSeason} · {humanPhase(s.currentPhase)} · {s.teamCount} teams · {s.playerCount} players
                   </div>
                   <div className="text-xs text-[var(--text-sec)] opacity-70 mt-0.5">
                     Saved {new Date(s.updatedAt).toLocaleString()}
                   </div>
                 </div>
                 <Button size="sm" onClick={() => void loadLeague(s.id)}>Load</Button>
-                <Button size="sm" variant="ghost" onClick={() => void handleRename(s.id, s.displayName)} title="Rename save">✎</Button>
-                <Button size="sm" variant="ghost" onClick={() => void handleDelete(s.id)} title="Delete save">✕</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setRenameTarget(s); setRenameDraft(s.displayName); }} title="Rename save">✎</Button>
+                <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(s)} title="Delete save">✕</Button>
               </Card>
             ))}
           </div>
@@ -525,11 +550,12 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
 
       {/* Search */}
       <input
+        id="team-picker"
         type="text"
         placeholder="Search teams…"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        className="w-full max-w-md mb-4 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm focus:outline-none focus:border-[var(--accent)]"
+        className="w-full max-w-md mb-4 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm focus:outline-none focus:border-[var(--accent)] scroll-mt-24"
       />
 
       {/* Spectator card */}
@@ -613,8 +639,43 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
       )}
       </div>
       {intro}
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete saved league?"
+        body={<>Delete <strong>{deleteTarget?.displayName}</strong>? This can&apos;t be undone.</>}
+        confirmLabel="Delete league"
+        tone="danger"
+        onConfirm={() => void confirmDelete()}
+      />
+      <Modal open={!!renameTarget} onClose={() => setRenameTarget(null)} title="Rename league" maxWidthClass="max-w-sm">
+        <form
+          onSubmit={e => { e.preventDefault(); void confirmRename(); }}
+          className="space-y-4"
+        >
+          <input
+            autoFocus
+            value={renameDraft}
+            onChange={e => setRenameDraft(e.target.value)}
+            maxLength={60}
+            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm focus:outline-none focus:border-[var(--accent)]"
+            aria-label="League name"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRenameTarget(null)}>Cancel</Button>
+            <Button type="submit" disabled={!renameDraft.trim()}>Save</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
+}
+
+/** Saves store the engine's raw phase key ("regular_season") — show it as words. */
+function humanPhase(raw: string | undefined): string {
+  if (!raw) return 'In progress';
+  return raw.replace(/[_-]+/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase());
 }
 
 // ===========================================================================

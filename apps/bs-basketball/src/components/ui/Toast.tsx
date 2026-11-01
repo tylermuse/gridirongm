@@ -20,7 +20,7 @@ export function SimToast() {
   if (!simToast) return null;
 
   return (
-    <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bs-animate-fade" role="status">
+    <div className="fixed top-36 left-1/2 -translate-x-1/2 z-50 bs-animate-fade" role="status">
       <button
         onClick={dismissToast}
         className="flex items-center gap-2 px-4 py-2 rounded-full border shadow-lg text-sm font-semibold"

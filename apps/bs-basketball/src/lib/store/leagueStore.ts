@@ -40,12 +40,11 @@ import {
 } from '../persistence/db';
 import { simNextGameForTeam } from '../sim/runNextGame';
 import { simNextDay } from '../sim/runSimDay';
-import { simThroughDay } from '../sim/simRange';
+import { simRangeStep, scheduledDaysThrough } from '../sim/simRange';
 import {
   initializePlayoffs,
   simPlayoffDay,
-  simPlayoffRound,
-  simAllPlayoffs,
+  currentPlayoffRound,
   isRegularSeasonComplete,
   getBracket,
 } from '../playoffs';
@@ -125,6 +124,9 @@ interface LeagueStore {
   error: string | null;
   /** Transient sim-result toast (new object each sim → re-triggers display). */
   simToast: { text: string } | null;
+  /** Live progress of a bulk sim (Sim Week / to Deadline / Rest of Season),
+   *  updated as each day is simmed; null when no bulk sim is running. */
+  simProgress: { done: number; total: number } | null;
   /** Dismiss the sim toast. */
   dismissToast: () => void;
   /** Clear the current error message (dismisses the error banner). */
@@ -525,6 +527,52 @@ function yieldToPaint(): Promise<void> {
 }
 
 /**
+ * Sim playoff days one at a time until the bracket completes or `stopAfter`
+ * says so, handing the league to `onProgress` every ~150ms so the bracket and
+ * ticker update live (same treatment as the regular-season bulk sims).
+ */
+async function stepPlayoffDays(
+  start: BasketballLeagueState,
+  stopAfter: (league: BasketballLeagueState) => boolean,
+  onProgress: (league: BasketballLeagueState, days: number) => void,
+): Promise<{ league: BasketballLeagueState; gamesSimmed: number; champion: string | null } | null> {
+  let league = start;
+  let gamesSimmed = 0;
+  let champion: string | null = null;
+  let days = 0;
+  let lastPublish = Date.now();
+  for (let guard = 0; guard < 160; guard++) {
+    const r = simPlayoffDay(league);
+    if (!r) break;
+    league = r.league;
+    gamesSimmed += r.gamesSimmed;
+    champion = r.champion ?? champion;
+    days += 1;
+    const bracket = getBracket(league);
+    if (!bracket || bracket.complete || stopAfter(league)) break;
+    if (Date.now() - lastPublish >= 150) {
+      onProgress(league, days);
+      await nextFrame();
+      lastPublish = Date.now();
+    }
+  }
+  return gamesSimmed === 0 ? null : { league, gamesSimmed, champion };
+}
+
+/** Wait for the browser to actually paint (rAF → next task), with a timer
+ *  fallback for background tabs where rAF is paused. Used between days of a
+ *  bulk sim so each published day renders. */
+function nextFrame(): Promise<void> {
+  return new Promise(resolve => {
+    if (typeof window === 'undefined') { resolve(); return; }
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    window.requestAnimationFrame(() => window.setTimeout(finish, 0));
+    window.setTimeout(finish, 60);
+  });
+}
+
+/**
  * After the user signs a free agent during the preseason window, the market
  * should move: advance the FA clock one day and run a round of CPU free agency
  * so rivals compete for (and sometimes sign away) the remaining pool. No-op once
@@ -549,6 +597,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   loading: false,
   error: null,
   simToast: null,
+  simProgress: null,
   dismissToast() { set({ simToast: null }); },
   clearError() { set({ error: null }); },
 
@@ -1823,17 +1872,22 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   async simPlayoffRound() {
     const current = get().league;
     if (!current) { set({ error: 'No league loaded.' }); return null; }
-    set({ loading: true, error: null });
+    const startRound = currentPlayoffRound(getBracket(current));
+    set({ loading: true, error: null, simProgress: { done: 0, total: 0 } });
     try {
       await yieldToPaint();
-      const outcome = simPlayoffRound(current);
-      if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
+      const outcome = await stepPlayoffDays(
+        current,
+        l => currentPlayoffRound(getBracket(l)) > startRound, // advanced to the next round
+        (league, days) => set({ league, simProgress: { done: days, total: 0 } }),
+      );
+      if (!outcome) { set({ loading: false, simProgress: null, error: 'No playoff games left to sim.' }); return null; }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
+      set({ league: outcome.league, loading: false, simProgress: null, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
       return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
     } catch (err) {
       console.error('[bs-hoops] simPlayoffRound failed:', err);
-      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      set({ loading: false, simProgress: null, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
   },
@@ -1841,17 +1895,21 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   async simAllPlayoffs() {
     const current = get().league;
     if (!current) { set({ error: 'No league loaded.' }); return null; }
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, simProgress: { done: 0, total: 0 } });
     try {
       await yieldToPaint();
-      const outcome = simAllPlayoffs(current);
-      if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
+      const outcome = await stepPlayoffDays(
+        current,
+        () => false,
+        (league, days) => set({ league, simProgress: { done: days, total: 0 } }),
+      );
+      if (!outcome) { set({ loading: false, simProgress: null, error: 'No playoff games left to sim.' }); return null; }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
+      set({ league: outcome.league, loading: false, simProgress: null, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
       return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
     } catch (err) {
       console.error('[bs-hoops] simAllPlayoffs failed:', err);
-      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      set({ loading: false, simProgress: null, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
   },
@@ -1866,21 +1924,48 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       target === 'week' ? current.currentTick + 7 :
       target === 'deadline' ? getTradeDeadlineDay(current) :
       null;
-    set({ loading: true, error: null });
+    const total = scheduledDaysThrough(current, targetDay);
+    set({ loading: true, error: null, simProgress: { done: 0, total } });
     try {
       await yieldToPaint();
-      const outcome = simThroughDay(current, targetDay);
-      if (outcome.gamesSimmed === 0) {
-        set({ loading: false, error: 'No games left to sim in that range.' });
+      // Sim day by day (football parity): publish the league every ~150ms so
+      // the ticker, standings and the "Day 12/40" readout move while it runs,
+      // instead of freezing the page for the whole range and jumping at the
+      // end. Checkpoint the save every two weeks so a closed tab mid-sim keeps
+      // most of the progress.
+      let league = current;
+      let daysSimmed = 0;
+      let gamesSimmed = 0;
+      let lastPublish = Date.now();
+      let lastSaveDay = 0;
+      // Hard cap well above a 170-day season — a runaway-loop backstop.
+      for (let guard = 0; guard < 400; guard++) {
+        const step = simRangeStep(league, targetDay);
+        if (!step) break;
+        league = step.league;
+        daysSimmed += 1;
+        gamesSimmed += step.gamesSimmed;
+        if (daysSimmed - lastSaveDay >= 14) {
+          await saveLeague(league);
+          lastSaveDay = daysSimmed;
+        }
+        if (Date.now() - lastPublish >= 150) {
+          set({ league, simProgress: { done: daysSimmed, total: Math.max(total, daysSimmed) } });
+          await nextFrame();
+          lastPublish = Date.now();
+        }
+      }
+      if (gamesSimmed === 0) {
+        set({ loading: false, simProgress: null, error: 'No games left to sim in that range.' });
         return null;
       }
-      await saveLeague(outcome.league);
-      trackDaySimmed(get, current, target, outcome.daysSimmed, outcome.gamesSimmed);
-      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) + newProposalNote(current, outcome.league) } });
-      return { daysSimmed: outcome.daysSimmed, gamesSimmed: outcome.gamesSimmed };
+      await saveLeague(league);
+      trackDaySimmed(get, current, target, daysSimmed, gamesSimmed);
+      set({ league, loading: false, simProgress: null, simToast: { text: simSummary(league, gamesSimmed) + newProposalNote(current, league) } });
+      return { daysSimmed, gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simRange failed:', err);
-      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      set({ loading: false, simProgress: null, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
   },

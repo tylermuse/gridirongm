@@ -98,7 +98,7 @@ export function Modal({ open, onClose, title, children, maxWidthClass = 'max-w-2
 
   return createPortal(
     <div
-      className="bs-animate-fade fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="bs-animate-fade fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm"
       onClick={onClose}
       onKeyDown={onKeyDown}
       role="presentation"
@@ -109,7 +109,9 @@ export function Modal({ open, onClose, title, children, maxWidthClass = 'max-w-2
         aria-modal="true"
         tabIndex={-1}
         onClick={e => e.stopPropagation()}
-        className={`bs-animate-modal w-full ${maxWidthClass} max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl outline-none`}
+        // Phones get football's sheet: full width, near full height, pinned to
+        // the bottom edge; centered card from sm up.
+        className={`bs-animate-modal w-full ${maxWidthClass} max-h-[94dvh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border shadow-2xl outline-none`}
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
         <div
@@ -123,7 +125,7 @@ export function Modal({ open, onClose, title, children, maxWidthClass = 'max-w-2
           <button
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 w-9 h-9 inline-flex items-center justify-center rounded-lg text-[var(--text-sec)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors"
+            className="shrink-0 w-11 h-11 sm:w-9 sm:h-9 inline-flex items-center justify-center rounded-lg text-[var(--text-sec)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors"
           >
             ✕
           </button>

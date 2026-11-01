@@ -11,6 +11,8 @@ import {
   type LeagueRules,
 } from '@/lib/rules/leagueRules';
 import { Section } from './Section';
+import { SettingsChoice } from './SettingsControls';
+import { Button } from '@/components/ui/Button';
 
 /**
  * League Rules (parity with BS Football's league settings). Edits a local draft
@@ -147,31 +149,10 @@ export function LeagueRulesPanel() {
         desc="Commissioner settings for this league — saved with the save file. Changes apply once you press Save."
       >
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => void save()}
-            disabled={!dirty}
-            className="rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
-            style={{ background: 'var(--accent)' }}
-          >
-            Save rules
-          </button>
-          <button
-            onClick={() => setDraft(saved)}
-            disabled={!dirty}
-            className="rounded-lg px-4 py-2 text-sm font-semibold border disabled:opacity-40"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}
-          >
-            Discard changes
-          </button>
-          <button
-            onClick={() => void resetAll()}
-            disabled={atDefaults && !dirty}
-            className="rounded-lg px-4 py-2 text-sm font-semibold border disabled:opacity-40"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}
-          >
-            Reset to defaults
-          </button>
-          <span className="text-xs text-[var(--muted)]">
+          <Button variant="primary" onClick={() => void save()} disabled={!dirty}>Save rules</Button>
+          <Button variant="secondary" onClick={() => setDraft(saved)} disabled={!dirty}>Discard changes</Button>
+          <Button variant="ghost" onClick={() => void resetAll()} disabled={atDefaults && !dirty}>Reset to defaults</Button>
+          <span className="text-xs text-[var(--text-sec)]">
             {status === 'saved' ? 'Saved ✓' : status === 'reset' ? 'Back to stock rules ✓' : dirty ? 'Unsaved changes' : atDefaults ? 'Using stock rules' : 'Custom rules active'}
           </span>
         </div>
@@ -273,26 +254,8 @@ function SalaryCapControl({
         <span className="text-xs text-[var(--text-sec)]">{season} cap in force: ${curM}M</span>
       </div>
       <div className="flex gap-2 mt-2">
-        <button
-          onClick={() => onChange(null)}
-          aria-pressed={!flat}
-          className="flex-1 rounded-lg border px-3 py-2 text-sm font-semibold"
-          style={!flat
-            ? { borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)' }
-            : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}
-        >
-          Grows yearly
-        </button>
-        <button
-          onClick={() => onChange(savedM ?? curM)}
-          aria-pressed={flat}
-          className="flex-1 rounded-lg border px-3 py-2 text-sm font-semibold"
-          style={flat
-            ? { borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)' }
-            : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}
-        >
-          Flat cap
-        </button>
+        <SettingsChoice active={!flat} onClick={() => onChange(null)} label="Grows yearly" />
+        <SettingsChoice active={flat} onClick={() => onChange(savedM ?? curM)} label="Flat cap" />
       </div>
       {flat && (
         <div className="mt-3">

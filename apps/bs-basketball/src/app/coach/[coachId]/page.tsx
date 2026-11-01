@@ -65,11 +65,11 @@ export default function CoachPage() {
             {coach.firstName[0]}{coach.lastName[0]}
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-display)' }}>{coach.firstName} {coach.lastName}</h1>
+            <h1 className="text-2xl font-black font-display uppercase tracking-tight leading-tight">{coach.firstName} {coach.lastName}</h1>
             <div className="text-sm text-[var(--text-sec)] flex flex-wrap items-center gap-2 mt-0.5">
               <span>{ROLE_LABELS[role]}</span>·<span>Age {coach.age}</span>·
               {team ? (
-                <Link href={`/team/${team.id}`} className="inline-flex items-center gap-1 font-semibold" style={{ color: 'var(--accent)' }}>
+                <Link href={`/team/${team.id}`} className="inline-flex items-center gap-1 font-semibold text-[var(--text)] hover:text-[var(--accent)] transition-colors">
                   <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />
                   {team.city} {team.name}
                 </Link>
@@ -176,7 +176,7 @@ export default function CoachPage() {
                       <td className="px-4 py-1.5 tabular-nums">{r.season}{r.live && <span className="ml-1 text-[10px] text-[var(--text-sec)]">(in progress)</span>}</td>
                       <td className="px-2 py-1.5">
                         {t ? (
-                          <Link href={`/team/${t.id}`} className="inline-flex items-center gap-1.5 font-semibold">
+                          <Link href={`/team/${t.id}`} className="inline-flex items-center gap-1.5 font-semibold hover:text-[var(--accent)] transition-colors">
                             <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
                             {t.abbreviation}
                           </Link>
@@ -219,7 +219,7 @@ export default function CoachPage() {
       )}
 
       <p className="mt-3 text-xs text-[var(--text-sec)]">
-        <Link href="/staff" className="font-semibold" style={{ color: 'var(--accent)' }}>Staff &amp; league coaches →</Link>
+        <Link href="/staff" className="font-semibold text-[var(--accent)] hover:underline">Staff &amp; league coaches →</Link>
       </p>
     </Shell>
   );
@@ -249,8 +249,8 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="max-w-4xl mx-auto p-4 sm:p-8">
-      <Link href="/staff" className="text-sm font-semibold opacity-70 hover:opacity-100">← Staff</Link>
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      <Link href="/staff" className="text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--text)] transition-colors">← Staff</Link>
       <div className="mt-2">{children}</div>
     </main>
   );

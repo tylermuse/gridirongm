@@ -6,10 +6,14 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { PlayerModal } from '@/components/modals/PlayerModal';
+import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
+import { ReleaseModal } from '@/components/modals/ReleaseModal';
 import { teamFinances, apronLabel } from '@/lib/finances/finances';
 import { fmtMoney } from '@/lib/dashboard/summary';
-import type { BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
+import { ratingChipClass, ratingColor, potentialLabel } from '@/lib/ui/ratingColor';
+import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /finances — revenue, expenses, profit, cap & apron status, salary by position,
@@ -23,7 +27,7 @@ const POS_COLORS: Record<BasketballPosition, string> = {
 
 export default function FinancesPage() {
   const { league, loading, error } = useLeagueOrHydrate();
-  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [releaseId, setReleaseId] = useState<string | null>(null);
 
   const team = useMemo<BasketballTeam | null>(() => {
     if (!league?.userTeamId) return null;
@@ -32,11 +36,12 @@ export default function FinancesPage() {
 
   const fin = useMemo(() => (league && team ? teamFinances(league, team) : null), [league, team]);
 
-  if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
-  if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
+  if (loading) return <Shell><PageHeader quickNav="finances" title="Finances" /><p className="opacity-60">Loading…</p></Shell>;
+  if (!league) return <Shell><PageHeader quickNav="finances" title="Finances" /><p>{error ?? 'No league loaded.'}</p></Shell>;
   if (!team || !fin) {
     return (
       <Shell>
+        <PageHeader quickNav="finances" title="Finances" />
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState icon="💰" title="No team yet" message="Pick a team from the League page to see its books." />
         </div>
@@ -49,14 +54,17 @@ export default function FinancesPage() {
 
   return (
     <Shell>
-      <div className="flex items-center gap-3 mb-5">
-        <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-display)' }}>{team.city} {team.name} Finances</h1>
-          <p className="text-sm text-[var(--text-sec)]">Season {league.currentSeason}</p>
-        </div>
-        <span className="ml-auto text-xs font-bold rounded-full px-3 py-1" style={{ background: `color-mix(in srgb, ${apron.color} 16%, transparent)`, color: apron.color }}>{apron.text}</span>
-      </div>
+      <PageHeader
+        quickNav="finances"
+        title={(
+          <span className="inline-flex items-center gap-2.5">
+            <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="md" />
+            <span>{team.city} {team.name} Finances</span>
+          </span>
+        )}
+        subtitle={`Season ${league.currentSeason}`}
+        right={<span className="text-xs font-bold rounded-full px-3 py-1" style={{ background: `color-mix(in srgb, ${apron.color} 16%, transparent)`, color: apron.color }}>{apron.text}</span>}
+      />
 
       {/* P&L */}
       <div className="grid md:grid-cols-3 gap-4 mb-4">
@@ -84,7 +92,7 @@ export default function FinancesPage() {
           <div className="text-3xl font-black tabular-nums" style={{ color: fin.profit >= 0 ? '#10b981' : '#dc2626' }}>
             {fin.profit >= 0 ? '+' : ''}{fmtMoney(fin.profit)}
           </div>
-          <p className="text-xs text-[var(--text-sec)] mt-1">Revenue minus payroll and luxury tax.</p>
+          <p className="text-xs text-[var(--text-sec)] mt-1">Revenue minus total expenses (player payroll, dead cap, coaching incl. fired coaches, luxury tax).</p>
         </Card>
       </div>
 
@@ -128,37 +136,69 @@ export default function FinancesPage() {
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="!p-0 overflow-hidden">
           <CardHeader className="px-4 pt-3"><CardTitle>Top salaries</CardTitle></CardHeader>
-          <SalaryList rows={fin.topSalaries} onName={setModalPlayerId} />
+          <SalaryTable rows={fin.topSalaries} season={league.currentSeason} onRelease={setReleaseId} />
         </Card>
         <Card className="!p-0 overflow-hidden">
           <CardHeader className="px-4 pt-3"><CardTitle>Expiring contracts</CardTitle><span className="text-xs text-[var(--text-sec)]">{fin.expiring.length}</span></CardHeader>
           {fin.expiring.length === 0
             ? <p className="px-4 pb-4 text-sm text-[var(--text-sec)]">No deals expiring this season.</p>
-            : <SalaryList rows={fin.expiring} onName={setModalPlayerId} />}
+            : <SalaryTable rows={fin.expiring} season={league.currentSeason} onRelease={setReleaseId} />}
         </Card>
       </div>
 
-      <p className="mt-3 text-xs text-[var(--text-sec)]">Manage contracts — extend or release — from the <Link href="/roster" className="font-semibold" style={{ color: 'var(--accent)' }}>Roster</Link>.</p>
+      <p className="mt-3 text-xs text-[var(--text-sec)]">Extend contracts from the <Link href="/roster" className="font-semibold text-[var(--accent)] hover:underline">Roster</Link>.</p>
 
-      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
+      <ReleaseModal playerId={releaseId} onClose={() => setReleaseId(null)} />
     </Shell>
   );
 }
 
-function SalaryList({ rows, onName }: { rows: { player: { id: string; firstName: string; lastName: string; sportData: { position: string } }; salary: number }[]; onName: (id: string) => void }) {
+/** Football's finances salary table: Player (with a Pos · Age subline), OVR
+ *  chip, POT, Salary, Yrs and a Release action. Every row is the user's own
+ *  player (this page only shows the user's books), so Release always applies. */
+function SalaryTable({ rows, season, onRelease }: { rows: { player: BasketballPlayer; salary: number }[]; season: number; onRelease: (id: string) => void }) {
   return (
-    <div className="pb-2">
-      {rows.map(({ player, salary }) => (
-        <button
-          key={player.id}
-          onClick={() => onName(player.id)}
-          className="w-full flex items-center gap-2 px-4 py-1.5 text-sm hover:bg-[var(--surface-2)] transition-colors text-left"
-        >
-          <span className="font-semibold truncate flex-1" style={{ color: 'var(--accent)' }}>{player.firstName} {player.lastName}</span>
-          <span className="text-xs opacity-60 w-7">{player.sportData.position}</span>
-          <span className="tabular-nums font-semibold w-14 text-right">{fmtMoney(salary)}</span>
-        </button>
-      ))}
+    <div className="overflow-x-auto px-4 pb-3">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-[var(--text-sec)] text-xs uppercase">
+            <th className="text-left font-semibold pb-2">Player</th>
+            <th className="text-center font-semibold pb-2">OVR</th>
+            <th className="text-center font-semibold pb-2">POT</th>
+            <th className="text-right font-semibold pb-2">Salary</th>
+            <th className="text-right font-semibold pb-2">Yrs</th>
+            <th className="text-right font-semibold pb-2"><span className="sr-only">Action</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ player, salary }) => {
+            const yearsLeft = player.contract ? player.contract.years.filter(y => y.season >= season).length : 0;
+            const pot = player.development.potential;
+            return (
+              <tr key={player.id} className="border-t border-[var(--border)]">
+                <td className="py-2 pr-2 min-w-0">
+                  <PlayerName
+                    playerId={player.id}
+                    firstName={player.firstName}
+                    lastName={player.lastName}
+                    className="font-semibold hover:text-[var(--accent)] transition-colors"
+                  />
+                  <div className="text-xs text-[var(--text-sec)]">{player.sportData.position} · Age {player.age}</div>
+                </td>
+                <td className="py-2 text-center">
+                  <span className={`inline-block min-w-[2rem] rounded px-1.5 py-0.5 text-xs font-bold tabular-nums ${ratingChipClass(player.ratings.overall)}`}>{player.ratings.overall}</span>
+                </td>
+                <td className={`py-2 text-center text-xs font-semibold ${ratingColor(pot)}`} title={`${pot} potential`}>{potentialLabel(pot)}</td>
+                <td className="py-2 text-right tabular-nums font-semibold">{fmtMoney(salary)}</td>
+                <td className="py-2 text-right tabular-nums text-[var(--text-sec)]">{yearsLeft}</td>
+                <td className="py-2 pl-2 text-right">
+                  <Button size="sm" variant="secondary" onClick={() => onRelease(player.id)}>Release</Button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -208,9 +248,8 @@ function Row({ label, value, color, muted }: { label: string; value: string; col
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="max-w-5xl mx-auto p-5 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <div className="mt-2">{children}</div>
+    <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8">
+      {children}
     </main>
   );
 }

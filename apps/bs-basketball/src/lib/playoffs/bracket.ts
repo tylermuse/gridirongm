@@ -352,7 +352,7 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
 
 /** Lowest round number among series still in progress (both teams known, no
  *  winner). Returns Infinity when nothing is active. */
-function currentPlayoffRound(bracket: PlayoffBracket | null): number {
+export function currentPlayoffRound(bracket: PlayoffBracket | null): number {
   if (!bracket) return Infinity;
   let min = Infinity;
   for (const s of [...bracket.rounds.flat(), ...(bracket.playIn ?? [])]) {

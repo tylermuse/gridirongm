@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import { getTransactions, type TransactionKind } from '@/lib/transactions';
 
 /**
@@ -11,15 +14,15 @@ import { getTransactions, type TransactionKind } from '@/lib/transactions';
  * releases, and draft picks, filterable by kind.
  */
 
-const FILTERS: { key: TransactionKind | 'all'; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'trade', label: 'Trades' },
-  { key: 'signing', label: 'Signings' },
-  { key: 'release', label: 'Releases' },
-  { key: 'draft', label: 'Draft' },
-  { key: 'pick', label: 'Picks' },
-  { key: 'coaching', label: 'Coaching' },
-  { key: 'expansion', label: 'Expansion' },
+const FILTERS: ReadonlyArray<{ value: TransactionKind | 'all'; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'trade', label: 'Trades' },
+  { value: 'signing', label: 'Signings' },
+  { value: 'release', label: 'Releases' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'pick', label: 'Picks' },
+  { value: 'coaching', label: 'Coaching' },
+  { value: 'expansion', label: 'Expansion' },
 ];
 
 const ICON: Record<TransactionKind, string> = {
@@ -43,24 +46,14 @@ export default function TransactionsPage() {
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
 
   return (
-    <main className="max-w-4xl mx-auto p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <h1 className="text-4xl font-extrabold mt-2 mb-5" style={{ color: 'var(--accent)' }}>Transactions</h1>
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      <PageHeader
+        title="Transactions"
+        subtitle={`Season ${league.currentSeason} · ${all.length} move${all.length === 1 ? '' : 's'} on the wire`}
+      />
 
-      <div className="flex flex-wrap gap-1.5 mb-5">
-        {FILTERS.map(f => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className="px-3 py-1 rounded-full text-sm font-semibold transition-colors"
-            style={{
-              background: filter === f.key ? 'var(--accent)' : 'var(--surface-2)',
-              color: filter === f.key ? '#fff' : 'var(--text-sec)',
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="mb-5 max-w-full overflow-x-auto no-scrollbar">
+        <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} size="sm" />
       </div>
 
       {shown.length === 0 ? (
@@ -86,14 +79,19 @@ export default function TransactionsPage() {
 }
 
 function Loading() {
-  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return (
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      <Skeleton className="h-8 w-44 mb-5" />
+      <SkeletonList rows={8} />
+    </main>
+  );
 }
 
 function NotFound({ message }: { message: string }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
-      <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
+      <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Start or load a league</Link>
     </main>
   );
 }

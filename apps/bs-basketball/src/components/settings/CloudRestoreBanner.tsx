@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSupabaseUser } from '@/lib/auth/useSupabaseUser';
 import { readCloudIndex } from '@/lib/persistence/cloud';
+import { settingsLinkClass } from './SettingsControls';
 
 /**
  * Splash prompt for a signed-in user on a device that's missing some of their
@@ -31,7 +32,7 @@ export function CloudRestoreBanner({ localIds }: { localIds: string[] }) {
         <div className="font-bold">{missing} league{missing === 1 ? '' : 's'} saved to your account</div>
         <div className="text-xs text-[var(--text-sec)]">Pick up where you left off on another device.</div>
       </div>
-      <Link href="/settings" className="rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: 'var(--accent)' }}>Restore</Link>
+      <Link href="/settings" className={settingsLinkClass('primary', 'sm')}>Restore</Link>
     </div>
   );
 }

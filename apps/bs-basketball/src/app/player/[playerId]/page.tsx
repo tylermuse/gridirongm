@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { computeLeagueStatRanks, ordinal, type StatCategory } from '@/lib/stats/leagueRank';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -15,22 +15,32 @@ import { ratingDeltas, trajectoryDescription } from '@/lib/development';
 import { getInjuries, SEVERITY_LABEL, canPlayThrough } from '@/lib/injuries';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { buildAdvancedContext } from '@/lib/stats/advancedLeague';
+import { ratingHex, potentialLabel } from '@/lib/ui/ratingColor';
+import { releasePreview } from '@/lib/roster/release';
+import { fmtMoney } from '@/lib/dashboard/summary';
+import { ExtendModal } from '@/components/modals/ExtendModal';
+import { ReleaseModal } from '@/components/modals/ReleaseModal';
 import {
-  basketballUiMetadata,
-  type BasketballPlayer,
-  type BasketballStats,
-  type BasketballTeam,
-} from '@bs/sport-basketball';
+  AwardChipList,
+  OvrHistory,
+  RatingGroups,
+  ovrHistoryPoints,
+  playerAwardChips,
+} from '@/components/modals/PlayerCardSections';
+import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 import type { BaseGameResult } from '@bs/core/adapter';
 
 /**
  * /player/[playerId] — full player card.
  *
- *  - xl avatar + meta + floating OVR + trajectory badge
+ *  - breadcrumb, xl avatar + meta + tier-colored OVR circle + trajectory badge
+ *  - front-office actions on your own players (trading block / extend /
+ *    release, with the dead-cap preview) — same as the PlayerModal card
+ *  - development (offseason deltas + rating history) and career awards
  *  - season/career stat toggle
  *  - contract card (when signed)
  *  - game log table (recent appearances, expandable)
- *  - grouped ratings with color-coded bars
+ *  - grouped ratings — the PlayerModal's rows (components/modals/PlayerCardSections)
  */
 
 type GameResult = BaseGameResult<BasketballStats>;
@@ -54,6 +64,8 @@ export default function PlayerPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const [statMode, setStatMode] = useState<'season' | 'career'>('season');
   const [showAllGames, setShowAllGames] = useState(false);
+  const [extendId, setExtendId] = useState<string | null>(null);
+  const [releaseId, setReleaseId] = useState<string | null>(null);
 
   const player: BasketballPlayer | null = useMemo(() => {
     if (!league) return null;
@@ -94,15 +106,7 @@ export default function PlayerPage() {
   if (!league) return <NotFound message={error ?? 'No league loaded.'} backHref="/" backLabel="Home" />;
   if (!player) return <NotFound message="Player not found." backHref="/league" backLabel="League" />;
 
-  const primary = team?.primaryColor ?? 'var(--accent)';
   const secondary = team?.secondaryColor ?? '#ffffff';
-
-  // Group ratings by category as declared in basketballUiMetadata.
-  const grouped = new Map<string, { key: string; label: string }[]>();
-  for (const f of basketballUiMetadata.ratingFields) {
-    if (!grouped.has(f.group)) grouped.set(f.group, []);
-    grouped.get(f.group)!.push({ key: String(f.key), label: f.label });
-  }
 
   // Season stats come from box-score aggregation (player.seasonStats isn't kept
   // up to date during the season); career stats are rolled up at season's end.
@@ -125,20 +129,33 @@ export default function PlayerPage() {
   const injury = getInjuries(league)[player.id];
   const injuryActive = !!injury && injury.returnDay > day;
 
-  // OVR history: season → overall, from the rollover log.
-  const ovrHistory = (player.sportData.seasonLog ?? []).map(e => ({ season: e.season, overall: e.overall }));
+  // OVR history: logged seasons + the current rating (shared with the modal).
+  const ovrPoints = ovrHistoryPoints(player);
+  const awardChips = playerAwardChips(league, player.id);
 
   // "Trade for this player" — only for players on another team while managing.
   const canTradeFor =
     !!player.rosterSlot && !!league.userTeamId && player.rosterSlot.teamId !== league.userTeamId;
+  const isOnUserTeam =
+    !!player.rosterSlot && !!league.userTeamId && player.rosterSlot.teamId === league.userTeamId;
+  const release = isOnUserTeam ? releasePreview(player, league.currentSeason) : null;
+  const pot = player.development.potential;
+
+  // Breadcrumb — your roster, another team's page, or the players index.
+  const crumb = team
+    ? isOnUserTeam
+      ? { href: '/roster', label: 'Roster' }
+      : { href: `/team/${team.id}`, label: `${team.abbreviation} Roster` }
+    : { href: '/players', label: 'Players' };
 
   return (
-    <main className="max-w-4xl mx-auto p-5 sm:p-8">
-      {team && (
-        <Link href={`/team/${team.id}`} className="text-sm font-semibold opacity-70 hover:opacity-100">
-          ← {team.city} {team.name}
-        </Link>
-      )}
+    <>
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
+      <nav aria-label="Breadcrumb" className="text-xs text-[var(--text-sec)]">
+        <Link href={crumb.href} className="hover:text-[var(--text)] transition-colors">{crumb.label}</Link>
+        {' / '}
+        <span>{player.firstName} {player.lastName}</span>
+      </nav>
 
       {/* Header */}
       <header className="relative flex flex-wrap items-center gap-5 mt-2 mb-6">
@@ -170,6 +187,10 @@ export default function PlayerPage() {
                 </span>
               </>
             )}
+            {!team && ' · Free Agent'}
+            {player.sportData.draftYear && player.sportData.draftPick && (
+              <> · {player.sportData.draftYear} draft, #{player.sportData.draftPick}</>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <Badge variant="default" size="md" className="capitalize">{player.sportData.starTier}</Badge>
@@ -181,27 +202,57 @@ export default function PlayerPage() {
             {injuryActive && injury ? (
               canPlayThrough(injury) ? (
                 <Badge variant="amber" size="md">
-                  {`GTD: ${injury.bodyPart} · returns day ${injury.returnDay} (${SEVERITY_LABEL[injury.severity]})`}
+                  {`GTD: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
                 </Badge>
               ) : (
                 <Badge variant="red" size="md">
                   {injury.returnDay >= 50_000
                     ? `Out for season (${injury.bodyPart})`
-                    : `Out: ${injury.bodyPart} · returns day ${injury.returnDay} (${SEVERITY_LABEL[injury.severity]})`}
+                    : `Out: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
                 </Badge>
               )
             ) : (
               <Badge variant="green" size="md">Healthy</Badge>
             )}
           </div>
+
+          {/* Front-office actions on your own players (same as the card). */}
+          {isOnUserTeam && (
+            <div className="mt-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button size="sm" onClick={() => router.push(`/trade?block=${player.id}`)}>
+                  Add to Trading Block
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setExtendId(player.id)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-green-500/40 text-green-600 hover:bg-green-500/10 transition-colors"
+                >
+                  Extend Contract
+                </button>
+                <Button size="sm" variant="ghost" onClick={() => setReleaseId(player.id)}>
+                  Release Player
+                </Button>
+              </div>
+              {release && release.remainingGuaranteed > 0 && (
+                <div className="text-xs mt-1 text-red-600 tabular-nums">
+                  Dead cap if released: {fmtMoney(release.waiveThisYear)} this season
+                  {release.years > 1 && ` (${fmtMoney(release.remainingGuaranteed)} total)`}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="ml-auto self-start flex flex-col items-end gap-2">
-          <div
-            className="text-5xl font-extrabold px-4 py-1 rounded-lg text-white"
-            style={{ background: primary, color: secondary, fontFamily: 'var(--font-display)' }}
-            title="Overall rating"
-          >
-            {player.ratings.overall}
+          <div className="flex flex-col items-center">
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center shadow-sm"
+              style={{ background: ratingHex(player.ratings.overall) }}
+              title="Overall rating"
+            >
+              <span className="text-3xl font-black text-white tabular-nums">{player.ratings.overall}</span>
+            </div>
+            <div className="text-xs text-[var(--text-sec)] mt-1">Overall</div>
           </div>
           {ovrDelta !== 0 && (
             <span
@@ -232,13 +283,19 @@ export default function PlayerPage() {
       </header>
 
       {/* Physical / basics row */}
-      <section className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-6">
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
         <Stat label="Height" value={`${Math.floor(player.ratings.height / 12)}'${player.ratings.height % 12}"`} />
         <Stat label="Wingspan" value={`${player.ratings.wingspan}"`} />
-        <Stat label="Potential" value={player.development.potential} />
-        <Stat label="Speed" value={player.ratings.speed} />
-        <Stat label="Hand" value={player.sportData.shootingHand} />
-        <Stat label="Two-way" value={player.sportData.isTwoWay ? 'Yes' : 'No'} />
+        <Stat
+          label="Potential"
+          title={`Potential ceiling: ${pot} OVR`}
+          value={
+            <span style={{ color: ratingHex(pot) }}>
+              {potentialLabel(pot)} <span className="tabular-nums">{pot}</span>
+            </span>
+          }
+        />
+        <Stat label="Hand" value={<span className="capitalize">{player.sportData.shootingHand}</span>} />
       </section>
 
       {/* Development */}
@@ -246,7 +303,7 @@ export default function PlayerPage() {
         const deltas = ratingDeltas(player);
         const log = player.sportData.seasonLog ?? [];
         const desc = trajectoryDescription(traj);
-        if (!desc && deltas.length === 0 && log.length === 0 && ovrHistory.length === 0) return null;
+        if (!desc && deltas.length === 0 && log.length === 0 && ovrPoints.length < 2) return null;
         return (
           <Card className="mb-4">
             <CardHeader>
@@ -278,15 +335,25 @@ export default function PlayerPage() {
                 </div>
               </>
             )}
-            {ovrHistory.length > 0 && (
+            {ovrPoints.length >= 2 && (
               <div className="mt-4">
-                <div className="text-xs uppercase tracking-widest opacity-60 mb-2">OVR history</div>
-                <OvrSparkline history={ovrHistory} current={player.ratings.overall} />
+                <div className="text-xs uppercase tracking-widest opacity-60 mb-2">Rating history</div>
+                <OvrHistory points={ovrPoints} />
               </div>
             )}
           </Card>
         );
       })()}
+
+      {/* Career awards — counted from the league's season archive. */}
+      {awardChips.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Career Awards</CardTitle>
+          </CardHeader>
+          <AwardChipList chips={awardChips} />
+        </Card>
+      )}
 
       {/* Stat block with season/career toggle */}
       <Card className="mb-4">
@@ -452,30 +519,13 @@ export default function PlayerPage() {
         )}
       </Card>
 
-      {/* Ratings grouped */}
-      <section className="grid sm:grid-cols-2 gap-4">
-        {[...grouped.entries()].map(([group, fields]) => (
-          <div key={group} className="p-4 rounded-xl border" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <h2 className="text-sm font-bold uppercase tracking-wide mb-3 text-[var(--text-sec)]">{group}</h2>
-            <ul className="space-y-2">
-              {fields.map(f => {
-                const v = (player.ratings as unknown as Record<string, number>)[f.key];
-                if (typeof v !== 'number') return null;
-                return (
-                  <li key={f.key} className="flex items-center gap-3">
-                    <span className="w-14 text-xs text-[var(--text-sec)]">{f.label}</span>
-                    <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--border)' }}>
-                      <div className="h-2 rounded-full" style={{ width: `${v}%`, background: ratingColor(v) }} />
-                    </div>
-                    <span className="w-8 text-right text-sm font-semibold">{v}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </section>
+      {/* Ratings grouped — the player card's row look (full label, tier bar). */}
+      <RatingGroups player={player} variant="page" />
     </main>
+    {/* Rendered after the page so they portal on top. */}
+    <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
+    <ReleaseModal playerId={releaseId} onClose={() => setReleaseId(null)} />
+    </>
   );
 }
 
@@ -499,58 +549,22 @@ function money(dollars: number): string {
   return `$${Math.round(dollars)}`;
 }
 
-function ratingColor(v: number): string {
-  if (v >= 90) return '#10b981';
-  if (v >= 80) return '#84cc16';
-  if (v >= 70) return '#eab308';
-  if (v >= 60) return '#f97316';
-  return '#dc2626';
-}
-
 function trajectoryVariant(t: string): 'green' | 'red' | 'default' {
   if (t === 'breakout' || t === 'rising') return 'green';
   if (t === 'declining' || t === 'cliff') return 'red';
   return 'default';
 }
 
-/** Compact season→OVR history as a horizontal bar list (no charting dep). */
-function OvrSparkline({ history, current }: { history: { season: number; overall: number }[]; current: number }) {
-  const rows = [...history, { season: NaN, overall: current }];
-  const max = Math.max(...rows.map(r => r.overall), 1);
+function Stat({
+  label, value, rank, title,
+}: {
+  label: string;
+  value: ReactNode;
+  rank?: number | null;
+  title?: string;
+}) {
   return (
-    <ul className="space-y-1.5">
-      {rows.map((r, i) => {
-        const isCurrent = Number.isNaN(r.season);
-        return (
-          <li key={isCurrent ? 'now' : r.season} className="flex items-center gap-3">
-            <span className="w-14 text-xs text-[var(--text-sec)] tabular-nums">
-              {isCurrent ? 'Now' : r.season}
-            </span>
-            <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--border)' }}>
-              <div
-                className="h-2 rounded-full"
-                style={{ width: `${(r.overall / max) * 100}%`, background: ratingColor(r.overall) }}
-              />
-            </div>
-            <span className="w-8 text-right text-sm font-semibold tabular-nums">{r.overall}</span>
-            {i > 0 && (
-              <span
-                className="w-8 text-right text-xs tabular-nums"
-                style={{ color: r.overall - rows[i - 1].overall >= 0 ? '#10b981' : '#dc2626' }}
-              >
-                {r.overall - rows[i - 1].overall > 0 ? '+' : ''}{r.overall - rows[i - 1].overall || ''}
-              </span>
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function Stat({ label, value, rank }: { label: string; value: string | number; rank?: number | null }) {
-  return (
-    <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }}>
+    <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }} title={title}>
       <div className="text-base font-bold" style={{ color: 'var(--accent)' }}>{value}</div>
       <div className="text-[10px] opacity-70 uppercase tracking-wide">
         {label}{rank ? <span className="normal-case"> · {ordinal(rank)}</span> : null}
@@ -560,12 +574,12 @@ function Stat({ label, value, rank }: { label: string; value: string | number; r
 }
 
 function Loading() {
-  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8"><p className="opacity-60">Loading…</p></main>;
 }
 
 function NotFound({ message, backHref, backLabel }: { message: string; backHref: string; backLabel: string }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
       <Link href={backHref} className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
         ← Back to {backLabel}

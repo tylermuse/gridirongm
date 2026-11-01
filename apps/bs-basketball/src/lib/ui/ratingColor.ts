@@ -42,3 +42,17 @@ export function getContrastText(hex: string): string {
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return lum > 0.6 ? '#0b1220' : '#fff';
 }
+
+/** OVR chip classes (text + tinted fill) — football's roster/table OVR chip.
+ *  The one OVR treatment for every table, so every surface agrees. */
+export function ratingChipClass(v: number): string {
+  return v >= 80 ? 'text-green-600 bg-green-500/15'
+    : v >= 65 ? 'text-blue-600 bg-blue-500/15'
+    : v >= 50 ? 'text-amber-600 bg-amber-500/15'
+    : 'text-red-600 bg-red-500/15';
+}
+
+/** Potential as a word (football shows Elite / High / Average / Low). */
+export function potentialLabel(pot: number): 'Elite' | 'High' | 'Average' | 'Low' {
+  return pot >= 85 ? 'Elite' : pot >= 75 ? 'High' : pot >= 62 ? 'Average' : 'Low';
+}

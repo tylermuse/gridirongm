@@ -1,13 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { SortableTradeTable } from '@/components/trade/SortableTradeTable';
 import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { evaluateTrade, isExecutable, type TradeSideInput } from '@/lib/trade';
@@ -22,6 +25,32 @@ import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, t
 import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
 
 type League = NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']>;
+type TradeTab = 'build' | 'finder' | 'offers' | 'block';
+
+// Football's tab set + order, with the short phone labels it swaps in below sm.
+const TAB_LABELS: ReadonlyArray<{ value: TradeTab; long: string; short: string }> = [
+  { value: 'offers', long: 'Incoming Offers', short: 'Offers' },
+  { value: 'block', long: 'Trading Block', short: 'Block' },
+  { value: 'build', long: 'Propose Trade', short: 'Propose' },
+  { value: 'finder', long: 'Trade Finder', short: 'Finder' },
+];
+
+function tabOptions(short: boolean, pendingCount: number) {
+  return TAB_LABELS.map(t => ({
+    value: t.value,
+    label: short ? t.short : t.long,
+    badge: t.value === 'offers' ? pendingCount : undefined,
+  }));
+}
+
+/** Multi-select toggle chip (picks to throw in, seek-in-return filters). Not a
+ *  single-choice switch, so it's a chip — with a hover state, unlike the old
+ *  inline-styled buttons. */
+function toggleChipClass(selected: boolean): string {
+  return `border transition-colors ${selected
+    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+    : 'border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)] hover:border-[var(--accent)] hover:bg-[var(--surface-2)]'}`;
+}
 
 /**
  * /trade — two-team trade builder (Phase 2D-6, trade-system upgrade).
@@ -77,7 +106,19 @@ function TradePage() {
   const [dragOver, setDragOver] = useState(false);
   // ?tab=offers deep-links the inbox (sidebar badge / dashboard banner).
   const initTab = searchParams.get('tab');
-  const [tab, setTab] = useState<'build' | 'finder' | 'offers' | 'block'>(() => (initBlockPlayer ? 'block' : initTab === 'offers' ? 'offers' : 'build'));
+  // Football parity: with no deep-link, open on Incoming Offers when offers are
+  // waiting, else Propose. `null` = "not decided yet" (the league is still
+  // hydrating) — settled once below, as soon as the league is in hand.
+  const hasDeepLink = !!(initTarget || initGetPlayer || initGivePlayer || initBlockPlayer || initTab);
+  const [tab, setTab] = useState<TradeTab | null>(() => (
+    initBlockPlayer ? 'block'
+      : initTab === 'offers' ? 'offers'
+      : hasDeepLink ? 'build'
+      : league ? (pendingProposalCount(league) > 0 ? 'offers' : 'build')
+      : null
+  ));
+  if (tab === null && league) setTab(pendingProposalCount(league) > 0 ? 'offers' : 'build');
+  const activeTab: TradeTab = tab ?? 'build';
   const [finderId, setFinderId] = useState('');
   // Set while the builder is editing a counter to a persisted AI proposal.
   const [counterId, setCounterId] = useState<string | null>(null);
@@ -124,9 +165,11 @@ function TradePage() {
   if (loading) return <Loading />;
   if (!league || !statsMap) return <NotFound message={error ?? 'No league loaded.'} />;
 
+  const window = tradeWindowClosed(league);
+
   if (!userTeamId) {
     return (
-      <Shell>
+      <Shell right={<DeadlineLine league={league} window={window} />}>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState icon="🔁" title="Spectating" message="Pick a team to build and propose trades." />
         </div>
@@ -138,7 +181,6 @@ function TradePage() {
   const targetTeam = targetId ? teamById.get(targetId) : null;
   const playerById = league.players as Record<string, BasketballPlayer>;
   const season = league.currentSeason;
-  const window = tradeWindowClosed(league);
   const hasAssets = (mine.size + myPicks.size > 0) && (theirs.size + theirPicks.size > 0);
   const accepted = !!evaluation && isExecutable(evaluation, sides);
   // You can SEND any legal deal (the AI may still decline); illegal salary
@@ -259,7 +301,7 @@ function TradePage() {
   const strategy = targetId ? teamStrategy(league, targetId as TradeSideInput['teamId']) : null;
 
   return (
-    <Shell>
+    <Shell right={<DeadlineLine league={league} window={window} />}>
       <RumorsPanel
         league={league}
         onOpen={(rumor) => {
@@ -273,35 +315,27 @@ function TradePage() {
         }}
       />
 
-      <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit overflow-x-auto max-w-full">
-        {([['offers', 'Incoming Offers'], ['block', 'Trading Block'], ['build', 'Propose Trade'], ['finder', 'Trade Finder']] as const).map(([k, l]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className="px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap"
-            style={tab === k ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}
-          >
-            {l}
-            {k === 'offers' && pendingCount > 0 && (
-              <span className="ml-1.5 rounded-full px-1.5 text-[10px] font-bold" style={{ background: '#dc2626', color: '#fff' }}>{pendingCount}</span>
-            )}
-          </button>
-        ))}
+      {/* Short labels on phones, full labels from sm up (football's tab set). */}
+      <div className="mb-6 max-w-full overflow-x-auto">
+        <div className="sm:hidden">
+          <SegmentedControl options={tabOptions(true, pendingCount)} value={activeTab} onChange={setTab} size="sm" />
+        </div>
+        <div className="hidden sm:block">
+          <SegmentedControl options={tabOptions(false, pendingCount)} value={activeTab} onChange={setTab} />
+        </div>
       </div>
 
-      <DeadlineBanner league={league} window={window} />
-
-      {tab === 'finder' && (
+      {activeTab === 'finder' && (
         <TradeFinderPanel league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} season={season} finderId={finderId} setFinderId={setFinderId} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} />
       )}
-      {tab === 'offers' && (
+      {activeTab === 'offers' && (
         <OffersPanel league={league} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} onCounter={counterOffer} closed={window.closed} loading={store.loading} />
       )}
-      {tab === 'block' && (
+      {activeTab === 'block' && (
         <TradingBlockTab league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} initialBlock={initBlockPlayer ?? undefined} />
       )}
 
-      {tab === 'build' && (
+      {activeTab === 'build' && (
       <>
       {counterId && targetTeam && (
         <div className="mb-3 rounded-lg border px-4 py-2.5 flex items-start gap-3" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
@@ -355,7 +389,7 @@ function TradePage() {
             <div className="text-sm font-bold" style={{ color: '#15803d' }}>Trade Accepted!</div>
             <div className="text-xs text-[var(--text-sec)]">The deal went through — rosters and picks have been updated.</div>
           </div>
-          <button onClick={() => setResultMsg(null)} className="text-xs font-semibold rounded-md px-2.5 py-1 border shrink-0" style={{ borderColor: 'var(--border)' }}>Dismiss</button>
+          <button onClick={() => setResultMsg(null)} className="text-xs font-semibold rounded-md px-2.5 py-1 border border-[var(--border)] shrink-0 text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors">Dismiss</button>
         </div>
       ) : (
         <div className="mb-5 rounded-lg border p-3" style={{ borderColor: '#fcd34d', background: 'color-mix(in srgb, #f59e0b 12%, transparent)' }}>
@@ -490,7 +524,7 @@ function HistoryPanel({ league }: { league: League }) {
   if (history.length === 0) return null;
   return (
     <section className="mt-6 rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 text-left" style={{ background: 'var(--muted)' }}>
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 text-left bg-[var(--muted)] hover:bg-[var(--surface-2)] transition-colors">
         <span className="font-bold text-sm">Past proposals ({history.length})</span>
         <span className="ml-auto text-xs opacity-60">{open ? '▾' : '▸'}</span>
       </button>
@@ -586,26 +620,23 @@ function RumorCard({ league, rumor, onOpen }: { league: League; rumor: TradeRumo
 }
 
 // ===========================================================================
-// Deadline / window banner (P2.2)
+// Deadline / window line (P2.2) — football shows it compact in the header
 // ===========================================================================
 
-function DeadlineBanner({ league, window }: { league: League; window: { closed: boolean; reason: string } }) {
+function DeadlineLine({ league, window }: { league: League; window: { closed: boolean; reason: string } }) {
   if (window.closed) {
-    return (
-      <div className="mb-5 px-4 py-2.5 rounded-lg text-sm border flex items-center gap-2" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
-        🔒 <span className="font-semibold">Trade window closed.</span> {window.reason}
-      </div>
-    );
+    return <span className="text-sm text-[var(--text-sec)]">🔒 {window.reason}</span>;
   }
   const deadlineDay = getTradeDeadlineDay(league);
-  const daysLeft = Math.max(0, deadlineDay - league.currentTick);
+  const daysLeft = deadlineDay - league.currentTick;
+  // Window open past the deadline day only happens in the offseason.
+  if (daysLeft < 0) {
+    return <span className="text-sm text-[var(--text-sec)]">Offseason — trade window open</span>;
+  }
   return (
-    <div className="mb-5 px-4 py-2.5 rounded-lg text-sm border flex flex-wrap items-center gap-x-3 gap-y-1" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-      <span className="font-semibold">📆 Trade deadline: Day {deadlineDay}</span>
-      <span className="text-[var(--text-sec)]">
-        {daysLeft === 0 ? 'Deadline day — last chance to deal.' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left to make a move.`}
-      </span>
-    </div>
+    <span className="text-sm text-[var(--text-sec)]">
+      Trade deadline: Day {deadlineDay} ({daysLeft === 0 ? 'deadline day' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`})
+    </span>
   );
 }
 
@@ -624,11 +655,12 @@ function gradeColor(g: TradeGrade): string {
 // Grade badge palette mirrors football's trade summary (src/app/trades/page.tsx):
 // A → green, B → blue, C → yellow, D/F → red. Inline hex keeps it consistent
 // with this app's styling convention while matching football's exact colors.
+// Fills are alpha tints (not light pastels) so the badge reads in dark mode.
 function gradeBadgeStyle(g: TradeGrade): { color: string; background: string } {
-  if (g.startsWith('A')) return { color: '#15803d', background: '#dcfce7' };
-  if (g.startsWith('B')) return { color: '#1d4ed8', background: '#dbeafe' };
-  if (g === 'C') return { color: '#a16207', background: '#fef9c3' };
-  return { color: '#b91c1c', background: '#fee2e2' };
+  if (g.startsWith('A')) return { color: '#16a34a', background: 'color-mix(in srgb, #16a34a 16%, transparent)' };
+  if (g.startsWith('B')) return { color: '#2563eb', background: 'color-mix(in srgb, #2563eb 16%, transparent)' };
+  if (g === 'C') return { color: '#ca8a04', background: 'color-mix(in srgb, #ca8a04 16%, transparent)' };
+  return { color: '#dc2626', background: 'color-mix(in srgb, #dc2626 16%, transparent)' };
 }
 
 // Qualitative verdict tag — football's exact label set + thresholds
@@ -758,8 +790,8 @@ function TradeFinderPanel({
                 <button
                   key={pk.id}
                   onClick={() => toggleOffer(pk.id)}
-                  className="text-xs font-semibold rounded-full px-2.5 py-1 border"
-                  style={sel ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}
+                  aria-pressed={sel}
+                  className={`text-xs font-semibold rounded-full px-2.5 py-1 ${toggleChipClass(sel)}`}
                   title="Offer this pick to sweeten the deal"
                 >
                   🎟️ {pickShort(league, pk)}
@@ -812,6 +844,25 @@ function OffersPanel({
     if (r) setNote(r.ok ? (action === 'accept' ? `✅ ${r.message}` : r.message) : `❌ ${r.message}`);
   }
 
+  // Football's "Reject All": decline every pending offer, one at a time through
+  // the same store action the per-card Decline button uses.
+  const [confirmRejectAll, setConfirmRejectAll] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  async function rejectAll() {
+    setRejecting(true);
+    let declined = 0;
+    try {
+      for (const p of pending) {
+        const r = await store.respondToProposal(p.id, 'decline');
+        if (r?.ok) declined++;
+      }
+    } finally {
+      setRejecting(false);
+      setConfirmRejectAll(false);
+    }
+    setNote(`Declined ${declined} offer${declined === 1 ? '' : 's'}.`);
+  }
+
   return (
     <div className="space-y-4">
       {note && (
@@ -821,7 +872,14 @@ function OffersPanel({
         </div>
       )}
       <section>
-        <h3 className="text-sm font-bold mb-1">Offers inbox</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <h3 className="text-sm font-bold">Offers inbox</h3>
+          {pending.length >= 2 && (
+            <Button variant="danger" size="sm" disabled={loading || closed} busy={rejecting} onClick={() => setConfirmRejectAll(true)}>
+              Reject All ({pending.length})
+            </Button>
+          )}
+        </div>
         <p className="text-xs text-[var(--text-sec)] mb-3">Rival GMs call with real offers during the season. Each stays on the table for a few days — accept, decline, or counter once.</p>
         {pending.length === 0 ? (
           <div className="rounded-xl border bg-[var(--surface)] p-5 text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
@@ -849,6 +907,17 @@ function OffersPanel({
         )}
       </section>
 
+      <ConfirmModal
+        open={confirmRejectAll}
+        onClose={() => { if (!rejecting) setConfirmRejectAll(false); }}
+        title="Reject all offers?"
+        body={`Decline all ${pending.length} pending trade offers? Each team is told no — this can't be undone.`}
+        confirmLabel={`Reject All (${pending.length})`}
+        tone="danger"
+        loading={rejecting}
+        onConfirm={() => void rejectAll()}
+      />
+
       {recent.length > 0 && (
         <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
           <div className="px-4 py-2 text-xs font-bold border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>Recent offers</div>
@@ -866,7 +935,7 @@ function OffersPanel({
       )}
 
       <section>
-        <button onClick={() => setShowMore(v => !v)} className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
+        <button onClick={() => setShowMore(v => !v)} className="text-xs font-semibold text-[var(--accent)] hover:underline">
           {showMore ? '▾ Hide' : '▸ Show'} other interest around the league
         </button>
         {showMore && (
@@ -1099,8 +1168,8 @@ function TradingBlockTab({
                   <button
                     key={pk.id}
                     onClick={() => toggleSet(blockPicks, setBlockPicks, pk.id)}
-                    className="text-xs font-semibold rounded-full px-2.5 py-1 border inline-flex items-center gap-1"
-                    style={sel ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}
+                    aria-pressed={sel}
+                    className={`text-xs font-semibold rounded-full px-2.5 py-1 inline-flex items-center gap-1 ${toggleChipClass(sel)}`}
                     title="Put this pick on the block"
                   >
                     🎟️ {pickShort(league, pk)}<span className="opacity-60 tabular-nums">· {fmtPts(pickValue(league, pk))}</span>
@@ -1114,12 +1183,12 @@ function TradingBlockTab({
           <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Seeking in return</div>
           <div className="flex flex-wrap gap-2 mb-2">
             {BLOCK_POSITIONS.map(pos => (
-              <button key={pos} onClick={() => toggleSet(seekPos, setSeekPos, pos)} className="text-xs font-bold rounded-md px-2.5 py-1 border" style={seekPos.has(pos) ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>{pos}</button>
+              <button key={pos} onClick={() => toggleSet(seekPos, setSeekPos, pos)} aria-pressed={seekPos.has(pos)} className={`text-xs font-bold rounded-md px-2.5 py-1 ${toggleChipClass(seekPos.has(pos))}`}>{pos}</button>
             ))}
           </div>
           <div className="flex flex-wrap gap-2 mb-3">
             {SEEK_TAGS.map(tag => (
-              <button key={tag} onClick={() => toggleSet(seekTags, setSeekTags, tag)} className="text-xs font-semibold rounded-md px-2.5 py-1 border" style={seekTags.has(tag) ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>{SEEK_LABELS[tag]}</button>
+              <button key={tag} onClick={() => toggleSet(seekTags, setSeekTags, tag)} aria-pressed={seekTags.has(tag)} className={`text-xs font-semibold rounded-md px-2.5 py-1 ${toggleChipClass(seekTags.has(tag))}`}>{SEEK_LABELS[tag]}</button>
             ))}
           </div>
           <Button variant="primary" disabled={blockCount === 0 || loading} onClick={ask} className="w-full">
@@ -1505,25 +1574,24 @@ function money(n: number): string {
   return '$0';
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <main className="max-w-6xl mx-auto p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <h2 className="text-2xl font-black uppercase tracking-tight mt-2 mb-6">Trade Center</h2>
+    <main className="max-w-6xl mx-auto p-3 sm:p-5 md:p-8">
+      <PageHeader quickNav="trade" title="Trade Center" right={right} className="mb-6" />
       {children}
     </main>
   );
 }
 
 function Loading() {
-  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8"><p className="opacity-60">Loading…</p></main>;
 }
 
 function NotFound({ message }: { message: string }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
-      <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
+      <Link href="/" className="text-sm font-semibold text-[var(--accent)] hover:underline">Go to the home screen</Link>
     </main>
   );
 }

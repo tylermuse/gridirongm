@@ -6,6 +6,10 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
+import { RankingsTabs } from '@/components/awards/RankingsTabs';
 import { powerScore } from '@/lib/stats/powerScore';
 import { powerBreakdown, rankByGroup, GROUP_LABEL, type GroupKey, type TeamBreakdown } from '@/lib/rankings/powerBreakdown';
 import type { BasketballTeam } from '@bs/sport-basketball';
@@ -16,10 +20,27 @@ import type { BasketballTeam } from '@bs/sport-basketball';
  * Score formula lives in `@/lib/stats/powerScore` so the /stats Power tab and
  * this rich-card view always show the same numbers. Each card carries
  * auto-generated commentary tailored to the team's stat signature. The user's
- * team is highlighted with an accent border.
+ * team is highlighted with an accent border, and its overall rank sits on top
+ * as a big tier-colored "#N" (football parity). Rank numbers are colored by
+ * league quartile rather than always accent.
  */
 
 interface TeamSportData { conference: string; division: string }
+
+type View = 'overall' | 'groups';
+const VIEW_OPTIONS: ReadonlyArray<{ value: View; label: string }> = [
+  { value: 'overall', label: 'Overall' },
+  { value: 'groups', label: 'By group' },
+];
+
+/** League quartile of a rank: 1 = top quarter … 4 = bottom quarter. */
+function quartile(rank: number, total: number): 1 | 2 | 3 | 4 {
+  const q = rank / Math.max(1, total);
+  return q <= 0.25 ? 1 : q <= 0.5 ? 2 : q <= 0.75 ? 3 : 4;
+}
+
+const TIER_TEXT = { 1: 'text-green-600', 2: 'text-blue-600', 3: 'text-amber-600', 4: 'text-red-600' } as const;
+const TIER_LABEL = { 1: 'Elite', 2: 'Above Average', 3: 'Below Average', 4: 'Bottom Tier' } as const;
 
 function commentary(team: BasketballTeam): string {
   const games = team.record.wins + team.record.losses;
@@ -41,7 +62,7 @@ function commentary(team: BasketballTeam): string {
 
 export default function PowerRankingsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
-  const [view, setView] = useState<'overall' | 'groups'>('overall');
+  const [view, setView] = useState<View>('overall');
   const [group, setGroup] = useState<GroupKey>('backcourt');
   const [expanded, setExpanded] = useState<string | null>(null);
   const breakdown = useMemo(() => (league ? powerBreakdown(league) : new Map<string, TeamBreakdown>()), [league]);
@@ -53,36 +74,47 @@ export default function PowerRankingsPage() {
       .sort((a, b) => b.score - a.score);
   }, [league]);
 
-  if (loading) return <main className="max-w-3xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  if (loading) {
+    return (
+      <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
+        <Skeleton className="h-8 w-48 mb-4" />
+        <SkeletonList rows={10} />
+      </main>
+    );
+  }
   if (!league) {
     return (
-      <main className="max-w-3xl mx-auto p-8">
+      <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
         <p className="mb-4">{error ?? 'No league loaded.'}</p>
-        <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>← Home</Link>
+        <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Start or load a league</Link>
       </main>
     );
   }
 
   const gamesPlayed = league.games.filter(g => g.status === 'played').length;
+  const total = ranked.length;
+  const userIdx = league.userTeamId ? ranked.findIndex(r => r.team.id === league.userTeamId) : -1;
 
   return (
-    <main className="max-w-3xl mx-auto p-5 sm:p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
-        <h1 className="text-3xl sm:text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
-          Power Rankings
-        </h1>
-        <span className="text-sm text-[var(--text-sec)]">
-          Season {league.currentSeason} · Day {league.currentTick}
-        </span>
-        <div className="ml-auto inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
-          {(['overall', 'groups'] as const).map(v => (
-            <button key={v} onClick={() => setView(v)} className="px-3 py-1.5" style={view === v ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>
-              {v === 'overall' ? 'Overall' : 'By group'}
-            </button>
-          ))}
-        </div>
-      </header>
+    <main className="max-w-3xl mx-auto p-3 sm:p-5 md:p-8">
+      <RankingsTabs />
+      <PageHeader
+        title="Power Rankings"
+        subtitle={`Season ${league.currentSeason} · Day ${league.currentTick}`}
+        right={<SegmentedControl options={VIEW_OPTIONS} value={view} onChange={setView} size="sm" />}
+        className="mb-6"
+      />
+
+      {view === 'overall' && gamesPlayed > 0 && userIdx >= 0 && (() => {
+        const rank = userIdx + 1;
+        const q = quartile(rank, total);
+        return (
+          <div className="text-center mb-6">
+            <div className={`text-5xl font-black tabular-nums ${TIER_TEXT[q]}`} style={{ fontFamily: 'var(--font-display)' }}>#{rank}</div>
+            <div className="text-sm text-[var(--text-sec)] mt-1">{TIER_LABEL[q]} — Your Overall Power Rank (of {total})</div>
+          </div>
+        );
+      })()}
 
       {view === 'groups' && (
         <GroupView league={league} breakdown={breakdown} group={group} setGroup={setGroup} />
@@ -104,50 +136,52 @@ export default function PowerRankingsPage() {
           const isUser = league.userTeamId === team.id;
           const bd = breakdown.get(team.id);
           const open = expanded === team.id;
+          // Row = a div holding the team link + a sibling expand button (a
+          // <button> nested inside <Link> is invalid interactive nesting).
           return (
             <li key={team.id}>
-              <Link
-                href={`/team/${team.id}`}
-                className={`flex items-center gap-4 p-3 rounded-xl border bg-[var(--surface)] transition-all hover:shadow-lg hover:shadow-[var(--accent-glow)] ${
+              <div
+                className={`group flex items-center gap-3 pr-3 rounded-xl border bg-[var(--surface)] transition-all hover:shadow-lg hover:shadow-[var(--accent-glow)] ${
                   isUser ? 'border-[var(--accent)] border-2' : 'border-[var(--border)] hover:border-[var(--accent)]'
                 }`}
               >
-                <div
-                  className="w-9 text-center text-3xl font-black shrink-0"
-                  style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
-                >
-                  {i + 1}
-                </div>
-                <TeamLogo
-                  abbreviation={team.abbreviation}
-                  primaryColor={team.primaryColor}
-                  secondaryColor={team.secondaryColor}
-                  size="md"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="font-bold truncate flex items-center gap-2">
-                    {team.city} {team.name}
-                    {isUser && <Badge variant="orange" size="sm">You</Badge>}
+                <Link href={`/team/${team.id}`} className="flex flex-1 min-w-0 items-center gap-4 p-3 rounded-l-xl">
+                  <div
+                    className={`w-9 text-center text-3xl font-black shrink-0 tabular-nums ${TIER_TEXT[quartile(i + 1, total)]}`}
+                    style={{ fontFamily: 'var(--font-display)' }}
+                  >
+                    {i + 1}
                   </div>
-                  <div className="text-xs text-[var(--text-sec)] truncate">
-                    {sd.conference} · {commentary(team)}
+                  <TeamLogo
+                    abbreviation={team.abbreviation}
+                    primaryColor={team.primaryColor}
+                    secondaryColor={team.secondaryColor}
+                    size="md"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold truncate flex items-center gap-2 group-hover:text-[var(--accent)] transition-colors">
+                      {team.city} {team.name}
+                      {isUser && <Badge variant="orange" size="sm">You</Badge>}
+                    </div>
+                    <div className="text-xs text-[var(--text-sec)] truncate">
+                      {sd.conference} · {commentary(team)}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-mono text-sm font-semibold tabular-nums">{score.toFixed(1)}</div>
-                  <div className="text-xs text-[var(--text-sec)]">{team.record.wins}–{team.record.losses}</div>
-                </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-mono text-sm font-semibold tabular-nums">{score.toFixed(1)}</div>
+                    <div className="text-xs text-[var(--text-sec)]">{team.record.wins}–{team.record.losses}</div>
+                  </div>
+                </Link>
                 <button
                   type="button"
                   aria-expanded={open}
-                  aria-label={open ? 'Hide breakdown' : 'Show breakdown'}
-                  onClick={e => { e.preventDefault(); e.stopPropagation(); setExpanded(open ? null : team.id); }}
-                  className="shrink-0 h-7 w-7 rounded-md border text-xs font-bold text-[var(--text-sec)] hover:text-[var(--accent)] hover:border-[var(--accent)]"
-                  style={{ borderColor: 'var(--border)' }}
+                  aria-label={open ? `Hide ${team.abbreviation} breakdown` : `Show ${team.abbreviation} breakdown`}
+                  onClick={() => setExpanded(open ? null : team.id)}
+                  className="shrink-0 h-7 w-7 rounded-md border border-[var(--border)] text-xs font-bold text-[var(--text-sec)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
                 >
                   {open ? '−' : '+'}
                 </button>
-              </Link>
+              </div>
               {open && bd && <BreakdownPanel bd={bd} total={league.teams.length} />}
             </li>
           );
@@ -158,6 +192,7 @@ export default function PowerRankingsPage() {
 }
 
 const CARD_GROUPS: GroupKey[] = ['backcourt', 'wings', 'frontcourt', 'bench', 'offense', 'defense', 'ortg', 'drtg', 'net'];
+const GROUP_OPTIONS: ReadonlyArray<{ value: GroupKey; label: string }> = CARD_GROUPS.map(k => ({ value: k, label: GROUP_LABEL[k] }));
 
 function rankColor(rank: number, total: number): string {
   if (rank <= Math.ceil(total * 0.2)) return '#10b981';
@@ -205,13 +240,8 @@ function GroupView({ league, breakdown, group, setGroup }: {
   const total = rows.length;
   return (
     <>
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {CARD_GROUPS.map(k => (
-          <button key={k} onClick={() => setGroup(k)} className="text-xs font-bold rounded-full px-3 py-1 border transition active:scale-95"
-            style={group === k ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
-            {GROUP_LABEL[k]}
-          </button>
-        ))}
+      <div className="mb-3 max-w-full overflow-x-auto no-scrollbar">
+        <SegmentedControl options={GROUP_OPTIONS} value={group} onChange={setGroup} variant="secondary" size="sm" />
       </div>
       <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
         {rows.map(r => {

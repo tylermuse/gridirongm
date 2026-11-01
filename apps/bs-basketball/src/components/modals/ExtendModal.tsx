@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/modals/Modal';
 import { Button } from '@/components/ui/Button';
+import { OfferSalaryInput, OfferYearsPicker } from '@/components/freeAgency/OfferSalaryInput';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { openTalk, currentAsk, offerTemperature, validateOffer, type OfferResponse } from '@/lib/roster/negotiation';
 import { extensionMarket } from '@/lib/roster/extension';
@@ -26,10 +27,11 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
 
   const talk = useMemo(() => (league && player ? openTalk(league, player) : null), [league, player]);
   const market = useMemo(() => (player ? extensionMarket(player, season) : null), [player, season]);
-  // String-backed inputs so mobile users can fully clear + retype the field;
-  // clamp only for the derived offer and on blur (never mid-keystroke).
-  const [yearsDraft, setYearsDraft] = useState('2');
-  const [salaryDraft, setSalaryDraft] = useState('5');
+  // Offer form state ($M/yr for salary). OfferSalaryInput keeps its own
+  // string drafts so mobile users can clear + retype; the derived offer below
+  // still clamps exactly as before.
+  const [yearsSel, setYearsSel] = useState(2);
+  const [salarySel, setSalarySel] = useState(5);
   const [last, setLast] = useState<OfferResponse | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -39,8 +41,8 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
     const p = league.players[playerId as keyof typeof league.players] as BasketballPlayer | undefined;
     if (!p) return;
     const ask = currentAsk(openTalk(league, p));
-    setYearsDraft(String(ask.years));
-    setSalaryDraft(String(Math.round((ask.salaryPerYear / 1e6) * 10) / 10));
+    setYearsSel(ask.years);
+    setSalarySel(Math.round((ask.salaryPerYear / 1e6) * 10) / 10);
     setLast(null);
     // Intentionally keyed on playerId only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,8 +53,8 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
     return <Modal open onClose={onClose} title="Negotiate" maxWidthClass="max-w-md"><p className="p-2 text-sm text-[var(--text-sec)]">Player unavailable.</p></Modal>;
   }
 
-  const years = Math.min(5, Math.max(1, Math.round(Number(yearsDraft) || 1)));
-  const salaryM = Math.min(80, Math.max(0.5, Number(salaryDraft) || 0.5));
+  const years = Math.min(5, Math.max(1, Math.round(yearsSel || 1)));
+  const salaryM = Math.min(80, Math.max(0.5, salarySel || 0.5));
   const offer = { years, salaryPerYear: Math.round(salaryM * 10) * 100_000 };
   const illegal = validateOffer(talk.profile, offer);
   const temp = offerTemperature(talk, offer);
@@ -80,9 +82,13 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
     setLast(res);
   }
   function loadCounter(o: { years: number; salaryPerYear: number }) {
-    setYearsDraft(String(o.years));
-    setSalaryDraft(String(Math.round((o.salaryPerYear / 1e6) * 10) / 10));
+    setYearsSel(o.years);
+    setSalarySel(Math.round((o.salaryPerYear / 1e6) * 10) / 10);
   }
+  // Slider / clamp band for the salary control: his legal range (league
+  // minimum → max salary), inside the same 0.5–80 $M rails the offer clamps to.
+  const minM = Math.max(0.5, Math.ceil(talk.profile.minSalary / 100_000) / 10);
+  const maxM = Math.max(minM, Math.min(80, Math.floor(talk.profile.maxSalary / 100_000) / 10));
 
   const lastTone = last?.kind === 'countered' ? 'var(--accent)' : last?.kind === 'invalid' ? 'var(--border)' : '#dc2626';
 
@@ -128,7 +134,7 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
           <div className="rounded-lg p-3 text-sm border" style={{ borderColor: lastTone, background: 'var(--surface)' }}>
             <div>{last.message}</div>
             {last.counter && open && (
-              <button type="button" onClick={() => loadCounter(last.counter!)} className="mt-2 text-xs font-bold underline" style={{ color: 'var(--accent)' }}>
+              <button type="button" onClick={() => loadCounter(last.counter!)} className="mt-2 text-xs font-bold underline hover:no-underline hover:opacity-80 transition-opacity" style={{ color: 'var(--accent)' }}>
                 Load his counter into the offer
               </button>
             )}
@@ -148,19 +154,21 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
 
         {open && (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm">
+            <div className="space-y-3">
+              <div>
+                <span className="block text-xs uppercase tracking-widest opacity-60 mb-1">Salary</span>
+                <OfferSalaryInput
+                  askingSalary={ask.salaryPerYear / 1e6}
+                  value={salarySel}
+                  onChange={setSalarySel}
+                  minSalary={minM}
+                  maxSalary={maxM}
+                />
+              </div>
+              <div>
                 <span className="block text-xs uppercase tracking-widest opacity-60 mb-1">Years</span>
-                <input type="number" inputMode="numeric" min={1} max={5} step={1} value={yearsDraft}
-                  onChange={e => setYearsDraft(e.target.value)} onBlur={() => setYearsDraft(String(years))}
-                  className="w-full rounded-lg border px-3 py-2 bg-[var(--surface)]" style={{ borderColor: 'var(--border)' }} />
-              </label>
-              <label className="text-sm">
-                <span className="block text-xs uppercase tracking-widest opacity-60 mb-1">Salary ($M/yr)</span>
-                <input type="number" inputMode="decimal" min={0.5} max={80} step={0.5} value={salaryDraft}
-                  onChange={e => setSalaryDraft(e.target.value)} onBlur={() => setSalaryDraft(String(salaryM))}
-                  className="w-full rounded-lg border px-3 py-2 bg-[var(--surface)]" style={{ borderColor: 'var(--border)' }} />
-              </label>
+                <OfferYearsPicker value={yearsSel} onChange={setYearsSel} preferred={ask.years} max={5} />
+              </div>
             </div>
 
             <div>

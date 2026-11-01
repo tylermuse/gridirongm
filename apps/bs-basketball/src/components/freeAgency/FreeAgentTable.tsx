@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Chip } from '@/components/ui/Chip';
-import { ratingColor } from '@/lib/ui/ratingColor';
+import { Button } from '@/components/ui/Button';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
+import { ratingChipClass } from '@/lib/ui/ratingColor';
 import { acceptanceProbability, bestCompetingOffer, rosterCount, getMaxRoster, type FreeAgentInfo } from '@/lib/freeAgency';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
-import type { BasketballTeam } from '@bs/sport-basketball';
+import type { BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 import { careerPerGameLine } from '@/lib/stats/statLine';
 import { SuitorIntel } from './SuitorIntel';
 
@@ -14,9 +16,15 @@ import { SuitorIntel } from './SuitorIntel';
  * Sortable free-agent table with an expandable intel panel (parity with
  * football's FA table + FAEvaluationPanel). All intel is derived from existing
  * engine calls — acceptance %, competing interest, Bird rights, market vs ask.
+ *
+ * The expand chevron lives inside the name cell, so the sticky first column
+ * (phones/tablets) pins the player's name, not a bare chevron. The table owns
+ * its scroll box (both axes) so the header row stays pinned while scrolling.
  */
 
-type SortKey = 'ovr' | 'pot' | 'age' | 'ppg' | 'ask';
+type SortKey = 'name' | 'pos' | 'ovr' | 'pot' | 'age' | 'ppg' | 'ask';
+
+const POS_ORDER: Record<BasketballPosition, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
 
 function money(n: number): string {
   const s = n < 0 ? '-' : '';
@@ -42,7 +50,7 @@ function lastLine(f: FreeAgentInfo): { ppg: number; text: string } {
 }
 
 export function FreeAgentTable({
-  league, pool, room, budget, appeal, selectedId, onSelect,
+  league, pool, room, budget, appeal, selectedId, onSelect, showActions = true, priceDecay = 1,
 }: {
   league: BasketballLeagueState;
   pool: FreeAgentInfo[];
@@ -53,40 +61,60 @@ export function FreeAgentTable({
   appeal: number;
   selectedId: string | null;
   onSelect: (f: FreeAgentInfo) => void;
+  /** False for spectators (no user team) — hides the Offer column. */
+  showActions?: boolean;
+  /** Current FA price multiplier (1 = full market). Below 1 the Ask column
+   *  flags the discount with an amber ↓. */
+  priceDecay?: number;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('ovr');
   const [dir, setDir] = useState<1 | -1>(-1);
   const [expanded, setExpanded] = useState<string | null>(null);
   const teamById = new Map((league.teams as BasketballTeam[]).map(t => [t.id as string, t]));
+  const decayed = priceDecay < 1;
+  const colCount = showActions ? 8 : 7;
 
   const rows = [...pool].sort((a, b) => {
     let cmp = 0;
     switch (sortKey) {
+      case 'name':
+        cmp = a.player.lastName.localeCompare(b.player.lastName) || a.player.firstName.localeCompare(b.player.firstName);
+        break;
+      case 'pos':
+        cmp = (POS_ORDER[a.player.sportData.position] ?? 9) - (POS_ORDER[b.player.sportData.position] ?? 9);
+        break;
       case 'ovr': cmp = a.player.ratings.overall - b.player.ratings.overall; break;
       case 'pot': cmp = a.player.development.potential - b.player.development.potential; break;
       case 'age': cmp = a.player.age - b.player.age; break;
       case 'ppg': cmp = lastLine(a).ppg - lastLine(b).ppg; break;
       default: cmp = a.marketSalary * a.desiredYears - b.marketSalary * b.desiredYears;
     }
-    return cmp * dir;
+    // Ties (same position, same age, …) fall back to best-first.
+    return cmp * dir || b.player.ratings.overall - a.player.ratings.overall;
   });
 
   function sort(k: SortKey) {
     if (k === sortKey) setDir(d => (d === 1 ? -1 : 1));
-    else { setSortKey(k); setDir(k === 'age' ? 1 : -1); }
+    // Name, position and age read best ascending first.
+    else { setSortKey(k); setDir(k === 'age' || k === 'name' || k === 'pos' ? 1 : -1); }
   }
   const th = (k: SortKey, label: string, cls = '') => (
-    <th onClick={() => sort(k)} className={`py-2 cursor-pointer hover:text-[var(--text)] select-none ${cls}`}>{label}{k === sortKey ? (dir === 1 ? ' ↑' : ' ↓') : ''}</th>
+    <th
+      onClick={() => sort(k)}
+      aria-sort={k === sortKey ? (dir === 1 ? 'ascending' : 'descending') : undefined}
+      className={`py-2 cursor-pointer hover:text-[var(--text)] select-none transition-colors ${cls}`}
+    >
+      {label}{k === sortKey ? (dir === 1 ? ' ↑' : ' ↓') : ''}
+    </th>
   );
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm sticky-col sticky-action">
-        <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider" style={{ background: 'var(--surface-2)' }}>
+    <div className="overflow-auto max-h-[36rem]">
+      <table className={`w-full text-sm sticky-col ${showActions ? 'sticky-action' : ''}`}>
+        <thead className="sticky top-0 z-[2] bg-[var(--surface)] text-[var(--text-sec)] text-[10px] uppercase tracking-wider shadow-[0_1px_0_var(--border)]">
           <tr>
-            <th className="w-5"></th>
-            <th className="text-left pl-1">Player</th>
-            <th className="text-center">Pos</th>
+            {th('name', 'Player', 'text-left pl-3')}
+            {th('pos', 'Pos', 'text-center')}
             {/* MOBILE-1c: hide Age / POT / Last on phone (drop the densest
                 columns to keep OVR + Ask + Action readable at 390px). Above the
                 phone breakpoint (sm+) the stat line shows inline; on phone it's
@@ -95,12 +123,11 @@ export function FreeAgentTable({
             {th('ovr', 'OVR', 'text-center')}
             {th('pot', 'POT', 'text-center hidden sm:table-cell')}
             {th('ppg', 'Last', 'text-center hidden sm:table-cell')}
-            {th('ask', 'Ask', 'text-right')}
-            <th className="text-right pr-3">Action</th>
+            {th('ask', 'Ask', `text-right ${showActions ? '' : 'pr-3'}`)}
+            {showActions && <th className="text-right pr-3">Action</th>}
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-sm text-[var(--text-sec)]">No free agents match.</td></tr>}
           {rows.map(f => {
             const p = f.player;
             const last = f.lastTeamId ? teamById.get(f.lastTeamId) : null;
@@ -108,39 +135,63 @@ export function FreeAgentTable({
             const isOpen = expanded === p.id;
             const ll = lastLine(f);
             return (
-              <RowGroup key={p.id}>
+              <Fragment key={p.id}>
                 <tr
                   onClick={() => setExpanded(isOpen ? null : p.id)}
+                  aria-expanded={isOpen}
                   className="border-t cursor-pointer hover:bg-[var(--surface-2)] transition-colors"
                   style={{ borderColor: 'var(--border)', background: isSel ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : undefined }}
                 >
-                  <td className="pl-2"><svg width="9" height="9" viewBox="0 0 10 10" className={isOpen ? 'rotate-90' : ''} style={{ transition: 'transform .15s', opacity: 0.5 }}><path d="M3 1l4 4-4 4" stroke="currentColor" fill="none" strokeWidth="1.5" /></svg></td>
-                  <td className="py-2 pl-1">
-                    <div className="flex items-center gap-2">
+                  <td className="py-2 pl-2 pr-2">
+                    {/* Width cap lives on the div — table cells ignore max-width. */}
+                    <div className="flex items-center gap-2 min-w-0 max-w-[12rem] sm:max-w-none">
+                      <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden className={`shrink-0 ${isOpen ? 'rotate-90' : ''}`} style={{ transition: 'transform .15s', opacity: 0.5 }}><path d="M3 1l4 4-4 4" stroke="currentColor" fill="none" strokeWidth="1.5" /></svg>
                       <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={last?.primaryColor ?? '#555'} secondaryColor={last?.secondaryColor ?? '#fff'} photoUrl={p.sportData.photoUrl} size="sm" />
-                      <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
+                      {/* PlayerName stops propagation, so opening the card
+                          doesn't also toggle the row. */}
+                      <PlayerName
+                        playerId={p.id}
+                        firstName={p.firstName}
+                        lastName={p.lastName}
+                        className="font-semibold truncate min-w-0 hover:text-[var(--accent)] transition-colors"
+                      />
                       <BirdChip tier={f.birdRights} />
                     </div>
                   </td>
                   <td className="text-center"><Chip>{p.sportData.position}</Chip></td>
                   <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.age}</td>
-                  <td className={`text-center font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.development.potential}</td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{ll.text}</td>
-                  <td className="text-right tabular-nums">{money(f.marketSalary)}</td>
-                  <td className="text-right pr-3">
-                    {/* MOBILE-5: bumps to 44px min on touch only. */}
-                    <button onClick={e => { e.stopPropagation(); onSelect(f); }} className="bs-touch-target text-xs font-bold rounded-md px-2.5 py-1 text-white" style={{ background: 'var(--accent)' }}>Offer</button>
+                  <td className="text-center">
+                    <span className={`font-black text-sm px-1.5 py-0.5 rounded tabular-nums ${ratingChipClass(p.ratings.overall)}`}>{p.ratings.overall}</span>
                   </td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.development.potential}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell whitespace-nowrap">{ll.text}</td>
+                  <td className={`text-right tabular-nums whitespace-nowrap ${showActions ? '' : 'pr-3'}`}>
+                    {money(f.marketSalary)}
+                    {decayed && (
+                      <span className="text-[10px] text-amber-600 ml-1" title={`Prices at ${Math.round(priceDecay * 100)}% of market`}>↓</span>
+                    )}
+                  </td>
+                  {showActions && (
+                    <td className="text-right pr-3">
+                      {/* Only the button is shielded from the row's expand
+                          click; the rest of the cell still toggles the row.
+                          MOBILE-5: bs-touch-target bumps to 44px on touch. */}
+                      <span className="inline-flex" onClick={e => e.stopPropagation()}>
+                        <Button size="sm" className="bs-touch-target" onClick={() => onSelect(f)}>
+                          {isSel ? 'Negotiate' : 'Offer'}
+                        </Button>
+                      </span>
+                    </td>
+                  )}
                 </tr>
                 {isOpen && (
                   <tr style={{ background: 'color-mix(in srgb, var(--surface-2) 50%, transparent)' }}>
-                    <td colSpan={9} className="px-4 py-3">
+                    <td colSpan={colCount} className="px-4 py-3">
                       <FaIntel league={league} info={f} room={room} budget={budget} appeal={appeal} teamById={teamById} />
                     </td>
                   </tr>
                 )}
-              </RowGroup>
+              </Fragment>
             );
           })}
         </tbody>
@@ -213,8 +264,4 @@ function L({ children }: { children: React.ReactNode }) {
 function BirdChip({ tier }: { tier: FreeAgentInfo['birdRights'] }) {
   if (tier === 'none') return null;
   return <span className="text-[9px] font-bold px-1 rounded shrink-0" style={{ background: 'color-mix(in srgb, var(--accent-alt) 16%, transparent)', color: 'var(--accent-alt)' }}>🐦 {tier}</span>;
-}
-
-function RowGroup({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
 }

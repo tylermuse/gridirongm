@@ -14,6 +14,7 @@
  */
 
 import { Modal } from './Modal';
+import { Button } from '@/components/ui/Button';
 import type { ReactNode } from 'react';
 
 interface ConfirmModalProps {
@@ -45,22 +46,10 @@ export function ConfirmModal({
         {body}
       </div>
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <button
-          onClick={onClose}
-          disabled={loading}
-          className="text-sm font-semibold rounded-lg border px-4 py-2 hover:bg-[var(--surface-2)] disabled:opacity-40"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}
-        >
-          {cancelLabel}
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={loading}
-          className="text-sm font-bold rounded-lg px-4 py-2 text-white transition active:scale-95 disabled:opacity-40"
-          style={{ background: dangerous ? '#dc2626' : 'var(--accent)' }}
-        >
-          {loading ? 'Working…' : confirmLabel}
-        </button>
+        <Button variant="ghost" onClick={onClose} disabled={loading}>{cancelLabel}</Button>
+        <Button variant={dangerous ? 'danger' : 'primary'} onClick={onConfirm} busy={loading}>
+          {confirmLabel}
+        </Button>
       </div>
     </Modal>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { computeAchievements } from '@/lib/dashboard/achievements';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
@@ -8,16 +8,25 @@ import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-/** Two ring gauges — Fan Pulse + Owner approval (parity audit #18). */
-export function ApprovalRings({ team }: { team: BasketballTeam }) {
-  const { fanApproval, ownerApproval } = team.approval;
+/** Two ring gauges — Fan Pulse + Owner approval (parity audit #18). Football
+ *  pairs them with the owner objectives right under the hero; the hot-seat
+ *  flag sits beside the rings. */
+export function ApprovalRings({ team, className = '' }: { team: BasketballTeam; className?: string }) {
+  const { fanApproval, ownerApproval, jobSecurity } = team.approval;
+  const hot = jobSecurity === 'hot' || jobSecurity === 'final_warning';
   return (
-    <Card className="!p-4">
-      <div className="text-xs uppercase tracking-widest opacity-60 mb-3">Pulse</div>
-      <div className="flex justify-around">
+    <Card className={`!p-4 flex flex-col justify-center ${className}`}>
+      <div className="flex items-center justify-around gap-4">
         <Ring value={fanApproval} label="Fan Pulse" />
         <Ring value={ownerApproval} label="Owner" />
       </div>
+      {hot && (
+        <div className="mt-3 text-center">
+          <span className="text-xs font-bold px-2 py-1 rounded animate-pulse" style={{ color: '#dc2626', background: 'color-mix(in srgb, #dc2626 12%, transparent)' }}>
+            🔥 {jobSecurity === 'final_warning' ? 'Final Warning' : 'Hot Seat'}
+          </span>
+        </div>
+      )}
     </Card>
   );
 }
@@ -39,32 +48,29 @@ function Ring({ value, label }: { value: number; label: string }) {
   );
 }
 
-/** Trophy case — derived achievement badges (parity audit #17). */
+/** Trophy case — derived achievement badges (parity audit #17). Football's
+ *  compact achievements strip: one small tile per badge, unlocked in amber,
+ *  locked greyed with progress; names collapse to just the emoji on phones. */
 export function TrophyCase({ league, team }: { league: LeagueState; team: BasketballTeam }) {
   const achievements = computeAchievements(league, team);
   return (
-    <Card className="mb-6">
-      <CardHeader><CardTitle>Trophy Case</CardTitle><span className="text-xs text-[var(--text-sec)]">{achievements.filter(a => a.unlocked).length}/{achievements.length}</span></CardHeader>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {achievements.map(a => (
-          <div
-            key={a.label}
-            className="rounded-lg p-2.5 text-center transition"
-            style={{
-              background: a.unlocked ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--surface-2)',
-              opacity: a.unlocked ? 1 : 0.55,
-            }}
-            title={a.desc}
-          >
-            <div className="text-2xl leading-none" style={{ filter: a.unlocked ? 'none' : 'grayscale(1)' }}>{a.icon}</div>
-            <div className="text-[11px] font-bold mt-1 leading-tight">{a.label}</div>
-            {a.max != null && !a.unlocked && (
-              <div className="text-[10px] tabular-nums text-[var(--text-sec)]">{a.progress ?? 0}/{a.max}</div>
-            )}
-            {a.unlocked && <div className="text-[10px] font-bold" style={{ color: 'var(--accent)' }}>Unlocked</div>}
-          </div>
-        ))}
-      </div>
-    </Card>
+    <div className="flex items-center gap-1.5 flex-wrap mb-6" aria-label="Trophy case">
+      {achievements.map(a => (
+        <div
+          key={a.label}
+          className={`flex flex-col items-center gap-0.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs border transition-all ${a.unlocked ? '' : 'opacity-40'}`}
+          style={a.unlocked
+            ? { background: 'color-mix(in srgb, #f59e0b 12%, transparent)', borderColor: 'color-mix(in srgb, #f59e0b 40%, transparent)' }
+            : { background: 'var(--surface-2)', borderColor: 'transparent' }}
+          title={`${a.label}: ${a.desc}${a.unlocked ? ' (Unlocked)' : a.max != null ? ` (${a.progress ?? 0}/${a.max})` : ''}`}
+        >
+          <span className="text-lg leading-none" style={{ filter: a.unlocked ? 'none' : 'grayscale(1)' }}>{a.icon}</span>
+          <span className="font-medium hidden sm:inline text-[10px]">{a.label}</span>
+          {a.max != null && a.max > 1 && !a.unlocked && (
+            <span className="text-[9px] tabular-nums text-[var(--text-sec)] hidden sm:inline">{a.progress ?? 0}/{a.max}</span>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }

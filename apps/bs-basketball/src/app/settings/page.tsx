@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getTheme, setTheme, type Theme } from '@/lib/ui/theme';
 import { isSoundEnabled, setSoundEnabled, playSound } from '@/lib/ui/sound';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -14,7 +15,12 @@ import { CloudSavesPanel } from '@/components/settings/CloudSavesPanel';
 import { LeagueRulesPanel } from '@/components/settings/LeagueRulesPanel';
 import { Section } from '@/components/settings/Section';
 import { Field, ColorField } from '@/components/settings/FranchiseFields';
+import { SettingsChoice, settingsLinkClass } from '@/components/settings/SettingsControls';
 import { expansionWindow, getExpansion } from '@/lib/expansion';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/Button';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { ConfirmModal } from '@/components/modals/ConfirmModal';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -55,13 +61,12 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="max-w-2xl mx-auto p-6 md:p-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-          Settings
-        </h1>
-        <p className="text-sm text-[var(--text-sec)]">Appearance and sound saved on this device. League rules saved with this league. Account + billing synced to your BS account.</p>
-      </header>
+    <main className="max-w-2xl mx-auto p-3 sm:p-5 md:p-8">
+      <PageHeader
+        title="Settings"
+        subtitle="Appearance and sound saved on this device. League rules saved with this league. Account + billing synced to your BS account."
+        className="mb-6"
+      />
 
       {/* STRIPE-4: account + subscription card — only renders when Supabase is
           configured. Mirrors the football settings page's AccountCard but slim:
@@ -74,8 +79,8 @@ export default function SettingsPage() {
       {/* Appearance */}
       <Section title="Appearance" desc="Switch between the warm light theme and a low-glare dark mode.">
         <div className="flex gap-2">
-          <Choice active={mounted && theme === 'light'} onClick={() => chooseTheme('light')} icon="☀️" label="Light" />
-          <Choice active={mounted && theme === 'dark'} onClick={() => chooseTheme('dark')} icon="🌙" label="Dark" />
+          <SettingsChoice active={mounted && theme === 'light'} onClick={() => chooseTheme('light')} icon="☀️" label="Light" />
+          <SettingsChoice active={mounted && theme === 'dark'} onClick={() => chooseTheme('dark')} icon="🌙" label="Dark" />
         </div>
       </Section>
 
@@ -85,8 +90,8 @@ export default function SettingsPage() {
         desc="A soft pop when a sim finishes, a chime when your team wins, a buzzer when a champion is crowned. Off by default."
       >
         <div className="flex gap-2">
-          <Choice active={mounted && !sound} onClick={() => toggleSound(false)} icon="🔇" label="Muted" />
-          <Choice active={mounted && sound} onClick={() => toggleSound(true)} icon="🔊" label="On" />
+          <SettingsChoice active={mounted && !sound} onClick={() => toggleSound(false)} icon="🔇" label="Muted" />
+          <SettingsChoice active={mounted && sound} onClick={() => toggleSound(true)} icon="🔊" label="On" />
         </div>
         {mounted && sound && (
           <button
@@ -105,14 +110,18 @@ export default function SettingsPage() {
           desc="Commissioner powers — edit any player's ratings, age, potential, position, contract, injury, and trade request from their card, or create new players. Saved with this league."
         >
           <div className="flex gap-2">
-            <Choice active={!godOn} onClick={() => void setGodMode(false)} icon="🔒" label="Off" />
-            <Choice active={godOn} onClick={() => void setGodMode(true)} icon="🛠️" label="On" />
+            <SettingsChoice active={!godOn} onClick={() => void setGodMode(false)} icon="🔒" label="Off" />
+            <SettingsChoice active={godOn} onClick={() => void setGodMode(true)} icon="🛠️" label="On" />
           </div>
           {godOn && (
             <p className="text-xs text-[var(--text-sec)] mt-3">Open any player and use the God Mode editor on their card; force game outcomes from the dashboard.</p>
           )}
         </Section>
       )}
+
+      {/* Switch Team — football parity: take over any franchise (spectators
+          too); the old club goes to the AI. */}
+      {league && <SwitchTeamPanel />}
 
       {/* League Rules — cap, calendar, health/development, roster. Always
           available (like BS Football's league settings); not a God Mode power. */}
@@ -162,20 +171,8 @@ function SubscriptionCard() {
     return (
       <Section title="Account" desc="Sign in to manage billing, sync the global leaderboard, and unlock Premium.">
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/login?next=/settings"
-            className="text-sm font-bold rounded-lg px-4 py-2 text-white"
-            style={{ background: 'var(--accent)' }}
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/pricing"
-            className="text-sm font-bold rounded-lg px-4 py-2 border"
-            style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
-          >
-            See Premium
-          </Link>
+          <Link href="/login?next=/settings" className={settingsLinkClass('primary')}>Sign in</Link>
+          <Link href="/pricing" className={settingsLinkClass('secondary')}>See Premium</Link>
         </div>
       </Section>
     );
@@ -206,30 +203,13 @@ function SubscriptionCard() {
         </div>
         <div className="flex flex-wrap gap-2">
           {complimentary ? null : isPremium ? (
-            <button
-              onClick={() => void manage()}
-              disabled={portalLoading}
-              className="text-sm font-bold rounded-lg px-4 py-2 border disabled:opacity-50"
-              style={{ borderColor: 'var(--border)' }}
-            >
+            <Button variant="secondary" busy={portalLoading} onClick={() => void manage()}>
               {portalLoading ? 'Opening…' : 'Manage subscription'}
-            </button>
+            </Button>
           ) : (
-            <Link
-              href="/pricing"
-              className="text-sm font-bold rounded-lg px-4 py-2 text-white"
-              style={{ background: 'var(--accent)' }}
-            >
-              Upgrade to Premium
-            </Link>
+            <Link href="/pricing" className={settingsLinkClass('primary')}>Upgrade to Premium</Link>
           )}
-          <button
-            onClick={signOut}
-            className="text-sm font-semibold rounded-lg px-4 py-2 border"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}
-          >
-            Sign out
-          </button>
+          <Button variant="ghost" onClick={() => void signOut()}>Sign out</Button>
         </div>
       </div>
     </Section>
@@ -247,6 +227,7 @@ function RelocatePanel() {
   const sel = teams.find(t => t.id === teamId) ?? null;
   const [form, setForm] = useState<FranchiseEdit>({});
   const [saved, setSaved] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   function choose(id: string) {
     setTeamId(id);
@@ -256,8 +237,13 @@ function RelocatePanel() {
   }
   async function apply() {
     if (!teamId) return;
-    await relocate(teamId, form);
-    setSaved(true);
+    setApplying(true);
+    try {
+      await relocate(teamId, form);
+      setSaved(true);
+    } finally {
+      setApplying(false);
+    }
   }
 
   return (
@@ -276,11 +262,87 @@ function RelocatePanel() {
             <ColorField label="Primary" value={form.primaryColor ?? '#000000'} onChange={v => { setForm(f => ({ ...f, primaryColor: v })); setSaved(false); }} />
             <ColorField label="Secondary" value={form.secondaryColor ?? '#ffffff'} onChange={v => { setForm(f => ({ ...f, secondaryColor: v })); setSaved(false); }} />
           </div>
-          <button onClick={() => void apply()} className="mt-1 rounded-lg px-3 py-1.5 text-sm font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>
+          <Button variant="primary" size="sm" className="mt-1" busy={applying} onClick={() => void apply()}>
             {saved ? 'Saved ✓' : 'Apply'}
-          </button>
+          </Button>
         </div>
       )}
+    </Section>
+  );
+}
+
+/** Football's Switch Team card: a logo grid of every franchise. Picking one
+ *  goes through the store's existing pickUserTeam (the same action the Team
+ *  page's "Pick This Team" and the post-firing takeover use) behind a confirm. */
+function SwitchTeamPanel() {
+  const league = useLeagueStore(s => s.league);
+  const pickUserTeam = useLeagueStore(s => s.pickUserTeam);
+  const router = useRouter();
+  const [target, setTarget] = useState<BasketballTeam | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const teams = useMemo(
+    () => [...((league?.teams ?? []) as BasketballTeam[])].sort((a, b) => a.city.localeCompare(b.city)),
+    [league],
+  );
+  if (!league) return null;
+  const userTeamId = league.userTeamId;
+
+  async function confirmSwitch() {
+    if (!target) return;
+    setSwitching(true);
+    try {
+      await pickUserTeam(target.id);
+    } finally {
+      setSwitching(false);
+    }
+    setTarget(null);
+    router.push('/');
+  }
+
+  return (
+    <Section
+      title="Switch Team"
+      desc={userTeamId
+        ? 'Take control of a different franchise. Your current team will be managed by AI.'
+        : "You're spectating — pick a franchise to take control of it."}
+    >
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+        {teams.map(t => {
+          const isCurrent = t.id === userTeamId;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              disabled={isCurrent}
+              aria-current={isCurrent ? 'true' : undefined}
+              onClick={() => setTarget(t)}
+              title={`${t.city} ${t.name}`}
+              className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-xs font-bold transition-colors ${
+                isCurrent
+                  ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] cursor-default'
+                  : 'border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--surface-2)] cursor-pointer'
+              }`}
+            >
+              <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="md" />
+              <span className="truncate w-full text-center text-[10px]">{t.abbreviation}</span>
+            </button>
+          );
+        })}
+      </div>
+      <ConfirmModal
+        open={!!target}
+        onClose={() => { if (!switching) setTarget(null); }}
+        title={target ? `Take over the ${target.city} ${target.name}?` : ''}
+        body={target && (
+          <div className="space-y-2">
+            <p>{userTeamId ? 'Your current team becomes AI-controlled.' : 'You stop spectating and run this franchise.'}</p>
+            <p className="text-[var(--text-sec)]">Your GM tenure restarts with the new club. This league&apos;s season, rosters and history carry on as-is.</p>
+          </div>
+        )}
+        confirmLabel="Take over"
+        loading={switching}
+        onConfirm={() => void confirmSwitch()}
+      />
     </Section>
   );
 }
@@ -297,42 +359,11 @@ function ExpansionPanel() {
       desc={`Grow the league from ${league.teams.length} to up to 32 teams: create franchises, realign the conferences, run a protection list and an expansion draft. Irreversible.`}
     >
       <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href="/expansion"
-          className="text-sm font-bold rounded-lg px-4 py-2"
-          style={inProgress || win.open
-            ? { background: 'var(--accent)', color: '#fff' }
-            : { background: 'var(--surface-2)', color: 'var(--text-sec)' }}
-        >
+        <Link href="/expansion" className={settingsLinkClass(inProgress || win.open ? 'primary' : 'secondary')}>
           {inProgress ? 'Resume expansion →' : 'Open expansion →'}
         </Link>
         <span className="text-xs text-[var(--text-sec)]">{inProgress ? 'An expansion is in progress.' : win.reason}</span>
       </div>
     </Section>
-  );
-}
-
-function Choice({
-  active, onClick, icon, label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: string;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className="flex-1 flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition active:scale-95"
-      style={
-        active
-          ? { borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)' }
-          : { borderColor: 'var(--border)', color: 'var(--text-sec)' }
-      }
-    >
-      <span aria-hidden className="text-base">{icon}</span>
-      {label}
-    </button>
   );
 }

@@ -23,6 +23,10 @@ interface ButtonProps {
   className?: string;
   type?: 'button' | 'submit';
   title?: string;
+  /** Work in flight (football parity): disables the button and shows a
+   *  spinner beside the unchanged label, so the clicked button — not some
+   *  other one — reads as working. */
+  busy?: boolean;
 }
 
 const variants = {
@@ -40,23 +44,29 @@ const sizes = {
 
 export function Button({
   children, onClick, variant = 'primary', size = 'md',
-  disabled, className = '', type = 'button', title,
+  disabled, className = '', type = 'button', title, busy = false,
 }: ButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       title={title}
       className={`
         inline-flex items-center justify-center gap-2 font-semibold rounded-lg
         transition-all duration-150 active:scale-[0.98]
-        disabled:opacity-40 disabled:pointer-events-none
+        ${busy ? 'opacity-75 cursor-progress' : 'disabled:opacity-40 disabled:pointer-events-none'}
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
         focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
         ${variants[variant]} ${sizes[size]} ${className}
       `}
     >
+      {busy && (
+        // Compositor-driven, so it keeps spinning while a synchronous sim
+        // blocks the main thread.
+        <span aria-hidden="true" className="inline-block w-3 h-3 shrink-0 rounded-full border-2 border-current border-t-transparent animate-spin" />
+      )}
       {children}
     </button>
   );

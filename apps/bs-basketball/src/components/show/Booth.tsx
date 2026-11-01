@@ -576,7 +576,7 @@ export function Booth() {
   return (
     <>
       {!open && !onLiveGame && (
-        <div className="fixed right-4 bottom-4 sm:bottom-5 sm:right-5 z-30 flex flex-col items-end gap-2">
+        <div className="fixed right-4 bottom-20 sm:bottom-5 sm:right-5 z-30 flex flex-col items-end gap-2">
           {showCallout && (
             <div
               ref={calloutRef}

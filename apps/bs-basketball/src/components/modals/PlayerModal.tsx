@@ -5,12 +5,15 @@
  *
  * Same content as /player/[playerId] (grouped ratings with bars) but rendered
  * inline as a modal so box scores / rosters can show a player without a full
- * navigation. The dedicated page stays for deep-linkable URLs.
+ * navigation. The dedicated page stays for deep-linkable URLs. Body sections
+ * (ratings, Rating History, Awards, Career Stats) live in PlayerCardSections
+ * so the page and the card stay identical.
  *
  * Props: playerId (null = closed), onClose.
  */
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -18,27 +21,61 @@ import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from './Modal';
+import { ExtendModal } from './ExtendModal';
+import { ReleaseModal } from './ReleaseModal';
 import { isGodMode } from '@/lib/godMode/godMode';
 import { GodModePlayerEditor } from '@/components/godMode/GodModePlayerEditor';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { getInjuries, SEVERITY_LABEL, canPlayThrough } from '@/lib/injuries';
-import { ratingHex, ratingTier } from '@/lib/ui/ratingColor';
+import { ratingHex } from '@/lib/ui/ratingColor';
 import {
-  basketballUiMetadata,
-  type BasketballPlayer,
-  type BasketballStats,
-  type BasketballTeam,
-  type PlayerSeasonLogEntry,
-} from '@bs/sport-basketball';
+  AwardChipList,
+  CareerStatsTable,
+  OvrHistory,
+  RatingGroups,
+  careerStatRows,
+  ovrHistoryPoints,
+  playerAwardChips,
+} from './PlayerCardSections';
+import { resolveLineup } from '@/lib/lineup/lineup';
+import { playerMood, moodFactors } from '@/lib/roster/mood';
+import { contractYearsLeft } from '@/lib/roster/playerActions';
+import { releasePreview } from '@/lib/roster/release';
+import { tradeRequestBadge } from '@/lib/roster/tradeRequests';
+import { getHeadCoach, coachScheme, schemeFit } from '@/lib/coaching/coaches';
+import { fmtMoney } from '@/lib/dashboard/summary';
+import { archetypeFor } from '@/lib/scouting/scoutingReport';
+import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
 interface PlayerModalProps {
   playerId: string | null;
   onClose: () => void;
+  /** Fired after a release from the card's Release action, so a page holding
+   *  local lineup state (the roster editor) can drop the player. */
+  onReleased?: (id: string) => void;
 }
 
-export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
+// Football's archetype chip ("🧠 Field General") — basketball derives the
+// play-style archetype from ratings, the same label the scouting report uses.
+const ARCHETYPE_EMOJI: Record<string, string> = {
+  'Floor general': '🧠', 'Scoring lead guard': '🎯', 'Change-of-pace guard': '⚡',
+  '3-and-D wing': '🔒', 'Microwave scorer': '🔥', 'Slashing guard': '🗡️',
+  'Two-way athlete': '💪', 'Connector forward': '🔗', 'Stretch four': '🏹',
+  'Defensive forward': '🛡️', 'Energy big': '🔋', 'Stretch five': '🏹',
+  'Rim protector': '🚫', 'Rim-running big': '🏃',
+};
+
+function titleCase(s: string): string {
+  return s.replace(/\b[a-z]/g, c => c.toUpperCase());
+}
+
+const FIT_LABEL = { great: 'Great', good: 'Good', neutral: 'Neutral', poor: 'Poor' } as const;
+
+export function PlayerModal({ playerId, onClose, onReleased }: PlayerModalProps) {
   const league = useLeagueStore(s => s.league);
   const router = useRouter();
+  const [extendId, setExtendId] = useState<string | null>(null);
+  const [releaseId, setReleaseId] = useState<string | null>(null);
 
   const player = playerId && league
     ? ((league.players as Record<string, BasketballPlayer>)[playerId] ?? null)
@@ -49,13 +86,9 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
       ? ((league.teams.find(t => t.id === player.rosterSlot!.teamId) as BasketballTeam | undefined) ?? null)
       : null;
 
-  // Current-season averages (aggregated lazily from box scores) and the
-  // last-season line from the rollover log for comparison.
+  // Current-season averages (aggregated lazily from box scores).
   const seasonStats: BasketballStats | null =
     player && league ? statsForPlayer(regularSeasonStatsByPlayer(league), player.id) : null;
-  const lastSeason: PlayerSeasonLogEntry | null = player
-    ? (player.sportData.seasonLog?.[player.sportData.seasonLog.length - 1] ?? null)
-    : null;
 
   // OVR trend vs the pre-offseason snapshot.
   const ovrDelta = player
@@ -74,170 +107,292 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
     !!league?.userTeamId &&
     player.rosterSlot.teamId !== league.userTeamId;
 
-  // Group ratings by category as declared in basketballUiMetadata.
-  const grouped = new Map<string, { key: string; label: string }[]>();
-  for (const f of basketballUiMetadata.ratingFields) {
-    if (!grouped.has(f.group)) grouped.set(f.group, []);
-    grouped.get(f.group)!.push({ key: String(f.key), label: f.label });
+  const season = league?.currentSeason ?? 0;
+  const isOnUserTeam =
+    !!player?.rosterSlot &&
+    !!league?.userTeamId &&
+    player.rosterSlot.teamId === league.userTeamId;
+
+  // Contract line — AAV over the remaining years (matches the roster column).
+  const yearsLeft = player ? contractYearsLeft(player, season) : 0;
+  const remainingYears = player?.contract?.years.filter(y => y.season >= season) ?? [];
+  const aav = remainingYears.length
+    ? remainingYears.reduce((s, y) => s + y.baseSalary + y.proratedBonus, 0) / remainingYears.length
+    : 0;
+
+  // Mood is derived (no morale model) from role vs talent + contract + form,
+  // exactly as the roster column computes it.
+  let mood: ReturnType<typeof playerMood> | null = null;
+  let moodReasons: string[] = [];
+  if (player && team && league) {
+    const players = league.players as Record<string, BasketballPlayer>;
+    const teamRoster = team.playerIds.map(id => players[id]).filter((p): p is BasketballPlayer => !!p);
+    const isStarter = resolveLineup(team, teamRoster).starters.includes(player.id);
+    const talentRank = [...teamRoster].sort((a, b) => b.ratings.overall - a.ratings.overall).findIndex(p => p.id === player.id);
+    const moodOpts = { player, team, talentRank: talentRank < 0 ? 99 : talentRank, isStarter, yearsLeft };
+    mood = playerMood(moodOpts);
+    moodReasons = moodFactors(moodOpts).map(f => f.label.charAt(0).toUpperCase() + f.label.slice(1));
   }
 
+  // Scheme fit against YOUR head coach's system — useful on trade / FA targets too.
+  const userCoach = league?.userTeamId ? getHeadCoach(league, league.userTeamId) : null;
+  const fit = player && userCoach ? schemeFit(player, coachScheme(userCoach)) : null;
+
+  const tradeReq = player ? tradeRequestBadge(player, season) : null;
+  const release = player && isOnUserTeam ? releasePreview(player, season) : null;
+  const archetype = player ? archetypeFor(player) : null;
+  const tierChip = archetype ? { emoji: ARCHETYPE_EMOJI[archetype] ?? '🏀', label: titleCase(archetype) } : null;
+  const yrs = player?.sportData.yearsInLeague ?? 0;
+
+  // Body sections (shared with the full player page).
+  const ovrPoints = player ? ovrHistoryPoints(player) : [];
+  const awardChips = player && league ? playerAwardChips(league, player.id) : [];
+  const careerRows = player ? careerStatRows(player, { season, stats: seasonStats }) : [];
+
   return (
+    <>
     <Modal
       open={!!playerId}
       onClose={onClose}
       maxWidthClass="max-w-3xl"
-      title={player ? `${player.firstName} ${player.lastName}` : 'Player'}
+      title={<span className="text-sm font-bold uppercase tracking-wide text-[var(--text-sec)]">Player Card</span>}
     >
       {!player ? (
         <p className="text-[var(--text-sec)] py-8 text-center">Player not found.</p>
       ) : (
         <>
-          <header className="flex flex-wrap items-center gap-4 mb-5">
-            {/* BUG-38: lead with the player's avatar (real headshot for
-                imported NBA players via sportData.photoUrl, initials badge
-                in the team's colors otherwise). The team logo used to take
-                this slot, which read as a team card instead of a player card. */}
-            <PlayerAvatar
-              firstName={player.firstName}
-              lastName={player.lastName}
-              primaryColor={team?.primaryColor ?? 'var(--accent)'}
-              secondaryColor={team?.secondaryColor ?? '#fff'}
-              photoUrl={(player.sportData as { photoUrl?: string }).photoUrl}
-              size="xl"
-            />
-            <div className="min-w-0">
-              <div className="text-2xl font-extrabold flex items-center gap-2 flex-wrap">
-                <span>{player.firstName} {player.lastName}</span>
-                {/* Keep a small team logo next to the name so the team context
-                    isn't lost when the headshot takes the headline slot. */}
-                {team && (
-                  <TeamLogo
-                    abbreviation={team.abbreviation}
-                    primaryColor={team.primaryColor}
-                    secondaryColor={team.secondaryColor}
-                    size="xs"
-                  />
+          {/* Header — football's PlayerModal layout: avatar column (headshot,
+              team logo, position) beside name / bio / contract / mood / fit,
+              with the front-office actions inline for your own players. */}
+          <header className="flex items-start gap-4 sm:gap-5 mb-5">
+            <div className="flex flex-col items-center gap-1.5 shrink-0">
+              {/* BUG-38: real headshot for imported NBA players, initials badge
+                  in the team's colors otherwise. */}
+              <PlayerAvatar
+                firstName={player.firstName}
+                lastName={player.lastName}
+                primaryColor={team?.primaryColor ?? 'var(--accent)'}
+                secondaryColor={team?.secondaryColor ?? '#fff'}
+                photoUrl={(player.sportData as { photoUrl?: string }).photoUrl}
+                size="xl"
+              />
+              {team && (
+                <TeamLogo
+                  abbreviation={team.abbreviation}
+                  primaryColor={team.primaryColor}
+                  secondaryColor={team.secondaryColor}
+                  size="sm"
+                />
+              )}
+              <div className="text-[10px] font-black text-[var(--text-sec)]">
+                {player.sportData.position}
+                {player.sportData.secondaryPosition && (
+                  <span className="ml-1 font-bold opacity-70">/ {player.sportData.secondaryPosition}</span>
                 )}
               </div>
-              <p className="text-sm text-[var(--text-sec)]">
-                {player.sportData.position} · Age {player.age}
-                {team && ` · ${team.city} ${team.name}`}
-                {' · '}<span className="capitalize">{player.sportData.starTier}</span>
-              </p>
             </div>
-            <div className="ml-auto flex flex-col items-end gap-1">
-              <div
-                className="text-4xl font-extrabold px-4 py-1 rounded-lg text-white"
-                style={{ background: 'var(--accent)' }}
-                title="Overall rating"
-              >
-                {player.ratings.overall}
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h2 className="text-2xl font-black leading-tight">{player.firstName} {player.lastName}</h2>
+                  {tierChip && (
+                    <div className="mt-0.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium"
+                        style={{
+                          background: 'color-mix(in srgb, #6366f1 10%, transparent)',
+                          borderColor: 'color-mix(in srgb, #6366f1 35%, transparent)',
+                          color: '#6366f1',
+                        }}
+                      >
+                        <span aria-hidden>{tierChip.emoji}</span> {tierChip.label}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+                    <Badge>{player.sportData.position}</Badge>
+                    <span className="text-sm text-[var(--text-sec)]">
+                      {Math.floor(player.ratings.height / 12)}&apos;{player.ratings.height % 12}&quot; · {player.ratings.wingspan}&quot; wing
+                    </span>
+                    <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
+                    <span className="text-sm text-[var(--text-sec)]">{yrs === 0 ? 'Rookie' : `Yr ${yrs}`}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-sm text-[var(--text-sec)]">
+                    <span>{team ? `${team.city} ${team.name}` : 'Free Agent'}</span>
+                    {player.sportData.draftYear && player.sportData.draftPick && (
+                      <span>· {player.sportData.draftYear} draft, #{player.sportData.draftPick}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex flex-col items-center">
+                  <div
+                    className="w-16 h-16 rounded-full flex items-center justify-center shadow-sm"
+                    style={{ background: ratingHex(player.ratings.overall) }}
+                    title="Overall rating"
+                  >
+                    <span className="text-2xl font-black text-white tabular-nums">{player.ratings.overall}</span>
+                  </div>
+                  <div className="text-xs text-[var(--text-sec)] mt-1">Overall</div>
+                  <OvrTrend delta={ovrDelta} />
+                </div>
               </div>
-              <OvrTrend delta={ovrDelta} />
+
+              {/* Contract + potential + mood */}
+              <div className="flex flex-wrap items-start gap-x-4 gap-y-1 mt-2">
+                {yearsLeft > 0 && aav > 0 ? (
+                  <span className="text-sm">
+                    <span className="font-semibold tabular-nums">{fmtMoney(aav)}/yr</span>
+                    <span className="text-[var(--text-sec)]"> · {yearsLeft} yr{yearsLeft !== 1 ? 's' : ''} left</span>
+                  </span>
+                ) : (
+                  <span className="text-sm text-[var(--text-sec)]">{team ? 'Expiring contract' : 'Unsigned'}</span>
+                )}
+                <span
+                  className="text-sm font-semibold tabular-nums"
+                  style={{ color: ratingHex(player.development.potential) }}
+                  title={`Potential ceiling: ${player.development.potential} OVR`}
+                >
+                  POT: {player.development.potential}
+                </span>
+                {mood && (
+                  <div className="min-w-0">
+                    <span className="text-sm font-semibold" style={{ color: mood.color }}>{mood.emoji} {mood.label}</span>
+                    {moodReasons.length > 0 && (
+                      <div className="text-[10px] text-[var(--text-sec)] mt-0.5">{moodReasons.join(' · ')}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {fit && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: fit.color }} />
+                  <span className="text-xs text-[var(--text-sec)]">
+                    {FIT_LABEL[fit.tier]} Scheme Fit
+                    {fit.delta > 0 && <span className="ml-1 font-bold text-green-600">(+{fit.delta} OVR)</span>}
+                    {fit.delta < 0 && <span className="ml-1 font-bold text-red-600">({fit.delta} OVR)</span>}
+                  </span>
+                </div>
+              )}
+
+              {/* Status chips — development arc, two-way, injury, trade request. */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <Badge variant={trajectoryVariant(player.development.currentTrajectory)}>
+                  {player.development.currentTrajectory}
+                </Badge>
+                {player.sportData.isTwoWay && <Badge variant="amber">Two-way</Badge>}
+                {tradeReq && <Badge variant="red">{tradeReq.emoji} {tradeReq.label}</Badge>}
+                {injuryActive && injury && (
+                  canPlayThrough(injury) ? (
+                    <Badge variant="amber">
+                      {`GTD: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
+                    </Badge>
+                  ) : (
+                    <Badge variant="red">
+                      {injury.returnDay >= 50_000
+                        ? `Out for season (${injury.bodyPart})`
+                        : `Out: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
+                    </Badge>
+                  )
+                )}
+              </div>
+
+              {/* Front-office actions on your own players. */}
+              {isOnUserTeam && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        onClose();
+                        router.push(`/trade?block=${player.id}`);
+                      }}
+                    >
+                      Add to Trading Block
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setExtendId(player.id)}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-green-500/40 text-green-600 hover:bg-green-500/10 transition-colors"
+                    >
+                      Extend Contract
+                    </button>
+                    <Button size="sm" variant="ghost" onClick={() => setReleaseId(player.id)}>
+                      Release Player
+                    </Button>
+                  </div>
+                  {release && release.remainingGuaranteed > 0 && (
+                    <div className="text-xs mt-1 text-red-600 tabular-nums">
+                      Dead cap if released: {fmtMoney(release.waiveThisYear)} this season
+                      {release.years > 1 && ` (${fmtMoney(release.remainingGuaranteed)} total)`}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {canTradeFor && player.rosterSlot && (
+                <div className="mt-3">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      onClose();
+                      router.push(`/trade?target=${player.rosterSlot!.teamId}&getPlayer=${player.id}`);
+                    }}
+                  >
+                    Trade for this player
+                  </Button>
+                </div>
+              )}
             </div>
           </header>
 
-          <div className="flex flex-wrap gap-2 mb-5">
-            <Badge variant="default" size="md">
-              {Math.floor(player.ratings.height / 12)}&apos;{player.ratings.height % 12}&quot;
-            </Badge>
-            <Badge variant="default" size="md">{player.ratings.wingspan}&quot; wing</Badge>
-            <Badge variant={trajectoryVariant(player.development.currentTrajectory)} size="md">
-              {player.development.currentTrajectory}
-            </Badge>
-            {player.sportData.isTwoWay && <Badge variant="amber" size="md">Two-way</Badge>}
-            {injuryActive && injury && (
-              canPlayThrough(injury) ? (
-                <Badge variant="amber" size="md">
-                  {`GTD: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
-                </Badge>
-              ) : (
-                <Badge variant="red" size="md">
-                  {injury.returnDay >= 50_000
-                    ? `Out for season (${injury.bodyPart})`
-                    : `Out: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
-                </Badge>
-              )
-            )}
-          </div>
-
-          {/* Stat lines: current season + last-season comparison. */}
-          {(seasonStats?.gamesPlayed || lastSeason) && (
+          {/* Current-season line (shooting splits + minutes); prior seasons
+              live in the Career Stats table below. */}
+          {seasonStats && seasonStats.gamesPlayed > 0 && (
             <div
-              className="mb-5 p-3 rounded-lg space-y-2"
+              className="mb-5 p-3 rounded-lg"
               style={{ background: 'var(--surface-2)' }}
             >
-              {seasonStats && seasonStats.gamesPlayed > 0 && (
-                <StatLine
-                  label="This season"
-                  ppg={per(seasonStats.points, seasonStats.gamesPlayed)}
-                  rpg={per(seasonStats.totalRebounds, seasonStats.gamesPlayed)}
-                  apg={per(seasonStats.assists, seasonStats.gamesPlayed)}
-                  fgPct={pct(seasonStats.fieldGoalsMade, seasonStats.fieldGoalsAttempted)}
-                  tpPct={pct(seasonStats.threePointsMade, seasonStats.threePointsAttempted)}
-                  gp={seasonStats.gamesPlayed}
-                  mpg={per(seasonStats.minutes, seasonStats.gamesPlayed)}
-                />
-              )}
-              {lastSeason && (
-                <StatLine
-                  label="Last season"
-                  ppg={lastSeason.ppg.toFixed(1)}
-                  rpg={lastSeason.rpg.toFixed(1)}
-                  apg={lastSeason.apg.toFixed(1)}
-                  gp={lastSeason.gamesPlayed}
-                  muted
-                />
-              )}
+              <StatLine
+                label="This season"
+                ppg={per(seasonStats.points, seasonStats.gamesPlayed)}
+                rpg={per(seasonStats.totalRebounds, seasonStats.gamesPlayed)}
+                apg={per(seasonStats.assists, seasonStats.gamesPlayed)}
+                fgPct={pct(seasonStats.fieldGoalsMade, seasonStats.fieldGoalsAttempted)}
+                tpPct={pct(seasonStats.threePointsMade, seasonStats.threePointsAttempted)}
+                gp={seasonStats.gamesPlayed}
+                mpg={per(seasonStats.minutes, seasonStats.gamesPlayed)}
+              />
             </div>
           )}
 
-          {canTradeFor && player.rosterSlot && (
-            <div className="mb-5">
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => {
-                  onClose();
-                  router.push(`/trade?target=${player.rosterSlot!.teamId}&getPlayer=${player.id}`);
-                }}
-              >
-                🔁 Trade for this player
-              </Button>
-            </div>
+          <RatingGroups player={player} variant="modal" />
+
+          {/* Rating History — OVR by season, football's sparkline + values. */}
+          {ovrPoints.length >= 2 && (
+            <section className="mt-4 p-4 rounded-lg" style={{ background: 'var(--surface-2)' }}>
+              <h3 className="text-xs font-bold uppercase tracking-wide mb-2 text-[var(--text-sec)]">Rating History</h3>
+              <OvrHistory points={ovrPoints} />
+            </section>
           )}
 
-          <section className="grid sm:grid-cols-2 gap-4">
-            {[...grouped.entries()].map(([group, fields]) => (
-              <div
-                key={group}
-                className="p-4 rounded-lg"
-                style={{ background: 'var(--surface-2)' }}
-              >
-                <h3 className="text-xs font-bold uppercase tracking-wide mb-3 text-[var(--text-sec)]">{group}</h3>
-                <ul className="space-y-2">
-                  {fields.map(f => {
-                    const v = (player.ratings as unknown as Record<string, number>)[f.key];
-                    if (typeof v !== 'number') return null;
-                    // EPIC-D: tier label + actual hex color on the bar so a
-                    // new user can read 'ELITE 86' rather than just decode 86.
-                    const tier = ratingTier(v);
-                    const hex = ratingHex(v);
-                    return (
-                      <li key={f.key} className="flex items-center gap-2 sm:gap-3" title={f.label}>
-                        <span className="w-14 text-xs text-[var(--text-sec)] truncate">{f.label}</span>
-                        <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--border)' }}>
-                          <div className="h-2 rounded-full" style={{ width: `${v}%`, background: hex }} />
-                        </div>
-                        <span className="w-10 text-[10px] uppercase tracking-wide font-bold text-right" style={{ color: hex }}>{tier}</span>
-                        <span className="w-7 text-right text-sm font-semibold tabular-nums">{v}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </section>
+          {/* Awards — counted from the league's season archive. */}
+          {awardChips.length > 0 && (
+            <section className="mt-4">
+              <h3 className="text-xs font-bold uppercase tracking-wide mb-2 text-[var(--text-sec)]">Awards</h3>
+              <AwardChipList chips={awardChips} />
+            </section>
+          )}
+
+          {/* Career Stats — year-by-year from the rollover log + this season. */}
+          {careerRows.length > 0 && (
+            <section className="mt-4 p-4 rounded-lg" style={{ background: 'var(--surface-2)' }}>
+              <h3 className="text-xs font-bold uppercase tracking-wide mb-2 text-[var(--text-sec)]">Career Stats</h3>
+              <CareerStatsTable rows={careerRows} />
+            </section>
+          )}
 
           {/* Keyed on id + a state fingerprint so a saved edit re-seeds the form. */}
           {isGodMode(league) && (
@@ -260,6 +415,18 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         </>
       )}
     </Modal>
+    {/* Rendered after the card so they portal on top of it. */}
+    <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
+    <ReleaseModal
+      playerId={releaseId}
+      onClose={() => setReleaseId(null)}
+      onReleased={id => {
+        setReleaseId(null);
+        onReleased?.(id);
+        onClose();
+      }}
+    />
+    </>
   );
 }
 
@@ -279,7 +446,7 @@ function OvrTrend({ delta }: { delta: number }) {
 }
 
 function StatLine({
-  label, ppg, rpg, apg, fgPct, tpPct, gp, mpg, muted,
+  label, ppg, rpg, apg, fgPct, tpPct, gp, mpg,
 }: {
   label: string;
   ppg: string;
@@ -289,10 +456,9 @@ function StatLine({
   tpPct?: string;
   gp: number;
   mpg?: string;
-  muted?: boolean;
 }) {
   return (
-    <div className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm ${muted ? 'opacity-70' : ''}`}>
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
       <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-sec)] w-20">{label}</span>
       <span><strong className="tabular-nums">{ppg}</strong> <span className="text-[var(--text-sec)] text-xs">PPG</span></span>
       <span><strong className="tabular-nums">{rpg}</strong> <span className="text-[var(--text-sec)] text-xs">RPG</span></span>

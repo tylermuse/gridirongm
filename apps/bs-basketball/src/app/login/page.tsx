@@ -27,7 +27,7 @@ export default function LoginPage() {
   // useSearchParams forces a client bailout — wrap in Suspense so `next build`
   // can still prerender the route.
   return (
-    <Suspense fallback={<main className="max-w-sm mx-auto p-8 text-sm text-[var(--text-sec)]">Loading…</main>}>
+    <Suspense fallback={<main className="max-w-sm mx-auto p-3 sm:p-5 md:p-8 text-sm text-[var(--text-sec)]">Loading…</main>}>
       <LoginContent />
     </Suspense>
   );
@@ -70,7 +70,7 @@ function LoginContent() {
   }
 
   return (
-    <main className="max-w-sm mx-auto p-8">
+    <main className="max-w-sm mx-auto p-3 sm:p-5 md:p-8">
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
       <h1 className="text-3xl font-extrabold mt-2 mb-1" style={{ color: 'var(--accent)' }}>Sign in</h1>
       <p className="text-sm text-[var(--text-sec)] mb-5">Optional — only to appear on the global GM leaderboard. The game works fully without it.</p>

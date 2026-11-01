@@ -22,6 +22,7 @@ import { PlayerModal } from '@/components/modals/PlayerModal';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 import { getMaxRoster } from '@/lib/rules/leagueRules';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 /**
  * /draft — the NBA draft board (Phase 2D-4).
@@ -334,25 +335,20 @@ export default function DraftPage() {
 
 function Shell({ season, children }: { season: number; children: React.ReactNode }) {
   return (
-    <main className="max-w-6xl mx-auto p-8">
-      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
-        ← Home
-      </Link>
-      <h1 className="text-4xl font-extrabold mt-2 mb-6" style={{ color: 'var(--accent)' }}>
-        {season} Draft
-      </h1>
+    <main className="max-w-6xl mx-auto p-3 sm:p-5 md:p-8">
+      <PageHeader title={`${season} Draft`} className="mb-6" />
       {children}
     </main>
   );
 }
 
 function Loading() {
-  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  return <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8"><p className="opacity-60">Loading…</p></main>;
 }
 
 function NotFound({ message }: { message: string }) {
   return (
-    <main className="max-w-4xl mx-auto p-8">
+    <main className="max-w-4xl mx-auto p-3 sm:p-5 md:p-8">
       <p className="mb-4">{message}</p>
       <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
         ← Home

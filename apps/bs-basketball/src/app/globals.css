@@ -33,6 +33,7 @@
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --bg: #0b1220;
   --background: #0b1220;
   --surface: #131c2e;
@@ -135,7 +136,9 @@ html, body {
 }
 .sticky-col tr:hover td:first-child,
 .sticky-action tr:hover td:last-child { background: var(--surface-2); }
-@media (min-width: 640px) {
+@media (min-width: 1024px) {
+  /* Wide tables fit from lg up; below that (phones AND tablets with the
+   * sidebar open) keep the name column pinned, as football does. */
   .sticky-col th:first-child,
   .sticky-col td:first-child,
   .sticky-action th:last-child,
@@ -191,3 +194,6 @@ html, body {
 .bs-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); cursor: pointer; }
 .bs-range::-moz-range-track { height: 6px; border-radius: 999px; background: var(--surface-2); }
 .bs-range::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--accent); }
+
+/* Football's display headline: heavy, uppercase, tight. Used by PageHeader. */
+.font-display { font-family: var(--font-display), sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }

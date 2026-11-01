@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PageHeader } from '@/components/ui/PageHeader';
 import type { TeamId } from '@bs/core/adapter';
 
 /**
@@ -84,13 +85,19 @@ export default function RostersPage() {
   const router = useRouter();
   const [customUrl, setCustomUrl] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+  const [teamQuery, setTeamQuery] = useState('');
+  // The team being started (football's "Starting…" state on the clicked card).
+  const [choosingId, setChoosingId] = useState<TeamId | null>(null);
 
   // Show the team picker whenever a league is loaded without a user team —
   // either a fresh import (the common path) or returning to /rosters with an
   // imported-but-not-picked league. The catalog still shows when no league is
   // loaded, OR (BUG-14: explicitly allow starting another league) when the
   // user has already picked a team and revisits /rosters.
-  const picking = !!league && !league.userTeamId;
+  // While a pick is in flight the league already carries the new userTeamId
+  // (pickUserTeam sets it before saving), so keep the picker up until we
+  // navigate — otherwise the catalog flashes and the "Starting…" card vanishes.
+  const picking = !!league && (!league.userTeamId || choosingId !== null);
 
   async function startFromUrl(url: string) {
     clearError();
@@ -123,6 +130,7 @@ export default function RostersPage() {
   const downloadOpening = () => downloadFile(nbaOpeningUrl, 'BBGM_NBA_Roster_2026_OpeningNight.json');
 
   async function choose(teamId: TeamId) {
+    setChoosingId(teamId);
     await pickUserTeam(teamId);
     // Offseason files with a draft pending go run it first, post-draft files go
     // to re-sign; mid-season imports land straight on the team dashboard.
@@ -133,15 +141,28 @@ export default function RostersPage() {
 
   // --- After a successful import: pick your team ---
   if (picking && league) {
-    const teams = [...league.teams].sort((a, b) => a.city.localeCompare(b.city));
+    const q = teamQuery.trim().toLowerCase();
+    const teams = [...league.teams]
+      .sort((a, b) => a.city.localeCompare(b.city))
+      .filter(t => !q || `${t.city} ${t.name} ${t.abbreviation}`.toLowerCase().includes(q));
+    const busy = loading || choosingId !== null;
     return (
-      <main className="max-w-5xl mx-auto p-8">
-        <h1 className="text-3xl font-extrabold mb-1" style={{ color: 'var(--accent)' }}>Pick your team</h1>
-        <p className="text-sm text-[var(--text-sec)] mb-6">{league.displayName} is loaded — choose who you want to run.</p>
+      <main className="max-w-5xl mx-auto p-3 sm:p-5 md:p-8">
+        <PageHeader title="Pick your team" subtitle={`${league.displayName} is loaded — choose who you want to run.`} className="mb-4" />
+
+        <input
+          type="search"
+          value={teamQuery}
+          onChange={e => setTeamQuery(e.target.value)}
+          placeholder="Search teams…"
+          aria-label="Search teams"
+          className="w-full max-w-md px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm mb-4 outline-none focus:border-[var(--accent)]"
+        />
 
         <button
           onClick={() => router.push('/league')}
-          className="w-full mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)] transition-all text-left"
+          disabled={busy}
+          className="w-full mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)] transition-all text-left disabled:opacity-50"
         >
           <div className="w-11 h-11 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">👁</div>
           <div className="min-w-0 flex-1">
@@ -151,22 +172,39 @@ export default function RostersPage() {
           <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
         </button>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {teams.map(team => (
-            <button
-              key={team.id}
-              onClick={() => void choose(team.id)}
-              disabled={loading}
-              className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)] hover:shadow-lg transition-all text-left disabled:opacity-50 disabled:cursor-wait"
-            >
-              <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
-              <div className="min-w-0">
-                <div className="text-sm font-bold truncate">{team.city}</div>
-                <div className="text-xs text-[var(--text-sec)] truncate">{team.name}</div>
-              </div>
-            </button>
-          ))}
-        </div>
+        {teams.length === 0 ? (
+          <p className="text-sm text-[var(--text-sec)] py-6 text-center">No teams match &ldquo;{teamQuery.trim()}&rdquo;.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {teams.map(team => {
+              const starting = choosingId === team.id;
+              return (
+                <button
+                  key={team.id}
+                  onClick={() => void choose(team.id)}
+                  disabled={busy}
+                  aria-busy={starting || undefined}
+                  className={`group flex items-center gap-3 p-3 rounded-xl border hover:border-[var(--accent)] hover:shadow-lg transition-all text-left disabled:cursor-wait ${
+                    starting ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-[var(--border)] bg-[var(--surface)] disabled:opacity-50'
+                  }`}
+                >
+                  <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold truncate">{team.city}</div>
+                    <div className="text-xs text-[var(--text-sec)] truncate">
+                      {starting ? (
+                        <span className="inline-flex items-center gap-1.5 text-[var(--accent)] font-semibold">
+                          <span aria-hidden className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                          Starting…
+                        </span>
+                      ) : team.name}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </main>
     );
   }
@@ -219,7 +257,7 @@ export default function RostersPage() {
 
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 {['Basketball GM (BBGM)', 'BS Hoops'].map(tag => (
-                  <span key={tag} className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
+                  <span key={tag} className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-green-500/10 text-green-600 border border-green-500/30">
                     {tag}
                   </span>
                 ))}
