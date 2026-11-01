@@ -2,9 +2,9 @@
 
 import { Fragment, useState } from 'react';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { PlayerName, usePlayerModal } from '@/components/modals/PlayerModalProvider';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
-import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { ratingChipClass } from '@/lib/ui/ratingColor';
 import { acceptanceProbability, bestCompetingOffer, rosterCount, getMaxRoster, type FreeAgentInfo } from '@/lib/freeAgency';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
@@ -16,6 +16,8 @@ import { SuitorIntel } from './SuitorIntel';
  * Sortable free-agent table with an expandable intel panel (parity with
  * football's FA table + FAEvaluationPanel). All intel is derived from existing
  * engine calls — acceptance %, competing interest, Bird rights, market vs ask.
+ * Row click expands the intel; the name/avatar open the shared player card
+ * (stats + ratings), same as every other Hoops player list.
  *
  * The expand chevron lives inside the name cell, so the sticky first column
  * (phones/tablets) pins the player's name, not a bare chevron. The table owns
@@ -70,6 +72,7 @@ export function FreeAgentTable({
   const [sortKey, setSortKey] = useState<SortKey>('ovr');
   const [dir, setDir] = useState<1 | -1>(-1);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const openPlayer = usePlayerModal();
   const teamById = new Map((league.teams as BasketballTeam[]).map(t => [t.id as string, t]));
   const decayed = priceDecay < 1;
   const colCount = showActions ? 8 : 7;
@@ -146,7 +149,9 @@ export function FreeAgentTable({
                     {/* Width cap lives on the div — table cells ignore max-width. */}
                     <div className="flex items-center gap-2 min-w-0 max-w-[12rem] sm:max-w-none">
                       <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden className={`shrink-0 ${isOpen ? 'rotate-90' : ''}`} style={{ transition: 'transform .15s', opacity: 0.5 }}><path d="M3 1l4 4-4 4" stroke="currentColor" fill="none" strokeWidth="1.5" /></svg>
-                      <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={last?.primaryColor ?? '#555'} secondaryColor={last?.secondaryColor ?? '#fff'} photoUrl={p.sportData.photoUrl} size="sm" />
+                      <button type="button" onClick={e => { e.stopPropagation(); openPlayer(p.id); }} className="shrink-0" aria-label={`View ${p.firstName} ${p.lastName}`}>
+                        <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={last?.primaryColor ?? '#555'} secondaryColor={last?.secondaryColor ?? '#fff'} photoUrl={p.sportData.photoUrl} size="sm" />
+                      </button>
                       {/* PlayerName stops propagation, so opening the card
                           doesn't also toggle the row. */}
                       <PlayerName
@@ -216,6 +221,7 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
   const compTeam = competing ? teamById.get(competing.teamId) : null;
   const rec = info.player.ratings.overall >= 78 ? 'Priority Target' : info.player.ratings.overall >= 70 ? 'Solid Add' : affordable ? 'Depth Option' : 'Stretch';
   const recColor = rec === 'Priority Target' ? '#10b981' : rec === 'Stretch' ? '#d97706' : 'var(--accent-alt)';
+  const openPlayer = usePlayerModal();
 
   return (
     <div className="space-y-3">
@@ -230,6 +236,7 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
         <L>Last season</L>
         <span className="font-bold tabular-nums">{ll.text}</span>
         <span className="text-[var(--text-sec)]"> · pts / reb / ast</span>
+        <button type="button" onClick={() => openPlayer(info.player.id)} className="ml-3 font-bold hover:underline" style={{ color: 'var(--accent)' }}>Full stats &amp; ratings →</button>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
         <div><L>Accepts at market</L><div className="font-bold tabular-nums" style={{ color: accept >= 60 ? '#10b981' : accept >= 35 ? '#d97706' : '#dc2626' }}>{accept}%</div></div>
