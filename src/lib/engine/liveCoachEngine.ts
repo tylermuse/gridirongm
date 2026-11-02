@@ -900,6 +900,32 @@ export function createLiveCoachEngine(
       }
     }
 
+    // CPU offensive 2-minute drill: a trailing CPU WITH the ball late in Q4 burns a
+    // timeout to stop the clock after an in-bounds play, preserving time to keep
+    // driving for the tying/go-ahead score. Complements the defensive clock-stop
+    // above — together they give the CPU real 2-minute clock management instead of
+    // letting the clock bleed out. (yo46363 — CPU never called timeouts on offense.)
+    {
+      const cpuSide: 'home' | 'away' = userSide === 'home' ? 'away' : 'home';
+      const cpuTimeouts = cpuSide === 'home' ? state.homeTimeouts : state.awayTimeouts;
+      const cpuScore = cpuSide === 'home' ? state.homeScore : state.awayScore;
+      const oppScore = cpuSide === 'home' ? state.awayScore : state.homeScore;
+      const deficit = oppScore - cpuScore; // > 0 = CPU trailing
+      if (
+        !state.overtime &&
+        state.quarter === 4 &&
+        state.timeSecs <= 120 &&
+        (state.pendingRunoff ?? 0) > 0 && // only if there's clock to save
+        state.possession === cpuSide &&   // the CPU (not the user) has the ball
+        deficit > 0 && deficit <= 8 &&    // trailing by one score — must hurry
+        cpuTimeouts > 0
+      ) {
+        if (callTimeout(events, cpuSide)) {
+          state.pendingRunoff = 0;
+        }
+      }
+    }
+
     // Consume the runoff owed by the previous play before running this one.
     // A timeout would have zeroed this out.
     if ((state.pendingRunoff ?? 0) > 0) {
