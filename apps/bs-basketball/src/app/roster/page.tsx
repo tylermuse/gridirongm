@@ -86,6 +86,15 @@ export default function RosterPage() {
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [dragOverBenchId, setDragOverBenchId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Auto-fill's result line. It used to change state silently, and when the
+  // lineup already matched the default nothing on screen moved, so it was the
+  // top rage/dead-click target. `sticky` notes stay until Save.
+  const [autoFillNote, setAutoFillNote] = useState<{ text: string; sticky: boolean } | null>(null);
+  useEffect(() => {
+    if (!autoFillNote || autoFillNote.sticky) return;
+    const t = setTimeout(() => setAutoFillNote(null), 4000);
+    return () => clearTimeout(t);
+  }, [autoFillNote]);
   const [menu, setMenu] = useState<MenuState | null>(null);
   // FEAT-26: which team's roster we're viewing. Defaults to the user's team;
   // any other selection renders read-only (no lineup editing / front-office).
@@ -151,6 +160,7 @@ export default function RosterPage() {
     setBench(benchInit);
     setSeededTeamId(team.id);
     setSaved(false);
+    setAutoFillNote(null);
     setMenu(null);
     setMoodPop(null);
   }
@@ -304,14 +314,38 @@ export default function RosterPage() {
 
   async function save() {
     const ok = await store.saveLineup(team!.id, lineup);
-    if (ok) setSaved(true);
+    if (ok) { setSaved(true); setAutoFillNote(null); }
   }
 
   function autoFill() {
+    // Same lineup the sim would pick by default (bench in its rotation order,
+    // which gives young prospects minutes), except that players who are OUT
+    // (not GTD) start only if there aren't five healthy bodies, and sit at the
+    // end of the bench, outside the rotation.
+    const isOut = (id: string) => { const st = injuryOf(id); return !!st && !st.gtd; };
+    const healthy = roster.filter(p => !isOut(p.id));
+    const def = buildDefaultBasketballLineup(healthy.length >= 5 ? healthy : roster);
+    const nextStarters = [...def.starters] as string[];
+    const outIds = roster
+      .filter(p => !nextStarters.includes(p.id) && !def.bench.includes(p.id))
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)
+      .map(p => p.id);
+    const nextBench = [...def.bench, ...outIds] as string[];
+    const startersChanged = nextStarters.filter((id, i) => id !== starters[i]).length;
+    const benchChanged = nextBench.some((id, i) => id !== bench[i]);
+    if (!startersChanged && !benchChanged) {
+      setAutoFillNote({ text: 'Already your best lineup. Nothing to change.', sticky: false });
+      return;
+    }
     setSaved(false);
-    const def = buildDefaultBasketballLineup(roster);
-    setStarters([...def.starters]);
-    setBench(roster.filter(p => !def.starters.includes(p.id)).sort((a, b) => b.ratings.overall - a.ratings.overall).map(p => p.id));
+    setStarters(nextStarters);
+    setBench(nextBench);
+    setAutoFillNote({
+      text: startersChanged
+        ? `Auto-filled ${startersChanged} starting spot${startersChanged === 1 ? '' : 's'}. Save Lineup to keep it.`
+        : 'Bench rotation re-ordered. Save Lineup to keep it.',
+      sticky: true,
+    });
   }
 
   // --- front-office actions ---
@@ -534,6 +568,11 @@ export default function RosterPage() {
                 {store.loading ? 'Working…' : 'Save Lineup'}
               </Button>
               {saved && <span className="text-sm" style={{ color: 'var(--accent)' }}>✓ Saved</span>}
+              {autoFillNote && (
+                <span role="status" className="text-sm text-[var(--text-sec)] basis-full sm:basis-auto text-right">
+                  {autoFillNote.text}
+                </span>
+              )}
             </div>
           )}
 
