@@ -30,6 +30,7 @@ interface AnalyticsData {
   interactions: InteractionReport | null;
   rollups?: RollupHealth;
   timingsMs?: Record<string, number>;
+  cacheAgeMs?: Record<string, number>;
   warnings?: string[];
 }
 
@@ -195,7 +196,7 @@ export default function AdminAnalyticsPage() {
             )}
 
             {/* Is the rollup pipeline (20261025) applied, backfilled and still fed? Loud when not, one quiet line when it is. */}
-            <RollupHealthPanel h={data.rollups} timings={data.timingsMs} now={now} />
+            <RollupHealthPanel h={data.rollups} timings={data.timingsMs} cacheAge={data.cacheAgeMs} now={now} />
 
             {/* All-time — these do NOT move with the period selector. */}
             <div>
@@ -474,9 +475,15 @@ function MetricCard({ label, value, sub }: { label: string; value: string | numb
   );
 }
 
-function RollupHealthPanel({ h, timings, now }: { h?: RollupHealth; timings?: Record<string, number>; now: number }) {
-  const slowest = Object.entries(timings ?? {}).sort((a, b) => b[1] - a[1])[0];
+function RollupHealthPanel({ h, timings, cacheAge, now }: { h?: RollupHealth; timings?: Record<string, number>; cacheAge?: Record<string, number>; now: number }) {
+  // Cached reports return in ~0 ms, so only queries that actually ran this request count as "slowest".
+  const cachedKeys = new Set(Object.keys(cacheAge ?? {}).map(k => k.split(':')[0]));
+  const slowest = Object.entries(timings ?? {}).filter(([k]) => !cachedKeys.has(k)).sort((a, b) => b[1] - a[1])[0];
   const timing = slowest ? `slowest query: ${slowest[0]} ${(slowest[1] / 1000).toFixed(1)}s` : null;
+  const oldest = Math.max(0, ...Object.values(cacheAge ?? {}));
+  const cached = cachedKeys.size
+    ? `${cachedKeys.size} report${cachedKeys.size === 1 ? '' : 's'} cached (${oldest < 60000 ? `${Math.round(oldest / 1000)}s` : `${Math.round(oldest / 60000)}m`} old, refreshes every 5m)`
+    : null;
 
   const problems: string[] = [];
   if (!h || h.applied === null) {
@@ -506,7 +513,7 @@ function RollupHealthPanel({ h, timings, now }: { h?: RollupHealth; timings?: Re
     const since = h?.earliestMinute ? h.earliestMinute.slice(0, 10) : '?';
     return (
       <p className="text-xs text-gray-400">
-        Rollups live · {h?.lagSeconds ?? 0}s behind · history from {since}{timing ? ` · ${timing}` : ''}
+        Rollups live · {h?.lagSeconds ?? 0}s behind · history from {since}{timing ? ` · ${timing}` : ''}{cached ? ` · ${cached}` : ''}
       </p>
     );
   }
