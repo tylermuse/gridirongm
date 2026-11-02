@@ -29,7 +29,7 @@ import type { TeamId } from '@bs/core/adapter';
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
-const CACHE_BUST = 14;
+const CACHE_BUST = 15;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
 // Stock-BBGM download variant (built by scripts/build_vanilla_bbgm.py): starts at
@@ -41,7 +41,7 @@ const nbaVanillaUrl = `${NBA_VANILLA_FILE}?v=${CACHE_BUST}`;
 // season from scratch. Built once; the weekly refresh does not touch it.
 const NBA_OPENING_FILE = '/rosters/BBGM_NBA_Roster_2026_OpeningNight.json';
 const nbaOpeningUrl = `${NBA_OPENING_FILE}?v=1`;
-const LAST_UPDATED = 'October 31, 2026';
+const LAST_UPDATED = 'November 1, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
 /** Collapsible "How to use this roster" panel — BS Hoops + Basketball GM paths. */

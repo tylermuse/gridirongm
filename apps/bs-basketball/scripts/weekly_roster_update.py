@@ -269,6 +269,66 @@ def espn_contract(ath):
     return None, None
 
 
+# ---------- Basketball-Reference contracts ----------
+BBREF_CONTRACTS = 'https://www.basketball-reference.com/contracts/players.html'
+
+
+def fetch_bbref_contracts():
+    """srID -> list of (season, salary $) from the Basketball-Reference contracts
+    table (the canonical per-year salary book; ESPN's roster API returns no
+    contract for ~1 in 4 rostered players and the file was defaulting those to
+    the minimum). Fails soft: {} on any error."""
+    import html as _html
+    for _ in range(3):
+        r = subprocess.run(['curl', '-s', '--compressed', '--max-time', '30', BBREF_CONTRACTS], capture_output=True, text=True)
+        if 'data-append-csv' in r.stdout:
+            break
+        time.sleep(2)
+    else:
+        return {}
+    out = {}
+    for row in re.findall(r'<tr[^>]*>(.*?)</tr>', r.stdout, re.S):
+        m = re.search(r'data-append-csv="([^"]+)"', row)
+        if not m:
+            continue
+        sal = []
+        for y, cell in re.findall(r'data-stat="(y\d)"[^>]*>(.*?)</td>', row, re.S):
+            v = re.sub('<[^>]+>', '', cell).replace('$', '').replace(',', '').strip()
+            if v.isdigit():
+                sal.append((START_YEAR + int(y[1]), int(v)))   # y1 = 2026-27 = BBGM season 2027
+        if sal:
+            out[m.group(1)] = sorted(sal)
+    return out
+
+
+def apply_bbref_contracts(d, book, log):
+    """Overwrite rostered players' contracts from the bbref book, matched by
+    srID: amount = this season's salary ($K), exp = last season with a listed
+    salary (option years included). Players bbref doesn't list keep ESPN's."""
+    if not book:
+        log.append('Basketball-Reference contracts: fetch failed, kept ESPN/min values')
+        return 0, 0
+    updated = unmatched = 0
+    for p in d['players']:
+        if p.get('tid', -1) < 0:
+            continue
+        sal = book.get(p.get('srID'))
+        if not sal:
+            unmatched += 1
+            continue
+        this = next((v for y, v in sal if y == SEASON), None)
+        if this is None:
+            continue
+        amt = max(MIN_CONTRACT, round(this / 1000))
+        exp = max(SEASON, sal[-1][0])
+        cur = p.get('contract') or {}
+        if cur.get('amount') != amt or cur.get('exp') != exp:
+            updated += 1
+        p['contract'] = {**cur, 'amount': amt, 'exp': exp}
+    log.append(f'Basketball-Reference contracts applied: {updated} changed; {unmatched} rostered players not in the bbref table (kept ESPN/min)')
+    return updated, unmatched
+
+
 def reconcile(d, rosters, tid_by_abbrev, log):
     by_key = defaultdict(list)
     for i, p in enumerate(d['players']):
@@ -502,6 +562,7 @@ def main():
     injuries = fetch_injuries()
 
     moves, released, created, trimmed = reconcile(d, rosters, tid_by_abbrev, log)
+    apply_bbref_contracts(d, fetch_bbref_contracts(), log)
     rec, remaining_dates, through = build_season(d, games, tid_by_abbrev, log)
     hurt = apply_injuries(d, injuries, remaining_dates, log)
     apply_coaches(d, sorted(tid_by_abbrev), log)
