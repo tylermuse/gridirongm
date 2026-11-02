@@ -131,3 +131,14 @@ explain (analyze, timing off, summary) select public.admin_interaction_report(no
 -- analytics_rollup_meta.started_at. admin_analytics_health() reports the lag
 -- between the newest raw event and the newest rollup minute, and the page
 -- turns red if that exceeds 10 minutes, so drift is visible instead of silent.
+
+-- ===========================================================================
+-- 2026-11-01 prod run, for the record
+-- ===========================================================================
+-- STEP 1 showed 20261025 already applied (trigger on, all four functions on the
+-- rollups) but backfilled only to 2026-09-24. STEP 3 extended it to 2026-07-27.
+-- STEP 4 still timed the four reports at 2–15 s: the instance (Micro: 224 MB
+-- shared_buffers, 2 MB work_mem) is the limit now, not the raw table. The
+-- follow-up is supabase/migrations/20261102_analytics_report_tuning.sql
+-- (covering indexes + per-function work_mem + ANALYZE); until it is applied,
+-- STEP 5's 60 s service_role timeout keeps the page rendering.
