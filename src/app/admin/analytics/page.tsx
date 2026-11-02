@@ -5,26 +5,50 @@ import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { InteractionsSection, type InteractionReport } from './InteractionsSection';
 
+// Every number fed by the summary RPC is null when that query failed (e.g. a
+// statement timeout). The cards render "—" for null; they must never show 0 as
+// if it were a real count.
 interface AnalyticsData {
   period: string;
-  totalUsers: number;
-  newUsers: number;
-  grandfatheredUsers: number;
-  convertibleUsers: number;
-  activeUsers: number;
-  uniqueDevices: number;
-  sessions: number;
-  pageViews: number;
-  conversionRate: number;
+  generatedAt?: string;
+  totalUsers: number | null;
+  newUsers: number | null;
+  grandfatheredUsers: number | null;
+  convertibleUsers: number | null;
+  activeUsers: number | null;
+  uniqueDevices: number | null;
+  sessions: number | null;
+  pageViews: number | null;
+  conversionRate: number | null;
   totalSubscriptions: number;
-  signupsByDay: Record<string, number>;
-  topPages: { path: string; count: number }[];
+  signupsByDay: Record<string, number> | null;
+  topPages: { path: string; count: number }[] | null;
   recentEvents: { event: string; properties: Record<string, unknown>; created_at: string; user_id: string | null }[];
   activeUsersRolling: ActiveUsersRolling | null;
   hoopsActiveUsersRolling: ActiveUsersRolling | null;
   sim3dCohorts: Sim3dCohorts | null;
   interactions: InteractionReport | null;
+  rollups?: RollupHealth;
+  timingsMs?: Record<string, number>;
   warnings?: string[];
+}
+
+// From admin_analytics_health() (migration 20261101_analytics_rollup_health).
+// applied === null means the health function itself is missing.
+interface RollupHealth {
+  applied: boolean | null;
+  error?: string;
+  startedAt?: string;
+  trigger?: 'enabled' | 'disabled' | 'missing';
+  functionsOnRollups?: Record<string, boolean>;
+  latestEventAt?: string | null;
+  latestMinute?: string | null;
+  lagSeconds?: number | null;
+  earliestMinute?: string | null;
+  backfillRows30d?: number;
+  liveRows30d?: number;
+  uiDays30d?: number;
+  timeouts?: Record<string, string>;
 }
 
 interface Sim3dCohort { devices: number; sessions: number; sessionsPerDevice: number; medianMinutes: number; meanMinutes: number; pctMultiDay: number; pctReturned7d: number }
@@ -97,6 +121,10 @@ export default function AdminAnalyticsPage() {
     }
   }, [authLoading, isAdmin, period, fetchData, fetchFeedback]);
 
+  // The API's server clock; every "N minutes ago" / "last N days" calculation
+  // keys off it so render stays pure (no Date.now() while rendering).
+  const now = data?.generatedAt ? Date.parse(data.generatedAt) : 0;
+
   // Auth loading
   if (authLoading) {
     return (
@@ -166,6 +194,9 @@ export default function AdminAnalyticsPage() {
               </div>
             )}
 
+            {/* Is the rollup pipeline (20261025) applied, backfilled and still fed? Loud when not, one quiet line when it is. */}
+            <RollupHealthPanel h={data.rollups} timings={data.timingsMs} now={now} />
+
             {/* All-time — these do NOT move with the period selector. */}
             <div>
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">All time</h2>
@@ -174,19 +205,24 @@ export default function AdminAnalyticsPage() {
                 <MetricCard
                   label="Can Convert"
                   value={data.convertibleUsers}
-                  sub={`${data.grandfatheredUsers} Founders get Premium free`}
+                  sub={`${fmt(data.grandfatheredUsers)} Founders get Premium free`}
                 />
                 <MetricCard
                   label="Conversion Rate"
-                  value={`${(data.conversionRate * 100).toFixed(1)}%`}
-                  sub={`${data.totalSubscriptions} subs / ${data.convertibleUsers} who can buy`}
+                  value={data.conversionRate === null ? null : `${(data.conversionRate * 100).toFixed(1)}%`}
+                  sub={`${data.totalSubscriptions} subs / ${fmt(data.convertibleUsers)} who can buy`}
                 />
               </div>
             </div>
 
             {/* Rolling DAU/WAU/MAU — fixed windows, ignore the period selector. */}
-            {data.activeUsersRolling && (
+            {data.activeUsersRolling ? (
               <ActiveUsersSection title="BS Football" a={data.activeUsersRolling} />
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide">BS Football · Active users · rolling</h2>
+                <p className="text-sm text-amber-700 mt-2">Didn&rsquo;t load — see the warning above.</p>
+              </div>
             )}
             {data.hoopsActiveUsersRolling && data.hoopsActiveUsersRolling.mau > 0 && (
               <ActiveUsersSection title="BS Hoops" a={data.hoopsActiveUsersRolling} />
@@ -200,14 +236,14 @@ export default function AdminAnalyticsPage() {
                 <MetricCard label="Active Users" value={data.activeUsers} sub="logged-in only" />
                 <MetricCard
                   label="Unique Devices"
-                  value={data.uniqueDevices || '—'}
+                  value={data.uniqueDevices}
                   sub="visited a page · incl. crawlers · upper bound"
                 />
                 <MetricCard label="Sessions" value={data.sessions} />
                 <MetricCard label="Page Views" value={data.pageViews} />
                 <MetricCard
                   label="Views / Session"
-                  value={data.sessions > 0 ? (data.pageViews / data.sessions).toFixed(1) : '—'}
+                  value={data.sessions !== null && data.pageViews !== null && data.sessions > 0 ? (data.pageViews / data.sessions).toFixed(1) : null}
                   sub="engagement depth"
                 />
               </div>
@@ -228,18 +264,24 @@ export default function AdminAnalyticsPage() {
               {/* Signups over time */}
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h2 className="text-sm font-bold text-gray-900 mb-4">New Accounts ({period})</h2>
-                <SignupsChart data={data.signupsByDay} period={period} />
+                {data.signupsByDay ? (
+                  <SignupsChart data={data.signupsByDay} period={period} now={now} />
+                ) : (
+                  <div className="text-sm text-amber-700 py-4 text-center">Didn&rsquo;t load</div>
+                )}
               </div>
 
               {/* Top pages */}
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h2 className="text-sm font-bold text-gray-900 mb-4">Top Pages ({period})</h2>
-                {data.topPages.length === 0 ? (
+                {!data.topPages ? (
+                  <div className="text-sm text-amber-700 py-4 text-center">Didn&rsquo;t load</div>
+                ) : data.topPages.length === 0 ? (
                   <div className="text-sm text-gray-400 py-4 text-center">No page views yet</div>
                 ) : (
                   <div className="space-y-2">
                     {data.topPages.map(({ path, count }) => {
-                      const max = data.topPages[0].count;
+                      const max = data.topPages![0].count;
                       return (
                         <div key={path} className="flex items-center gap-3">
                           <div className="flex-1 min-w-0">
@@ -289,7 +331,7 @@ export default function AdminAnalyticsPage() {
                             {ev.user_id ? ev.user_id.slice(0, 8) : 'anon'}
                           </td>
                           <td className="py-2 text-gray-400 text-xs whitespace-nowrap">
-                            {timeAgo(ev.created_at)}
+                            {timeAgo(ev.created_at, now)}
                           </td>
                         </tr>
                       ))}
@@ -313,7 +355,7 @@ export default function AdminAnalyticsPage() {
                     <div key={fb.id} className="border border-gray-100 rounded-lg p-3">
                       <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.message}</p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                        <span>{timeAgo(fb.created_at)}</span>
+                        <span>{timeAgo(fb.created_at, now)}</span>
                         {fb.app === 'bs-hoops' && <span className="font-semibold text-orange-600">Hoops</span>}
                         {fb.page && <span className="font-mono">{fb.page}</span>}
                         <span className="font-mono">{fb.user_id ? fb.user_id.slice(0, 8) : 'anon'}</span>
@@ -415,12 +457,70 @@ function Sim3dSection({ c, period }: { c: Sim3dCohorts; period: string }) {
   );
 }
 
-function MetricCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+/** null = the query behind this number failed; render a dash, never a fake 0. */
+function fmt(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '—';
+  return typeof value === 'number' ? value.toLocaleString() : value;
+}
+
+function MetricCard({ label, value, sub }: { label: string; value: string | number | null; sub?: string }) {
+  const failed = value === null;
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-5" title={failed ? 'This query failed — see the warning at the top' : undefined}>
       <div className="text-xs text-gray-500 mb-1">{label}</div>
-      <div className="text-2xl font-bold text-gray-900">{typeof value === 'number' ? value.toLocaleString() : value}</div>
+      <div className={`text-2xl font-bold ${failed ? 'text-gray-300' : 'text-gray-900'}`}>{fmt(value)}</div>
       {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function RollupHealthPanel({ h, timings, now }: { h?: RollupHealth; timings?: Record<string, number>; now: number }) {
+  const slowest = Object.entries(timings ?? {}).sort((a, b) => b[1] - a[1])[0];
+  const timing = slowest ? `slowest query: ${slowest[0]} ${(slowest[1] / 1000).toFixed(1)}s` : null;
+
+  const problems: string[] = [];
+  if (!h || h.applied === null) {
+    problems.push(h?.error ?? 'Rollup health unknown: admin_analytics_health() did not respond.');
+  } else if (!h.applied) {
+    problems.push('Rollup tables are missing: supabase/migrations/20261025_analytics_rollups.sql has not been applied, so every report scans the raw analytics_events table and times out.');
+  } else {
+    if (h.trigger !== 'enabled') problems.push(`Rollup trigger is ${h.trigger}: new events are not being rolled up, so these numbers are frozen.`);
+    const raw = Object.entries(h.functionsOnRollups ?? {}).filter(([, ok]) => !ok).map(([fn]) => fn);
+    if (raw.length) problems.push(`Still reading the raw events table: ${raw.join(', ')}. Re-apply 20261025_analytics_rollups.sql.`);
+    const missingFns = ['admin_analytics_summary', 'admin_active_users', 'admin_sim3d_cohorts', 'admin_interaction_report']
+      .filter(fn => !(fn in (h.functionsOnRollups ?? {})));
+    if (missingFns.length) problems.push(`Report functions missing: ${missingFns.join(', ')}.`);
+    if (h.lagSeconds !== null && h.lagSeconds !== undefined && h.lagSeconds > 600) {
+      problems.push(`Rollups are ${Math.round(h.lagSeconds / 60)} min behind the newest event (latest rollup minute ${h.latestMinute ?? '?'}).`);
+    }
+    const earliest = h.earliestMinute ? Date.parse(h.earliestMinute) : NaN;
+    const ninetyDaysAgo = now - 90 * 86400000;
+    if (Number.isNaN(earliest)) {
+      problems.push('Rollup tables are empty: run analytics_backfill_rollups() (see supabase/runbooks/analytics-rollups-prod.sql).');
+    } else if (earliest > ninetyDaysAgo) {
+      problems.push(`Backfill only reaches back to ${h.earliestMinute!.slice(0, 10)}; the 90d view is incomplete before that. Run analytics_backfill_rollups() for the earlier range.`);
+    }
+  }
+
+  if (problems.length === 0) {
+    const since = h?.earliestMinute ? h.earliestMinute.slice(0, 10) : '?';
+    return (
+      <p className="text-xs text-gray-400">
+        Rollups live · {h?.lagSeconds ?? 0}s behind · history from {since}{timing ? ` · ${timing}` : ''}
+      </p>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      <div className="font-semibold mb-1">Analytics rollups need attention</div>
+      <ul className="list-disc pl-5 space-y-0.5">
+        {problems.map(p => <li key={p}>{p}</li>)}
+      </ul>
+      {h?.timeouts && (
+        <p className="text-xs text-red-700/80 mt-2">
+          statement_timeout: {Object.entries(h.timeouts).map(([r, t]) => `${r}=${t}`).join(' · ')}{timing ? ` · ${timing}` : ''}
+        </p>
+      )}
     </div>
   );
 }
@@ -451,8 +551,8 @@ function formatProperties(props: Record<string, unknown>): string {
   return entries.map(([k, v]) => `${k}: ${v}`).join(', ');
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+function timeAgo(iso: string, now: number): string {
+  const diff = now - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -462,13 +562,13 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
-function SignupsChart({ data, period }: { data: Record<string, number>; period: Period }) {
+function SignupsChart({ data, period, now }: { data: Record<string, number>; period: Period; now: number }) {
   const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
   const labels: string[] = [];
   const values: number[] = [];
 
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000);
+    const d = new Date(now - i * 86400000);
     const key = d.toISOString().slice(0, 10);
     labels.push(key);
     values.push(data[key] ?? 0);
