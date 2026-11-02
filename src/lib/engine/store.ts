@@ -974,12 +974,13 @@ function generateWeekNews(
 // ---------------------------------------------------------------------------
 
 // Draft pick value chart — exponential decay by overall pick number.
-// Inspired by NFL draft value charts (Jimmy Johnson). Pick #1 ≈ 3000, pick #32 ≈ 600.
-// Value = 3000 * e^(-0.032 * (pickNum - 1)) for picks 1-224.
-// This makes top picks DRAMATICALLY more valuable than late picks,
-// preventing exploits like trading pick #30 for pick #2.
+// Inspired by NFL draft value charts (Jimmy Johnson). Pick #1 ≈ 3000, pick #10 ≈ 1670, pick #32 ≈ 400.
+// Value = 3000 * e^(-0.065 * (pickNum - 1)) for picks 1-224.
+// Steeper decay (was -0.032) so pick #1 (3000) is ~1.8x pick #10 (1670) rather than
+// only 1.33x — the AI no longer accepts pick #1 for pick #10 with a minimal sweetener
+// (kodak6lack). Still prevents exploits like trading pick #30 for pick #2.
 function draftPickPointValue(overallPick: number): number {
-  return Math.round(3000 * Math.exp(-0.032 * (overallPick - 1)));
+  return Math.round(3000 * Math.exp(-0.065 * (overallPick - 1)));
 }
 
 // Estimate overall pick number from round + team record
@@ -1141,7 +1142,7 @@ export function generateDraftClassPreview(season: number): { season: number; gro
 }
 
 /** Pick value based on estimated overall pick number.
- *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 2200, #20 ≈ 1600, #32 ≈ 1100, #64 ≈ 400. */
+ *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 1670, #20 ≈ 870, #32 ≈ 400, #64 ≈ 50. */
 export function pickTradeValue(pick: DraftPick, teams?: Team[], draftPickOrder?: string[]): number {
   if (draftPickOrder && draftPickOrder.length > 0) {
     const idx = draftPickOrder.indexOf(pick.id);
