@@ -490,7 +490,9 @@ function MobileActionBar({ actions }: { actions: ShellActions }) {
               onClick={() => setMoreOpen(o => !o)}
               className="whitespace-nowrap"
             >
-              More ▴
+              {/* "More" hid the deadline/season sims so well the Commish couldn't
+                  find them — say what's inside when it's all sim options. */}
+              {extra.every(a => a.key.startsWith('sim')) ? 'Sim to… ▴' : 'More ▴'}
             </Button>
             {moreOpen && (
               <div className="absolute right-0 bottom-full mb-2 w-52 rounded-xl border shadow-lg p-1.5 z-50" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>

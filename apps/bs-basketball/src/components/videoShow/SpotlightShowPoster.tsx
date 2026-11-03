@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EPISODE_PACK } from '@bs/core/billing';
 import Link from 'next/link';
 import type { ShowTeam as Team } from '@/lib/videoShow/types';
@@ -77,13 +77,25 @@ export function SpotlightShowPoster({
   }
 
   function onClipEnded() {
-    if (clip + 1 < TEASER.length) {
-      setClip(clip + 1);
-      requestAnimationFrame(() => videoRef.current?.play().catch(() => setTeaser('done')));
-    } else {
-      setTeaser('done');
-    }
+    if (clip + 1 < TEASER.length) setClip(clip + 1);
+    else setTeaser('done');
   }
+
+  // Clip 2+ plays on the SAME <video> element the user's tap started. The old
+  // `key={src}` remount made a brand-new element whose play() iOS blocks
+  // outside a tap — the teaser froze on Marcus's last frame instead of
+  // reaching Tony and the Premium card. A watchdog covers a stalled load.
+  useEffect(() => {
+    if (clip === 0 || teaser !== 'playing') return;
+    const v = videoRef.current;
+    if (!v) return;
+    v.load();
+    v.play().catch(() => setTeaser('done'));
+    const watchdog = window.setTimeout(() => { if (v.paused || v.readyState < 2) setTeaser('done'); }, 4000);
+    const started = () => window.clearTimeout(watchdog);
+    v.addEventListener('playing', started);
+    return () => { window.clearTimeout(watchdog); v.removeEventListener('playing', started); };
+  }, [clip, teaser]);
 
   const record = `${team.record.wins}-${team.record.losses}`;
   const busy = player === 'loading' || (!gated && !exhausted && !ready && access === 'ready');
@@ -96,7 +108,6 @@ export function SpotlightShowPoster({
       ) : (
         <video
           ref={videoRef}
-          key={TEASER[clip]}
           src={TEASER[clip]}
           playsInline
           preload="auto"
@@ -190,7 +201,7 @@ export function SpotlightShowPoster({
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               {access === 'signedOut' ? (
                 <>
-                  <Link href="/login" className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">Sign in</Link>
+                  <Link href="/login?next=/show" className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">Sign in</Link>
                   <Link href="/pricing" className="rounded-lg bg-purple-100 px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-200">See Premium</Link>
                 </>
               ) : (
