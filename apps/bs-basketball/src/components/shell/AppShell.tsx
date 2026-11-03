@@ -403,11 +403,13 @@ function TopBar({ league, actions }: { league: League; actions: ShellActions }) 
           </span>
         )}
         {visible.length > 0 && (
-          // Phones get these in the bottom action bar; keep the primary here
-          // too so the header always says what's next.
-          <div className="flex flex-wrap items-center justify-end gap-1.5 md:gap-2">
-            {visible.map((a, i) => {
-              const btn = (
+          // ≥sm: every action inline. Phones: the primary + first alternative
+          // live in the thumb bar at the bottom, so repeating the primary up
+          // here was dead weight — instead the header holds a menu of the
+          // longer sims (to the deadline, rest of season, all playoffs…).
+          <>
+            <div className="hidden sm:flex flex-wrap items-center justify-end gap-2">
+              {visible.map(a => (
                 <Button
                   key={a.key}
                   size="sm"
@@ -419,12 +421,14 @@ function TopBar({ league, actions }: { league: League; actions: ShellActions }) 
                 >
                   {actionLabel(a, running, progress)}
                 </Button>
-              );
-              // Alternatives live in the bottom bar on phones. The wrapper does
-              // the hiding — `hidden` on Button loses to its base inline-flex.
-              return i === 0 ? btn : <span key={a.key} className="hidden sm:inline-flex">{btn}</span>;
-            })}
-          </div>
+              ))}
+            </div>
+            {visible.length > 1 && (
+              <span className="sm:hidden">
+                <ActionMenu actions={actions} items={visible.slice(1)} direction="down" />
+              </span>
+            )}
+          </>
         )}
         {userTeam && (
           <Link href={`/team/${userTeam.id}`} className="shrink-0 hidden sm:block" title={`${userTeam.city} ${userTeam.name}`}>
@@ -450,68 +454,86 @@ function TopBar({ league, actions }: { league: League; actions: ShellActions }) 
   );
 }
 
+/** Dropdown of secondary actions (phones). `down` hangs from the header;
+ *  `up` opens above the bottom bar. Closes on an outside tap. */
+function ActionMenu({ actions, items, direction }: {
+  actions: ShellActions;
+  items: ShellActions['visible'];
+  direction: 'up' | 'down';
+}) {
+  const store = useLeagueStore();
+  const { running, run } = actions;
+  const locked = !!running || store.loading;
+  const progress = store.simProgress;
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+  // Say what's inside: "Sim ▾" when it's all sim options, else "More".
+  const allSim = items.every(a => a.key.startsWith('sim'));
+  const label = `${allSim ? 'Sim' : 'More'} ${direction === 'up' ? '▴' : '▾'}`;
+  return (
+    <>
+      {open && <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} aria-hidden />}
+      <div className="relative">
+        <Button
+          size="sm"
+          variant="secondary"
+          busy={!!running && items.some(a => a.key === running)}
+          disabled={locked}
+          onClick={() => setOpen(o => !o)}
+          className="whitespace-nowrap"
+        >
+          {label}
+        </Button>
+        {open && (
+          <div
+            role="menu"
+            className={`absolute right-0 w-56 rounded-xl border shadow-lg p-1.5 z-50 ${direction === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            {items.map(a => (
+              <button
+                key={a.key}
+                role="menuitem"
+                disabled={locked}
+                onClick={() => { setOpen(false); run(a.key); }}
+                className="w-full text-left rounded-lg px-3 py-2.5 text-sm font-semibold hover:bg-[var(--surface-2)] disabled:opacity-50 transition-colors"
+              >
+                {actionLabel(a, running, progress)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 /** Football's thumb-reachable bottom bar on phones: the primary next action
- *  plus the first alternative, full width; any further alternatives sit in a
- *  "More" menu that opens upward and closes on an outside tap. */
+ *  plus the first alternative, full width. Longer sims are in the header menu. */
 function MobileActionBar({ actions }: { actions: ShellActions }) {
   const store = useLeagueStore();
   const { visible, running, run } = actions;
   const locked = !!running || store.loading;
   const progress = store.simProgress;
-  const [moreOpen, setMoreOpen] = useState(false);
-  const extra = visible.slice(2);
   return (
-    <>
-      {moreOpen && <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setMoreOpen(false)} aria-hidden />}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-40 border-t px-3 py-2 flex items-center gap-2 sm:hidden"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
-      >
-        {visible.slice(0, 2).map(a => (
-          <Button
-            key={a.key}
-            size="sm"
-            variant={a.primary ? 'primary' : 'secondary'}
-            busy={running === a.key}
-            disabled={locked}
-            onClick={() => run(a.key)}
-            className="flex-1 whitespace-nowrap"
-          >
-            {actionLabel(a, running, progress)}
-          </Button>
-        ))}
-        {extra.length > 0 && (
-          <div className="relative">
-            <Button
-              size="sm"
-              variant="secondary"
-              busy={!!running && extra.some(a => a.key === running)}
-              disabled={locked}
-              onClick={() => setMoreOpen(o => !o)}
-              className="whitespace-nowrap"
-            >
-              {/* "More" hid the deadline/season sims so well the Commish couldn't
-                  find them — say what's inside when it's all sim options. */}
-              {extra.every(a => a.key.startsWith('sim')) ? 'Sim to… ▴' : 'More ▴'}
-            </Button>
-            {moreOpen && (
-              <div className="absolute right-0 bottom-full mb-2 w-52 rounded-xl border shadow-lg p-1.5 z-50" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-                {extra.map(a => (
-                  <button
-                    key={a.key}
-                    disabled={locked}
-                    onClick={() => { setMoreOpen(false); run(a.key); }}
-                    className="w-full text-left rounded-lg px-3 py-2.5 text-sm font-semibold hover:bg-[var(--surface-2)] disabled:opacity-50 transition-colors"
-                  >
-                    {actionLabel(a, running, progress)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </>
+    <div
+      className="fixed bottom-0 left-0 right-0 z-40 border-t px-3 py-2 flex items-center gap-2 sm:hidden"
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+    >
+      {visible.slice(0, 2).map(a => (
+        <Button
+          key={a.key}
+          size="sm"
+          variant={a.primary ? 'primary' : 'secondary'}
+          busy={running === a.key}
+          disabled={locked}
+          onClick={() => run(a.key)}
+          className="flex-1 whitespace-nowrap"
+        >
+          {actionLabel(a, running, progress)}
+        </Button>
+      ))}
+    </div>
   );
 }
 
