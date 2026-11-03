@@ -29,6 +29,12 @@ interface RosterEntry {
    *  this year-shifted variant for vanilla FBGM while Play in BS Football
    *  keeps using fileName. Built by scripts/build_vanilla_fbgm.py. */
   downloadFileName?: string;
+  /** Optional second FBGM download: the same week's rosters, contracts,
+   *  injuries and ratings, but the season rewound to Week 1 with nothing
+   *  played (0-0 records, no 2026 stats, full real schedule) for people who
+   *  want to sim the whole season themselves. Also year-shifted. Built by
+   *  scripts/build_vanilla_fbgm.py alongside downloadFileName. */
+  week1FileName?: string;
 }
 
 const ROSTERS: RosterEntry[] = [
@@ -39,13 +45,14 @@ const ROSTERS: RosterEntry[] = [
       'Starts at the current NFL week — Play in BS Football picks up exactly where the real NFL is: real standings, every completed game’s real final score and box score, real 2026 season stats for every player, and ratings nudged up or down by how players have actually performed so far (judged against what their rating predicts, scaled by playing time). Every team plays its actual real-life remaining schedule. Reconciled against real active rosters as of the 2026 season opener — every team’s 53-man roster plus practice squad and injured reserve verified against ESPN. September 3 v5: a full league-wide reconciliation after training camp and the cut to 53, with ~270 team changes, 550+ players released to free agency, and 40+ un-retirements. Headliners: Aaron Donald back with the Rams, Stefon Diggs to the Commanders, Keenan Allen to the Colts, Za’Darius Smith to the Falcons, L’Jarius Sneed to the Chiefs, Bobby Okereke to the Panthers and Deebo Samuel to the 49ers, plus duplicate-record cleanup. July 1 v4: caught up on every post-draft move through July 1 — the June 1 blockbusters (Myles Garrett to the Rams, A.J. Brown to the Patriots), 20+ contract extensions (Mahomes through 2033, Jeffery Simmons, Drake London and more) and Russell Wilson’s retirement. Earlier passes set all 2,636 contracts from Spotrac and reconciled every roster against ESPN with a 99%+ match rate. Starts at the 2026 regular season. Weekly refresh (through Week 8): rosters + injuries updated; best records so far — Bills 6-1, Vikings 6-1, 49ers 6-1, Broncos 6-2, Steelers 6-2. Sep 15 update: corrected 41 un-retired players’ expired contract years and two erroneous player weights.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     downloadFileName: 'FBGM_NFL_Roster_2026_Vanilla.json',
+    week1FileName: 'FBGM_NFL_Roster_2026_Week1.json',
     lastUpdated: 'November 1, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
     cacheBust: 27,
     caveat:
-      'Download JSON is tuned for stock Football GM (play.football-gm.com): the draft classes are aligned so the first draft you reach is the real class, since FBGM indexes drafts by season. Play in BS Football handles this automatically and uses the standard file.',
+      'Both downloads are tuned for stock Football GM (play.football-gm.com): the draft classes are aligned so the first draft you reach is the real class, since FBGM indexes drafts by season. Download: Current starts at the current NFL week with real standings and stats; Download: Week 1 Start has the same rosters, contracts, injuries and ratings but every team at 0-0 with the full real 2026 schedule, so you sim the whole season yourself. Play in BS Football handles this automatically and uses the standard file.',
   },
   {
     id: 'nfl-1994-montana-era',
@@ -105,6 +112,29 @@ function eraPillClasses(era: RosterEntry['era']): string {
   if (era === 'Era') return 'bg-amber-50 text-amber-700 border-amber-200';
   if (era === 'Beta') return 'bg-purple-50 text-purple-700 border-purple-200';
   return 'bg-blue-50 text-blue-700 border-blue-200';
+}
+
+/* 5/25 (bitter__pill 5/16 msg 1505022252809195590 carry-forward): JS-triggered
+   click on a generated anchor with ≥44px tap-target buttons. Some Android
+   browsers don't reliably fire the save dialog from a single tap on a plain
+   anchor with the download attribute. */
+function downloadRoster(fileName: string, cacheBust?: number) {
+  const url = `/rosters/${fileName}${cacheBust ? `?v=${cacheBust}` : ''}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function DownloadIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+  );
 }
 
 function HowToUse({ roster }: { roster: RosterEntry }) {
@@ -232,24 +262,28 @@ export default function RostersPage() {
                     a single tap on a plain anchor with the download attribute. */}
                 <button
                   type="button"
-                  onClick={() => {
-                    const dl = roster.downloadFileName ?? roster.fileName;
-                    const url = `/rosters/${dl}${roster.cacheBust ? `?v=${roster.cacheBust}` : ''}`;
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = dl;
-                    a.rel = 'noopener noreferrer';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                  }}
+                  onClick={() => downloadRoster(roster.downloadFileName ?? roster.fileName, roster.cacheBust)}
                   className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-3 bg-[var(--surface-2)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)] font-medium text-sm rounded-lg transition-colors border border-[var(--border)]"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download JSON
+                  <DownloadIcon />
+                  {roster.week1FileName ? 'Download: Current' : 'Download JSON'}
                 </button>
+                {roster.week1FileName && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => downloadRoster(roster.week1FileName!, roster.cacheBust)}
+                      className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-3 bg-[var(--surface-2)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)] font-medium text-sm rounded-lg transition-colors border border-[var(--border)]"
+                    >
+                      <DownloadIcon />
+                      Download: Week 1 Start
+                    </button>
+                    <p className="text-[10px] text-[var(--text-sec)] leading-snug max-w-[200px] text-center sm:text-left">
+                      <strong>Current</strong> = picks up at this NFL week with real standings and stats.{' '}
+                      <strong>Week 1 Start</strong> = same rosters and injuries, every team 0-0, full real schedule.
+                    </p>
+                  </>
+                )}
                 <p className="text-[10px] text-[var(--text-sec)] leading-snug max-w-[200px] text-center sm:text-left">
                   On Android: if the download doesn&rsquo;t start, tap-and-hold the button and choose &ldquo;Download link.&rdquo;
                 </p>

@@ -332,7 +332,7 @@ def main():
     cb = update_page(week, teams, today)
     fn = write_changelog(week, teams, today, moves, unret, cuts, ninj)
     subprocess.run([sys.executable,"scripts/build_midseason_start.py"],check=True)
-    subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variant
+    subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variants (Current + Week 1 start)
     append_rating_changes(fn)
     print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
 
