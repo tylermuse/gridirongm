@@ -197,6 +197,7 @@ function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, onAsk }
   onAir: OnAirInfo | null;
   onAsk: () => void;
 }) {
+  const pathname = usePathname() ?? '/';
   const { user, hasFeature, loading: subLoading } = useSubscription();
   const isPremium = hasFeature('ai_commentary');
   const signedIn = !!user;
@@ -442,7 +443,7 @@ function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, onAsk }
 
         {!signedIn ? (
           <p className="text-xs text-[var(--text-sec)] text-center py-1">
-            <Link href="/login" className="text-blue-600 font-semibold hover:underline">Sign in</Link> to ask the hosts your own question: 3 a week free.
+            <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="text-blue-600 font-semibold hover:underline">Sign in</Link> to ask the hosts your own question: 3 a week free.
           </p>
         ) : typedCapped ? (
           <div className="text-center py-1">
@@ -533,6 +534,15 @@ export function Booth() {
 
   // Changing page or opening the Booth ends it on the spot.
   useEffect(() => setCallout(null), [pathname, open]);
+
+  // The panel is a fixed overlay in the shell, so a link inside it (Sign in,
+  // Premium) navigated UNDER the still-open panel and looked like a dead tap.
+  // Any route change closes it.
+  const openedOnPath = useRef(pathname);
+  useEffect(() => {
+    if (open && openedOnPath.current !== pathname) setOpen(false);
+    if (open) openedOnPath.current = pathname;
+  }, [pathname, open, setOpen]);
 
   // Once in, it leaves after 5s, or on the first click or keypress outside it.
   useEffect(() => {

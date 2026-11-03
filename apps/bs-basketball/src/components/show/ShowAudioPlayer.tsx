@@ -52,9 +52,39 @@ interface PlayerProps {
 export function ShowAudioPlayer(props: PlayerProps) {
   const body = useMemo(() => buildShowAudioRequest(props.episode, props.teamName), [props.episode, props.teamName]);
   const key = useMemo(() => showAudioKey(body), [body]);
+  const { user, hasFeature, loading } = useSubscription();
+  // Listening is Premium. Free and signed-out users used to get the browser's
+  // SpeechSynthesis voice, which was robotic enough to hurt the product — now
+  // they get the upsell and the written episode below. (The browser voice
+  // survives only as a fallback for Premium users when the studio fails.)
+  if (!loading && (!user || !hasFeature('podcast_credits'))) {
+    return <PremiumUpsell signedIn={!!user} onClose={props.onClose} />;
+  }
   // A new episode (sim advanced) remounts the player fresh; the previous
   // episode's audio stays in the in-memory cache for a replay.
   return <PlayerInner key={key} {...props} body={body} audioKey={key} />;
+}
+
+function PremiumUpsell({ signedIn, onClose }: { signedIn: boolean; onClose?: () => void }) {
+  return (
+    <div className="rounded-xl border p-3 flex items-center gap-3" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }} data-testid="show-audio-upsell">
+      <div className="shrink-0 h-11 w-11 rounded-full grid place-items-center text-lg text-white" style={{ background: 'var(--accent)' }} aria-hidden>🔒</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-sec)]">Hoops Tonight · Studio audio</div>
+        <div className="text-sm font-semibold leading-snug">Hear Marcus &amp; Tony call your week — Premium</div>
+        <p className="text-xs text-[var(--text-sec)] mt-0.5">Two studio voices, your stats, every episode. The written show is free below.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Link href="/pricing" className="inline-flex items-center min-h-9 px-3 rounded-lg text-xs font-bold text-white" style={{ background: 'var(--accent)' }}>Go Premium</Link>
+          {!signedIn && (
+            <Link href="/login?next=/show" className="inline-flex items-center min-h-9 px-3 rounded-lg border text-xs font-semibold hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)' }}>Sign in</Link>
+          )}
+        </div>
+      </div>
+      {onClose && (
+        <button onClick={onClose} aria-label="Close" className="shrink-0 h-8 w-8 rounded-full grid place-items-center text-[var(--text-sec)] hover:bg-[var(--surface-2)]">✕</button>
+      )}
+    </div>
+  );
 }
 
 function PlayerInner({ episode, compact = false, autoStart = false, onClose, body, audioKey: key }: PlayerProps & { body: ShowAudioRequestBody; audioKey: string }) {

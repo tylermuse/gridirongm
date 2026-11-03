@@ -199,7 +199,7 @@ export function evaluateBasketballTrade(
       .filter((p): p is BasketballPlayer => !!p);
     const dispShift = dispositionTolerance(disposition, incoming, outgoing);
     const fitShift = positionalFitShift(teamRoster, incomingPlayers, outgoingPlayers, proposal.season);
-    const windowShift = windowTolerance(disposition, incomingPlayers, proposal.season);
+    const windowShift = windowTolerance(disposition, incomingPlayers, outgoingPlayers, proposal.season);
     const fairnessTolerance = Math.max(150, outgoing.totalValue * 0.12) + dispShift + fitShift + windowShift;
     const willAccept = netValue >= -fairnessTolerance;
 
@@ -446,6 +446,7 @@ function tradeFactorNote(capFit: number, fitShift: number, windowShift: number):
 function windowTolerance(
   disposition: TeamDisposition | undefined,
   incomingPlayers: BasketballPlayer[],
+  outgoingPlayers: BasketballPlayer[],
   season: number,
 ): number {
   if (!disposition) return 0;
@@ -456,11 +457,23 @@ function windowTolerance(
     if (v <= 0) continue;
     if (rebuilding && p.age >= 31) {
       shift -= v * 0.3; // aging win-now piece doesn't fit a rebuild, even at value
+    } else if (rebuilding && p.age >= 27) {
+      shift -= v * 0.15; // a prime-age vet is wasted on a team years from contending
     } else if (!rebuilding && p.age <= 20) {
       shift -= v * 0.15; // a win-now team discounts a raw project
     }
   }
-  return Math.round(Math.max(-700, shift));
+  // A rebuilder's young, high-upside core is what the rebuild IS — it takes a
+  // clear overpay to pry one loose, not merely "value for value".
+  if (rebuilding) {
+    for (const p of outgoingPlayers) {
+      const v = basketballTradeValue(p, { season });
+      if (v <= 0) continue;
+      const potGap = (p.development?.potential ?? p.ratings.overall) - p.ratings.overall;
+      if (p.age <= 23 && potGap >= 5) shift -= v * 0.25;
+    }
+  }
+  return Math.round(Math.max(-1000, shift));
 }
 
 /** Disposition tilt (PTS) on the acceptance bar. A rebuilder leans into youth
