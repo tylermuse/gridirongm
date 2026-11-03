@@ -1005,10 +1005,13 @@ function ProposalCard({
           <div className="text-xs mt-1"><span className="font-semibold" style={{ color: '#10b981' }}>You get:</span> {assetText(d.getIds, d.getPickIds)} <span className="opacity-50 tabular-nums">· {fmtPts(getVal)} pts</span></div>
           <div className="text-xs"><span className="font-semibold" style={{ color: '#dc2626' }}>You give:</span> {assetText(d.giveIds, d.givePickIds)} <span className="opacity-50 tabular-nums">· {fmtPts(giveVal)} pts</span></div>
         </div>
-        <div className="flex sm:flex-col gap-1.5 ml-auto">
-          <Button variant="primary" disabled={disabled} onClick={onAccept}>Accept</Button>
-          {!p.counterOf && <Button variant="secondary" disabled={disabled} onClick={onCounter}>Counter</Button>}
-          <Button variant="ghost" disabled={disabled} onClick={onDecline}>Decline</Button>
+        {/* Phones: full-width row under the text (basis-full forces the wrap, so
+            the text column keeps the whole card width instead of being squeezed
+            beside three buttons). ≥sm: a stacked column on the right. */}
+        <div className="flex basis-full sm:basis-auto sm:flex-col gap-1.5 sm:ml-auto">
+          <Button variant="primary" disabled={disabled} onClick={onAccept} className="flex-1 sm:flex-none">Accept</Button>
+          {!p.counterOf && <Button variant="secondary" disabled={disabled} onClick={onCounter} className="flex-1 sm:flex-none">Counter</Button>}
+          <Button variant="ghost" disabled={disabled} onClick={onDecline} className="flex-1 sm:flex-none">Decline</Button>
         </div>
       </div>
     </div>

@@ -136,16 +136,21 @@ export function basketballTradeValue(player: BasketballPlayer, opts: TradeValueO
   const pos = player.sportData.position;
   const potential = player.development?.potential ?? ovr;
 
-  // Non-linear OVR base: ((OVR - 50) / 45)^3 * 4500. Floored at 50 OVR.
-  const norm = Math.max(0, (ovr - 50) / 45);
+  // Upside: the market prices a young player on where he's GOING, not just where
+  // he is. Blend unrealized potential into the rating that feeds the cubic curve
+  // (a flat per-point bonus was worth ~70 PTS on a 1,000-PTS base, so a 19-yo
+  // 78/90 top-5 pick valued the same as a 27-yo 80-OVR center and rebuilding
+  // teams happily shipped their franchise rookie for a journeyman big).
+  // Weight decays with age — a 30-yo rarely reaches a distant ceiling.
+  const potGap = Math.max(0, potential - ovr);
+  const potWeight = age <= 20 ? 0.45 : age <= 22 ? 0.4 : age <= 24 ? 0.3 : age <= 26 ? 0.15 : 0.05;
+  const effOvr = ovr + potGap * potWeight;
+
+  // Non-linear base: ((effOVR - 50) / 45)^3 * 4500. Floored at 50.
+  const norm = Math.max(0, (effOvr - 50) / 45);
   const base = Math.pow(norm, 3) * 4500;
 
-  // Upside premium for unrealized potential — weighted heavily for the young,
-  // lightly for vets (an old player rarely reaches a distant ceiling).
-  const potGap = Math.max(0, potential - ovr);
-  const potBonus = potGap * (age <= 23 ? 6 : age <= 27 ? 3 : 1);
-
-  const ovrValue = (base + potBonus) * ageTradeMultiplier(age) * (POSITION_VALUE_MULT[pos] ?? 1.0);
+  const ovrValue = base * ageTradeMultiplier(age) * (POSITION_VALUE_MULT[pos] ?? 1.0);
 
   // Production floor: a still-productive player can't be valued below what his
   // current output is worth to a contender, even if the age curve hammers his
