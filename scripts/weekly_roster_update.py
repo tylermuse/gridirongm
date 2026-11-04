@@ -67,7 +67,9 @@ def fetch_espn():
                 g=grp.get('position')
                 for it in grp.get('items',[]):
                     st=it.get('status',{})
-                    players.append({'name':it.get('fullName') or it.get('displayName'),'jersey':str(it.get('jersey') or '').lstrip('#'),'pos':(it.get('position') or {}).get('abbreviation'),'unit':classify_group(g),'status':st.get('name') if isinstance(st,dict) else st})
+                    ri=(it.get('injuries') or [{}])[0]  # the roster item's own injury entry (status/date/details)
+                    players.append({'name':it.get('fullName') or it.get('displayName'),'jersey':str(it.get('jersey') or '').lstrip('#'),'pos':(it.get('position') or {}).get('abbreviation'),'unit':classify_group(g),'status':st.get('name') if isinstance(st,dict) else st,
+                                    'injStatus':ri.get('status'),'injType':(ri.get('details') or {}).get('type'),'injReturn':(ri.get('details') or {}).get('returnDate'),'injDate':(ri.get('date') or '')[:10]})
         else:  # ARI /roster 404s on a broken contract sub-fetch -> team?enable=roster fallback
             d2 = curl(f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/{ab}?enable=roster")
             for it in d2.get('team',{}).get('athletes',[]):
@@ -93,13 +95,26 @@ def fetch_espn():
         for a in t.get('injuries',[]):
             ath=a.get('athlete',{})
             injured.append({'name':ath.get('displayName'),'pos':(ath.get('position') or {}).get('abbreviation'),
-                            'status':a.get('status'),'type':(a.get('details') or {}).get('type') or a.get('type')})
+                            'status':a.get('status'),'type':(a.get('details') or {}).get('type') or a.get('type'),
+                            'returnDate':(a.get('details') or {}).get('returnDate'),'source':'feed'})
+    # The league feed only lists players with a recent news item: on Nov 3 2026 it
+    # had 55 IR entries while the team rosters' IR/Out group held 315 (Jaxson Dart
+    # and De'Von Achane, both on season-ending IR since September, were missing;
+    # RussOverBron flagged it in #content-creators). Add every roster IR/Out-group
+    # player the feed doesn't already cover, with the roster item's own entry.
+    seen={' '.join(normtoks(a['name'])) for a in injured}
+    for tid,t in teams.items():
+        for pl in t['players']:
+            if pl.get('unit')!='ir' or ' '.join(normtoks(pl['name'])) in seen: continue
+            injured.append({'name':pl['name'],'pos':pl.get('pos'),'status':pl.get('injStatus') or 'Injured Reserve',
+                            'type':pl.get('injType'),'returnDate':pl.get('injReturn'),'source':'roster'})
     return week, teams, injured, ok
 
 # ---------- real head coaches (BS-only `bsCoaches` block) ----------
 # ESPN's core API lists the current head coach per team. Only head coaches are
 # published; coordinators / position coaches stay auto-generated in the app.
 # `experience` = seasons as an NFL head coach including this one.
+SEASON = 2026
 COACH_SEASON = 2026
 def fetch_coaches():
     """{file abbrev: {"name","experience","age"?}} for every team, or {} on failure."""
@@ -231,7 +246,19 @@ def lastn_by_pid(P,pid):
     return ''
 
 # ---------- injuries ----------
-def apply_injuries(d, injured):
+def apply_injuries(d, injured, week=None, today=None):
+    """Mark injured players. Duration in games:
+      - a returnDate from ESPN -> weeks until it (min 1); a date after the regular
+        season ends -> the rest of the season incl. playoffs
+      - IR / PUP / NFI with no returnDate -> the rest of the season incl. playoffs.
+        ESPN attaches a returnDate (and a feed entry) once a player is designated
+        to return, so an IR player still without one is a long-termer. A fresh IR
+        stint is over-marked for a week at most: injuries are rebuilt every run.
+      - Out -> 2, Doubtful -> 1, Questionable / Day-To-Day / suspension -> healthy"""
+    today=today or datetime.date.today()
+    week=week or 1
+    season_end_games=max(1,19-week)+4   # remaining regular-season weeks + a playoff run
+    reg_season_ends=datetime.date(SEASON+1,1,5)
     P=d['players']
     idx=defaultdict(list)
     for p in P:
@@ -239,15 +266,22 @@ def apply_injuries(d, injured):
             idx[' '.join(normtoks((p.get('firstName') or '')+' '+(p.get('lastName') or '')))].append(p)
     # reset
     for p in P: p['injury']={'type':'Healthy','gamesRemaining':0}
-    def games(status):
+    def games(status, return_date):
         s=(status or '').lower()
-        if any(w in s for w in ('injured reserve','ir','physically unable','pup','non-football','non football')): return 8
-        if 'out' in s: return 2
-        if 'doubtful' in s: return 1
-        return 0  # Questionable / Day-To-Day / Suspension -> not marked injured
+        long_term=any(w in s for w in ('injured reserve','ir','physically unable','pup','non-football','non football'))
+        if not (long_term or 'out' in s or 'doubtful' in s):
+            return 0  # Questionable / Day-To-Day / Active / Suspension -> healthy, whatever returnDate says
+        if return_date:
+            try:
+                rd=datetime.date.fromisoformat(return_date[:10])
+                if rd>reg_season_ends: return season_end_games
+                return max(1,-(-(rd-today).days//7))
+            except ValueError: pass
+        if long_term: return season_end_games
+        return 1 if 'doubtful' in s else 2  # Out / Doubtful with no return date
     n=0
     for a in injured:
-        g=games(a.get('status'))
+        g=games(a.get('status'), a.get('returnDate'))
         if g<=0: continue
         cands=idx.get(' '.join(normtoks(a.get('name'))),[])
         if not cands: continue
@@ -289,7 +323,7 @@ def write_changelog(week, teams, today, moves, unret, cuts, ninj):
     L=[f"# NFL 2026 Roster — Weekly Refresh (through Week {week})", f"_{today.strftime('%B %-d, %Y')}_", "",
        "## Changes", f"- {moves} roster moves (signings/cuts/IR/practice-squad/team changes)",
        f"- {unret} players un-retired to match active rosters", f"- {cuts} players released to free agency",
-       f"- {ninj} players flagged injured (Out / Doubtful / IR) from the ESPN report", "",
+       f"- {ninj} players flagged injured (Out / Doubtful / IR) from ESPN's injury report plus each team roster's IR/Out group; IR with no return date = out for the season", "",
        "## Standings through Week "+str(week)]
     for t in order: L.append(f"- {TEAM_NAME[t]}: {teams[t]['record']}")
     os.makedirs("roster-updates",exist_ok=True)
@@ -325,7 +359,7 @@ def main():
     n0=len(d['players'])
     moves,unret,cuts,jset = reconcile(d, teams, ok)
     nov = apply_overrides(d)
-    ninj = apply_injuries(d, injured)
+    ninj = apply_injuries(d, injured, week, today)
     ncoach = apply_coaches(d)
     assert len(d['players'])==n0
     json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
