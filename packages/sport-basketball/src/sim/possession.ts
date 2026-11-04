@@ -108,7 +108,8 @@ export type StatEventField =
   | 'totalRebounds'
   | 'steals'
   | 'blocks'
-  | 'personalFouls';
+  | 'personalFouls'
+  | 'and1sMade';
 
 export interface PossessionResult {
   /** Stat events to apply. */
@@ -286,6 +287,15 @@ export function simPossession(
       events.push({ playerId: defender.id, field: 'personalFouls' });
       const ftMade = resolveFreeThrows(shooter, 1, events, rng);
       pointsScored += ftMade;
+      // Completed 3-point play (made 2-pt FG + converted bonus FT). Tracked as a
+      // distinct stat so the play-by-play can call out and-1s and the box-score
+      // reconstruction (trimmed / non-logged games) can render them as one 3-pt
+      // play instead of a separate bucket + free throw. Four-point plays (made
+      // three + FT) are intentionally excluded so the synth reconstruction's
+      // point math stays exact (each and-1 collapses exactly one 2 and one FT).
+      if (!isThree && ftMade > 0) {
+        events.push({ playerId: shooter.id, field: 'and1sMade' });
+      }
     }
     return tag({
       events,
