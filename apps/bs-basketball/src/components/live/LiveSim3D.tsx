@@ -14,16 +14,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SimPossession, SimTeamSpec } from '@/lib/live/liveSim3d';
 
-const SIM_BUILD = 'h1a';   // bump with public/court-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'h1b';   // bump with public/court-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/court-cam/index.html?embed=1&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsbb.sim3d';
 const VIEW_KEY = 'bsbb.sim3d.view';
 
 export type SimCam = 'broadcast' | 'chase' | 'high';
-const CAM_LABELS: [SimCam, string][] = [['broadcast', 'Broadcast'], ['chase', 'Chase'], ['high', 'High']];
+const CAM_LABELS: [SimCam, string][] = [['chase', 'Chase'], ['broadcast', 'Broadcast'], ['high', 'High']];
 
 function useSimView(): [{ cam: SimCam; auto: boolean }, (v: Partial<{ cam: SimCam; auto: boolean }>) => void] {
-  const [view, setViewState] = useState<{ cam: SimCam; auto: boolean }>({ cam: 'broadcast', auto: true });
+  const [view, setViewState] = useState<{ cam: SimCam; auto: boolean }>({ cam: 'chase', auto: false });
   useEffect(() => {
     let saved: { cam?: SimCam; auto?: boolean } | null = null;
     try { saved = JSON.parse(window.localStorage.getItem(VIEW_KEY) || 'null'); } catch { /* storage blocked */ }

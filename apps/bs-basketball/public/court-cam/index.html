@@ -73,7 +73,7 @@ button.call{background:var(--accent);color:var(--accent-ink);border-color:transp
     </div>
     <div class="card">
       <h2>View</h2>
-      <div class="row" role="group" aria-label="Camera"><button data-cam="broadcast" class="on">Broadcast</button><button data-cam="chase">Chase</button><button data-cam="high">High</button><button data-cam="baseline">Baseline</button><button id="autoCut" class="on">Auto cuts</button></div>
+      <div class="row" role="group" aria-label="Camera"><button data-cam="chase" class="on">Chase</button><button data-cam="broadcast">Broadcast</button><button data-cam="high">High</button><button data-cam="baseline">Baseline</button><button id="autoCut">Auto cuts</button></div>
       <div class="row" role="group" aria-label="Speed"><button data-speed="0.6">0.6×</button><button data-speed="1" class="on">1×</button><button data-speed="1.6">1.6×</button><button data-speed="2.5">2.5×</button></div>
       <h2>Log</h2><ol class="log" id="log"></ol>
     </div>
@@ -87,7 +87,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h1a'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h1b'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -908,14 +908,22 @@ function pinToHand(a, mode, t) {
 }
 
 // ---------- Camera director ----------
-const CAM = { mode: 'broadcast', auto: true, pos: V3(-70, 34, 0), look: V3(0, 5, 0), cut: null, cutUntil: -1 };
+const CAM = { mode: 'chase', auto: false, pos: V3(0, 16, -40), look: V3(0, 5, 0), cut: null, cutUntil: -1, holdX: 0 };
 function camGoal(t) {
   const b = ball.position; const r = RIM();
   const lookZ = clamp(b.z, -40, 40), lookX = clamp(b.x * .35, -8, 8);
   let mode = CAM.mode;
   if (CAM.auto && CAM.cut && t < CAM.cutUntil) mode = CAM.cut;
   if (mode === 'broadcast') { const z = clamp(b.z, -34, 34); return { pos: V3(-70, 27, z * .55), look: V3(lookX * .6, 4.5, z), fov: 21.5 }; }
-  if (mode === 'chase') { const back = -ATK; const cz = clamp(b.z + back * 26, -44, 44); const nearEnd = Math.max(0, 1 - Math.abs(cz - (b.z + back * 26)) / 8); return { pos: V3(b.x * .45, 13 + (1 - nearEnd) * 9, cz), look: V3(b.x * .3, 6, lerp(b.z, r[2], .55)), fov: 42 }; }
+  if (mode === 'chase') {
+    // Behind the offense: rides up the court with the ball, then parks behind the top of the key for the rest of the possession.
+    const depth = b.z * ATK;                         // how far up the court the ball is (attack frame)
+    const camDepth = Math.min(depth, 12) - 27;       // follows until the ball is ~12 ft into the frontcourt, then holds
+    const parked = depth > 12;
+    CAM.holdX = parked ? CAM.holdX + (b.x * .25 - CAM.holdX) * .02 : b.x * .3;   // lateral drift only while bringing it up
+    const high = Math.max(0, -12 - depth) * .28;   // deep in the backcourt the camera rises so the near basket doesn't block the view
+    return { pos: V3(CAM.holdX, 15.5 + high, clamp(camDepth * ATK, -38, 38)), look: V3(b.x * .35, 5.5, lerp(b.z, r[2], parked ? .7 : .5)), fov: parked ? 36 : 40 };
+  }
   if (mode === 'close') { return { pos: V3(b.x - 13, 6.5, b.z - ATK * 9), look: V3(b.x, 5, b.z), fov: 36 }; }
   if (mode === 'high') return { pos: V3(-85, 62, lookZ * .3), look: V3(0, 2, lookZ * .7), fov: 30 };
   if (mode === 'baseline') { const sgn = b.x >= 0 ? 1 : -1; return { pos: V3(-sgn * 33, 9.5, r[2] + ATK * 1), look: V3(0, 7, r[2] - ATK * 10), fov: 30 }; }
@@ -924,10 +932,12 @@ function camGoal(t) {
 }
 let camSnap = true;
 function updateCamera(dt, t) {
-  const g = camGoal(t); const k = camSnap ? 1 : 1 - Math.exp(-dt * (CAM.cut && t < CAM.cutUntil ? 6 : 2.6)); camSnap = false;
-  CAM.pos.lerp(g.pos, k); CAM.look.lerp(g.look, k); camera.position.copy(CAM.pos); camera.lookAt(CAM.look); camera.fov = lerp(camera.fov, g.fov, k); camera.updateProjectionMatrix();
+  const g = camGoal(t); const far = CAM.pos.distanceTo(g.pos); const k = camSnap ? 1 : 1 - Math.exp(-dt * (CAM.cut && t < CAM.cutUntil ? 6 : far > 30 ? 1.6 : 2.6)); camSnap = false;
+  CAM.pos.lerp(g.pos, k); CAM.look.lerp(g.look, k);
+  if (far > 20 && CAM.mode === 'chase') CAM.pos.y += Math.min(14, far * .18) * k;   // arc over the court when swinging ends
+  camera.position.copy(CAM.pos); camera.lookAt(CAM.look); camera.fov = lerp(camera.fov, g.fov, k); camera.updateProjectionMatrix();
 }
-function cutTo(mode, until) { if (!CAM.auto) return; CAM.cut = mode; CAM.cutUntil = until; camSnap = true; }
+function cutTo(mode, until) { if (!CAM.auto) return; CAM.cut = mode; CAM.cutUntil = until; }
 
 // ---------- Frame loop ----------
 let last = performance.now(), shotClockT = 24;
