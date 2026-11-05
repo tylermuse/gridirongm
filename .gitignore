@@ -56,3 +56,4 @@ next-env.d.ts
 
 .claude/
 apps/bs-basketball/public/court-cam/_fixture.json
+apps/bs-basketball/model/clips/

@@ -85,9 +85,10 @@ button.call{background:var(--accent);color:var(--accent-ink);border-color:transp
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h1c'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2a'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -340,7 +341,9 @@ function crowd(level, dur = 1.2) { const u = window.__crowdU; if (!u) return; u.
 // ---------- Player model ----------
 const PART = { 'shirt_0': 'torso', 'pants': 'pants', 'sepatu_keyobj': 'shoe', 'Bodymat': 'skin', 'Mat3': 'helmet', 'mask': 'mask', 'trim': 'trim', 'frosted_glass': 'visor', 'plain': 'plain' };
 const SKINS = ['#8d5524', '#c68642', '#e0ac69', '#5c3a21', '#a86b3c', '#f1c27d', '#6f4325', '#3b2314'];
-let BOT = null; const TEX = {};
+let BOT = null, LIB = null; const TEX = {};
+const HAS = n => !!(LIB && LIB.clips[n]);
+const META = n => (LIB && LIB.meta[n]) || null;
 const numCache = {};
 function numMat(n, t) { const k = n + t.num + t.jersey; if (numCache[k]) return numCache[k]; const c = document.createElement('canvas'); c.width = c.height = 160; const g = c.getContext('2d'); g.fillStyle = t.num; g.font = '800 118px "Saira Condensed", Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 8; g.strokeStyle = t.trim || t.num; g.strokeText(String(n), 80, 86); g.fillText(String(n), 80, 86);
   return numCache[k] = new THREE.MeshStandardMaterial({ map: canvasTex(c), transparent: true, roughness: .85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, side: THREE.DoubleSide }); }
@@ -414,7 +417,7 @@ function makePlayer(t, number, opts = {}) {
   Object.values(act).forEach(a => { a.play(); a.setEffectiveWeight(0); }); act.idle.setEffectiveWeight(1); mixer.update(rnd() * 2);
   const hipsY0 = bones.Hips.position.y;
   const a = { id: opts.id || `${t.id}-${number}`, team: t, number, name: opts.name || `#${number}`, root, body, model, bones, mixer, act, heightFt, sc, hipsY0,
-    x: 0, z: 0, y: 0, face: 0, speed: 0, ref: !!opts.ref, moves: [], acts: [], faceTo: null, side: null, slot: 0, ratings: opts.ratings || {}, lastPos: [0, 0], prevFoot: [0, 0] };
+    x: 0, z: 0, y: 0, face: 0, speed: 0, ref: !!opts.ref, moves: [], acts: [], faceTo: null, side: null, slot: 0, ratings: opts.ratings || {}, lastPos: [0, 0], prevFoot: [0, 0], clipActs: {}, clipLive: {}, clipW: 0, clipName: null, carrying: false, carryMode: null };
   scene.add(root); actors.push(a); return a;
 }
 function place(a) { a.root.position.set(a.x, a.y, a.z); a.root.rotation.y = a.face; }
@@ -501,9 +504,26 @@ const ev = (t, fn) => playEvents.push({ t, fn, done: false });
 function resetPlans() { for (const a of actors) { a.moves = []; a.acts = []; a.faceTo = null; a.planX = a.x; a.planZ = a.z; } ballPlan = []; playEvents = []; }
 /** Move to (x,z) over [t0,t1]. Chained: starts where the previous move ended. */
 function move(a, t0, t1, x, z, o = {}) { const prev = a.moves[a.moves.length - 1]; const sx = prev ? prev.x : a.planX, sz = prev ? prev.z : a.planZ; if (prev && t0 < prev.t1) t0 = prev.t1; a.moves.push({ t0, t1: Math.max(t1, t0 + .05), sx, sz, x, z, lin: !!o.lin, backpedal: !!o.backpedal, shuffle: !!o.shuffle }); return a.moves[a.moves.length - 1]; }
-function act(a, t0, t1, kind, p = {}) { a.acts.push({ t0, t1, kind, ...p }); }
+function act(a, t0, t1, kind, p = {}) { const c = { t0, t1, kind, ...p }; a.acts.push(c);
+  if (c.root) { const m = META(c.clip); const [px, pz] = pathAt(LIB, c.clip, c.rootDur); const cs = Math.cos(c.root.yaw), sn = Math.sin(c.root.yaw); const ex = c.root.sx + px * cs + pz * sn, ez = c.root.sz - px * sn + pz * cs; move(a, c.t0 + c.rootDur, c.t0 + c.rootDur + .05, ex, ez, { lin: true }); } }
+/** Place a root-motion clip so that at clip time tAt the actor stands at (x,z) facing yaw: returns the start point and schedules the walk-in. */
+function rootClip(a, kind, clip, t0, tAt, x, z, yaw, extra = {}) {
+  const m = META(clip); const [px, pz] = pathAt(LIB, clip, tAt);
+  if (yaw == null) { const from = posAt(a, t0 - .7); yaw = Math.atan2(x - from.x, z - from.z); }   // run in from wherever the player is
+  const cs = Math.cos(yaw), sn = Math.sin(yaw);
+  const sx = x - (px * cs + pz * sn), sz = z - (-px * sn + pz * cs);
+  move(a, t0 - .7, t0, sx, sz);
+  act(a, t0, t0 + m.dur, kind, { clip, t0, root: { sx, sz, yaw }, rootDur: m.dur, ...extra });
+  return { sx, sz };
+}
 function faceTo(a, t0, target) { a.faceTo = a.faceTo || []; a.faceTo.push({ t0, target }); }
-function posAt(a, t) { let x = a.planX, z = a.planZ, moving = false, dir = 0, spd = 0, mv = null;
+function rootActAt(a, t) { let r = null; for (const c of a.acts) { if (c.root && t >= c.t0 && t < c.t0 + c.rootDur) r = c; } return r; }
+function posAt(a, t) {
+  const rc = rootActAt(a, t);
+  if (rc) { const u = t - rc.t0; const [px, pz] = pathAt(LIB, rc.clip, u); const [qx, qz] = pathAt(LIB, rc.clip, Math.max(0, u - .05)); const c = Math.cos(rc.root.yaw), sn = Math.sin(rc.root.yaw);
+    const x = rc.root.sx + px * c + pz * sn, z = rc.root.sz - px * sn + pz * c; const vx = (px - qx) / .05, vz = (pz - qz) / .05;
+    return { x, z, moving: true, dir: rc.root.yaw, spd: Math.hypot(vx, vz), mv: null, root: rc }; }
+  let x = a.planX, z = a.planZ, moving = false, dir = 0, spd = 0, mv = null;
   for (const m of a.moves) { if (t < m.t0) break; mv = m; if (t < m.t1) { const u = m.lin ? (t - m.t0) / (m.t1 - m.t0) : ease((t - m.t0) / (m.t1 - m.t0)); x = lerp(m.sx, m.x, u); z = lerp(m.sz, m.z, u); moving = true; const L = Math.hypot(m.x - m.sx, m.z - m.sz); spd = L / (m.t1 - m.t0) * (m.lin ? 1 : 6 * u * (1 - u) * .8 + .2); dir = Math.atan2(m.x - m.sx, m.z - m.sz); } else { x = m.x; z = m.z; } }
   return { x, z, moving, dir, spd, mv }; }
 function actAt(a, t) { let cur = null; for (const c of a.acts) { if (t >= c.t0 && t < c.t1) cur = c; } return cur; }
@@ -533,7 +553,9 @@ function choreograph(p) {
   const hold = (a, t0, t1, mode = 'dribble') => { ballPlan.push({ t0, t1, held: a, mode }); ballAt = t1; };
   const pass = (from, to, t0, dur, kind = 'chest', arrive) => {   // flight from hand to the receiver's chest at arrival
     ballPlan.push({ t0, t1: t0 + dur, pass: { from, to, kind, arrive } });
-    act(from, t0 - .35, t0 + .25, kind === 'over' ? 'overpass' : kind === 'bounce' ? 'chestpass' : 'chestpass'); act(to, t0 + dur - .25, t0 + dur + .2, 'catch');
+    const pc = kind === 'over' ? 'overhead_pass' : 'chest_pass'; const pm = META(pc);
+    if (pm) act(from, t0 - pm.reach, t0 + .45, kind === 'over' ? 'overpass' : 'chestpass', { clip: pc, t0: t0 - pm.reach }); else act(from, t0 - .35, t0 + .25, kind === 'over' ? 'overpass' : 'chestpass');
+    if (HAS('catch')) act(to, t0 + dur - .45, t0 + dur + .35, 'catch', { clip: 'catch', t0: t0 + dur - .45 }); else act(to, t0 + dur - .25, t0 + dur + .2, 'catch');
     ev(t0, () => sndNoise(.06, 700, .9, .12)); ballAt = t0 + dur; return t0 + dur; };
   const defOf = i => def[i];
 
@@ -591,16 +613,30 @@ function choreograph(p) {
   const putback = isPut;
   const bodyRelease = (a) => V3(0, 0, 0);   // computed at run time from the hand
   const toSpot = (a, t0, t1) => move(a, t0, t1, spotW[0], spotW[1]);
+  const contestAct = (d, t0, t1, contested, jump) => { if (contested && HAS('block')) act(d, jump - META('block').hipsMax, t1, 'contest', { clip: 'block', t0: jump - META('block').hipsMax, jump }); else act(d, t0, t1, contested ? 'contest' : 'closeout', { jump }); };
   const guardSpot = (i, t0, t1, k = 4) => { const d = def[i]; const [sx, sz] = spotW; const dx = rimW[0] - sx, dz = rimW[2] - sz, L = Math.hypot(dx, dz) || 1; move(d, t0, t1, sx + dx / L * k, sz + dz / L * k, { shuffle: true }); };
   const rimApproach = (ax) => W(ax, 36.5);
   const dunk = !!p.dunk;
-  const finishAtRim = (a, tArrive, fromAx) => {   // layup or dunk from the approach side
-    const [ax, az] = rimApproach(fromAx); move(a, tArrive - 1.0, tArrive, ax, az, { lin: true });
-    const air = dunk ? .78 : .62; act(a, tArrive - .28, tArrive + air + .35, dunk ? 'dunk' : 'layup', { apex: dunk ? 2.6 : 1.9, dur: air, jump: tArrive });
-    hold(a, tArrive - .3, tArrive + (dunk ? air * .52 : air * .42), dunk ? 'dunk' : 'layup'); release = tArrive + (dunk ? air * .52 : air * .42); shotFrom = 'rim'; return release; };
-  const jumper = (a, tSet, spot) => {   // catch/pull-up at the spot, rise, release
-    const three = p.st === 'three'; const rise = tSet + .42; act(a, tSet - .1, rise + 1.15, 'jumper', { jump: rise, apex: three ? 1.25 : 1.1, dur: .62 });
-    hold(a, tSet - .1, rise + .27, 'shot'); release = rise + .27; shotFrom = spot; return release; };
+  const pickDunk = () => { const list = ['dunk', 'dunk2', 'dunk_one', 'dunk_two', 'dunk_tomahawk', 'dunk_windmill', 'dunk_reverse', 'dunk_oop'].filter(HAS); const r = (p.ratings && p.ratings.vertical) || 60; const pool = r > 75 ? list : list.slice(0, 4); return pool[(rnd() * pool.length) | 0]; };
+  const pickLayup = () => { const list = (p.contested ? ['layup', 'finger_roll', 'floater', 'euro_step'] : ['layup', 'finger_roll', 'layup', 'euro_step']).filter(HAS); return list[(rnd() * list.length) | 0]; };
+  const finishAtRim = (a, tArrive, fromAx) => {   // layup or dunk from the approach side (mocap: the clip's own approach + jump)
+    const clip = dunk ? pickDunk() : pickLayup();
+    if (!clip) { const [ax, az] = rimApproach(fromAx); move(a, tArrive - 1.0, tArrive, ax, az, { lin: true });
+      const air = dunk ? .78 : .62; act(a, tArrive - .28, tArrive + air + .35, dunk ? 'dunk' : 'layup', { apex: dunk ? 2.6 : 1.9, dur: air, jump: tArrive });
+      hold(a, tArrive - .3, tArrive + (dunk ? air * .52 : air * .42), dunk ? 'dunk' : 'layup'); release = tArrive + (dunk ? air * .52 : air * .42); shotFrom = 'rim'; return release; }
+    const m = META(clip); const tRim = tArrive + .3; const t0 = tRim - m.handPeak;
+    const [ax, az] = W(fromAx * 1.2, 39.2);   // hand meets the rim with the hips ~2.5 ft in front of it
+    rootClip(a, dunk ? 'dunk' : 'layup', clip, t0, m.handPeak, ax, az, null, { release: tRim });
+    hold(a, t0 - .15, tRim, dunk ? 'dunk' : 'layup'); release = tRim; shotFrom = 'rim'; return release; };
+  const jumper = (a, tSet, spot) => {   // catch/pull-up at the spot, rise, release (mocap when the library is loaded)
+    const kind = spot === 'pullup' ? (p.pt === 'iso' ? (rnd() < .5 ? 'stepback' : 'pullup') : 'pullup') : spot === 'post' ? (rnd() < .5 ? 'turnaround' : 'fadeaway') : (rnd() < .3 ? 'catch_shoot' : 'jump_shot');
+    const clip = HAS(kind) ? kind : HAS('jump_shot') ? 'jump_shot' : null;
+    if (!clip) { const three = p.st === 'three'; const rise = tSet + .42; act(a, tSet - .1, rise + 1.15, 'jumper', { jump: rise, apex: three ? 1.25 : 1.1, dur: .62 });
+      hold(a, tSet - .1, rise + .27, 'shot'); release = rise + .27; shotFrom = spot; return release; }
+    const m = META(clip); const t0 = tSet - Math.max(0, m.handPeak - 1.0);   // the release lands ~1 s after the set-up moment
+    const rim = RIM(); const [sx, sz] = spotW; const yaw = Math.atan2(rim[0] - sx, rim[2] - sz);
+    if (m.travel > 3) rootClip(a, 'jumper', clip, t0, m.handPeak, sx, sz, yaw, { release: t0 + m.handPeak }); else act(a, t0, t0 + m.dur, 'jumper', { clip, t0, release: t0 + m.handPeak });
+    hold(a, t0, t0 + m.handPeak, 'shot'); release = t0 + m.handPeak; shotFrom = spot; return release; };
 
   const pt0 = p.pt; if (pt0 === 'spot' && finisher === handler) p.pt = 'iso'; if (pt0 === 'cut' && finisher === handler) p.pt = 'drive'; if (pt0 === 'post' && finisher === handler) p.pt = 'iso';
   let defenderClose = null;
@@ -658,20 +694,20 @@ function choreograph(p) {
     if (sw && sw !== sh) { const [sx, sz] = W(14 * (zone[0] >= 0 ? 1 : -1), 22); move(sw, Ta, Ta + .8, sx, sz); tp = pass(handler, sw, Ta + .9, .4); hold(sw, tp, tp + .35, 'hold'); tp = pass(sw, sh, tp + .35, .45); }
     else tp = pass(handler, sh, tp, .5);
     hold(sh, tp, tp + .15, 'hold'); shotT = jumper(sh, tp + .12, 'spot');
-    guardSpot(p.shooter, Ta + .3, tp + .55 + (p.contested ? 0 : .35), p.contested ? 3.2 : 6); act(def[p.shooter], tp + .25, tp + 1.3, p.contested ? 'contest' : 'closeout', { jump: tp + .55 }); defenderClose = def[p.shooter];
+    guardSpot(p.shooter, Ta + .3, tp + .55 + (p.contested ? 0 : .35), p.contested ? 3.2 : 6); contestAct(def[p.shooter], tp + .25, tp + 1.3, p.contested, tp + .55); defenderClose = def[p.shooter];
     off.forEach((o, i) => { if (o !== sh && o !== handler && o !== sw) move(o, Ta + .2, Ta + 1.4, ...(i >= 3 ? W(i === 4 ? 6 : -7, 36) : H(i))); });
     t = tp + .6;
   } else if (pt === 'pnr') {
     const scr = (finisher && bigs.includes(p.shooter)) ? finisher : off[4]; const useLeft = zone[0] >= 0 ? 1 : -1;
     const [hx, hz] = W(0, 14); const [sx0, sz0] = W(-useLeft * 1.6, 17.5);   // screener sets up beside the on-ball defender
-    act(handler, Ta - .4, Ta + 2.4, 'dribble'); move(scr, Ta, Ta + .9, sx0, sz0); act(scr, Ta + .7, Ta + 1.9, 'screen');
+    act(handler, Ta - .4, Ta + 2.4, 'dribble'); move(scr, Ta, Ta + .9, sx0, sz0); act(scr, Ta + .7, Ta + 1.9, 'screen', HAS('screen') ? { clip: 'screen', loop: true } : {});
     const [ex, ez] = W(useLeft * 9, 24); move(handler, Ta + 1.0, Ta + 2.1, ex, ez);   // comes off the screen toward the elbow
     const onball = def[0]; move(onball, Ta + 1.05, Ta + 2.3, ex - useLeft * 3 * ATK, ez - 3 * ATK, { shuffle: true });   // trails over the top
     const [rx, rz] = W(useLeft * 2.5, 37); move(scr, Ta + 1.6, Ta + 2.7, rx, rz, { lin: true });   // roll
     const bigD = def[scr === off[4] ? 4 : 3]; move(bigD, Ta + 1.2, Ta + 2.2, ...W(useLeft * 5, 30), { shuffle: true });
     if (finisher === handler) { move(handler, Ta + 2.1, Ta + 2.5, spotW[0], spotW[1]); shotT = jumper(handler, Ta + 2.5, 'pullup'); act(onball, Ta + 2.6, Ta + 3.5, 'contest', { jump: Ta + 2.95 }); defenderClose = onball; t = Ta + 3.0; }
-    else if (finisher === scr) { const tp = pass(handler, scr, Ta + 2.15, .42, 'bounce'); hold(scr, tp, tp + .15, 'hold'); shotT = finishAtRim(scr, tp + .55, useLeft * 2.2); move(bigD, Ta + 2.2, tp + .5, ...W(useLeft * 2, 39), { shuffle: true }); act(bigD, tp + .2, tp + 1.2, p.contested ? 'contest' : 'closeout', { jump: tp + .5 }); defenderClose = bigD; t = tp + 1.1; }
-    else { toSpot(finisher, Ta + .3, Ta + 1.6); const tp = pass(handler, finisher, Ta + 2.2, .5); hold(finisher, tp, tp + .15, 'hold'); shotT = jumper(finisher, tp + .12, 'spot'); guardSpot(p.shooter, Ta + 1.5, tp + .6, p.contested ? 3 : 7); act(def[p.shooter], tp + .25, tp + 1.3, p.contested ? 'contest' : 'closeout', { jump: tp + .55 }); defenderClose = def[p.shooter]; t = tp + .7; }
+    else if (finisher === scr) { const tp = pass(handler, scr, Ta + 2.15, .42, 'bounce'); hold(scr, tp, tp + .15, 'hold'); shotT = finishAtRim(scr, tp + .55, useLeft * 2.2); move(bigD, Ta + 2.2, tp + .5, ...W(useLeft * 2, 39), { shuffle: true }); contestAct(bigD, tp + .2, tp + 1.2, p.contested, tp + .5); defenderClose = bigD; t = tp + 1.1; }
+    else { toSpot(finisher, Ta + .3, Ta + 1.6); const tp = pass(handler, finisher, Ta + 2.2, .5); hold(finisher, tp, tp + .15, 'hold'); shotT = jumper(finisher, tp + .12, 'spot'); guardSpot(p.shooter, Ta + 1.5, tp + .6, p.contested ? 3 : 7); contestAct(def[p.shooter], tp + .25, tp + 1.3, p.contested, tp + .55); defenderClose = def[p.shooter]; t = tp + .7; }
     off.forEach((o, i) => { if (o !== handler && o !== scr && o !== finisher) move(o, Ta + .2, Ta + 1.6, ...W(i === 1 ? -20 : i === 2 ? 20 : -16, i === 3 ? 38 : 27)); });
   } else if (pt === 'iso' || pt === 'drive') {
     const a = (pt === 'drive' && assister) ? assister : finisher || handler; const [wx, wz] = pt === 'iso' ? W(zone[0] >= 0 ? 15 : -15, 22) : W(0, 14);
@@ -680,16 +716,16 @@ function choreograph(p) {
     const d = def[off.indexOf(a)];
     if (pt === 'iso') { act(a, tp, tp + 1.5, 'sizeup'); hold(a, ballAt, 99); const [jx, jz] = W((zone[0] >= 0 ? 1 : -1) * 13, 23); move(a, tp + .5, tp + 1.0, jx, jz); move(a, tp + 1.0, tp + 1.5, wx + (wx > 0 ? -2 : 2), wz - 1 * ATK);
       move(d, tp + .1, tp + 1.5, lerp(wx, rimW[0], .18), lerp(wz, rimW[2], .18), { shuffle: true });
-      if (p.st === 'at_rim') { act(a, tp + 1.5, tp + 2.3, 'dribble'); shotT = finishAtRim(a, tp + 2.5, zone[0] >= 0 ? 3 : -3); move(d, tp + 1.5, tp + 2.3, ...W(zone[0] >= 0 ? 2.5 : -2.5, 35), { shuffle: true }); act(d, tp + 2.1, tp + 3.1, p.contested ? 'contest' : 'closeout', { jump: tp + 2.5 }); }
-      else { move(a, tp + 1.5, tp + 2.2, spotW[0], spotW[1]); act(a, tp + 1.5, tp + 2.3, 'dribble'); shotT = jumper(a, tp + 2.3, 'pullup'); move(d, tp + 1.5, tp + 2.4, lerp(spotW[0], rimW[0], .15), lerp(spotW[2 - 1], rimW[2], .15), { shuffle: true }); act(d, tp + 2.3, tp + 3.3, p.contested ? 'contest' : 'closeout', { jump: tp + 2.75 }); }
+      if (p.st === 'at_rim') { act(a, tp + 1.5, tp + 2.3, 'dribble'); shotT = finishAtRim(a, tp + 2.5, zone[0] >= 0 ? 3 : -3); move(d, tp + 1.5, tp + 2.3, ...W(zone[0] >= 0 ? 2.5 : -2.5, 35), { shuffle: true }); contestAct(d, tp + 2.1, tp + 3.1, p.contested, tp + 2.5); }
+      else { move(a, tp + 1.5, tp + 2.2, spotW[0], spotW[1]); act(a, tp + 1.5, tp + 2.3, 'dribble'); shotT = jumper(a, tp + 2.3, 'pullup'); move(d, tp + 1.5, tp + 2.4, lerp(spotW[0], rimW[0], .15), lerp(spotW[2 - 1], rimW[2], .15), { shuffle: true }); contestAct(d, tp + 2.3, tp + 3.3, p.contested, tp + 2.75); }
       defenderClose = d; t = Math.max(t, shotT + .6);
     } else {
       // drive: straight line to the rim; dump-off if assisted
       const side = zone[0] >= 0 ? 1 : -1; act(a, tp, tp + 2.2, 'dribble'); hold(a, ballAt, 99);
       move(d, tp + .1, tp + 1.9, ...W(side * 3, 32), { shuffle: true });
       if (assister && finisher !== a) { const [cx, cz] = W(-side * 6, 38); move(finisher, Ta + .2, tp + 1.4, cx, cz); move(a, tp + .3, tp + 1.6, ...W(side * 6, 31), { lin: true });
-        const tpp = pass(a, finisher, tp + 1.65, .3, 'bounce'); hold(finisher, tpp, tpp + .1, 'hold'); shotT = finishAtRim(finisher, tpp + .45, -side * 2); const fd = def[p.shooter]; move(fd, tp + .5, tpp + .4, ...W(-side * 3, 40), { shuffle: true }); act(fd, tpp + .1, tpp + 1.1, p.contested ? 'contest' : 'closeout', { jump: tpp + .45 }); defenderClose = fd; t = tpp + 1.2; }
-      else { shotT = finishAtRim(a, tp + 1.9, side * 3.2); act(d, tp + 1.5, tp + 2.5, p.contested ? 'contest' : 'closeout', { jump: tp + 1.9 }); defenderClose = d; t = tp + 2.2; }
+        const tpp = pass(a, finisher, tp + 1.65, .3, 'bounce'); hold(finisher, tpp, tpp + .1, 'hold'); shotT = finishAtRim(finisher, tpp + .45, -side * 2); const fd = def[p.shooter]; move(fd, tp + .5, tpp + .4, ...W(-side * 3, 40), { shuffle: true }); contestAct(fd, tpp + .1, tpp + 1.1, p.contested, tpp + .45); defenderClose = fd; t = tpp + 1.2; }
+      else { shotT = finishAtRim(a, tp + 1.9, side * 3.2); contestAct(d, tp + 1.5, tp + 2.5, p.contested, tp + 1.9); defenderClose = d; t = tp + 2.2; }
     }
     off.forEach((o, i) => { if (o !== a && o !== finisher) move(o, Ta + .2, Ta + 1.5, ...(i === 4 ? W(zone[0] >= 0 ? -8 : 8, 37) : i === 3 ? W(zone[0] >= 0 ? -20 : 20, 38) : H(i))); });
   } else if (pt === 'post') {
@@ -706,13 +742,13 @@ function choreograph(p) {
     let tp = feeder !== handler ? pass(handler, feeder, Ta + .85, .4) : Ta + .9; if (feeder !== handler) { hold(feeder, tp, tp + .9, 'hold'); } else act(handler, Ta - .3, tp + .8, 'dribble');
     const [c0x, c0z] = W(-side * 17, 27); move(cutter, Ta, Ta + .6, c0x, c0z); move(cutter, tp + .2, tp + 1.3, ...W(-side * 2, 36.5), { lin: true });
     const cd = def[p.shooter]; move(cd, Ta + .1, tp + .3, ...W(-side * 14, 30), { shuffle: true }); move(cd, tp + .6, tp + 1.6, ...W(-side * 5, 37), { shuffle: true });   // a step late
-    const tpp = pass(feeder, cutter, tp + .75, .4, 'bounce'); hold(cutter, tpp, tpp + .1, 'hold'); shotT = finishAtRim(cutter, tpp + .55, -side * 2.2); act(cd, tpp + .3, tpp + 1.3, p.contested ? 'contest' : 'closeout', { jump: tpp + .55 }); defenderClose = cd; t = tpp + 1.2;
+    const tpp = pass(feeder, cutter, tp + .75, .4, 'bounce'); hold(cutter, tpp, tpp + .1, 'hold'); shotT = finishAtRim(cutter, tpp + .55, -side * 2.2); contestAct(cd, tpp + .3, tpp + 1.3, p.contested, tpp + .55); defenderClose = cd; t = tpp + 1.2;
     off.forEach((o, i) => { if (o !== cutter && o !== feeder) move(o, Ta + .2, Ta + 1.6, ...(i === 4 ? W(side * 8, 38) : H(i))); });
   } else { // trans (finish at the rim or a pull-up), fallback
     const a = finisher || handler; const side = zone[0] >= 0 ? 1 : -1;
     if (a !== handler) { const tp = pass(handler, a, Ta - .3, .45); hold(a, tp, 99); move(a, Ta - .9, tp, ...W(side * 10, 26), { lin: true }); act(a, tp, tp + 1.2, 'dribble'); if (p.st === 'at_rim') shotT = finishAtRim(a, tp + 1.1, side * 3); else { move(a, tp, tp + .4, spotW[0], spotW[1]); shotT = jumper(a, tp + .45, 'pullup'); } }
     else { act(a, Ta - .5, Ta + 1.2, 'dribble'); if (p.st === 'at_rim') shotT = finishAtRim(a, Ta + 1.0, side * 3); else { move(a, Ta - .2, Ta + .4, spotW[0], spotW[1]); shotT = jumper(a, Ta + .45, 'pullup'); } }
-    const d = def[p.shooter]; move(d, Ta - .4, shotT - .1, ...(p.st === 'at_rim' ? W(-side * 2, 36) : [lerp(spotW[0], rimW[0], .2), lerp(spotW[1], rimW[2], .2)]), { shuffle: true }); act(d, shotT - .25, shotT + .7, p.contested ? 'contest' : 'closeout', { jump: shotT - .05 }); defenderClose = d; t = Math.max(t, shotT + .6);
+    const d = def[p.shooter]; move(d, Ta - .4, shotT - .1, ...(p.st === 'at_rim' ? W(-side * 2, 36) : [lerp(spotW[0], rimW[0], .2), lerp(spotW[1], rimW[2], .2)]), { shuffle: true }); contestAct(d, shotT - .25, shotT + .7, p.contested, shotT - .05); defenderClose = d; t = Math.max(t, shotT + .6);
   }
 
   // ---- 3. The shot: flight, result, rebound / free throws ----
@@ -723,7 +759,7 @@ function choreograph(p) {
   const Tf = flightT(shotFrom === 'rim');
   if (blocked) {
     const bl = def[p.blk]; const jumpT = rel - .22; move(bl, Math.max(Ta, rel - 1.2), rel - .3, lerp(sh.x, rimW[0], .25) + (defenderClose === bl ? 0 : 0), lerp(sh.z, rimW[2], .25), { shuffle: true });
-    act(bl, jumpT - .1, rel + .9, 'block', { jump: jumpT, apex: 2.3, dur: .7 });
+    if (HAS('block')) act(bl, jumpT - META('block').hipsMax, jumpT + 1.0, 'block', { clip: 'block', t0: jumpT - META('block').hipsMax }); else act(bl, jumpT - .1, rel + .9, 'block', { jump: jumpT, apex: 2.3, dur: .7 });
     ballPlan.push({ t0: rel, t1: rel + .12, shot: { from: sh, T: .12, to: V3(lerp(sh.x, rimW[0], .4), 9.8, lerp(sh.z, rimW[2], .4)) } });
     const [lx, lz] = W(rnd() < .5 ? -9 : 9, 24); const landAt = V3(lx, 0, lz); ballPlan.push({ t0: rel + .12, t1: rel + 1.15, swat: { from: V3(lerp(sh.x, rimW[0], .4), 9.8, lerp(sh.z, rimW[2], .4)), to: landAt, T: 1.0 } });
     ev(rel + .1, () => { banner(`${bl.name} BLOCKS IT`, 'big', 1.5); crowd(.5, 1.4); sndNoise(.09, 500, .6, .5); sndPlay('roar', .35); });
@@ -740,7 +776,7 @@ function choreograph(p) {
     ballPlan.push({ t0: landT, t1: landT + 1.6, net: { at: landT, x: rimW[0], z: rimW[2] } });
     ev(landT, () => { if (dunk) { sndDunk(); banner(`${sh.name} THROWS IT DOWN!`, 'big', 1.8); crowd(.9, 2.2); sndPlay('roar', .7); } else { sndSwish(); banner(p.st === 'three' ? `${sh.name} FROM DEEP — ${p.pts}` : `${sh.name} SCORES`, 'good', 1.5); crowd(p.st === 'three' ? .7 : .45, 1.6); sndPlay('cheer', p.st === 'three' ? .6 : .4); }
       GS.score[GS.off] = GS.off === 0 ? p.h : p.a; if (!fouled) { GS.score[0] = p.h; GS.score[1] = p.a; } renderBug(); for (const n of netMats) if (Math.abs(n.net.position.z - rimW[2]) < 1) n.t = T; });
-    act(sh, landT + .1, landT + 1.4, dunk ? 'flex' : p.st === 'three' ? 'three' : 'cheer');
+    { const cc = ['celebrate1', 'celebrate3', 'celebrate4'].filter(HAS); act(sh, landT + .1, landT + 1.6, dunk ? 'flex' : p.st === 'three' ? 'three' : 'cheer', cc.length ? { clip: cc[(rnd() * cc.length) | 0], t0: landT + .1 } : {}); }
     off.forEach(o => { if (o !== sh && rnd() < .5) act(o, landT + .15, landT + 1.1, 'cheer'); });
     if (fouled) { ev(landT + .25, () => { blowWhistle(); banner('AND ONE!', 'big', 1.4); }); return freeThrows(landT + 1.5, sh, p.fta, p.ftm, p.ftMakes, true); }
     t = landT + 1.2; ev(t - .2, () => { GS.lastEnd = 'make'; }); return finish(t, 'make');
@@ -756,10 +792,10 @@ function choreograph(p) {
   ballPlan.push({ t0: landT, t1: landT + .85, rimOut: { from: rimTarget, T: .85, to: landAt } });
   ev(landT, () => { sndRim(); if (p.st === 'three' || p.contested) sndPlay('groan', .25); });
   // bodies go to the glass: rebounder arrives under the ball, two others box out
-  move(reb, Math.min(rel + .05, landT - .3), landT + .8, landAt.x, landAt.z, { lin: true }); act(reb, landT + .55, landT + 1.4, 'rebound', { jump: landT + .62, apex: 1.4, dur: .5 });
+  move(reb, Math.min(rel + .05, landT - .3), landT + .8, landAt.x, landAt.z, { lin: true }); if (HAS('block')) act(reb, landT + .62 - META('block').hipsMax, landT + 1.5, 'rebound', { clip: 'block', t0: landT + .62 - META('block').hipsMax }); else act(reb, landT + .55, landT + 1.4, 'rebound', { jump: landT + .62, apex: 1.4, dur: .5 });
   hold(reb, landT + .85, 99, 'hold'); GS.rebounder = reb;
   const crashers = [...off.filter(o => o !== sh && o !== reb).slice(-2), ...def.filter(d => d !== reb).slice(-2)];
-  crashers.forEach((c, i) => { move(c, rel, landT + .7, landAt.x + [-3, 3, -2.5, 2.5][i], landAt.z + ATK * [-2, -2, 1.5, 1.5][i], { lin: true }); act(c, landT + .2, landT + 1.3, 'boxout'); });
+  crashers.forEach((c, i) => { move(c, rel, landT + .7, landAt.x + [-3, 3, -2.5, 2.5][i], landAt.z + ATK * [-2, -2, 1.5, 1.5][i], { lin: true }); act(c, landT + .2, landT + 1.3, 'boxout', HAS('boxout') ? { clip: 'boxout', loop: true } : {}); });
   ev(landT + .85, () => { banner(`${reb.name} ${offBoard ? 'OFFENSIVE BOARD' : 'REBOUND'}`, offBoard ? 'good' : '', 1.2); });
   t = landT + 1.4; ev(t - .1, () => { GS.lastEnd = offBoard ? 'orb' : 'drb'; });
   return finish(t + .2, offBoard ? 'orb' : 'drb');
@@ -774,14 +810,16 @@ function choreograph(p) {
     move(shooterA, t0 - .9, t0 + .2, lx, lz); faceTo(shooterA, t0 - .9, 'rim'); ballPlan.push({ t0: ballAt, t1: t0 + .5, rest: [lx, .4, lz], hidden: true }); hold(shooterA, t0 + .5, 99, 'hold');
     let tt = t0 + .6; const madeList = makes || Array.from({ length: fta }, (_, i) => i < ftm);
     for (let i = 0; i < fta; i++) {
-      const tStart = tt; act(shooterA, tStart, tStart + 2.0, 'ft', { jump: tStart + 1.15 }); const rel = tStart + 1.42; hold(shooterA, tStart + .9, rel, 'ft'); const Tf = .95; const madeFt = madeList[i];
+      const tStart = tt; const fm = META('free_throw'); const rel = fm ? tStart + fm.handPeak : tStart + 1.42;
+      if (fm) act(shooterA, tStart, tStart + Math.min(fm.dur, fm.handPeak + 1.0), 'ft', { clip: 'free_throw', t0: tStart }); else act(shooterA, tStart, tStart + 2.0, 'ft', { jump: tStart + 1.15 });
+      hold(shooterA, tStart + .3, rel, 'ft'); const Tf = .95; const madeFt = madeList[i];
       const target = madeFt ? V3(rimV.x, COURT.RIM_Y + .1, rimV.z) : V3(rimV.x + .6, COURT.RIM_Y + .05, rimV.z - ATK * .7);
       ballPlan.push({ t0: rel, t1: rel + Tf, shot: { from: shooterA, T: Tf, to: target, made: madeFt } });
       ev(tStart + .2, () => { $('sit').textContent = `FT ${i + 1} OF ${fta}`; });
       if (madeFt) { ballPlan.push({ t0: rel + Tf, t1: rel + Tf + 1.4, net: { at: rel + Tf, x: rimV.x, z: rimV.z } }); ev(rel + Tf, () => { sndSwish(); GS.score[GS.off] += 1; renderBug(); for (const n of netMats) if (Math.abs(n.net.position.z - rimV.z) < 1) n.t = T; crowd(.2, .6); }); }
       else { ballPlan.push({ t0: rel + Tf, t1: rel + Tf + .9, rimOut: { from: target, T: .9, to: V3(rimV.x + 2 * ATK, 5, rimV.z - ATK * 3) } }); ev(rel + Tf, () => { sndRim(); sndPlay('groan', .2); }); }
       const last = i === fta - 1;
-      if (!last) { const back = rel + Tf + (madeFt ? .9 : .8); ballPlan.push({ t0: rel + Tf + (madeFt ? 1.2 : .8), t1: back + .2, rest: [lx, .4, lz], hidden: true }); hold(shooterA, back + .2, 99, 'hold'); tt = back + .3; }
+      if (!last) { const back = rel + Tf + (madeFt ? 1.0 : .9); ballPlan.push({ t0: rel + Tf + (madeFt ? 1.2 : .8), t1: back + .2, rest: [lx, .4, lz], hidden: true }); hold(shooterA, back + .2, 99, 'hold'); tt = back + .3; }
       else { tt = rel + Tf + (madeFt ? 1.1 : .9); if (!madeFt) { const reb = def[4]; move(reb, rel + .2, rel + Tf + .8, rimV.x + 2 * ATK, rimV.z - ATK * 3.5, { lin: true }); act(reb, rel + Tf + .5, rel + Tf + 1.2, 'catch'); hold(reb, rel + Tf + .9, 99, 'hold'); GS.rebounder = reb; } }
     }
     ev(tt - .1, () => { GS.score[0] = p.h; GS.score[1] = p.a; renderBug(); GS.lastEnd = madeList[fta - 1] ? 'ft' : 'drb'; });
@@ -807,39 +845,78 @@ function stepActor(a, t, dt) {
   const mv = P.mv; const fastMove = P.moving && a.speed > 6 && mv && !mv.backpedal && !mv.shuffle;
   if (fastMove) faceTarget = P.dir; else if (P.moving && mv && mv.backpedal) faceTarget = faceTarget ?? P.dir + Math.PI;
   if (kind === 'backdown') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z) + Math.PI; }
-  if (kind === 'jumper' || kind === 'layup' || kind === 'dunk' || kind === 'ft' || kind === 'rebound' || kind === 'block') { const r = RIM(); if (kind === 'jumper' || kind === 'ft' || kind === 'layup' || kind === 'dunk') faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); }
-  if (faceTarget != null) { let d = faceTarget - a.face; d = Math.atan2(Math.sin(d), Math.cos(d)); a.face += d * (1 - Math.exp(-dt * (fastMove ? 12 : 7))); }
-  // locomotion blend
-  const s = a.speed; const w = s < .4 ? [1, 0, 0] : s < 7 ? [1 - (s - .4) / 6.6, (s - .4) / 6.6, 0] : [0, Math.max(0, 1 - (s - 7) / 5), Math.min(1, (s - 7) / 5)];
+  if (kind === 'jumper' || kind === 'layup' || kind === 'dunk' || kind === 'ft') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); }
+  let snapFace = false;
+  if (P.root) { faceTarget = P.root.root.yaw; snapFace = t - P.root.t0 < .1; }   // a root-motion clip owns the facing; the clip turns the body itself
+  if (faceTarget != null) { let d = faceTarget - a.face; d = Math.atan2(Math.sin(d), Math.cos(d)); a.face += snapFace ? d : d * (1 - Math.exp(-dt * (fastMove ? 12 : 7))); }
   const shuffle = P.moving && mv && (mv.shuffle || mv.backpedal);
-  a.act.idle.setEffectiveWeight(w[0]); a.act.walk.setEffectiveWeight(w[1]); a.act.run.setEffectiveWeight(w[2]);
+  // ---- clip layer: which mocap clip should drive the body right now ----
+  let want = null, wantLoop = false, wantT0 = 0, wantRate = 1;
+  if (LIB && !a.ref) {
+    if (cur && cur.clip) { want = cur.clip; wantLoop = !!cur.loop || !!META(cur.clip).loop; wantT0 = cur.t0 ?? cur.t0; }
+    else if (kind === 'backdown') want = null;
+    else if (a.carrying) {
+      const sp = a.speed;
+      if (!P.moving || sp < 1.2) want = a.carryMode === 'hold' || a.carryMode === 'post' ? 'triple' : 'dribble_idle';
+      else want = sp < 7 ? 'dribble_walk' : sp < 14 ? 'dribble_jog' : 'dribble_run';
+      wantLoop = true;
+    } else if (a.side === 'def' && (kind == null || kind === 'stance' || kind === 'closeout' || kind === 'laneWait' || kind === 'bodyup' || kind === 'poke' || kind === 'reachin')) {
+      if (!P.moving || a.speed < 1.2) want = 'def_idle';
+      else if (shuffle) { const fr0 = frameOf(a); const mdir = V3(Math.sin(P.dir), 0, Math.cos(P.dir)); const lateral = mdir.dot(fr0.R); const back = mdir.dot(fr0.F) < -.5;
+        want = back ? 'mx_jog_back' : lateral > 0 ? 'def_slide_r' : 'def_slide_l'; }
+      else want = a.speed < 7 ? 'walk' : a.speed < 14 ? 'jog' : 'run';
+      wantLoop = true;
+    } else if (kind == null || kind === 'hold' || kind === 'triple' || kind === 'cheer' || kind === 'three' || kind === 'flex' || kind === 'stance' || kind === 'laneWait') {
+      if (!P.moving || a.speed < 1.2) want = kind === 'hold' || kind === 'triple' ? 'triple' : 'idle';
+      else want = a.speed < 7 ? 'walk' : a.speed < 14 ? 'jog' : 'run';
+      wantLoop = true;
+    }
+    if (want && !HAS(want)) want = null;
+    if (want && wantLoop) { const m = META(want); if (m.travel > 1.5) wantRate = clamp(a.speed / (m.travel / m.dur), .7, 1.5); }
+  }
+  // crossfade the active clip actions; base locomotion fills whatever weight the clips don't take
+  if (want && !a.clipActs[want]) { const ac = a.mixer.clipAction(LIB.clips[want]); ac.setLoop(THREE.LoopRepeat, Infinity); ac.enabled = true; ac.play(); ac.setEffectiveWeight(0); a.clipActs[want] = ac; }
+  for (const [n, ac] of Object.entries(a.clipActs)) {
+    const target = n === want ? 1 : 0; const w0 = a.clipLive[n] || 0; const w = w0 + (target - w0) * (1 - Math.exp(-dt / .12));
+    a.clipLive[n] = w; ac.setEffectiveWeight(w);
+    if (n === want) { if (wantLoop) { ac.paused = false; ac.setEffectiveTimeScale(wantRate); } else { ac.paused = true; ac.setEffectiveTimeScale(0); const m = META(n); ac.time = clamp(t - wantT0, 0, m.dur - 1e-3); } }
+    else if (w < .01) { ac.stop(); delete a.clipActs[n]; delete a.clipLive[n]; }
+  }
+  const clipW = want ? (a.clipLive[want] || 0) : 0; a.clipW = clipW; a.clipName = want;
+  const s = a.speed; const w = s < .4 ? [1, 0, 0] : s < 7 ? [1 - (s - .4) / 6.6, (s - .4) / 6.6, 0] : [0, Math.max(0, 1 - (s - 7) / 5), Math.min(1, (s - 7) / 5)];
+  const base = Math.max(0, 1 - Object.values(a.clipLive).reduce((x, y) => x + y, 0));
+  a.act.idle.setEffectiveWeight(w[0] * base); a.act.walk.setEffectiveWeight(w[1] * base); a.act.run.setEffectiveWeight(w[2] * base);
   a.act.walk.setEffectiveTimeScale(shuffle ? 1.6 : clamp(s / 5, .7, 1.6)); a.act.run.setEffectiveTimeScale(clamp(s / 17, .75, 1.5));
-  // airborne height from the current act
-  a.y = 0; let air = 0, crouchAmt = 0, lean = 0;
-  if (cur && cur.jump != null && (kind === 'jumper' || kind === 'layup' || kind === 'dunk' || kind === 'rebound' || kind === 'block' || kind === 'contest')) {
+  // airborne height from the current act (procedural acts only: clips carry their own hips)
+  a.y = 0; let air = 0, crouchAmt = 0;
+  const procedural = !(cur && cur.clip) && clipW < .5;
+  if (procedural && cur && cur.jump != null && (kind === 'jumper' || kind === 'layup' || kind === 'dunk' || kind === 'rebound' || kind === 'block' || kind === 'contest')) {
     const dur = cur.dur || .6, apex = cur.apex || 1.2, u = (t - cur.jump) / dur;
     if (u < 0) crouchAmt = .6 * smooth01(1 + u * 3);   // load
     else if (u < 1) { a.y = apex * 4 * u * (1 - u); air = 1; } else crouchAmt = .45 * Math.max(0, 1 - (u - 1) * 3);
   }
-  if (kind === 'ft' && cur.jump != null) {   // free throw is a set shot: dip, then rise onto the toes, feet never leave the line
+  if (procedural && kind === 'ft' && cur.jump != null) {   // free throw is a set shot: dip, then rise onto the toes, feet never leave the line
     const u = (t - cur.jump) / .5;
     crouchAmt = u < 0 ? .3 * smooth01(1 + u * 2.5) : u < 1 ? .3 * (1 - smooth01(u)) : 0;
   }
-  if (kind === 'stance' || kind === 'contest' && !air || kind === 'closeout' && !air || kind === 'bodyup') crouchAmt = Math.max(crouchAmt, .45);
-  if (kind === 'dribble' || kind === 'sizeup' || kind === 'backdown') crouchAmt = Math.max(crouchAmt, .28);
-  if (!kind && !a.ref && a.side === 'def' && !P.moving) crouchAmt = Math.max(crouchAmt, .35);
-  if (kind === 'laneWait') crouchAmt = Math.max(crouchAmt, .2);
-  a.mixer.update(dt * (shuffle ? .9 : 1));
+  if (procedural) {
+    if (kind === 'stance' || kind === 'contest' && !air || kind === 'closeout' && !air || kind === 'bodyup') crouchAmt = Math.max(crouchAmt, .45);
+    if (kind === 'dribble' || kind === 'sizeup' || kind === 'backdown') crouchAmt = Math.max(crouchAmt, .28);
+    if (!kind && !a.ref && a.side === 'def' && !P.moving) crouchAmt = Math.max(crouchAmt, .35);
+    if (kind === 'laneWait') crouchAmt = Math.max(crouchAmt, .2);
+  }
+  a.mixer.update(dt * (shuffle && base > .5 ? .9 : 1));
   // cancel any root drift the clips carry
   B.Hips.position.x = 0; B.Hips.position.z = 0;
   place(a); a.model.updateMatrixWorld(true);
   const fr = frameOf(a);
-  // procedural layers
-  if (crouchAmt > 0) crouch(a, crouchAmt);
-  if (air) tuck(a, clamp(a.y / 2, .3, 1));
-  const ramp = cur ? smooth01((t - cur.t0) / .18) * smooth01((cur.t1 - t) / .18) : 0;
-  const arms = (R, L, wgt = 1) => { poseArm(a, 'R', R, fr, wgt * ramp); poseArm(a, 'L', L, fr, wgt * ramp); };
-  switch (kind) {
+  // procedural layers (faded out while a clip owns the body)
+  const pw = 1 - clipW;
+  if (crouchAmt > 0 && pw > .02) crouch(a, crouchAmt, pw);
+  if (air && pw > .02) tuck(a, clamp(a.y / 2, .3, 1), pw);
+  const ramp = (cur ? smooth01((t - cur.t0) / .18) * smooth01((cur.t1 - t) / .18) : 0) * pw;
+  const arms = (R, L, wgt = 1) => { if (ramp <= .01) return; poseArm(a, 'R', R, fr, wgt * ramp); poseArm(a, 'L', L, fr, wgt * ramp); };
+  if (pw > .02) switch (kind) {
     case 'dribble': case 'sizeup': { const side = a.dribbleSide || 'R'; const ph = a.dribblePhase || 0; const down = Math.sin(ph * Math.PI * 2) * .5 + .5;
       const pose = blendPose(POSE.dribbleUp, POSE.dribbleDown, down); if (side === 'R') { poseArm(a, 'R', pose, fr, ramp); poseArm(a, 'L', [[.2, .45, -.85], [.6, .25, -.45]], fr, ramp * .8); } else { poseArm(a, 'L', pose, fr, ramp); poseArm(a, 'R', [[.2, .45, -.85], [.6, .25, -.45]], fr, ramp * .8); }
       if (kind === 'sizeup') { spineLean(a, .25 * ramp); } break; }
@@ -848,16 +925,16 @@ function stepActor(a, t, dt) {
     case 'triple': arms(POSE.triple, POSE.triple); break;
     case 'chestpass': { const u = smooth01((t - cur.t0) / .35); const pz = blendPose(POSE.hold, POSE.chest, u); arms(pz, pz); break; }
     case 'overpass': { const u = smooth01((t - cur.t0) / .35); const pz = blendPose(POSE.hold, POSE.over, u); arms(pz, pz); break; }
-    case 'jumper': case 'ft': case 'post': { const rel = cur.jump + .27; let R, L;
+    case 'jumper': case 'ft': case 'post': { if (cur.jump == null) break; const rel = cur.jump + .27; let R, L;
       if (t < cur.jump - .1) { R = POSE.hold; L = POSE.hold; } else if (t < rel) { const u = smooth01((t - (cur.jump - .1)) / (rel - cur.jump + .1)); R = blendPose(POSE.hold, POSE.set, u); L = blendPose(POSE.hold, POSE.off, u); }
       else if (t < rel + .2) { const u = smooth01((t - rel) / .2); R = blendPose(POSE.set, POSE.release, u); L = blendPose(POSE.off, [[.45, .5, .7], [.3, -.2, .9]], u); }
       else { const u = smooth01((t - rel - .2) / .6); R = blendPose(POSE.release, POSE.follow, u); L = blendPose([[.45, .5, .7], [.3, -.2, .9]], POSE.down, u * .8); }
       arms(R, L); if (t > rel + .3 && kind !== 'ft') spineLean(a, -.1 * ramp); break; }
-    case 'layup': case 'dunk': { const rel = cur.jump + (kind === 'dunk' ? cur.dur * .52 : cur.dur * .42); let R, L;
+    case 'layup': case 'dunk': { if (cur.jump == null) break; const rel = cur.jump + (kind === 'dunk' ? cur.dur * .52 : cur.dur * .42); let R, L;
       if (t < cur.jump - .15) { R = POSE.hold; L = POSE.hold; } else if (t < rel) { const u = smooth01((t - (cur.jump - .15)) / (rel - cur.jump + .15)); R = blendPose(POSE.hold, kind === 'dunk' ? POSE.reach : POSE.layup, u); L = blendPose(POSE.hold, kind === 'dunk' ? [[.2, .35, .9], [.1, -.1, .98]] : [[.3, .4, .6], [.5, -.2, .7]], u); }
       else { const u = smooth01((t - rel) / .45); R = blendPose(kind === 'dunk' ? POSE.reach : POSE.layup, kind === 'dunk' ? [[.55, .2, .8], [.9, -.1, .4]] : POSE.follow, u); L = blendPose([[.3, .4, .6], [.5, -.2, .7]], POSE.down, u); }
       arms(R, L); break; }
-    case 'rebound': case 'block': { const u = smooth01((t - (cur.jump - .15)) / .3); const R = blendPose(POSE.hold, POSE.reach, u); arms(R, kind === 'block' ? blendPose(POSE.hold, [[.2, .5, -.6], [.5, .3, -.3]], u) : R); if (kind === 'block' && t > cur.jump + .25) { const v = smooth01((t - cur.jump - .25) / .25); poseArm(a, 'R', blendPose(POSE.reach, [[.9, .1, .35], [.95, 0, .2]], v), fr, ramp); } break; }
+    case 'rebound': case 'block': { if (cur.jump == null) break; const u = smooth01((t - (cur.jump - .15)) / .3); const R = blendPose(POSE.hold, POSE.reach, u); arms(R, kind === 'block' ? blendPose(POSE.hold, [[.2, .5, -.6], [.5, .3, -.3]], u) : R); if (kind === 'block' && t > cur.jump + .25) { const v = smooth01((t - cur.jump - .25) / .25); poseArm(a, 'R', blendPose(POSE.reach, [[.9, .1, .35], [.95, 0, .2]], v), fr, ramp); } break; }
     case 'contest': case 'closeout': { if (cur.jump != null && t > cur.jump - .1 && kind === 'contest') { const u = smooth01((t - cur.jump + .1) / .25); arms(blendPose(POSE.stance, POSE.reach, u), blendPose(POSE.stance, [[.2, .6, .2], [.5, .4, .1]], u)); } else arms(POSE.stance, POSE.stance); break; }
     case 'stance': case 'bodyup': case 'laneWait': arms(kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, kind === 'laneWait' ? .5 : 1); break;
     case 'screen': arms(POSE.screen, POSE.screen); break;
@@ -869,7 +946,7 @@ function stepActor(a, t, dt) {
     case 'travel': arms(POSE.hold, POSE.hold); break;
     default: if (!a.ref && !P.moving) { if (a.side === 'def') arms(POSE.stance, POSE.stance, .9); else arms(POSE.hips, POSE.hips, .35); }
   }
-  if (!a.ref) lookAt(a, ball.position, kind === 'jumper' || kind === 'ft' ? 0 : .9);
+  if (!a.ref) lookAt(a, ball.position, (kind === 'jumper' || kind === 'ft' || kind === 'layup' || kind === 'dunk') ? 0 : .9 * (1 - clipW * .6));
   place(a); a.model.updateMatrixWorld(true);
 }
 
@@ -881,7 +958,7 @@ function updateBall(t, dt) {
   ball.visible = true;
   if (!seg) return;
   if (t >= seg.t1 && !seg.held && !seg.rest) t = seg.t1 - 1e-4;   // a finished flight parks at its end until the next segment starts
-  if (seg.held) { seg.held.carrying = true; pinToHand(seg.held, seg.mode, t); return; }
+  if (seg.held) { seg.held.carrying = true; seg.held.carryMode = seg.mode; pinToHand(seg.held, seg.mode, t); return; }
   if (seg.rest) { ball.position.set(seg.rest[0], seg.rest[1], seg.rest[2]); ball.visible = !seg.hidden; return; }
   if (seg.pass) { const u = clamp((t - seg.t0) / (seg.t1 - seg.t0) * (seg.pass.cut || 1), 0, 1); if (!seg.p0) { seg.p0 = chestPos(seg.pass.from); seg.p0.y = seg.pass.kind === 'over' ? seg.pass.from.heightFt * 1.05 : seg.pass.from.heightFt * .58; }
     const to = chestPos(seg.pass.to); to.y = seg.pass.to.heightFt * .6; const p = seg.p0.clone().lerp(to, u); const h = seg.pass.kind === 'bounce' ? -(seg.p0.y - BALL_R) * (1 - Math.abs(u - .5) * 2) * 1.0 : seg.pass.kind === 'over' ? 2.5 * 4 * u * (1 - u) : 1.2 * 4 * u * (1 - u);
@@ -899,6 +976,12 @@ function updateBall(t, dt) {
 }
 function pinToHand(a, mode, t) {
   a.model.updateMatrixWorld(true); const fr = frameOf(a);
+  if ((mode === 'dribble' || mode === 'post') && a.clipW > .5 && /^dribble|^mx_dribble|crossover|between|behind|spin|pullup|stepback|euro|floater|layup|finger|hook|dunk/.test(a.clipName || '')) {
+    // mocap dribble: the ball lives under the right hand; it drops to the floor as the hand pushes down and meets the hand on the way up
+    const h = handPos(a); const ht = a.heightFt * .50, hb = a.heightFt * .30; const u = clamp((h.y - hb) / (ht - hb), 0, 1);
+    const y = BALL_R + Math.max(0, h.y - BALL_R - .25) * Math.pow(u, 1.6);
+    ball.position.set(h.x, y, h.z).addScaledVector(fr.F, .1);
+    if (u < .12 && !a.bounced) { a.bounced = true; sndBounce(.45); } if (u > .5) a.bounced = false; ballSpin.set(4, 0, 0); return; }
   if (mode === 'dribble' || mode === 'post') { // the ball bounces beside the dribbling hand
     const period = mode === 'post' ? .62 : a.speed > 10 ? .36 : .46; a.dribblePhase = ((a.dribblePhase || 0) + (t - (a.dribbleT || t)) / period) % 1; a.dribbleT = t;
     const ph = a.dribblePhase; const side = a.dribbleSide === 'L' ? -1 : 1; const handY = a.heightFt * .42; const yy = handY - (handY - BALL_R) * Math.sin(ph * Math.PI);
@@ -1092,6 +1175,7 @@ const botReady = (async () => {
   const g = await new Promise((res, rej) => new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', res, rej));
   g.scene.traverse(o => { if (o.isMesh) { const e = window.PLAYER_MAT[o.material.name] || {}; const m = o.material; if (e.map) m.map = TEX[e.map]; if (e.normal) m.normalMap = TEX[e.normal]; if (e.rough) { m.roughnessMap = TEX[e.rough]; m.metalnessMap = TEX[e.rough]; } m.needsUpdate = true; } });
   BOT = g;
+  try { LIB = await loadClipLibrary('./'); } catch (e) { console.warn('clip library unavailable, procedural animation only', e); LIB = null; }
 })();
 Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(() => {
   resize(); paintShotClock(24);
