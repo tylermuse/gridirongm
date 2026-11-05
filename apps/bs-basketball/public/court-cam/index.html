@@ -981,7 +981,10 @@ function hold(a, t0, t1, mode = 'dribble') { ballPlan.push({ t0, t1, held: a, mo
 /** p: {off:0|1, pt, st, zone, shooter, assister, made, pts, h, a, contested, dunk, blk, orb, drb, to, stl, fouled, fta, ftm, bonusFt, fouler, ftShooter, q, clock, lineups?} */
 function runPossession(p) {
   if (GS.busy) return; GS.busy = true; running = false;
+  if (p.q && p.q !== GS.q) { GS.lastEnd = 'tip'; }   // new period: fresh inbound, ends switch
   if (p.q) GS.q = p.q; if (p.clockStart != null) GS.clock = p.clockStart;
+  // resync the score to the start of this possession (the viewer may have jumped ahead)
+  if (p.h != null && p.a != null) { const pts = p.pts || 0; GS.score = [p.h - (p.off === 0 ? pts : 0), p.a - (p.off === 1 ? pts : 0)]; }
   setOffense(p.off);
   if (p.lineups) { if (p.lineups.home) substitute(0, p.lineups.home); if (p.lineups.away) substitute(1, p.lineups.away); setOffense(p.off); }
   // continuity: putback only makes sense right after our own offensive board
