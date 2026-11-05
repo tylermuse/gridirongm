@@ -136,6 +136,32 @@ export const PLAY_LOG_FIELDS = {
 } as const;
 export type PlayLogFieldCode = typeof PLAY_LOG_FIELDS[keyof typeof PLAY_LOG_FIELDS];
 
+/** Half-court spots, offense attacking the far basket, from the shooter's view.
+ *  Threes: lc/rc corners, lw/rw wings, top. Midrange: lb/rb baselines, le/re
+ *  elbows, ft nail. At rim: l/c/r approach side. Post: l/r block. */
+export type ShotZone = 'lc' | 'lw' | 'top' | 'rw' | 'rc' | 'lb' | 'le' | 'ft' | 're' | 'rb' | 'l' | 'c' | 'r';
+/** The action that produced the shot (or turnover):
+ *  pnr = ball-screen, iso = one-on-one, spot = catch-and-shoot off a swing,
+ *  drive = straight-line attack, post = back-down, cut = backdoor/baseline cut,
+ *  trans = fast break off the previous stop, putback = right off an offensive board. */
+export type PlayType = 'pnr' | 'iso' | 'spot' | 'drive' | 'post' | 'cut' | 'trans' | 'putback';
+
+/** FNV-1a — a stable per-possession hash so the log's shape fields are a pure
+ *  function of (seed, possession index, shooter): no RNG draws, so every saved
+ *  game still replays to the same box score. */
+function shapeHash(seed: string, index: number, salt: string): number {
+  const s = `${seed}|${index}|${salt}`;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function hashPick<T>(items: readonly T[], weights: readonly number[], h: number): T {
+  let total = 0; for (const w of weights) total += w;
+  let r = ((h % 10007) / 10007) * total;
+  for (let i = 0; i < items.length; i++) { r -= weights[i]; if (r <= 0) return items[i]; }
+  return items[items.length - 1];
+}
+
 /** One logged moment. `k:'p'` = a possession (with its ordered stat events),
  *  `k:'s'` = a substitution (the five now on the floor for a side). */
 export type PlayLogEntry =
@@ -157,6 +183,14 @@ export type PlayLogEntry =
       c?: 1;
       /** End-game intentional foul (two FTs, no shot). */
       f?: 'int';
+      /** Where the shot went up (see `ShotZone`): a spot on the half court the
+       *  live 3D sim animates to. Hashed from seed + possession index, never an
+       *  RNG draw, so adding it moved no game outcome. */
+      z?: ShotZone;
+      /** How the possession got there — the action the 3D sim choreographs. */
+      pt?: PlayType;
+      /** The at-rim finish was a dunk. */
+      d?: 1;
       /** Running score after the possession. */
       h: number;
       a: number;
@@ -305,10 +339,68 @@ export function simBasketballGame(
     if (i === undefined) { i = logIds.length; logIds.push(id); logIdx.set(id, i); }
     return i;
   };
+  /** The shape of the possession for the live 3D sim: where the shot went up,
+   *  what action got it there, dunk or not. Derived from the stat events plus a
+   *  hash — reading the log back gives the same shape every replay. */
+  const possessionShape = (
+    result: ReturnType<typeof simPossession>, offenseIsHome: boolean,
+  ): { z?: ShotZone; pt?: PlayType; d?: 1 } => {
+    const idx = playLog.length;
+    const prev = playLog.length ? playLog[playLog.length - 1] : null;
+    const shooterEv = result.events.find(ev => ev.field === 'fieldGoalsAttempted');
+    const shooter = shooterEv ? (offenseIsHome ? homePlayerById : awayPlayerById).get(shooterEv.playerId) : undefined;
+    const h = shapeHash(context.rngSeed, idx, shooterEv?.playerId ?? 'none');
+    // The box score only credits assists on makes; a missed catch-and-shoot was
+    // still a catch-and-shoot, so misses get the same assisted share by hash.
+    const made = result.events.some(ev => ev.field === 'fieldGoalsMade');
+    const ASSISTED_SHARE: Record<string, number> = { three: 0.82, midrange: 0.45, at_rim: 0.62, post: 0.38 };
+    const assisted = result.events.some(ev => ev.field === 'assists')
+      || (!made && !!result.shotType && ((h >>> 20) % 1000) / 1000 < ASSISTED_SHARE[result.shotType]);
+    // Same team kept it: an offensive board, so this is the putback/second chance.
+    const prevP = prev && prev.k === 'p' ? prev : null;
+    const afterOrb = !!prevP && prevP.o === (offenseIsHome ? 'h' : 'a') && prevP.e.some(e => e[1] === 'orb');
+    // Off a live-ball steal or a defensive board with the ball pushed quickly.
+    const afterStop = !!prevP && prevP.o !== (offenseIsHome ? 'h' : 'a')
+      && (prevP.e.some(e => e[1] === 'stl') || (prevP.e.some(e => e[1] === 'drb') && result.secondsElapsed < 9));
+    const st = result.shotType;
+    if (!st) {
+      // Turnover / bonus FTs: the action still needs a shape to animate.
+      const pt = afterOrb ? 'putback' : afterStop && (h & 3) !== 0 ? 'trans' : hashPick(['pnr', 'iso', 'drive', 'spot'] as const, [4, 3, 3, 2], h >>> 3);
+      return { pt };
+    }
+    const r = shooter?.ratings;
+    const pos = shooter?.sportData.position;
+    const big = pos === 'C' || pos === 'PF';
+    let pt: PlayType;
+    if (afterOrb && st !== 'three') pt = 'putback';
+    else if (afterStop && (h & 3) !== 0 && st !== 'post') pt = 'trans';
+    else if (st === 'post') pt = 'post';
+    else if (st === 'three') pt = assisted ? hashPick(['spot', 'pnr', 'trans'] as const, [7, 2, 1], h >>> 4) : hashPick(['pnr', 'iso'] as const, [3, 2], h >>> 4);
+    else if (st === 'at_rim') pt = assisted ? hashPick(['cut', 'pnr', 'drive'] as const, [big ? 6 : 3, 3, 3], h >>> 4) : hashPick(['drive', 'iso', 'pnr'] as const, [5, 2, 3], h >>> 4);
+    else pt = assisted ? hashPick(['spot', 'pnr'] as const, [3, 2], h >>> 4) : hashPick(['iso', 'pnr', 'drive'] as const, [4, 3, 1], h >>> 4);
+    let z: ShotZone;
+    if (st === 'three') z = pt === 'spot' || pt === 'cut'
+      ? hashPick(['lc', 'lw', 'top', 'rw', 'rc'] as const, [5, 3, 2, 3, 5], h >>> 9)
+      : hashPick(['lw', 'top', 'rw'] as const, [3, 4, 3], h >>> 9);
+    else if (st === 'midrange') z = hashPick(['lb', 'le', 'ft', 're', 'rb'] as const, [2, 3, 2, 3, 2], h >>> 9);
+    else if (st === 'post') z = (h >>> 9) & 1 ? 'l' : 'r';
+    else z = hashPick(['l', 'c', 'r'] as const, [3, 2, 3], h >>> 9);
+    // Dunk: at-rim makes by athletes, more so on cuts, drives and breaks; a
+    // contested finish in traffic is more often a layup.
+    let d: 1 | undefined;
+    if (st === 'at_rim' && made && r) {
+      const athlete = (r.vertical - 50) / 50 + (r.height - 78) / 20 + (r.finishing - 60) / 80;
+      let p = 0.08 + athlete * 0.3 + (pt === 'cut' || pt === 'trans' ? 0.2 : pt === 'putback' ? 0.1 : 0) - (result.contested ? 0.15 : 0);
+      p = Math.max(0.03, Math.min(0.85, p));
+      if (((h >>> 14) % 1000) / 1000 < p) d = 1;
+    }
+    return { z, pt, ...(d ? { d } : {}) };
+  };
   const logPossession = (
     q: number, secondsLeft: number, offenseIsHome: boolean,
     result: ReturnType<typeof simPossession>,
   ) => {
+    const shape = possessionShape(result, offenseIsHome);
     playLog.push({
       k: 'p', q, t: Math.max(0, Math.round(secondsLeft)), o: offenseIsHome ? 'h' : 'a',
       e: result.events.map(ev => (ev.delta !== undefined && ev.delta !== 1
@@ -318,6 +410,7 @@ export function simBasketballGame(
       ...(result.shotType ? { st: result.shotType } : {}),
       ...(result.contested ? { c: 1 as const } : {}),
       ...(result.intentional ? { f: 'int' as const } : {}),
+      ...shape,
       h: homeScore, a: awayScore,
     });
   };

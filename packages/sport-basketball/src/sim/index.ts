@@ -45,6 +45,8 @@ export type {
   PlayLog,
   PlayLogEntry,
   PlayLogFieldCode,
+  ShotZone,
+  PlayType,
 } from './game';
 export { PLAY_LOG_FIELDS } from './game';
 
