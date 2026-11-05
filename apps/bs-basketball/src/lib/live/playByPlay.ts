@@ -49,7 +49,7 @@ export interface LiveEvent {
   possIdx?: number;
 }
 
-interface Basket { side: Side; playerId: string; pts: number; kind: '3' | '2' | 'ft' }
+interface Basket { side: Side; playerId: string; pts: number; kind: '3' | '2' | 'ft' | 'and1' }
 type Players = Record<string, BasketballPlayer>;
 
 // Small seeded PRNG for stable, repeatable replays.
@@ -119,9 +119,18 @@ function basketsFor(team: BasketballTeam, side: Side, box: Record<string, Partia
     const threes = s.threePointsMade ?? 0;
     const twos = Math.max(0, (s.fieldGoalsMade ?? 0) - threes);
     const fts = s.freeThrowsMade ?? 0;
+    // Completed and-1s (made 2-pt FG + converted bonus FT, tracked by the sim as
+    // `and1sMade`). Collapse each into a single 3-pt "and-1" play: it consumes one
+    // regular 2 and one made FT, so per-player point totals and quarter sums stay
+    // identical. Clamped to what the box score actually holds (old saves have no
+    // and1sMade → 0, so this is a no-op and they render exactly as before).
+    const and1s = Math.max(0, Math.min(s.and1sMade ?? 0, twos, fts));
+    const plainTwos = twos - and1s;
+    const plainFts = fts - and1s;
     for (let i = 0; i < threes; i++) out.push({ side, playerId: pid, pts: 3, kind: '3' });
-    for (let i = 0; i < twos; i++) out.push({ side, playerId: pid, pts: 2, kind: '2' });
-    for (let i = 0; i < fts; i++) out.push({ side, playerId: pid, pts: 1, kind: 'ft' });
+    for (let i = 0; i < and1s; i++) out.push({ side, playerId: pid, pts: 3, kind: 'and1' });
+    for (let i = 0; i < plainTwos; i++) out.push({ side, playerId: pid, pts: 2, kind: '2' });
+    for (let i = 0; i < plainFts; i++) out.push({ side, playerId: pid, pts: 1, kind: 'ft' });
   }
   return shuffle(out, rand);
 }
@@ -151,6 +160,7 @@ function flavorFor(team: BasketballTeam, side: Side, box: Record<string, Partial
 function scoreText(b: Basket, players: Players, rand: () => number): string {
   const who = nm(players, b.playerId);
   if (b.kind === '3') return `${who} ${pick(['drains a three', 'buries it from deep', 'hits a triple'], rand)}`;
+  if (b.kind === 'and1') return `${who} ${pick(['scores through contact — and-1!', 'finishes through the foul — and-1!', 'muscles it in — and the and-1!'], rand)}`;
   if (b.kind === 'ft') return `${who} ${pick(['knocks down the free throw', 'makes it at the line'], rand)}`;
   return `${who} ${pick(['scores inside', 'hits the jumper', 'finishes at the rim', 'gets the bucket'], rand)}`;
 }
@@ -198,7 +208,8 @@ export function synthesizePlayByPlay(
       if (item.type === 'basket') {
         if (item.b.side === 'home') home += item.b.pts; else away += item.b.pts;
         const kind: LiveEventKind = item.b.kind === '3' ? 'make3' : item.b.kind === 'ft' ? 'ft' : 'make2';
-        events.push({ quarter: q + 1, clock, side: item.b.side, text: scoreText(item.b, players, rand), home, away, scoring: true, kind, points: item.b.pts });
+        const isAnd1 = item.b.kind === 'and1';
+        events.push({ quarter: q + 1, clock, side: item.b.side, text: scoreText(item.b, players, rand), home, away, scoring: true, kind, points: item.b.pts, ...(isAnd1 ? { and1: true } : {}) });
       } else {
         events.push({ quarter: q + 1, clock, side: item.f.side, text: `${nm(players, item.f.playerId)} ${item.f.verb}`, home, away, scoring: false, kind: item.f.kind, points: 0 });
       }
