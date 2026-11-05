@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>harness</title>
+<style>html,body{margin:0;height:100%;background:#000}iframe{width:100%;height:100%;border:0}</style>
+<iframe id="f" src="index.html?embed=1&qa=1" allow="autoplay"></iframe>
+<script>
+// Replays a real game's adapter output through the embed protocol; window.__h exposes progress for the headless runner.
+const f = document.getElementById('f'); const post = m => f.contentWindow.postMessage(m, '*');
+window.__h = { ready: false, done: [], errors: [], i: 0, fixture: null };
+addEventListener('message', ev => { const m = ev.data; if (!m || !m.type) return;
+  if (m.type === 'bsh:ready' && !window.__h.ready) { window.__h.ready = true; }
+  else if (m.type === 'bsh:done') window.__h.done.push([m.id, m.how]);
+  else if (m.type === 'bsh:error') window.__h.errors.push(m.message); });
+fetch('_fixture.json').then(r => r.json()).then(fx => { window.__h.fixture = fx; });
+window.__h.setup = () => { const fx = window.__h.fixture; post({ type: 'bsh:setup', home: fx.home, away: fx.away, quarter: 1, clock: 720, homeScore: 0, awayScore: 0, possession: fx.possessions[0].off === 0 ? 'home' : 'away' }); post({ type: 'bsh:speed', rate: 1 }); };
+window.__h.send = i => { const p = window.__h.fixture.possessions[i]; post({ type: 'bsh:poss', id: p.id, p }); return p; };
+window.__h.sim = () => f.contentWindow.__sim;
+</script>
+<!-- QA only: run `npx vitest run tests/integration/basketball-court-cam-adapter.test.ts` (writes /tmp/court-cam-fixture.json),
+     copy it here as _fixture.json, serve apps/bs-basketball/public and open this page; it replays the game through the embed protocol. -->
