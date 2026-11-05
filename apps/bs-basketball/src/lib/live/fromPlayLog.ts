@@ -161,7 +161,7 @@ export function eventsFromPlayLog(playLog: PlayLog, players: Players, homeAbbr: 
       return;
     }
 
-    narratePossession(entry, idx, ids, players, push, () => ({ home, away }), (h, a) => { home = h; away = a; });
+    narratePossession(entry, idx, ids, players, e => push({ ...e, possIdx: idx }), () => ({ home, away }), (h, a) => { home = h; away = a; });
   });
 
   if (log.length) {

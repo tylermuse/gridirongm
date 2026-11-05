@@ -16,9 +16,11 @@ import { eventsFromPlayLog, hasPlayLog } from '@/lib/live/fromPlayLog';
 import { computeEventBeats } from '@/lib/live/beats';
 import { computeMoments, type MomentTone } from '@/lib/live/moments';
 import { winProbability, secondsLeftInGame } from '@/lib/live/winProbability';
+import { LiveSim3D, SIM_RATE, useSim3DMode } from '@/components/live/LiveSim3D';
+import { isRealPhoto, lineupsAt, sampleSkinFromPhoto, toSimPlayers, toSimPossession, toSimTeam, type SimPossession } from '@/lib/live/liveSim3d';
 import { useLiveGameTelemetry } from '@/lib/telemetry/useLiveGameTelemetry';
 import type { BaseGameResult } from '@bs/core/adapter';
-import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
+import type { BasketballPlayer, BasketballStats, BasketballTeam, PlayLog } from '@bs/sport-basketball';
 
 type GameResult = BaseGameResult<BasketballStats>;
 type Speed = 1 | 2 | 5 | 'max';
@@ -39,6 +41,11 @@ const TONE: Record<MomentTone, string> = {
 // too — same gating as BS Football. This env flag is only a local-dev override
 // so the broadcast can be tested on localhost without a premium account.
 const GAME_AUDIO_DEV_OVERRIDE = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
+// Court Cam (live 3D sim) is Premium too; this flag lets it be tested locally.
+const SIM3D_DEV_OVERRIDE = process.env.NEXT_PUBLIC_SIM3D === '1';
+/** Skin tones measured from headshots, per photo URL, for the whole session (null = couldn't read it). */
+const photoSkinCache = new Map<string, string | null>();
+function clockSecs(clock: string): number { const [m, s] = clock.split(':').map(Number); return (m || 0) * 60 + (s || 0); }
 const PREGAME_AUTO_OFF_KEY = 'bsbb-pregame-auto-off';
 /** Post-call dwell during a broadcast, per speed (the call is never cut). */
 const BROADCAST_DWELL: Record<Speed, number> = { 1: 900, 2: 350, 5: 80, max: 0 };
@@ -86,7 +93,7 @@ export function LiveViewer({
   const game = league?.games.find(g => g.id === userGameId) as GameResult | undefined;
   const home = game ? teamById.get(game.homeTeamId) ?? null : null;
   const away = game ? teamById.get(game.awayTeamId) ?? null : null;
-  const players = (league?.players ?? {}) as Players;
+  const players = useMemo(() => (league?.players ?? {}) as Players, [league?.players]);
 
   const real = !!game && hasPlayLog(game.sportData);
   const events = useMemo(() => {
@@ -119,6 +126,46 @@ export function LiveViewer({
 
   const { tier, isAdmin, isFoundingMember } = useSubscription();
   const isPremium = tier === 'premium' || isAdmin || isFoundingMember;
+  // ---- Court Cam (live 3D sim): one possession at a time, the viewer holds until the sim is done ----
+  const canSim3d = SIM3D_DEV_OVERRIDE || isPremium;
+  const [sim3dPref, setSim3dPref] = useSim3DMode();
+  const sim3dEnabled = real && canSim3d && sim3dPref;
+  const [sim3dActive, setSim3dActive] = useState(false);
+  const onSim3dActive = useCallback((v: boolean) => setSim3dActive(v), []);
+  const playLog = real && game ? (game.sportData as { playLog: PlayLog }).playLog : null;
+  // The possession whose first event the cursor just revealed — that's the one to animate.
+  const lastEv = cursor > 0 ? events[cursor - 1] : null;
+  const prevEv = cursor > 1 ? events[cursor - 2] : null;
+  const possIdx = lastEv?.possIdx != null && lastEv.possIdx !== prevEv?.possIdx ? lastEv.possIdx : null;
+  const animatedPossRef = useRef<number | null>(null);
+  const [photoSkins, setPhotoSkins] = useState<Record<string, string>>({});
+  const simLineups = useMemo(() => (playLog && sim3dEnabled ? lineupsAt(playLog, possIdx ?? Math.max(0, cursor - 1)) : null), [playLog, sim3dEnabled, possIdx, cursor]);
+  const photoKey = useMemo(() => simLineups ? [...simLineups.home, ...simLineups.away].map(id => players[id]?.sportData?.photoUrl).filter(isRealPhoto).join('|') : '', [simLineups, players]);
+  useEffect(() => {
+    if (!sim3dEnabled || !photoKey) return;
+    let live = true;
+    const urls = photoKey.split('|').filter(u => !photoSkinCache.has(u));
+    const known = () => Object.fromEntries([...photoSkinCache].filter((e): e is [string, string] => !!e[1]));
+    if (!urls.length) { setPhotoSkins(known()); return; }
+    Promise.all(urls.map(u => sampleSkinFromPhoto(u).then(sk => { photoSkinCache.set(u, sk); }))).then(() => { if (live) setPhotoSkins(known()); });
+    return () => { live = false; };
+  }, [sim3dEnabled, photoKey]);
+  const simPossession = useMemo<SimPossession | null>(() => {
+    if (!sim3dEnabled || !playLog || possIdx == null) return null;
+    return toSimPossession(playLog, possIdx, players, photoSkins);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- skins only label the bodies; a change must not re-send the possession
+  }, [sim3dEnabled, playLog, possIdx, players]);
+  useEffect(() => { if (simPossession) animatedPossRef.current = simPossession.id; }, [simPossession]);
+  const simHome = useMemo(() => (home && away && simLineups ? toSimTeam(home, 'home', away, toSimPlayers(simLineups.home, players, photoSkins)) : null), [home, away, simLineups, players, photoSkins]);
+  const simAway = useMemo(() => (home && away && simLineups ? toSimTeam(away, 'away', home, toSimPlayers(simLineups.away, players, photoSkins)) : null), [home, away, simLineups, players, photoSkins]);
+  // Game state when the sim (re)mounts: wherever the viewer is right now.
+  const simSetup = useMemo(() => {
+    if (!sim3dEnabled) return null;
+    const e = cursor > 0 ? events[cursor - 1] : null;
+    const first = events.find(x => x.possIdx != null);
+    return { quarter: e?.quarter ?? 1, clock: e ? clockSecs(e.clock) : 720, homeScore: e?.home ?? 0, awayScore: e?.away ?? 0, possession: (e?.side ?? first?.side ?? 'home') as 'home' | 'away' };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- captured once per enable, not per event
+  }, [sim3dEnabled, events]);
   const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || isPremium;
   // The dev override unlocks the spoken pregame/halftime buttons too (the
   // routes skip the Premium check when Supabase isn't configured locally).
@@ -238,9 +285,11 @@ export function LiveViewer({
   // Playback: per-event delay — scoring plays and banners linger, crunch time
   // slows down, quiet events (rapid subs) flash by.
   useEffect(() => {
-    if (paused || atEnd || speed === 'max' || halftimeOpen || pregameOpen || broadcastDriving) return;
+    if (paused || atEnd || speed === 'max' || halftimeOpen || pregameOpen || broadcastDriving || sim3dActive) return;
     const next = events[cursor];
     let ms = 1100 / speed;
+    // the rest of a possession the Court Cam already animated (rebound, free throws) flashes through
+    if (sim3dEnabled && next?.possIdx != null && next.possIdx === animatedPossRef.current) ms = 140;
     if (next?.quiet) ms *= 0.15;
     else if (next?.kind === 'rebound') ms *= 0.55;
     else if (next?.kind === 'period') ms *= 1.6;
@@ -248,7 +297,7 @@ export function LiveViewer({
     if (moments[cursor]?.crunch) ms *= 1.7;
     const id = window.setTimeout(() => setCursor(c => Math.min(events.length, c + 1)), ms);
     return () => window.clearTimeout(id);
-  }, [paused, atEnd, speed, halftimeOpen, pregameOpen, broadcastDriving, cursor, events, moments]);
+  }, [paused, atEnd, speed, halftimeOpen, pregameOpen, broadcastDriving, sim3dActive, sim3dEnabled, cursor, events, moments]);
 
   // Halftime break — pause once at the half (not when skipping to the end).
   // During a broadcast it opens from onCallDone instead, once the half is called.
@@ -300,15 +349,18 @@ export function LiveViewer({
     return { lines, onFloor };
   }, [events, cursor]);
 
-  const toast = last ? moments[cursor - 1]?.chip ?? null : null;
+  // While the Court Cam is animating a possession, the score, feed and banner hold at the previous event (no spoilers).
+  const shown = sim3dEnabled && sim3dActive && cursor > 0 ? cursor - 1 : cursor;
+  const lastShown = shown > 0 ? events[shown - 1] : null;
+  const toast = lastShown ? moments[shown - 1]?.chip ?? null : null;
 
   if (!game || !home || !away) return null;
 
-  const score = last ? { home: last.home, away: last.away } : { home: 0, away: 0 };
+  const score = lastShown ? { home: lastShown.home, away: lastShown.away } : { home: 0, away: 0 };
   const progress = events.length ? cursor / events.length : 1;
-  const qLabel = last ? quarterLabel(last.quarter) : '1st';
-  const clock = last ? last.clock : '12:00';
-  const feed = events.slice(0, cursor).map((e, i) => ({ e, i })).filter(x => !x.e.quiet).reverse();
+  const qLabel = lastShown ? quarterLabel(lastShown.quarter) : '1st';
+  const clock = lastShown ? lastShown.clock : '12:00';
+  const feed = events.slice(0, shown).map((e, i) => ({ e, i })).filter(x => !x.e.quiet).reverse();
   const wp = last ? winProbability(last.home - last.away, atEnd ? 0 : secondsLeftInGame(last.quarter, last.clock)) : winProbability(0, 2880);
   const wpLeader = wp >= 0.5 ? home : away;
   const wpPct = Math.round((wp >= 0.5 ? wp : 1 - wp) * 100);
@@ -350,16 +402,22 @@ export function LiveViewer({
           <ScoreSide team={home} score={score.home} align="right" leading={score.home > score.away} />
         </div>
 
-        <div className="hidden md:block max-w-lg mx-auto mt-3 relative">
+        {sim3dEnabled && (
+          <div className="max-w-3xl mx-auto mt-3 relative">
+            <LiveSim3D enabled={sim3dEnabled} possession={simPossession} disabled={speed === 'max' || paused || halftimeOpen || pregameOpen} homeTeam={simHome} awayTeam={simAway} setup={simSetup}
+              clock={!sim3dActive && last ? { secs: clockSecs(last.clock), quarter: last.quarter } : null} rate={SIM_RATE[String(speed)] ?? 1.3} onActiveChange={onSim3dActive} />
+          </div>
+        )}
+        <div className={`${sim3dEnabled ? 'hidden' : 'hidden md:block'} max-w-lg mx-auto mt-3 relative`}>
           <CourtCanvas home={home} away={away} last={last} cursor={cursor} shots={shots} />
           {toast && (
-            <div key={cursor} className="absolute inset-x-0 -bottom-3 flex justify-center pointer-events-none">
+            <div key={shown} className="absolute inset-x-0 -bottom-3 flex justify-center pointer-events-none">
               <span className="text-white font-black text-sm px-4 py-1 rounded-full shadow-lg animate-[bounce_0.6s_ease-out_1]" style={{ background: TONE[toast.tone] }}>{toast.text}</span>
             </div>
           )}
         </div>
         {toast && (
-          <div key={`m-${cursor}`} className="md:hidden flex justify-center mt-2">
+          <div key={`m-${shown}`} className="md:hidden flex justify-center mt-2">
             <span className="text-white font-black text-xs px-3 py-1 rounded-full" style={{ background: TONE[toast.tone] }}>{toast.text}</span>
           </div>
         )}
@@ -445,6 +503,16 @@ export function LiveViewer({
               ))}
             </div>
           )}
+          {real && (canSim3d ? (
+            <button onClick={() => setSim3dPref(!sim3dPref)} className="rounded-lg px-3 py-1.5 text-sm font-bold transition-colors" title="Court Cam — live 3D view of every possession"
+              style={sim3dPref ? { background: '#7c3aed', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--text-sec)' }}>
+              🎥 {sim3dPref ? 'Court Cam on' : 'Court Cam'}
+            </button>
+          ) : (
+            <Link href="/pricing" className="rounded-lg px-3 py-1.5 text-sm font-bold bg-[var(--surface-2)] text-[var(--text-sec)]" title="Court Cam — live 3D view of every possession — is a Premium feature">
+              🎥 Court Cam <span className="text-[10px] font-black uppercase tracking-wider text-[#7c3aed]">Premium</span>
+            </Link>
+          ))}
           {!atEnd && real && (
             <button onClick={() => jumpTo(jumpTarget(events, cursor))} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--foreground)]">
               Next quarter ⏭

@@ -45,6 +45,8 @@ export interface LiveEvent {
   onFloor?: string[];
   /** Real but low-signal (e.g. a rapid-fire sub) — feed hides it, state still applies. */
   quiet?: boolean;
+  /** Index of the play-log possession entry this event came from (real-log games only); the 3D sim plays one possession per index. */
+  possIdx?: number;
 }
 
 interface Basket { side: Side; playerId: string; pts: number; kind: '3' | '2' | 'ft' }
