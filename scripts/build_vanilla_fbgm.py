@@ -60,11 +60,18 @@ def shift_drafts(d):
     return npros, ndp
 
 
+FBGM_MAX_ROSTER = 90  # 53-man + practice squad + IR; teams carry 69-87 players
+
+
 def strip_bs_blocks(d):
     # BS Football-only real-season block (box scores keyed for BS); stock FBGM
     # reads the real records, schedule and stats rows it needs elsewhere.
     d.pop("bsRealSeason", None)
     d.pop("bsCoaches", None)  # BS-only real head coaches; stock FBGM has no coaches
+    # Stock FBGM refuses to sim while the user's team is over maxRosterSize, and
+    # every team here is over the 60 BS Football uses (practice squad + IR are on
+    # the roster). Raise the cap for the downloads so Play works out of the box.
+    d["gameAttributes"]["maxRosterSize"] = FBGM_MAX_ROSTER
 
 
 def rewind_to_week1(d):
