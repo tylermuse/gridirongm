@@ -774,15 +774,15 @@ function choreograph(p) {
     move(shooterA, t0 - .9, t0 + .2, lx, lz); faceTo(shooterA, t0 - .9, 'rim'); ballPlan.push({ t0: ballAt, t1: t0 + .5, rest: [lx, .4, lz], hidden: true }); hold(shooterA, t0 + .5, 99, 'hold');
     let tt = t0 + .6; const madeList = makes || Array.from({ length: fta }, (_, i) => i < ftm);
     for (let i = 0; i < fta; i++) {
-      const tStart = tt; act(shooterA, tStart, tStart + 2.4, 'ft', { jump: tStart + 1.55 }); const rel = tStart + 1.82; hold(shooterA, tStart + 1.2, rel, 'ft'); const Tf = .95; const madeFt = madeList[i];
+      const tStart = tt; act(shooterA, tStart, tStart + 2.0, 'ft', { jump: tStart + 1.15 }); const rel = tStart + 1.42; hold(shooterA, tStart + .9, rel, 'ft'); const Tf = .95; const madeFt = madeList[i];
       const target = madeFt ? V3(rimV.x, COURT.RIM_Y + .1, rimV.z) : V3(rimV.x + .6, COURT.RIM_Y + .05, rimV.z - ATK * .7);
       ballPlan.push({ t0: rel, t1: rel + Tf, shot: { from: shooterA, T: Tf, to: target, made: madeFt } });
       ev(tStart + .2, () => { $('sit').textContent = `FT ${i + 1} OF ${fta}`; });
       if (madeFt) { ballPlan.push({ t0: rel + Tf, t1: rel + Tf + 1.4, net: { at: rel + Tf, x: rimV.x, z: rimV.z } }); ev(rel + Tf, () => { sndSwish(); GS.score[GS.off] += 1; renderBug(); for (const n of netMats) if (Math.abs(n.net.position.z - rimV.z) < 1) n.t = T; crowd(.2, .6); }); }
       else { ballPlan.push({ t0: rel + Tf, t1: rel + Tf + .9, rimOut: { from: target, T: .9, to: V3(rimV.x + 2 * ATK, 5, rimV.z - ATK * 3) } }); ev(rel + Tf, () => { sndRim(); sndPlay('groan', .2); }); }
       const last = i === fta - 1;
-      if (!last) { const back = rel + Tf + (madeFt ? 1.0 : .9); ballPlan.push({ t0: rel + Tf + (madeFt ? 1.4 : .9), t1: back + .3, rest: [lx, .4, lz], hidden: true }); hold(shooterA, back + .3, 99, 'hold'); tt = back + .5; }
-      else { tt = rel + Tf + (madeFt ? 1.3 : 1.0); if (!madeFt) { const reb = def[4]; move(reb, rel + .2, rel + Tf + .8, rimV.x + 2 * ATK, rimV.z - ATK * 3.5, { lin: true }); act(reb, rel + Tf + .5, rel + Tf + 1.2, 'catch'); hold(reb, rel + Tf + .9, 99, 'hold'); GS.rebounder = reb; } }
+      if (!last) { const back = rel + Tf + (madeFt ? .9 : .8); ballPlan.push({ t0: rel + Tf + (madeFt ? 1.2 : .8), t1: back + .2, rest: [lx, .4, lz], hidden: true }); hold(shooterA, back + .2, 99, 'hold'); tt = back + .3; }
+      else { tt = rel + Tf + (madeFt ? 1.1 : .9); if (!madeFt) { const reb = def[4]; move(reb, rel + .2, rel + Tf + .8, rimV.x + 2 * ATK, rimV.z - ATK * 3.5, { lin: true }); act(reb, rel + Tf + .5, rel + Tf + 1.2, 'catch'); hold(reb, rel + Tf + .9, 99, 'hold'); GS.rebounder = reb; } }
     }
     ev(tt - .1, () => { GS.score[0] = p.h; GS.score[1] = p.a; renderBug(); GS.lastEnd = madeList[fta - 1] ? 'ft' : 'drb'; });
     return finish(tt + .2, 'ft');
@@ -914,12 +914,12 @@ function camGoal(t) {
   const lookZ = clamp(b.z, -40, 40), lookX = clamp(b.x * .35, -8, 8);
   let mode = CAM.mode;
   if (CAM.auto && CAM.cut && t < CAM.cutUntil) mode = CAM.cut;
-  if (mode === 'broadcast') return { pos: V3(-72, 30, lookZ * .62), look: V3(lookX, 5.5, lookZ), fov: 28 };
+  if (mode === 'broadcast') { const z = clamp(b.z, -34, 34); return { pos: V3(-70, 27, z * .55), look: V3(lookX * .6, 4.5, z), fov: 21.5 }; }
   if (mode === 'chase') { const back = -ATK; const cz = clamp(b.z + back * 26, -44, 44); const nearEnd = Math.max(0, 1 - Math.abs(cz - (b.z + back * 26)) / 8); return { pos: V3(b.x * .45, 13 + (1 - nearEnd) * 9, cz), look: V3(b.x * .3, 6, lerp(b.z, r[2], .55)), fov: 42 }; }
   if (mode === 'close') { return { pos: V3(b.x - 13, 6.5, b.z - ATK * 9), look: V3(b.x, 5, b.z), fov: 36 }; }
   if (mode === 'high') return { pos: V3(-85, 62, lookZ * .3), look: V3(0, 2, lookZ * .7), fov: 30 };
-  if (mode === 'baseline') { const sgn = b.x >= 0 ? 1 : -1; return { pos: V3(-sgn * 26, 5.5, r[2] + ATK * 1.5), look: V3(0, 7.5, r[2] - ATK * 9), fov: 38 }; }
-  if (mode === 'under') { const sgn = b.x >= 0 ? 1 : -1; return { pos: V3(-sgn * 16, 4.0, r[2] + ATK * 5), look: V3(0, 8.5, r[2] - ATK * 4), fov: 44 }; }
+  if (mode === 'baseline') { const sgn = b.x >= 0 ? 1 : -1; return { pos: V3(-sgn * 33, 9.5, r[2] + ATK * 1), look: V3(0, 7, r[2] - ATK * 10), fov: 30 }; }
+  if (mode === 'under') { const sgn = b.x >= 0 ? 1 : -1; return { pos: V3(-sgn * 31, 7.5, r[2] + ATK * 1.5), look: V3(0, 8, r[2] - ATK * 6), fov: 34 }; }
   return { pos: V3(-72, 30, 0), look: V3(0, 5, 0), fov: 28 };
 }
 let camSnap = true;
