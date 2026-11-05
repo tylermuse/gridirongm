@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>clip preview</title>
+<style>html,body{margin:0;height:100%;background:#2a2f3a}canvas{display:block;width:100%;height:100%}#l{position:fixed;left:8px;top:8px;color:#fff;font:12px monospace}</style>
+<canvas id="c"></canvas><div id="l"></div>
+<script src="player-fp27.js"></script>
+<script type="importmap">{"imports":{"three":"./vendor160/three.module.js","three/addons/":"./vendor160/jsm/"}}</script>
+<script type="module">
+// QA: ?clip=jump_shot&t=0.5,1.0,1.5  renders the retargeted clip on the player rig at the given times (one body per time)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import { loadClipLibrary, pathAt } from './clips.js';
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true }); renderer.setSize(innerWidth, innerHeight, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#2a2f3a');
+const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, .1, 100);
+scene.add(new THREE.HemisphereLight('#ffffff', '#445', 1.1)); const key = new THREE.DirectionalLight('#fff4e0', 2); key.position.set(3, 8, 5); key.castShadow = true; scene.add(key);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: '#b98a5a', roughness: .5 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+scene.add(new THREE.GridHelper(40, 40, 0x444444, 0x666666));
+const b64 = s => { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+const gltf = await new Promise((res, rej) => new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', res, rej));
+const lib = await loadClipLibrary('./');
+const name = q.get('clip') || 'jump_shot'; const times = (q.get('t') || '0,0.5,1,1.5').split(',').map(Number);
+const clip = lib.clips[name]; const meta = lib.meta[name];
+document.getElementById('l').textContent = `${name} dur=${meta.dur} frames=${meta.frames} jump=${meta.jump} travel=${meta.travel} handPeak=${meta.handPeak} hipsMax=${meta.hipsMax} reach=${meta.reach}`;
+times.forEach((t, i) => {
+  const m = skeletonClone(gltf.scene); m.traverse(o => { if (o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; if (/helmet|Mat3|mask|trim|frosted/i.test(o.name) || /Mat3|mask|trim|frosted/i.test(o.material.name)) o.visible = false; } });
+  const useRoot = q.get('root') === '1'; const [px, pz] = useRoot ? pathAt(lib, name, t) : [0, 0];
+  m.position.set(useRoot ? px * .3048 : (i - (times.length - 1) / 2) * 1.3, 0, useRoot ? pz * .3048 : 0); scene.add(m);
+  const mixer = new THREE.AnimationMixer(m); const a = mixer.clipAction(clip); a.play(); mixer.setTime(Math.min(t, clip.duration - 1e-3)); m.updateMatrixWorld(true);
+});
+const view = q.get('view') || 'front';
+if (view === 'side') { cam.position.set(6, 1.6, 0.3); } else if (view === 'iso') { cam.position.set(4.5, 2.4, 4.5); } else { cam.position.set(0.3, 1.5, 7); }
+cam.lookAt(q.get('root') === '1' ? new THREE.Vector3(0, 1, meta.travel * .3048 / 2) : new THREE.Vector3(0, 1, 0));
+renderer.render(scene, cam); window.__ready = true;
+</script>
