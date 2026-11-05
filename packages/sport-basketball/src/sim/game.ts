@@ -132,7 +132,7 @@ export const PLAY_LOG_FIELDS = {
   freeThrowsMade: 'ftm', freeThrowsAttempted: 'fta', assists: 'ast',
   turnovers: 'to', offensiveRebounds: 'orb', defensiveRebounds: 'drb',
   totalRebounds: 'reb', steals: 'stl', blocks: 'blk', personalFouls: 'pf',
-  minutes: 'min',
+  minutes: 'min', and1sMade: 'a1',
 } as const;
 export type PlayLogFieldCode = typeof PLAY_LOG_FIELDS[keyof typeof PLAY_LOG_FIELDS];
 

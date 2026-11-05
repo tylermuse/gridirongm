@@ -93,6 +93,10 @@ export interface BasketballStats {
   threePointsAttempted: number;
   freeThrowsMade: number;
   freeThrowsAttempted: number;
+  /** Completed 3-point plays (a made 2-pt FG while fouled, with the bonus free
+   *  throw converted). Optional + defaulted absent on read, so adding it needs
+   *  no CURRENT_SAVE_VERSION bump (old saves read it as 0). */
+  and1sMade?: number;
   // Possessions
   assists: number;
   turnovers: number;
@@ -293,6 +297,7 @@ export function emptyBasketballStats(): BasketballStats {
     threePointsAttempted: 0,
     freeThrowsMade: 0,
     freeThrowsAttempted: 0,
+    and1sMade: 0,
     assists: 0,
     turnovers: 0,
     offensiveRebounds: 0,
@@ -321,6 +326,7 @@ export function addBasketballStats(target: BasketballStats, source: Partial<Bask
     threePointsAttempted: target.threePointsAttempted + (source.threePointsAttempted ?? 0),
     freeThrowsMade: target.freeThrowsMade + (source.freeThrowsMade ?? 0),
     freeThrowsAttempted: target.freeThrowsAttempted + (source.freeThrowsAttempted ?? 0),
+    and1sMade: (target.and1sMade ?? 0) + (source.and1sMade ?? 0),
     assists: target.assists + (source.assists ?? 0),
     turnovers: target.turnovers + (source.turnovers ?? 0),
     offensiveRebounds: target.offensiveRebounds + (source.offensiveRebounds ?? 0),
@@ -360,6 +366,7 @@ export function perGame(stats: BasketballStats): Partial<BasketballStats> {
     threePointsAttempted: stats.threePointsAttempted / g,
     freeThrowsMade: stats.freeThrowsMade / g,
     freeThrowsAttempted: stats.freeThrowsAttempted / g,
+    and1sMade: (stats.and1sMade ?? 0) / g,
     assists: stats.assists / g,
     turnovers: stats.turnovers / g,
     offensiveRebounds: stats.offensiveRebounds / g,
