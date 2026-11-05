@@ -145,7 +145,7 @@ export function toSimPossession(playLog: PlayLog, idx: number, players: Players,
   const defSide = p.o === 'h' ? 'away' : 'home';
   // The engine occasionally rotates a body in without a logged sub (foul trouble, injury): anyone in this
   // possession's events who isn't in the logged five takes the slot of his position so the sim can picture him.
-  const OFF_FIELDS = new Set(['fga', 'fgm', '3pa', '3pm', 'fta', 'ftm', 'pts', 'ast', 'to', 'orb']);
+  const OFF_FIELDS = new Set(['fga', 'fgm', '3pa', '3pm', 'fta', 'ftm', 'pts', 'ast', 'to', 'orb', 'a1']);
   const POSN = ['PG', 'SG', 'SF', 'PF', 'C'];
   for (const [pi, code] of p.e) {
     const id = ids[pi]; const side = OFF_FIELDS.has(code) ? offSide : defSide;
