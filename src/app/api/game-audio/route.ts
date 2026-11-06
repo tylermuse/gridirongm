@@ -1,16 +1,14 @@
 /**
- * Game Broadcast audio (Phase 1 spike, feature-flagged on the client).
+ * Live game audio broadcast (Premium).
  *
- * Mirrors /api/spotlight-audio: takes a small batch of commentary lines,
- * renders each with the matching ElevenLabs voice, concatenates the MP3
- * frames, and caches the result in Supabase Storage keyed by content hash.
- * The client requests segments generate-ahead so playback can start fast.
+ * Mirrors /api/spotlight-audio: takes one play's commentary lines, renders each
+ * with the matching ElevenLabs voice, concatenates the MP3 frames, and caches
+ * the result in Supabase Storage keyed by content hash. The client requests
+ * clips generate-ahead so the voice stays in step with the game.
  *
- * NOTE (spike): this route requires an authenticated user but does NOT yet
- * consume a billing credit. The client feature is off unless
- * NEXT_PUBLIC_GAME_AUDIO=1, so it isn't reachable in prod. Before shipping,
- * gate fresh generations on an entitlement/credit like the podcast does
- * (see consumePodcastCredit in /api/spotlight-audio).
+ * Failures carry a `code` the client acts on: tts_quota, premium_required,
+ * auth_required and not_configured end the broadcast; anything else is retried
+ * and, if it persists, that one play goes unsaid.
  */
 
 import { NextResponse } from 'next/server';
@@ -76,8 +74,9 @@ async function generateSpeech(text: string, voiceId: string): Promise<Buffer> {
   if (!res.ok) {
     const err = await res.text();
     if (res.status === 401 || res.status === 402 || res.status === 429) {
-      const error = new Error(`ElevenLabs quota/auth error (${res.status}): ${err}`) as Error & { status: number };
+      const error = new Error(`ElevenLabs quota/auth error (${res.status}): ${err}`) as Error & { status: number; code: string };
       error.status = 402;
+      error.code = 'tts_quota';
       throw error;
     }
     throw new Error(`ElevenLabs TTS failed (${res.status}): ${err}`);
@@ -93,7 +92,7 @@ interface Line {
 export async function POST(request: Request) {
   try {
     if (!ELEVENLABS_API_KEY) {
-      return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured' }, { status: 500 });
+      return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured', code: 'not_configured' }, { status: 500 });
     }
 
     const { lines } = (await request.json()) as { lines?: Line[] };
@@ -110,7 +109,7 @@ export async function POST(request: Request) {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
       const authClient = await createSupabaseServer();
       const { data: { user } } = await authClient.auth.getUser();
-      if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      if (!user) return NextResponse.json({ error: 'Not authenticated', code: 'auth_required' }, { status: 401 });
       // Premium (incl. founders + admins, grandfathered by resolveTier). Free → 403.
       const { tier } = await readCredits(getServiceClient(), user.id, user.created_at);
       if (tier !== 'premium') {
@@ -164,9 +163,9 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error('Game Audio API error:', err);
-    const status = (err as Error & { status?: number }).status ?? 500;
+    const { status = 500, code } = err as Error & { status?: number; code?: string };
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { error: err instanceof Error ? err.message : 'Unknown error', ...(code ? { code } : {}) },
       { status },
     );
   }
