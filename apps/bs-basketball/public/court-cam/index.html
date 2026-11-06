@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2e'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2f'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -597,14 +597,26 @@ function choreograph(p) {
     move(inb, t + .3, t + upT + 1.0, ...H(4));
     t += upT;
   } else if (last === 'drb' || last === 'blk') {
-    // outlet from the rebounder (he's under the far basket) to the point guard, then push
-    const reb = (GS.rebounder && actors.includes(GS.rebounder) && off.includes(GS.rebounder)) ? GS.rebounder : off[4]; const [px, pz] = W(-16, -24);
-    move(handler, 0, .9, px, pz); hold(reb, 0, .9, 'hold'); faceTo(reb, 0, 'ball');
-    t = pass(reb, handler, .9, .55, 'over'); hold(handler, t, 99);
-    const upT = isTrans ? 2.4 : 3.8; act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .05, t + upT, ...(isTrans ? W(-5, 14) : H(0)), { lin: isTrans });
-    [1, 2, 3].forEach(i => move(off[i], .1 + i * .12, t + upT - .4 + i * .2, ...(isTrans ? W([-22, 22, -10][i - 1], [40, 40, 14][i - 1]) : H(i)), { lin: isTrans }));
-    move(reb, t + .2, t + upT + 1.2, ...H(4));
-    t += upT;
+    // Off the glass (as on tape): a guard or wing who grabs it turns and pushes it himself; a big makes a quick outlet.
+    const reb = (GS.rebounder && actors.includes(GS.rebounder) && off.includes(GS.rebounder)) ? GS.rebounder : off[4];
+    const rebI = off.indexOf(reb); const wantsBall = (isTrans && p.assister != null) ? off[p.assister] : handler0;   // on the break the assist comes from whoever the log says
+    const pushes = rebI >= 0 && rebI <= 2 && (!isTrans || p.assister == null || wantsBall === reb);
+    const upT = isTrans ? 2.4 : 3.6;
+    if (pushes) {
+      handler = reb; hold(reb, 0, 99); t = .45; faceTo(reb, 0, 'rim');
+      act(handler, t, t + upT + .2, 'dribble'); move(handler, t, t + upT, ...(isTrans ? W(-5, 14) : W(-8, 10)), { lin: isTrans });
+      off.forEach((a, i) => { if (a === reb) return; const lane = isTrans ? [[-5, 20], [-22, 40], [22, 40], [-10, 14], [8, 24]][i] : HOME[i]; move(a, .1 + i * .1, t + upT - .3 + i * .15, ...W(...lane), { lin: isTrans }); });
+      t += upT;
+      if (!isTrans && wantsBall !== handler) { const tp = pass(handler, wantsBall, t, .4); hold(wantsBall, tp, 99); move(wantsBall, t - .6, tp, ...H(0)); move(handler, tp + .1, tp + 1.0, ...H(rebI)); handler = wantsBall; act(handler, tp, tp + 1.6, 'dribble'); t = tp + .2; }
+    } else {
+      handler = wantsBall; const [px, pz] = W(-16, -24);
+      move(handler, 0, .7, px, pz); hold(reb, 0, .6, 'hold'); faceTo(reb, 0, 'ball');
+      t = pass(reb, handler, .6, .5, 'over'); hold(handler, t, 99);
+      act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .05, t + upT, ...(isTrans ? W(-5, 14) : H(0)), { lin: isTrans });
+      off.forEach((a, i) => { if (a === handler || a === reb) return; move(a, .1 + i * .12, t + upT - .4 + i * .2, ...(isTrans ? W([-22, 22, -10, 8][Math.min(i, 3)], [40, 40, 14, 24][Math.min(i, 3)]) : H(i)), { lin: isTrans }); });
+      move(reb, t + .2, t + upT + 1.2, ...H(off.indexOf(reb) >= 0 ? off.indexOf(reb) : 4));
+      t += upT;
+    }
   } else if (last === 'stl') {
     // the thief has it and goes
     const thief = (GS.thief && actors.includes(GS.thief) && off.includes(GS.thief)) ? GS.thief : off[0]; handler = thief; hold(thief, 0, 99); act(thief, 0, upT0(), 'dribble');
