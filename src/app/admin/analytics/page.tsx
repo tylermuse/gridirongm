@@ -28,6 +28,8 @@ interface AnalyticsData {
   activeUsersRolling: ActiveUsersRolling | null;
   hoopsActiveUsersRolling: ActiveUsersRolling | null;
   sim3dCohorts: Sim3dCohorts | null;
+  /** null until migration 20261106_sim3d_followup is applied (or the query failed) */
+  sim3dFollowup?: Sim3dFollowup | null;
   interactions: InteractionReport | null;
   rollups?: RollupHealth;
   timingsMs?: Record<string, number>;
@@ -55,6 +57,9 @@ interface RollupHealth {
 
 interface Sim3dCohort { devices: number; sessions: number; sessionsPerDevice: number; medianMinutes: number; meanMinutes: number; pctMultiDay: number; pctReturned7d: number }
 interface Sim3dCohorts { since: string; cohorts: { on?: Sim3dCohort; off?: Sim3dCohort }; toggles: { on: number; off: number } }
+interface Sim3dConversion { freeDevices: number; converted: number; pctConverted: number }
+interface Sim3dArm { devices: number; pctHad3dOn: number; pctSwitchedOff: number; sessionsPerDevice: number; pctMultiDay: number; pctReturned7d: number; pctConverted: number }
+interface Sim3dFollowup { since: string; conversion: { on?: Sim3dConversion; off?: Sim3dConversion }; defaultTest: { on?: Sim3dArm; off?: Sim3dArm } }
 
 interface ActiveUsersRolling {
   dau: number;
@@ -251,8 +256,8 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
 
-            {/* 3D live sim launch experiment (free for everyone from 2026-10-23; decide ~2026-11-06) */}
-            {data.sim3dCohorts && <Sim3dSection c={data.sim3dCohorts} period={period} />}
+            {/* 3D live sim: free for everyone (decided 2026-11-06); cohorts, conversion, and the default-on test */}
+            {data.sim3dCohorts && <Sim3dSection c={data.sim3dCohorts} f={data.sim3dFollowup ?? null} period={period} />}
 
             {/* Automatic click / hover / change capture — what people use, ignore, and fight with */}
             <InteractionsSection
@@ -409,7 +414,7 @@ function ActiveUsersSection({ title, a }: { title: string; a: ActiveUsersRolling
   );
 }
 
-function Sim3dSection({ c, period }: { c: Sim3dCohorts; period: string }) {
+function Sim3dSection({ c, f, period }: { c: Sim3dCohorts; f: Sim3dFollowup | null; period: string }) {
   const on = c.cohorts.on, off = c.cohorts.off;
   const rows: { label: string; key: keyof Sim3dCohort; fmt: (v: number) => string; help: string }[] = [
     { label: 'Devices', key: 'devices', fmt: v => String(v), help: 'game-watching devices in the cohort' },
@@ -423,11 +428,11 @@ function Sim3dSection({ c, period }: { c: Sim3dCohorts; period: string }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-baseline justify-between mb-1">
-        <h2 className="text-sm font-bold">3D Live Sim — launch experiment</h2>
+        <h2 className="text-sm font-bold">3D Live Sim — free for everyone</h2>
         <span className="text-xs text-gray-500">last {period} · {c.toggles.on} toggled on · {c.toggles.off} off</span>
       </div>
       <p className="text-xs text-gray-500 mb-4">
-        Free for everyone since Oct 23. Devices that opened a game page, split by whether the 3D sim was ever on. Decide Premium vs free around Nov 6: if the “on” column is clearly ahead on session length and return rate, 3D is a retention feature — keep it free and upsell inside it. If the columns look alike, gate it (flip SIM3D_FREE_FOR_ALL).
+        Free since Oct 23; kept free on Nov 6 as a retention feature. Devices that opened a game page, split by whether the 3D sim was ever on. These devices chose 3D themselves, so the gap overstates what 3D causes — the default-on test below is the causal read.
       </p>
       {!on && !off ? <div className="text-sm text-gray-500">No game-page events yet in this window.</div> : (
         <table className="w-full text-sm">
@@ -438,6 +443,62 @@ function Sim3dSection({ c, period }: { c: Sim3dCohorts; period: string }) {
                 <td className="py-1.5">{r.label}{r.help && <span className="block text-[11px] text-gray-400">{r.help}</span>}</td>
                 <td className={`py-1.5 text-right tabular-nums ${better(r.key) === 'on' ? 'font-bold text-emerald-700' : ''}`}>{on ? r.fmt(on[r.key]) : '—'}</td>
                 <td className={`py-1.5 text-right tabular-nums ${better(r.key) === 'off' ? 'font-bold text-emerald-700' : ''}`}>{off ? r.fmt(off[r.key]) : '—'}</td>
+              </tr>
+            ))}
+            {f && (
+              <tr className="border-t border-gray-100">
+                <td className="py-1.5">Went Premium<span className="block text-[11px] text-gray-400">of devices free at their first game view</span></td>
+                {(['on', 'off'] as const).map(k => {
+                  const v = f.conversion[k];
+                  const other = f.conversion[k === 'on' ? 'off' : 'on'];
+                  const best = v && other && v.pctConverted > other.pctConverted;
+                  return <td key={k} className={`py-1.5 text-right tabular-nums ${best ? 'font-bold text-emerald-700' : ''}`}>{v ? `${v.pctConverted}% (${v.converted}/${v.freeDevices})` : '—'}</td>;
+                })}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+      <Sim3dDefaultTest f={f} />
+    </div>
+  );
+}
+
+/** Default-on test (from 2026-11-06): new devices randomly start with 3D on or off. Intent-to-treat by arm. */
+function Sim3dDefaultTest({ f }: { f: Sim3dFollowup | null }) {
+  if (!f) {
+    return (
+      <p className="mt-4 text-xs text-gray-400">
+        Conversion and the default-on test need supabase/migrations/20261106_sim3d_followup.sql — run it in the Supabase SQL editor.
+      </p>
+    );
+  }
+  const on = f.defaultTest.on, off = f.defaultTest.off;
+  const rows: { label: string; key: keyof Sim3dArm; fmt: (v: number) => string; help: string }[] = [
+    { label: 'Devices', key: 'devices', fmt: v => String(v), help: 'new devices assigned to the arm' },
+    { label: 'Had 3D on', key: 'pctHad3dOn', fmt: v => `${v}%`, help: 'at any game' },
+    { label: 'Switched 3D off', key: 'pctSwitchedOff', fmt: v => `${v}%`, help: 'toggled it off at least once' },
+    { label: 'Sessions / device', key: 'sessionsPerDevice', fmt: v => v.toFixed(2), help: '30-min gap sessions' },
+    { label: 'Active 2+ days', key: 'pctMultiDay', fmt: v => `${v}%`, help: '' },
+    { label: 'Returned after 7+ days', key: 'pctReturned7d', fmt: v => `${v}%`, help: 'needs a week of data' },
+    { label: 'Went Premium', key: 'pctConverted', fmt: v => `${v}%`, help: 'of devices free at first view' },
+  ];
+  return (
+    <div className="mt-5">
+      <h3 className="text-xs font-bold text-gray-700 mb-1">Default-on test (since Nov 6)</h3>
+      <p className="text-xs text-gray-500 mb-2">
+        New devices are randomly started with 3D on or off; everyone can still toggle. Because the split is random, the gap here is what 3D actually causes.
+        Read it once each arm has a few hundred devices and a week of data.
+      </p>
+      {!on && !off ? <div className="text-sm text-gray-500">No new devices in the test yet.</div> : (
+        <table className="w-full text-sm">
+          <thead><tr className="text-xs text-gray-500"><th className="text-left font-medium pb-2">Metric</th><th className="text-right font-medium pb-2">Starts on</th><th className="text-right font-medium pb-2">Starts off</th></tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.key} className="border-t border-gray-100">
+                <td className="py-1.5">{r.label}{r.help && <span className="block text-[11px] text-gray-400">{r.help}</span>}</td>
+                <td className="py-1.5 text-right tabular-nums">{on ? r.fmt(on[r.key]) : '—'}</td>
+                <td className="py-1.5 text-right tabular-nums">{off ? r.fmt(off[r.key]) : '—'}</td>
               </tr>
             ))}
           </tbody>

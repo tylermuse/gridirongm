@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
     // Heavy reports go through the cache (see top of file); the three cheap
     // index-backed reads below do not, so the live feed and health line are
     // always current.
-    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, interactionsRes, healthRes] = await Promise.all([
+    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, sim3dFollowupRes, interactionsRes, healthRes] = await Promise.all([
       timed('summary', cachedReport(`summary:${period}`, () => service.rpc('admin_analytics_summary', { p_since: since }), cacheAge), timings),
 
       timed('recentEvents', service.from('analytics_events')
@@ -158,6 +158,9 @@ export async function GET(request: NextRequest) {
       timed('hoopsActiveUsers', cachedReport('hoopsActiveUsers', () => service.rpc('admin_active_users', { p_app: 'bs-hoops' }), cacheAge), timings),
       // 3D live sim launch experiment: free-for-all from 2026-10-23, compare 3D-on vs 3D-off devices (migration 20261023_sim3d_cohorts)
       timed('sim3dCohorts', cachedReport(`sim3dCohorts:${period}`, () => service.rpc('admin_sim3d_cohorts', { p_since: since }), cacheAge), timings),
+      // 3D sim follow-up: free→Premium conversion per cohort + the default-on test arms (migration 20261106_sim3d_followup).
+      // Not in `warnings`: until that migration is applied it errors and the card says so instead.
+      timed('sim3dFollowup', cachedReport(`sim3dFollowup:${period}`, () => service.rpc('admin_sim3d_followup', { p_since: since }), cacheAge), timings),
       // Feature usage from automatic click/hover capture (migration 20261024_ui_interactions)
       timed('interactions', cachedReport(`interactions:${period}`, () => service.rpc('admin_interaction_report', { p_since: since, p_app: 'bs-football' }), cacheAge), timings),
       // Is the rollup pipeline applied, backfilled, and still being fed? (migration 20261101_analytics_rollup_health)
@@ -225,6 +228,7 @@ export async function GET(request: NextRequest) {
       activeUsersRolling: activeRes.error ? null : (activeRes.data ?? null),
       hoopsActiveUsersRolling: hoopsActiveRes.error ? null : (hoopsActiveRes.data ?? null),
       sim3dCohorts: sim3dRes.error ? null : (sim3dRes.data ?? null),
+      sim3dFollowup: sim3dFollowupRes.error ? null : (sim3dFollowupRes.data ?? null),
       interactions: interactionsRes.error ? null : (interactionsRes.data ?? null),
       rollups,
       timingsMs: timings,

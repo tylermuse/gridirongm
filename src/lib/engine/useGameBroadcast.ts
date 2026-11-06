@@ -35,8 +35,12 @@ export interface StartOpts {
   awayName: string;
   /** Reveal the play at this event index on screen. */
   onShowPlay: (index: number) => void;
-  /** Called once the last play's call has finished. */
+  /** Called once the last play's call has finished (or, for a teaser, when it stops at toIndex / runs out). */
   onDone?: () => void;
+  /** Stop before this event index (exclusive) — the free teaser is one drive. Default: the end of the game. */
+  toIndex?: number;
+  /** Free-tier taste: the server allows it against a small daily allowance instead of requiring Premium. */
+  teaser?: boolean;
   /** Extra dwell (ms) to hold after each call finishes, before the next play —
    *  read live so the game's speed control still affects pacing during a
    *  broadcast (slower speed = longer gaps; the call is never cut off). */
@@ -56,16 +60,21 @@ export interface GameBroadcast {
 // A play with no audio (structural filler) still gets a brief on-screen beat.
 const SILENT_BEAT_MS = 500;
 
-async function fetchClip(lines: BroadcastLine[], signal: AbortSignal): Promise<string> {
+/** The server said today's free teaser allowance is spent: end the teaser like a finished drive, not an error. */
+class TeaserUsedError extends Error {}
+
+async function fetchClip(lines: BroadcastLine[], signal: AbortSignal, teaser: boolean): Promise<string> {
   const res = await fetch('/api/game-audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lines }),
+    body: JSON.stringify(teaser ? { lines, teaser: true } : { lines }),
     signal,
   });
   if (!res.ok) {
     let msg = `Audio request failed (${res.status})`;
-    try { const b = await res.json(); if (b?.error) msg = b.error; } catch { /* non-JSON */ }
+    let code: string | undefined;
+    try { const b = await res.json(); if (b?.error) msg = b.error; code = b?.code; } catch { /* non-JSON */ }
+    if (code === 'teaser_used') throw new TeaserUsedError(msg);
     throw new Error(msg);
   }
   return URL.createObjectURL(await res.blob());
@@ -102,10 +111,11 @@ export function useGameBroadcast(): GameBroadcast {
     const hit = cache.get(index);
     if (hit) return hit;
     const opts = optsRef.current!;
-    const lines = broadcastClipLines(opts.events, index, opts.homeAbbr, opts.awayAbbr, opts.fromIndex, opts.homeName, opts.awayName);
+    const end = Math.min(opts.toIndex ?? opts.events.length, opts.events.length);
+    const lines = index >= end ? [] : broadcastClipLines(opts.events, index, opts.homeAbbr, opts.awayAbbr, opts.fromIndex, opts.homeName, opts.awayName);
     const p: Promise<string | null> = lines.length === 0
       ? Promise.resolve(null)
-      : fetchClip(lines, abortRef.current!.signal);
+      : fetchClip(lines, abortRef.current!.signal, !!opts.teaser);
     cache.set(index, p);
     return p;
   }, []);
@@ -127,7 +137,8 @@ export function useGameBroadcast(): GameBroadcast {
   const runLoop = useCallback(async (from: number) => {
     const myRun = runIdRef.current;
     const opts = optsRef.current!;
-    for (let i = from; i < opts.events.length; i++) {
+    const end = Math.min(opts.toIndex ?? opts.events.length, opts.events.length);
+    for (let i = from; i < end; i++) {
       if (runIdRef.current !== myRun) return;
       opts.onShowPlay(i);
       setPlayIndex(i);
@@ -140,6 +151,7 @@ export function useGameBroadcast(): GameBroadcast {
         url = await ensureClip(i);
       } catch (e) {
         if (runIdRef.current !== myRun || (e as Error).name === 'AbortError') return;
+        if (e instanceof TeaserUsedError) { setStatus('done'); opts.onDone?.(); return; }
         setError((e as Error).message); setStatus('error'); return;
       }
       if (runIdRef.current !== myRun) return;
