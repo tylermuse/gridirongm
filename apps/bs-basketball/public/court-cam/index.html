@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2d'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2e'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -115,7 +115,7 @@ const ZONE = {
 };
 const POST = { l: [7.5, 36.5], r: [-7.5, 36.5] };
 /** Half-court homes by slot (PG SG SF PF C) in the attack frame. */
-const HOME = [[0, 13.5], [-18.5, 25], [18.5, 25], [-20, 37.5], [8, 35]];
+const HOME = [[0, 13.5], [-19.5, 25.5], [19.5, 25.5], [-22, 41], [8, 36]];   // top, wings a step outside the arc, corner three, dunker spot
 
 // ---------- Teams / state ----------
 const DEMO_TEAMS = [
@@ -505,17 +505,23 @@ let T = 0, running = false, playEvents = [], play = null;
 const ev = (t, fn) => playEvents.push({ t, fn, done: false });
 function resetPlans() { for (const a of actors) { a.moves = []; a.acts = []; a.faceTo = null; a.planX = a.x; a.planZ = a.z; } ballPlan = []; playEvents = []; }
 /** Move to (x,z) over [t0,t1]. Chained: starts where the previous move ended. */
-function move(a, t0, t1, x, z, o = {}) { const prev = a.moves[a.moves.length - 1]; const sx = prev ? prev.x : a.planX, sz = prev ? prev.z : a.planZ; if (prev && t0 < prev.t1) t0 = prev.t1; a.moves.push({ t0, t1: Math.max(t1, t0 + .05), sx, sz, x, z, lin: !!o.lin, backpedal: !!o.backpedal, shuffle: !!o.shuffle }); return a.moves[a.moves.length - 1]; }
+const MAX_SPD = 21;   // ft/s average over a move: nobody teleports (an NBA sprint is ~25 ft/s peak, a push with the ball ~18)
+function move(a, t0, t1, x, z, o = {}) { const prev = a.moves[a.moves.length - 1]; const sx = prev ? prev.x : a.planX, sz = prev ? prev.z : a.planZ; if (prev && t0 < prev.t1) t0 = prev.t1;
+  const L = Math.hypot(x - sx, z - sz); t1 = Math.max(t1, t0 + .05, t0 + L / (o.lin ? MAX_SPD + 3 : MAX_SPD));
+  a.moves.push({ t0, t1, sx, sz, x, z, lin: !!o.lin, backpedal: !!o.backpedal, shuffle: !!o.shuffle, trap: L > 8 }); return a.moves[a.moves.length - 1]; }
+/** Long moves accelerate, cruise, decelerate (peak 1.33× average) instead of the smoothstep's 1.5× spike in the middle. */
+const trapEase = u => u < .25 ? 2.6667 * u * u : u < .75 ? .16667 + 1.3333 * (u - .25) : 1 - 2.6667 * (1 - u) * (1 - u);
+const trapRate = u => u < .25 ? 5.3333 * u : u < .75 ? 1.3333 : 5.3333 * (1 - u);
 function act(a, t0, t1, kind, p = {}) { const c = { t0, t1, kind, ...p }; a.acts.push(c);
-  if (c.root) { const m = META(c.clip); const [px, pz] = pathAt(LIB, c.clip, c.rootDur); const cs = Math.cos(c.root.yaw), sn = Math.sin(c.root.yaw); const ex = c.root.sx + px * cs + pz * sn, ez = c.root.sz - px * sn + pz * cs; move(a, c.t0 + c.rootDur, c.t0 + c.rootDur + .05, ex, ez, { lin: true }); } }
+  if (c.root) { const m = META(c.clip); const [px, pz] = pathAt(LIB, c.clip, c.rootDur); const cs = Math.cos(c.root.yaw), sn = Math.sin(c.root.yaw); const ex = c.root.sx + px * cs + pz * sn, ez = c.root.sz - px * sn + pz * cs; const em = move(a, c.t0 + c.rootDur, c.t0 + c.rootDur + .05, ex, ez, { lin: true }); em.sx = ex; em.sz = ez; em.rootEnd = true; /* picks up exactly where the clip's path ends */ } }
 /** Place a root-motion clip so that at clip time tAt the actor stands at (x,z) facing yaw: returns the start point and schedules the walk-in. */
 function rootClip(a, kind, clip, t0, tAt, x, z, yaw, extra = {}) {
   const m = META(clip); const [px, pz] = pathAt(LIB, clip, tAt);
   if (yaw == null) { const from = posAt(a, t0 - .7); yaw = Math.atan2(x - from.x, z - from.z); }   // run in from wherever the player is
   const cs = Math.cos(yaw), sn = Math.sin(yaw);
   const sx = x - (px * cs + pz * sn), sz = z - (-px * sn + pz * cs);
-  move(a, t0 - .7, t0, sx, sz);
-  act(a, t0, t0 + m.dur, kind, { clip, t0, root: { sx, sz, yaw }, rootDur: m.dur, ...extra });
+  const from = posAt(a, t0 - .7); move(a, t0 - Math.max(.7, Math.hypot(sx - from.x, sz - from.z) / 15), t0, sx, sz);   // leave early enough to jog there
+  act(a, t0, t0 + m.dur, kind, { clip, t0, root: { sx, sz, yaw, blend: clamp(tAt * .8, .4, 1.1) }, rootDur: m.dur, ...extra });   // be on the clip's path well before its anchor moment
   return { sx, sz };
 }
 function faceTo(a, t0, target) { a.faceTo = a.faceTo || []; a.faceTo.push({ t0, target }); }
@@ -523,10 +529,17 @@ function rootActAt(a, t) { let r = null; for (const c of a.acts) { if (c.root &&
 function posAt(a, t) {
   const rc = rootActAt(a, t);
   if (rc) { const u = t - rc.t0; const [px, pz] = pathAt(LIB, rc.clip, u); const [qx, qz] = pathAt(LIB, rc.clip, Math.max(0, u - .05)); const c = Math.cos(rc.root.yaw), sn = Math.sin(rc.root.yaw);
-    const x = rc.root.sx + px * c + pz * sn, z = rc.root.sz - px * sn + pz * c; const vx = (px - qx) / .05, vz = (pz - qz) / .05;
+    let x = rc.root.sx + px * c + pz * sn, z = rc.root.sz - px * sn + pz * c; const vx = (px - qx) / .05, vz = (pz - qz) / .05;
+    // the walk-in may not have got him all the way to the clip's start point: carry the shortfall in and bleed it off over the first half second
+    if (rc.root.ox == null) { const at = movePosAt(a, rc.t0); rc.root.ox = at.x - rc.root.sx; rc.root.oz = at.z - rc.root.sz; }
+    const k = 1 - clamp(u / (rc.root.blend || .5), 0, 1); x += rc.root.ox * k; z += rc.root.oz * k;
     return { x, z, moving: true, dir: rc.root.yaw, spd: Math.hypot(vx, vz), mv: null, root: rc }; }
+  return movePosAt(a, t);
+}
+/** Position from the move chain alone (no root-motion clip). */
+function movePosAt(a, t) {
   let x = a.planX, z = a.planZ, moving = false, dir = 0, spd = 0, mv = null;
-  for (const m of a.moves) { if (t < m.t0) break; mv = m; if (t < m.t1) { const u = m.lin ? (t - m.t0) / (m.t1 - m.t0) : ease((t - m.t0) / (m.t1 - m.t0)); x = lerp(m.sx, m.x, u); z = lerp(m.sz, m.z, u); moving = true; const L = Math.hypot(m.x - m.sx, m.z - m.sz); spd = L / (m.t1 - m.t0) * (m.lin ? 1 : 6 * u * (1 - u) * .8 + .2); dir = Math.atan2(m.x - m.sx, m.z - m.sz); } else { x = m.x; z = m.z; } }
+  for (const m of a.moves) { if (t < m.t0) break; mv = m; if (t < m.t1) { const u0 = (t - m.t0) / (m.t1 - m.t0); const u = m.lin ? u0 : m.trap ? trapEase(u0) : ease(u0); x = lerp(m.sx, m.x, u); z = lerp(m.sz, m.z, u); moving = true; const L = Math.hypot(m.x - m.sx, m.z - m.sz); spd = L / (m.t1 - m.t0) * (m.lin ? 1 : m.trap ? trapRate(u0) : 1) * (m.lin || m.trap ? 1 : 6 * u * (1 - u) * .8 + .2); dir = Math.atan2(m.x - m.sx, m.z - m.sz); } else { x = m.x; z = m.z; } }
   return { x, z, moving, dir, spd, mv }; }
 function actAt(a, t) { let cur = null; for (const c of a.acts) { if (t >= c.t0 && t < c.t1) cur = c; } return cur; }
 function faceAt(a, t) { let tg = null; if (a.faceTo) for (const f of a.faceTo) { if (t >= f.t0) tg = f.target; } return tg; }
@@ -580,7 +593,7 @@ function choreograph(p) {
     move(inb, 0, 1.0, ix, iz); move(handler, 0, 1.0, px, pz); hold(inb, 0, 1.3, 'hold'); faceTo(inb, 0, 'ball');
     t = pass(inb, handler, 1.3, .4); hold(handler, t, 99);
     const upT = isTrans ? 2.6 : 4.6; act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .1, t + upT, ...(isTrans ? W(-6, 14) : H(0)), { lin: isTrans });
-    [1, 2, 3].forEach(i => move(off[i], .2 + i * .15, t + upT - .3 + i * .2, ...(isTrans ? W([-18, 18, -14][i - 1], [26, 26, 10][i - 1]) : H(i)), { lin: isTrans }));
+    [1, 2, 3].forEach(i => move(off[i], .2 + i * .15, t + upT - .3 + i * .2, ...(isTrans ? W([-22, 22, -10][i - 1], [40, 40, 14][i - 1]) : H(i)), { lin: isTrans }));
     move(inb, t + .3, t + upT + 1.0, ...H(4));
     t += upT;
   } else if (last === 'drb' || last === 'blk') {
@@ -589,14 +602,14 @@ function choreograph(p) {
     move(handler, 0, .9, px, pz); hold(reb, 0, .9, 'hold'); faceTo(reb, 0, 'ball');
     t = pass(reb, handler, .9, .55, 'over'); hold(handler, t, 99);
     const upT = isTrans ? 2.4 : 3.8; act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .05, t + upT, ...(isTrans ? W(-5, 14) : H(0)), { lin: isTrans });
-    [1, 2, 3].forEach(i => move(off[i], .1 + i * .12, t + upT - .4 + i * .2, ...(isTrans ? W([-19, 19, -14][i - 1], [27, 27, 12][i - 1]) : H(i)), { lin: isTrans }));
+    [1, 2, 3].forEach(i => move(off[i], .1 + i * .12, t + upT - .4 + i * .2, ...(isTrans ? W([-22, 22, -10][i - 1], [40, 40, 14][i - 1]) : H(i)), { lin: isTrans }));
     move(reb, t + .2, t + upT + 1.2, ...H(4));
     t += upT;
   } else if (last === 'stl') {
     // the thief has it and goes
     const thief = (GS.thief && actors.includes(GS.thief) && off.includes(GS.thief)) ? GS.thief : off[0]; handler = thief; hold(thief, 0, 99); act(thief, 0, upT0(), 'dribble');
     const upT = upT0(); move(thief, 0, upT, ...(isTrans ? W(-4, 16) : H(0)), { lin: isTrans });
-    off.forEach((a, i) => { if (a === thief) return; move(a, .1 + i * .1, upT + .3 + i * .15, ...(isTrans ? W([-19, 19, -14, 8][Math.min(i, 3)], [27, 27, 12, 20][Math.min(i, 3)]) : H(i)), { lin: isTrans }); });
+    off.forEach((a, i) => { if (a === thief) return; move(a, .1 + i * .1, upT + .3 + i * .15, ...(isTrans ? W([-22, 22, -10, 8][Math.min(i, 3)], [40, 40, 14, 24][Math.min(i, 3)]) : H(i)), { lin: isTrans }); });
     t += upT;
   } else if (last === 'orb') {
     // the big kicks it back out to the point and the set runs
@@ -1116,6 +1129,65 @@ function idleFormation() { resetPlans(); if (!O) return; O.forEach((a, i) => mov
   hold(O[0], 0, 99, 'hold'); running = true; T = 0; }
 function hold(a, t0, t1, mode = 'dribble') { ballPlan.push({ t0, t1, held: a, mode }); }
 
+// ---------- Life between the scripted beats ----------
+/** Where the ball is (planned) at t: the holder, a pass in flight, or the shot's origin. */
+function ballPosAt(t) {
+  let seg = null; for (const g of ballPlan) { if (g.t0 <= t && (!seg || g.t0 >= seg.t0)) seg = g; }
+  if (!seg) return null;
+  if (seg.held) { const q = posAt(seg.held, t); return [q.x, q.z]; }
+  if (seg.pass) { const a = posAt(seg.pass.from, seg.t0), b = posAt(seg.pass.to, seg.t1); const u = clamp((t - seg.t0) / (seg.t1 - seg.t0), 0, 1); return [lerp(a.x, b.x, u), lerp(a.z, b.z, u)]; }
+  if (seg.shot || seg.dunkIn) { const q = posAt((seg.shot || seg.dunkIn).from, seg.t0); return [q.x, q.z]; }
+  if (seg.rest) return [seg.rest[0], seg.rest[2]];
+  const r = RIM(); return [r[0], r[2]];
+}
+/** Insert a move into the chain in time order (the choreography pushes in order; this pass fills gaps afterwards). */
+function insertMove(a, mv) { let i = a.moves.findIndex(m => m.t0 > mv.t0); if (i < 0) i = a.moves.length; a.moves.splice(i, 0, mv); }
+function rechain(a) { let x = a.planX, z = a.planZ; for (const m of a.moves) { if (!m.rootEnd) { m.sx = x; m.sz = z; } x = m.x; z = m.z; } }
+/** Gaps in an actor's plan between from..to, as [t0,t1] pairs (root-motion clips count as busy). */
+function gaps(a, from, to) {
+  const busy = [...a.moves.map(m => [m.t0, m.t1]), ...a.acts.filter(c => c.kind !== 'dribble').map(c => [c.t0, c.root ? c.t0 + c.rootDur : c.t1])].sort((p, q) => p[0] - q[0]);
+  const out = []; let cur = from; for (const [b0, b1] of busy) { if (b1 <= cur) continue; if (b0 > cur) out.push([cur, Math.min(b0, to)]); cur = Math.max(cur, b1); if (cur >= to) break; } if (cur < to) out.push([cur, to]); return out.filter(g => g[1] - g[0] > .7);
+}
+/**
+ * Defenders shadow ball-you-man whenever the script leaves them idle; off-ball offense relocates a few feet along the arc
+ * instead of standing like statues. Runs over the live part of the possession (up to the shot / the turnover).
+ */
+function fillLife(until) {
+  if (!O || !D) return; const rim = RIM(); const rx = rim[0], rz = rim[2];
+  const holderAt = t => { let seg = null; for (const g of ballPlan) { if (g.t0 <= t && (!seg || g.t0 >= seg.t0)) seg = g; } return seg && seg.held ? seg.held : null; };
+  O.forEach((o, i) => {
+    let flip = i % 2 ? 1 : -1;
+    for (const [g0, g1] of gaps(o, 1.0, until)) {
+      for (let t = g0 + .3; t + 1.5 <= g1; t += 2.1) {
+        if (holderAt(t) === o || holderAt(t + 1.2) === o) continue;                     // the handler has his own script
+        const me = posAt(o, t); const dx = rx - me.x, dz = rz - me.z, L = Math.hypot(dx, dz) || 1; if (L < 12) continue;   // bigs in the paint hold their ground
+        const px = -dz / L, pz = dx / L; const amp = 2.5 + rnd() * 1.5;               // slide along the arc, alternating
+        insertMove(o, { t0: t, t1: t + 1.1, sx: me.x, sz: me.z, x: me.x + px * amp * flip, z: me.z + pz * amp * flip, lin: false, backpedal: false, shuffle: false, trap: false, life: 'o' }); flip = -flip;
+      }
+    }
+    rechain(o);
+  });
+  D.forEach((d, i) => {
+    const man = O[i]; if (!man) return;
+    for (const [g0, g1] of gaps(d, .4, until)) {
+      for (let t = g0 + .05; t + .55 <= g1; t += .6) {
+        const pm = posAt(man, t + .5), b = ballPosAt(t + .3) || [pm.x, pm.z]; const me = posAt(d, t);
+        const onBall = holderAt(t + .3) === man;
+        const dmb = Math.hypot(pm.x - b[0], pm.z - b[1]);                // how far my man is from the ball
+        const sag = onBall ? 0 : clamp((dmb - 10) / 24, 0, 1);            // far from the ball → sink toward the lane and the ball
+        const kR = onBall ? .14 : .12 + .3 * sag, kB = onBall ? 0 : .08 + .3 * sag;
+        let tx = pm.x + (rx - pm.x) * kR + (b[0] - pm.x) * kB, tz = pm.z + (rz - pm.z) * kR + (b[1] - pm.z) * kB;
+        if (onBall) { const L = Math.hypot(rx - pm.x, rz - pm.z) || 1; tx = pm.x + (rx - pm.x) / L * 3.6; tz = pm.z + (rz - pm.z) / L * 3.6; }
+        let L = Math.hypot(tx - me.x, tz - me.z); if (L < 1.0) continue;
+        const dur = clamp(L / 9, .3, .5), maxL = dur * 11;                 // a slide, not a sprint: close big gaps over several steps
+        if (L > maxL) { tx = me.x + (tx - me.x) * maxL / L; tz = me.z + (tz - me.z) * maxL / L; L = maxL; }
+        insertMove(d, { t0: t, t1: t + dur, sx: me.x, sz: me.z, x: tx, z: tz, lin: false, backpedal: false, shuffle: true, trap: false, life: 'd' });
+      }
+    }
+    rechain(d);
+  });
+}
+
 // ---------- Run a possession ----------
 /** p: {off:0|1, pt, st, zone, shooter, assister, made, pts, h, a, contested, dunk, blk, orb, drb, to, stl, fouled, fta, ftm, bonusFt, fouler, ftShooter, foul (non-shooting, no FTs), q, clock, lineups?} */
 function runPossession(p) {
@@ -1132,6 +1204,7 @@ function runPossession(p) {
   const total = choreograph(p);
   if (p.pt === 'putback') { const reb = (GS.rebounder && actors.includes(GS.rebounder)) ? GS.rebounder : O[4]; ballPlan.unshift({ t0: -1, t1: 0, held: reb, mode: 'hold' }); }
   ballPlan.sort((x, y) => x.t0 - y.t0);
+  { const live = ballPlan.find(g => g.shot || g.dunkIn || g.loose || g.flyTo); fillLife(live ? live.t0 - .2 : total - 1); }
   // referees: trail + lead
   REFS.forEach((r, i) => { r.moves = []; r.acts = []; move(r, 0, Math.min(2.5, total * .4), ...W(i ? 26 : -26, i ? 39 : 2)); faceTo(r, 0, 'ball'); });
   // camera cuts: rim finishes get the baseline angle
