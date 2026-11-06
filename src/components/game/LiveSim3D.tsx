@@ -9,13 +9,15 @@
  * beat) is over, which releases the page to advance.
  *
  * Toggle lives in the game controls ("3D Sim"); the choice is remembered per
- * browser. `?sim3d=1|0` in the URL overrides it. The iframe is created once
+ * browser. `?sim3d=1|0` in the URL overrides it. With no saved choice, new devices
+ * start on or off by the default-on test arm (see sim3dTestArm). The iframe is created once
  * when the mode is on (≈10 MB: model + three.js) and stays mounted so later
  * plays start instantly and stays on screen between plays (pre-snap formation at
  * the current spot) so the view never flips back and forth with the 2D field.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
+import { getDeviceId, DEVICE_CREATED_KEY } from '@bs/core/analytics/track';
 import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimNamedPlayer, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
 /** Skin tones measured from real headshots, per photo URL, for the whole session (null = couldn't read it). */
@@ -55,12 +57,44 @@ function useSimView(): [{ cam: SimCam; lighting: SimLighting }, (v: Partial<{ ca
   return [view, setView];
 }
 
-/** The browser's saved 3D choice (or the ?sim3d= override). Client only. */
+/**
+ * Default-on test (from 2026-11-06). The launch experiment showed devices with 3D on come back ~2× as often, but
+ * those devices chose 3D themselves. To measure what 3D causes, a device first seen after this shipped that has
+ * no saved 3D choice is put, once and at random, in arm 'on' (3D starts on) or 'off' (starts off, as before).
+ * Everyone can still toggle; a saved choice always wins. Results: /admin/analytics → 3D Live Sim → Default-on test.
+ * Set SIM3D_DEFAULT_TEST to false to stop enrolling (devices already in an arm keep it, so the read stays clean).
+ */
+const SIM3D_DEFAULT_TEST = true;
+const ARM_KEY = 'bsgm.sim3d.arm';
+export type Sim3DArm = 'on' | 'off';
+
+/** This device's default-on test arm, assigning one if it qualifies; null = not in the test. Client only. */
+export function sim3dTestArm(): Sim3DArm | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const ls = window.localStorage;
+    const saved = ls.getItem(ARM_KEY);
+    if (saved === 'on' || saved === 'off') return saved;
+    if (!SIM3D_DEFAULT_TEST) return null;
+    getDeviceId();                                     // a brand-new device gets its id + created stamp here
+    if (!ls.getItem(DEVICE_CREATED_KEY)) return null;  // device predates the test
+    if (ls.getItem(STORAGE_KEY) !== null) return null; // already made its own 3D choice
+    const arm: Sim3DArm = Math.random() < 0.5 ? 'on' : 'off';
+    ls.setItem(ARM_KEY, arm);
+    return arm;
+  } catch { return null; }
+}
+
+/** The browser's 3D choice: the ?sim3d= override, else the saved choice, else the default-on test arm. Client only. */
 export function readSim3DPref(): boolean {
   if (typeof window === 'undefined') return false;
   const q = new URLSearchParams(window.location.search).get('sim3d');
   if (q !== null) return q === '1' || q === 'on';
-  try { return window.localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (saved !== null) return saved === '1';
+  } catch { return false; }
+  return sim3dTestArm() === 'on';
 }
 
 export function useSim3DMode(): [boolean, (on: boolean) => void] {
