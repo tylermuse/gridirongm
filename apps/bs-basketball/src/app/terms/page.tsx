@@ -39,7 +39,8 @@ export default function TermsPage() {
         <li>The core game is free. Optional paid <strong>Premium</strong> features are billed through Stripe.</li>
         <li>
           Subscriptions renew automatically unless canceled before the renewal date. Cancellation takes effect at the end
-          of the current billing period.
+          of the current billing period. To cancel, sign in and choose <strong>Manage subscription</strong> under
+          Settings, or see our <Link href="/contact">Contact page</Link> for other ways to reach us about billing.
         </li>
         <li>
           Except where required by law, payments are non-refundable. Prices and features may change with reasonable
