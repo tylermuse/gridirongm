@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2b'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2c'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -637,8 +637,9 @@ function choreograph(p) {
       hold(a, tSet - .1, rise + .27, 'shot'); release = rise + .27; shotFrom = spot; return release; }
     const m = META(clip); const t0 = tSet - Math.max(0, m.handPeak - 1.0);   // the release lands ~1 s after the set-up moment
     const rim = RIM(); const [sx, sz] = spotW; const yaw = Math.atan2(rim[0] - sx, rim[2] - sz);
-    if (m.travel > 3) rootClip(a, 'jumper', clip, t0, m.handPeak, sx, sz, yaw, { release: t0 + m.handPeak }); else act(a, t0, t0 + m.dur, 'jumper', { clip, t0, release: t0 + m.handPeak });
-    hold(a, t0, t0 + m.handPeak, 'shot'); release = t0 + m.handPeak; shotFrom = spot; return release; };
+    const rel = m.release ?? m.handPeak;   // let go at the top of the jump, not on the way down
+    if (m.travel > 3) rootClip(a, 'jumper', clip, t0, m.handPeak, sx, sz, yaw, { release: t0 + rel }); else act(a, t0, t0 + m.dur, 'jumper', { clip, t0, release: t0 + rel });
+    hold(a, Math.max(t0, tSet + .13), t0 + rel, 'shot'); release = t0 + rel; shotFrom = spot; return release; };   // after the catch hold, so the ball rises with the shooting hands
 
   const pt0 = p.pt; if (pt0 === 'spot' && finisher === handler) p.pt = 'iso'; if (pt0 === 'cut' && finisher === handler) p.pt = 'drive'; if (pt0 === 'post' && finisher === handler) p.pt = 'iso';
   let defenderClose = null;
@@ -804,15 +805,16 @@ function choreograph(p) {
 
   // ---- helpers that close the possession ----
   function freeThrows(t0, shooterA, fta, ftm, makes, afterMake = false) {
-    const shooterIdx = off.indexOf(shooterA); const [lx, lz] = W(0, 28.3); const rimV = V3(...RIM());
+    const shooterIdx = off.indexOf(shooterA); const [lx, lz] = W(0, COURT.FT_Z - 1.15); const rimV = V3(...RIM());   // toes just behind the line (the actor's origin is the hips)
     // everyone to the lane: offense/defense alternate on the blocks
-    const spotsL = [[8.5, 40], [-8.5, 40], [8.5, 37], [-8.5, 37], [8.5, 34]]; let k = 0;
-    const lane = [def[4], off[4], def[3], off[3], def[2]]; lane.forEach((a, i) => { const [x, z] = W(...spotsL[i]); move(a, t0 - .9, t0 + .4 + i * .08, x, z); act(a, t0 + .3, t0 + 99, 'laneWait'); });
+    const spotsL = [[10, 40], [-10, 40], [10, 37], [-10, 37], [10, 34]]; let k = 0;   // outside the 16-ft lane, on the lane-space marks
+    const lane = [def[4], def[3], off[4], off[3], def[2]]; /* defense takes the low spots on both sides, offense the next ones up */ lane.forEach((a, i) => { const [x, z] = W(...spotsL[i]); move(a, t0 - .9, t0 + .4 + i * .08, x, z); act(a, t0 + .3, t0 + 99, 'laneWait'); });
     const others = [...off, ...def].filter(a => !lane.includes(a) && a !== shooterA); others.forEach((a, i) => move(a, t0 - .9, t0 + .6, ...W(i % 2 ? -18 : 18, 22 - i * 2)));
-    move(shooterA, t0 - .9, t0 + .2, lx, lz); faceTo(shooterA, t0 - .9, 'rim'); ballPlan.push({ t0: ballAt, t1: t0 + .5, rest: [lx, .4, lz], hidden: true }); hold(shooterA, t0 + .5, 99, 'hold');
-    let tt = t0 + .6; const madeList = makes || Array.from({ length: fta }, (_, i) => i < ftm);
+    const walk = move(shooterA, t0 - .9, t0 + .2, lx, lz); walk.t1 = Math.max(walk.t1, walk.t0 + Math.hypot(walk.x - walk.sx, walk.z - walk.sz) / 11);   // a finisher landing under the rim walks back, he doesn't teleport
+    faceTo(shooterA, t0 - .9, 'rim'); const atLine = walk.t1 + .3; ballPlan.push({ t0: ballAt, t1: atLine, rest: [lx, .4, lz], hidden: true }); hold(shooterA, atLine, 99, 'hold');
+    let tt = Math.max(t0 + .6, atLine + .4); const madeList = makes || Array.from({ length: fta }, (_, i) => i < ftm);
     for (let i = 0; i < fta; i++) {
-      const tStart = tt; const fm = META('free_throw'); const rel = fm ? tStart + fm.handPeak : tStart + 1.42;
+      const tStart = tt; const fm = META('free_throw'); const rel = fm ? tStart + (fm.release ?? fm.handPeak) : tStart + 1.42;
       if (fm) act(shooterA, tStart, tStart + Math.min(fm.dur, fm.handPeak + 1.0), 'ft', { clip: 'free_throw', t0: tStart }); else act(shooterA, tStart, tStart + 2.0, 'ft', { jump: tStart + 1.15 });
       hold(shooterA, tStart + .3, rel, 'ft'); const Tf = .95; const madeFt = madeList[i];
       const target = madeFt ? V3(rimV.x, COURT.RIM_Y + .1, rimV.z) : V3(rimV.x + .6, COURT.RIM_Y + .05, rimV.z - ATK * .7);
