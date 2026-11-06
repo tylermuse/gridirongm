@@ -33,6 +33,8 @@ describe('court cam adapter', () => {
       if (p.to != null) expect(p.shooter).toBeNull(); else if (!p.bonusFt) { expect(p.shooter).not.toBeNull(); expect(['three', 'midrange', 'at_rim', 'post']).toContain(p.st); expect(p.zone).toBeTruthy(); }
       if (p.made) expect(p.pts).toBeGreaterThanOrEqual(2);
       if (p.fouled || p.bonusFt) { expect(p.fta).toBeGreaterThan(0); expect(p.ftMakes!.length).toBe(p.fta); expect(p.ftMakes!.filter(Boolean).length).toBe(p.ftm); }
+      // a non-shooting foul that didn't reach the bonus is a side-out, never a trip to the line
+      if (p.foul != null) { expect(p.fta).toBe(0); expect(p.fouled).toBeFalsy(); expect(p.bonusFt).toBeFalsy(); expect(p.foul).toBeGreaterThanOrEqual(0); expect(p.foul).toBeLessThan(5); }
       expect(p.h).toBeGreaterThanOrEqual(lastScore.h); expect(p.a).toBeGreaterThanOrEqual(lastScore.a); lastScore = { h: p.h, a: p.a };
       expect(p.clockStart).toBeGreaterThanOrEqual(p.clockEnd);
       // the shooter really is on the floor for the offense

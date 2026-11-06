@@ -37,6 +37,8 @@ export interface SimPossession {
   fouled?: boolean;
   fta?: number; ftm?: number; ftMakes?: boolean[];
   bonusFt?: boolean; fouler?: number; ftShooter?: number;
+  /** Non-shooting foul before the shot with no free throws (not in the bonus): defender slot. */
+  foul?: number | null;
   q: number;
   /** Seconds left in the period when the possession started / ended. */
   clockStart: number; clockEnd: number; secs: number;
@@ -190,5 +192,6 @@ export function toSimPossession(playLog: PlayLog, idx: number, players: Players,
     made, contested: !!p.c, dunk: !!p.d,
     blk: slotIn(defSide, by('blk')[0]), orb: slotIn(offSide, by('orb')[0]), drb: slotIn(defSide, by('drb')[0]),
     fouled: shootingFoul && fta > 0, fta, ftm, ftMakes,
+    foul: !shootingFoul && fta === 0 && preFoul ? slotIn(defSide, preFoul) : null,
   };
 }

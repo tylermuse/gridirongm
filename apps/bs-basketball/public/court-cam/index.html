@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2c'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2d'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -606,12 +606,13 @@ function choreograph(p) {
     move(handler, t + .1, t + 1.2, ...H(0)); off.forEach((a, i) => { if (a !== handler && a !== reb) move(a, .2, 1.5 + i * .1, ...H(i)); }); move(reb, t + .2, t + 1.6, ...H(4)); t += 1.2;
   } else { t = 1.2; off.forEach((a, i) => move(a, 0, 1.2, ...H(i))); hold(handler, 0, 99); }
   // defense gets back and matches up (each man between his man and the rim)
-  def.forEach((d, i) => { const m = off[i]; const target = (tm) => { const pm = posAt(m, tm); const [rx, rz] = [rimW[0], rimW[2]]; const dx = rx - pm.x, dz = rz - pm.z, L = Math.hypot(dx, dz) || 1; const k = Math.min(5, L * .35); return [pm.x + dx / L * k, pm.z + dz / L * k]; };
-    const tt = isTrans ? Math.max(.6, t - 1.2) : Math.max(1.2, t - .8); const [tx, tz] = target(tt + 1); move(d, .1 + i * .12, tt, tx, tz, { backpedal: !isTrans }); faceTo(d, 0, 'ball'); });
+  const matchUp = (from, to, backpedal) => def.forEach((d, i) => { const m = off[i]; const pm = posAt(m, to + 1); const dx = rimW[0] - pm.x, dz = rimW[2] - pm.z, L = Math.hypot(dx, dz) || 1; const k = Math.min(5, L * .35);
+    move(d, from + i * .12, to, pm.x + dx / L * k, pm.z + dz / L * k, { backpedal }); faceTo(d, from, 'ball'); });
+  matchUp(.1, isTrans ? Math.max(.6, t - 1.2) : Math.max(1.2, t - .8), !isTrans);
   off.forEach(a => faceTo(a, 0, 'ball'));
 
   // ---- 2. Half-court action ----
-  const Ta = t; let shotT = null, release = null, shotFrom = null, shotKind = p.st, finisher = shooter, assister = p.assister != null ? off[p.assister] : null;
+  let Ta = t; let shotT = null, release = null, shotFrom = null, shotKind = p.st, finisher = shooter, assister = p.assister != null ? off[p.assister] : null;
   const putback = isPut;
   const bodyRelease = (a) => V3(0, 0, 0);   // computed at run time from the hand
   const toSpot = (a, t0, t1) => move(a, t0, t1, spotW[0], spotW[1]);
@@ -675,11 +676,26 @@ function choreograph(p) {
     ev(t, () => { GS.lastEnd = 'to'; }); return finish(t + .3, 'to');
   }
   if (p.bonusFt) {
-    // reach-in on a drive, no shot: straight to the line
+    // reach-in on a drive, no shot, team in the bonus: straight to the line
     const [dx, dz] = W(-6, 30); move(handler, Ta, Ta + 1.2, dx, dz); act(handler, Ta - .4, Ta + 1.3, 'dribble'); hold(handler, ballAt, Ta + 1.4, 'hold');
     const f = def[p.fouler ?? 0]; move(f, Ta + .1, Ta + 1.1, dx - 2 * ATK, dz - 1.5 * ATK, { shuffle: true }); act(f, Ta + .9, Ta + 1.4, 'reachin');
-    ev(Ta + 1.15, () => { blowWhistle(); banner(`FOUL — ${f.name}`, 'bad', 1.3); });
+    ev(Ta + 1.15, () => { blowWhistle(); banner(`FOUL — ${f.name} · ${team(1 - p.off).abbr} OVER THE LIMIT`, 'bad', 1.5); });
     return freeThrows(Ta + 1.8, off[p.ftShooter ?? 0], p.fta, p.ftm, p.ftMakes);
+  }
+  if (p.foul != null && !isPut) {
+    // non-shooting foul before the bonus: whistle, the offense takes it out on the side and runs the set
+    const f = def[p.foul] || def[0]; const [dx, dz] = W(-10, 24);
+    move(handler, Ta, Ta + 1.0, dx, dz); act(handler, Ta - .4, Ta + 1.1, 'dribble');
+    move(f, Ta + .1, Ta + .9, dx - 2 * ATK, dz - 1.5 * ATK, { shuffle: true }); act(f, Ta + .7, Ta + 1.2, 'reachin');
+    ev(Ta + .95, () => { blowWhistle(); banner(`FOUL — ${f.name} · ${team(p.off).abbr} BALL ON THE SIDE`, 'bad', 1.5); });
+    const [ix, iz] = W(-27.5, 20), [px, pz] = W(-16, 15); const tIn = Ta + 2.6; const wing = off[1] === handler ? off[2] : off[1];
+    hold(handler, Ta + 1.0, tIn, 'hold'); move(handler, Ta + 1.2, Ta + 2.4, ix, iz); move(wing, Ta + 1.2, Ta + 2.3, px, pz); faceTo(handler, Ta + 1.2, 'rim'); faceTo(wing, Ta + 1.2, 'ball');
+    let tp = pass(handler, wing, tIn, .42); hold(wing, tp, tp + .85, 'hold'); move(handler, tp + .05, tp + .95, ...W(-13, 19));
+    tp = pass(wing, handler, tp + .85, .4); hold(handler, tp, 99); act(handler, tp, tp + 1.6, 'dribble');
+    move(handler, tp + .1, tp + 1.3, ...H(0)); move(wing, tp + .1, tp + 1.4, ...H(off.indexOf(wing)));
+    off.forEach((a, i) => { if (a !== handler && a !== wing) move(a, Ta + 1.2, Ta + 2.8 + i * .1, ...H(i)); });
+    matchUp(Ta + 1.2, tp + 1.2, false); ev(tIn, () => { shotClockT = 14; });
+    Ta = tp + 1.3;
   }
 
   // ---- shot archetypes ----
@@ -1089,7 +1105,10 @@ function setOffense(offIdx) { GS.off = offIdx; const H = SIDES.H, A = SIDES.A; O
 function substitute(sideIdx, five) { // five: player specs in slot order; replace bodies that aren't on the floor
   const arr = sideIdx === 0 ? SIDES.H : SIDES.A; const t = team(sideIdx);
   five.forEach((p, i) => { const cur = arr[i]; if (cur && cur.id === p.id) return; if (cur) { scene.remove(cur.root); actors.splice(actors.indexOf(cur), 1); }
-    const a = makePlayer(t, p.num ?? (i + 1) * 11, { heightFt: p.heightFt, skin: p.skin, name: p.name, id: p.id, ratings: p.ratings }); a.slot = i; a.teamIdx = sideIdx; a.x = (sideIdx === 0 ? -1 : 1) * 29; a.z = -6 + i * 3; a.planX = a.x; a.planZ = a.z; place(a); arr[i] = a; });
+    const a = makePlayer(t, p.num ?? (i + 1) * 11, { heightFt: p.heightFt, skin: p.skin, name: p.name, id: p.id, ratings: p.ratings }); a.slot = i; a.teamIdx = sideIdx;
+    const live = cur && ['stl', 'drb', 'blk', 'orb'].includes(GS.lastEnd);   // ball never went dead: no walk-on from the bench, he's simply there
+    if (live) { a.x = cur.x; a.z = cur.z; a.face = cur.face; if (GS.thief === cur) GS.thief = a; if (GS.rebounder === cur) GS.rebounder = a; } else { a.x = (sideIdx === 0 ? -1 : 1) * 29; a.z = -6 + i * 3; }
+    a.planX = a.x; a.planZ = a.z; place(a); arr[i] = a; });
   if (O) setOffense(GS.off);
 }
 /** Idle formation when nothing is running: players walk to a neutral spread. */
@@ -1098,7 +1117,7 @@ function idleFormation() { resetPlans(); if (!O) return; O.forEach((a, i) => mov
 function hold(a, t0, t1, mode = 'dribble') { ballPlan.push({ t0, t1, held: a, mode }); }
 
 // ---------- Run a possession ----------
-/** p: {off:0|1, pt, st, zone, shooter, assister, made, pts, h, a, contested, dunk, blk, orb, drb, to, stl, fouled, fta, ftm, bonusFt, fouler, ftShooter, q, clock, lineups?} */
+/** p: {off:0|1, pt, st, zone, shooter, assister, made, pts, h, a, contested, dunk, blk, orb, drb, to, stl, fouled, fta, ftm, bonusFt, fouler, ftShooter, foul (non-shooting, no FTs), q, clock, lineups?} */
 function runPossession(p) {
   if (GS.busy) return; GS.busy = true; running = false;
   if (p.q && p.q !== GS.q) { GS.lastEnd = 'tip'; }   // new period: fresh inbound, ends switch
@@ -1149,6 +1168,7 @@ function demoPossession(force) {
   else if (f === 'block' || (f === 'auto' && rnd() < .06 && st !== 'three')) { Object.assign(p, { made: false, blk: rnd() < .6 ? 4 : shooter, drb: rnd() < .7 ? 4 : null, orb: null }); if (p.drb == null) p.orb = 3; }
   else {
     p.made = made; p.dunk = f === 'dunk' || (made && st === 'at_rim' && rnd() < .4);
+    if (f === 'foul') p.foul = (rnd() * 5) | 0;
     if (f === 'and1') { p.fouled = true; p.fta = 1; p.ftm = rnd() < .78 ? 1 : 0; }
     else if (f === 'ft') { p.fouled = true; p.fta = st === 'three' ? 3 : 2; p.ftm = Math.round(p.fta * (.55 + rnd() * .4)); }
     else if (f === 'auto' && rnd() < .08) { p.fouled = true; p.fta = made ? 1 : (st === 'three' ? 3 : 2); p.ftm = Math.round(p.fta * (.5 + rnd() * .5)); }

@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SimPossession, SimTeamSpec } from '@/lib/live/liveSim3d';
 
-const SIM_BUILD = 'h2c';   // bump with public/court-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'h2d';   // bump with public/court-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/court-cam/index.html?embed=1&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsbb.sim3d';
 const VIEW_KEY = 'bsbb.sim3d.view';
