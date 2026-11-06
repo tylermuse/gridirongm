@@ -583,15 +583,17 @@ function choreograph(p) {
   } else if (last === 'tip' || last === 'dead') {
     // sideline inbound at half court
     const inb = off[4]; const [ix, iz] = W(-27.5, -2); const [px, pz] = W(-18, -10);
-    move(inb, 0, 1.2, ix, iz); move(handler, 0, 1.2, px, pz); hold(inb, 0, 1.5, 'hold');
-    t = pass(inb, handler, 1.5, .45); hold(handler, t, 99); act(handler, t, t + 2.2, 'dribble'); faceTo(inb, 0, 'ball');
+    const w = move(inb, 0, 1.2, ix, iz); const ready = w.t1 + .35;   // he passes from out of bounds, once he's there — never while still walking to the line
+    move(handler, 0, Math.max(1.2, ready - .2), px, pz); hold(inb, 0, ready, 'hold');
+    t = pass(inb, handler, ready, .45); hold(handler, t, 99); act(handler, t, t + 2.2, 'dribble'); faceTo(inb, 0, 'ball');
     for (const i of [1, 2, 3]) move(off[i], 0, 2.2 + i * .2, ...H(i)); move(inb, t + .2, t + 2.4, ...H(4));
     t += .3; move(handler, t, t + 1.6, ...H(0)); t += 1.6;
   } else if (last === 'make' || last === 'ft' || last === 'to') {
     // inbound from under the basket just scored on (behind the offense now)
-    const inb = off[4]; const [ix, iz] = W(3, -49); const [px, pz] = W(-12, -38);
-    move(inb, 0, 1.0, ix, iz); move(handler, 0, 1.0, px, pz); hold(inb, 0, 1.3, 'hold'); faceTo(inb, 0, 'ball');
-    t = pass(inb, handler, 1.3, .4); hold(handler, t, 99);
+    const inb = off[4]; const [ix, iz] = W(3, -49.5); const [px, pz] = W(-12, -38);
+    const w = move(inb, 0, 1.0, ix, iz); const ready = w.t1 + .35;   // steps over the end line first, then inbounds — no passing while drifting toward it
+    move(handler, 0, Math.max(1.0, ready - .2), px, pz); hold(inb, 0, ready, 'hold'); faceTo(inb, 0, 'ball');
+    t = pass(inb, handler, ready, .4); hold(handler, t, 99);
     const upT = isTrans ? 2.6 : 4.6; act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .1, t + upT, ...(isTrans ? W(-6, 14) : H(0)), { lin: isTrans });
     [1, 2, 3].forEach(i => move(off[i], .2 + i * .15, t + upT - .3 + i * .2, ...(isTrans ? W([-22, 22, -10][i - 1], [40, 40, 14][i - 1]) : H(i)), { lin: isTrans }));
     move(inb, t + .3, t + upT + 1.0, ...H(4));
@@ -716,8 +718,9 @@ function choreograph(p) {
     move(handler, Ta, Ta + 1.0, dx, dz); act(handler, Ta - .4, Ta + 1.1, 'dribble');
     move(f, Ta + .1, Ta + .9, dx - 2 * ATK, dz - 1.5 * ATK, { shuffle: true }); act(f, Ta + .7, Ta + 1.2, 'reachin');
     ev(Ta + .95, () => { blowWhistle(); banner(`FOUL — ${f.name} · ${team(p.off).abbr} BALL ON THE SIDE`, 'bad', 1.5); });
-    const [ix, iz] = W(-27.5, 20), [px, pz] = W(-16, 15); const tIn = Ta + 2.6; const wing = off[1] === handler ? off[2] : off[1];
-    hold(handler, Ta + 1.0, tIn, 'hold'); move(handler, Ta + 1.2, Ta + 2.4, ix, iz); move(wing, Ta + 1.2, Ta + 2.3, px, pz); faceTo(handler, Ta + 1.2, 'rim'); faceTo(wing, Ta + 1.2, 'ball');
+    const [ix, iz] = W(-27.5, 20), [px, pz] = W(-16, 15); const wing = off[1] === handler ? off[2] : off[1];
+    const w = move(handler, Ta + 1.2, Ta + 2.4, ix, iz); const tIn = w.t1 + .35;
+    hold(handler, Ta + 1.0, tIn, 'hold'); move(wing, Ta + 1.2, Math.max(Ta + 2.3, tIn - .3), px, pz); faceTo(handler, Ta + 1.2, 'rim'); faceTo(wing, Ta + 1.2, 'ball');
     let tp = pass(handler, wing, tIn, .42); hold(wing, tp, tp + .85, 'hold'); move(handler, tp + .05, tp + .95, ...W(-13, 19));
     tp = pass(wing, handler, tp + .85, .4); hold(handler, tp, 99); act(handler, tp, tp + 1.6, 'dribble');
     move(handler, tp + .1, tp + 1.3, ...H(0)); move(wing, tp + .1, tp + 1.4, ...H(off.indexOf(wing)));
