@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SimPossession, SimTeamSpec } from '@/lib/live/liveSim3d';
 
-const SIM_BUILD = 'h1c';   // bump with public/court-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'h2b';   // bump with public/court-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/court-cam/index.html?embed=1&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsbb.sim3d';
 const VIEW_KEY = 'bsbb.sim3d.view';
@@ -88,6 +88,10 @@ export function LiveSim3D({
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
+  const [epoch, setEpoch] = useState(0);        // bumps when the frame comes back fresh (reload / lost context) so state is re-sent
+  const [frameKey, setFrameKey] = useState(0);  // bumps to force a fresh iframe when the sim stops answering
+  const beatRef = useRef(0);
+  const readyRef = useRef(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [active, setActive] = useState(false);
   const [view, setView] = useSimView();
@@ -111,7 +115,15 @@ export function LiveSim3D({
       if (ev.source !== frameRef.current?.contentWindow) return;
       const m = ev.data as { type?: string; id?: number; message?: string } | null;
       if (!m || typeof m !== 'object') return;
-      if (m.type === 'bsh:ready') { setReady(true); setFailed(null); }
+      if (m.type === 'bsh:ready') {
+        setFailed(null);
+        // A second ready means the frame reloaded (iOS drops background WebGL contexts): re-send everything, including
+        // the possession the viewer is still waiting on.
+        if (readyRef.current) { if (activeIdRef.current != null) lastIdRef.current = null; setEpoch(e => e + 1); }
+        readyRef.current = true; setReady(true);
+      }
+      else if (m.type === 'bsh:needsetup') { if (activeIdRef.current != null) lastIdRef.current = null; setEpoch(e => e + 1); }
+      else if (m.type === 'bsh:beat') { beatRef.current = Date.now(); }
       else if (m.type === 'bsh:done') { if (m.id === activeIdRef.current) { activeIdRef.current = null; setActiveBoth(false); } }
       else if (m.type === 'bsh:error') { setFailed(m.message || 'failed to load'); setActiveBoth(false); }
     };
@@ -126,30 +138,52 @@ export function LiveSim3D({
     return () => window.clearInterval(iv);
   }, [enabled, ready, post]);
 
-  // Teams + game state → sim (once ready, and whenever the matchup changes)
-  const homeKey = JSON.stringify(homeTeam), awayKey = JSON.stringify(awayTeam);
-  const setupKey = JSON.stringify(setup);
+  // Watchdog: the sim heartbeats once a second while a possession runs. If the beats stop while the viewer is held on it
+  // (frame loop died, page suspended and never resumed), release the viewer and bring up a fresh frame.
   useEffect(() => {
-    if (!enabled || !ready || !homeTeam || !awayTeam || !setup) return;
-    post({ type: 'bsh:setup', home: homeTeam, away: awayTeam, ...setup });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the serialised teams / setup
-  }, [enabled, ready, homeKey, awayKey, setupKey, post]);
+    if (!enabled) return;
+    const iv = window.setInterval(() => {
+      if (!activeRef.current || off || Date.now() - beatRef.current < 8000) return;
+      activeIdRef.current = null; setActiveBoth(false); readyRef.current = false; setReady(false); setFrameKey(k => k + 1);
+    }, 2000);
+    return () => window.clearInterval(iv);
+  }, [enabled, off, setActiveBoth]);
+
+  // Teams + game state → sim once per matchup (not per lineup: a re-setup rebuilds every body at centre court and
+  // resets continuity). Subs ride along with each possession; skin tones that resolve later go as bsh:skins.
+  const matchupKey = homeTeam && awayTeam ? `${homeTeam.id}|${homeTeam.jersey}|${homeTeam.trim}|${awayTeam.id}|${awayTeam.jersey}|${awayTeam.trim}` : '';
+  const setupKey = JSON.stringify(setup);
+  const teamsRef = useRef({ homeTeam, awayTeam }); teamsRef.current = { homeTeam, awayTeam };
+  useEffect(() => {
+    const { homeTeam: h, awayTeam: a } = teamsRef.current;
+    if (!enabled || !ready || !h || !a || !setup) return;
+    post({ type: 'bsh:setup', home: h, away: a, ...setup });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the matchup and the one-time setup, not the five
+  }, [enabled, ready, epoch, matchupKey, setupKey, post]);
+  const skinsKey = homeTeam && awayTeam ? [...homeTeam.players, ...awayTeam.players].map(p => `${p.id}:${p.skin ?? ''}`).join(',') : '';
+  useEffect(() => {
+    if (!enabled || !ready || !homeTeam || !awayTeam) return;
+    const skins: Record<string, string> = {};
+    for (const p of [...homeTeam.players, ...awayTeam.players]) if (p.skin) skins[p.id] = p.skin;
+    post({ type: 'bsh:skins', skins });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by skinsKey
+  }, [enabled, ready, epoch, skinsKey, post]);
 
   useEffect(() => {
     if (!enabled || !ready) return;
     post({ type: 'bsh:view', cam: view.cam, auto: view.auto });
-  }, [enabled, ready, view.cam, view.auto, post]);
+  }, [enabled, ready, epoch, view.cam, view.auto, post]);
 
   useEffect(() => {
     if (!enabled || !ready) return;
     post({ type: 'bsh:speed', rate });
-  }, [enabled, ready, rate, post]);
+  }, [enabled, ready, epoch, rate, post]);
 
   const clockKey = clock ? `${clock.quarter}:${clock.secs}` : '';
   useEffect(() => {
     if (!enabled || !ready || !clock) return;
     post({ type: 'bsh:clock', clock: clock.secs, quarter: clock.quarter });
-  }, [enabled, ready, clockKey, post]);   // eslint-disable-line react-hooks/exhaustive-deps -- keyed by clockKey
+  }, [enabled, ready, epoch, clockKey, post]);   // eslint-disable-line react-hooks/exhaustive-deps -- keyed by clockKey
 
   // New possession → send it and hold the viewer until the sim reports done
   useEffect(() => {
@@ -158,9 +192,10 @@ export function LiveSim3D({
     if (lastIdRef.current === possession.id) return;
     lastIdRef.current = possession.id;
     activeIdRef.current = possession.id;
+    beatRef.current = Date.now();
     post({ type: 'bsh:poss', id: possession.id, p: possession });
     setActiveBoth(true);
-  }, [enabled, possession, off, ready, failed, post, setActiveBoth]);
+  }, [enabled, possession, off, ready, epoch, failed, post, setActiveBoth]);
 
   useEffect(() => {
     if ((off || !enabled) && activeRef.current) { post({ type: 'bsh:skip' }); activeIdRef.current = null; setActiveBoth(false); }
@@ -171,7 +206,7 @@ export function LiveSim3D({
   if (!enabled) return null;
   return (
     <div ref={boxRef} className="relative w-full overflow-hidden rounded-xl bg-black aspect-[4/5] sm:aspect-video">
-      <iframe ref={frameRef} src={SIM_URL} title="Court Cam — live 3D sim" allow="autoplay" className="h-full w-full border-0" />
+      <iframe key={frameKey} ref={frameRef} src={frameKey ? `${SIM_URL}&r=${frameKey}` : SIM_URL} title="Court Cam — live 3D sim" allow="autoplay" className="h-full w-full border-0" />
       {!ready && !failed && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/70 text-sm font-semibold text-white">Loading Court Cam…</div>
       )}
