@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2a'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2b'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -353,6 +353,7 @@ function teamMaterial(src, part, t, skin) {
   const m = src.clone(); m.envMapIntensity = .5;
   const lin = v => Math.pow(v, 2.2);
   const U = { uA: { value: new THREE.Color('#fff') }, uB: { value: new THREE.Color('#fff') }, uRef: { value: V3(1, 1, 1) }, uRefW: { value: V3(1, 1, 1) }, uMode: { value: 3 }, uCut: { value: new THREE.Vector4(-9, 9, 9, 0) } };
+  m.userData.U = U;
   if (part === 'skin') { U.uA.value.set(skin); U.uRef.value.setScalar([.72, .52, .42].map(lin).reduce((s, v, i) => s + v * [.3, .59, .11][i], 0)); U.uMode.value = 1; m.roughness = .62; m.envMapIntensity = .35; }
   else if (part === 'torso' || part === 'pants') {
     if (t.id === 'REF' && part === 'torso') { U.uMode.value = 4; U.uRef.value.setScalar(lin(.93)); }
@@ -421,6 +422,7 @@ function makePlayer(t, number, opts = {}) {
   scene.add(root); actors.push(a); return a;
 }
 function place(a) { a.root.position.set(a.x, a.y, a.z); a.root.rotation.y = a.face; }
+function setSkin(a, hex) { if (!hex) return; a.model.traverse(o => { if (o.isSkinnedMesh && o.material.userData.U && o.material.userData.U.uMode.value === 1) o.material.userData.U.uA.value.set(hex); }); }
 function clearPlayers() { for (const a of actors) scene.remove(a.root); actors.length = 0; }
 
 // ---------- Posing helpers (world-direction aiming; rig-agnostic) ----------
@@ -977,11 +979,19 @@ function updateBall(t, dt) {
 function pinToHand(a, mode, t) {
   a.model.updateMatrixWorld(true); const fr = frameOf(a);
   if ((mode === 'dribble' || mode === 'post') && a.clipW > .5 && /^dribble|^mx_dribble|crossover|between|behind|spin|pullup|stepback|euro|floater|layup|finger|hook|dunk/.test(a.clipName || '')) {
-    // mocap dribble: the ball lives under the right hand; it drops to the floor as the hand pushes down and meets the hand on the way up
-    const h = handPos(a); const ht = a.heightFt * .50, hb = a.heightFt * .30; const u = clamp((h.y - hb) / (ht - hb), 0, 1);
-    const y = BALL_R + Math.max(0, h.y - BALL_R - .25) * Math.pow(u, 1.6);
-    ball.position.set(h.x, y, h.z).addScaledVector(fr.F, .1);
-    if (u < .12 && !a.bounced) { a.bounced = true; sndBounce(.45); } if (u > .5) a.bounced = false; ballSpin.set(4, 0, 0); return; }
+    // mocap dribble: the ball lives under the right hand. The hand itself only dips a foot or so (it pushes the ball,
+    // it doesn't follow it down), so the bounce is a clocked cycle — released at the hand's low point (phase 0), floor at
+    // .25, back in the hand at .5, riding the hand until the next push — re-synced whenever the mocap hand bottoms out.
+    const h = handPos(a); const dtp = Math.max(0, t - (a.dribbleT ?? t)); a.dribbleT = t;
+    const period = mode === 'post' ? .62 : a.speed > 10 ? .38 : .48;
+    let ph = (a.dribblePhase || 0) + dtp / period;
+    const vy = dtp > 1e-3 ? (h.y - (a.handY ?? h.y)) / dtp : (a.handVy || 0); a.handY = h.y;
+    if ((a.handVy || 0) < -2 && vy >= 0 && (ph % 1 > .7 || ph % 1 < .3)) ph = 0;   // the hand just pushed: release now
+    a.handVy = vy; ph = a.dribblePhase = ph % 1;
+    const top = Math.max(BALL_R + .4, h.y - .3);
+    const y = ph < .5 ? BALL_R + (top - BALL_R) * Math.abs(Math.cos(2 * Math.PI * ph)) : top;
+    ball.position.set(h.x, y, h.z).addScaledVector(fr.F, .1 + Math.min(a.speed, 20) * .015);
+    if (ph > .2 && ph < .3 && !a.bounced) { a.bounced = true; sndBounce(.45); } if (ph > .5) a.bounced = false; ballSpin.set(4, 0, 0); return; }
   if (mode === 'dribble' || mode === 'post') { // the ball bounces beside the dribbling hand
     const period = mode === 'post' ? .62 : a.speed > 10 ? .36 : .46; a.dribblePhase = ((a.dribblePhase || 0) + (t - (a.dribbleT || t)) / period) % 1; a.dribbleT = t;
     const ph = a.dribblePhase; const side = a.dribbleSide === 'L' ? -1 : 1; const handY = a.heightFt * .42; const yy = handY - (handY - BALL_R) * Math.sin(ph * Math.PI);
@@ -1028,10 +1038,21 @@ function cutTo(mode, until) { if (!CAM.auto) return; CAM.cut = mode; CAM.cutUnti
 
 // ---------- Frame loop ----------
 let last = performance.now(), shotClockT = 24;
+let glLost = false, lastBeat = 0;
+renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); glLost = true; console.warn('court cam: GL context lost'); }, false);
+renderer.domElement.addEventListener('webglcontextrestored', () => { glLost = false; console.warn('court cam: GL context restored'); }, false);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; last = performance.now();
+  setTimeout(() => { if (glLost && document.visibilityState === 'visible') location.reload(); }, 2500); });   // a context that doesn't come back → fresh page (the parent re-syncs on the new ready)
 function frame(now) {
   const dtReal = Math.min(.05, (now - last) / 1000); last = now;
-  if (!window.__qaDrive) advance(dtReal);
-  renderer.render(scene, camera);
+  try {
+    if (!window.__qaDrive) advance(dtReal);
+    if (!glLost) renderer.render(scene, camera);
+    if (window.__beat && now - lastBeat > 1000) { lastBeat = now; window.__beat(); }
+  } catch (e) {
+    console.error('court cam frame failed; ending the possession', e);
+    try { resetPlans(); playDead('error'); } catch (e2) { }
+  }
   requestAnimationFrame(frame);
 }
 function advance(dtReal) {
@@ -1149,14 +1170,25 @@ window.__onIdle = (how) => { if (EMBED || Q.get('qa')) return; setTimeout(demoNe
 // ---------- Embed protocol ----------
 // in:  {type:'bsh:setup', home:{id,name,abbr,jersey,num,shorts,trim,floorKey,players:[{id,name,num,skin,heightFt,pos,ratings}]}, away:{...}}
 //      {type:'bsh:poss', id, p:{...possession as runPossession takes...}}   {type:'bsh:clock', clock, quarter}   {type:'bsh:hello'}   {type:'bsh:skip'}   {type:'bsh:view', cam, auto}  {type:'bsh:speed', rate}
-// out: {type:'bsh:ready'}  {type:'bsh:done', id, how}  {type:'bsh:error', message}
+// out: {type:'bsh:ready'}  {type:'bsh:done', id, how}  {type:'bsh:error', message}  {type:'bsh:beat', id} (once a second while a possession runs)  {type:'bsh:needsetup'}
 function embedStart() {
   const post = m => { try { window.parent.postMessage(m, '*'); } catch (e) { } };
-  let pending = null, current = null;
-  const runNext = () => { if (GS.busy || !pending) return; const m = pending; pending = null; current = m.id; GS.clock = m.p.clockStart ?? GS.clock; runPossession(m.p); };
+  let pending = null, current = null, lastDone = null;
+  const runNext = () => { if (GS.busy || !pending) return;
+    if (!SIDES) { post({ type: 'bsh:needsetup' }); return; }   // a reloaded frame has no teams yet: keep the possession and ask the viewer to re-send the setup
+    const m = pending; pending = null; current = m.id; GS.clock = m.p.clockStart ?? GS.clock;
+    try { runPossession(m.p); } catch (e) { console.error('court cam: possession failed', e); GS.busy = false; running = false; current = null; post({ type: 'bsh:done', id: m.id, how: 'error' }); } };
+  window.__beat = () => { if (current != null) post({ type: 'bsh:beat', id: current }); };
   addEventListener('message', ev => { const m = ev.data; if (!m || typeof m !== 'object') return;
-    if (m.type === 'bsh:setup') { SIDES = setupTeams(m.home, m.away); GS.q = m.quarter || 1; GS.clock = m.clock ?? 720; GS.score = [m.homeScore || 0, m.awayScore || 0]; GS.lastEnd = 'tip'; setOffense(m.possession === 'away' ? 1 : 0); idleFormation(); renderBug('TIP-OFF'); camSnap = true; }
-    else if (m.type === 'bsh:poss') { sndInit(); sndBed(true); pending = m; runNext(); }
+    if (m.type === 'bsh:setup') {
+      const same = SIDES && TEAMS[0] && TEAMS[1] && TEAMS[0].id === m.home.id && TEAMS[1].id === m.away.id;
+      if (same) { // same matchup: keep the bodies where they are, just refresh kit/skins and the scoreboard
+        TEAMS[0] = { ...TEAMS[0], ...m.home, players: TEAMS[0].players }; TEAMS[1] = { ...TEAMS[1], ...m.away, players: TEAMS[1].players };
+        for (const t of [m.home, m.away]) for (const p of t.players || []) { const a = actors.find(x => x.id === p.id); if (a) setSkin(a, p.skin); }
+        if (!GS.busy) { GS.q = m.quarter || GS.q; GS.clock = m.clock ?? GS.clock; GS.score = [m.homeScore || 0, m.awayScore || 0]; } renderBug(); return; }
+      SIDES = setupTeams(m.home, m.away); GS.q = m.quarter || 1; GS.clock = m.clock ?? 720; GS.score = [m.homeScore || 0, m.awayScore || 0]; GS.lastEnd = 'tip'; setOffense(m.possession === 'away' ? 1 : 0); idleFormation(); renderBug('TIP-OFF'); camSnap = true; runNext(); }
+    else if (m.type === 'bsh:skins') { for (const [id, hex] of Object.entries(m.skins || {})) { const a = actors.find(x => x.id === id); if (a) setSkin(a, hex); } }
+    else if (m.type === 'bsh:poss') { if (m.id === current || m.id === lastDone) return; sndInit(); sndBed(true); pending = m; runNext(); }   // a re-sent possession (viewer re-sync) never runs twice
     else if (m.type === 'bsh:clock') { if (m.clock != null && !GS.busy) GS.clock = m.clock; if (m.quarter) GS.q = m.quarter; renderBug(); }
     else if (m.type === 'bsh:score') { GS.score = [m.home, m.away]; renderBug(); }
     else if (m.type === 'bsh:hello') { post({ type: 'bsh:ready' }); }
@@ -1164,7 +1196,7 @@ function embedStart() {
     else if (m.type === 'bsh:view') { if (m.cam) { CAM.mode = m.cam; CAM.cut = null; camSnap = true; } if (m.auto != null) CAM.auto = !!m.auto; }
     else if (m.type === 'bsh:speed') { GS.speed = m.rate || 1.3; }
     else if (m.type === 'bsh:lineup') { substitute(m.side === 'away' ? 1 : 0, m.five); } });
-  window.__onIdle = (how) => { GS.speed = window.__baseSpeed || GS.speed; if (GS.speed > 5) GS.speed = window.__baseSpeed || 1.3; if (current != null) { const id = current; current = null; post({ type: 'bsh:done', id, how }); } runNext(); };
+  window.__onIdle = (how) => { GS.speed = window.__baseSpeed || GS.speed; if (GS.speed > 5) GS.speed = window.__baseSpeed || 1.3; if (current != null) { const id = current; current = null; lastDone = id; post({ type: 'bsh:done', id, how }); } runNext(); };
   post({ type: 'bsh:ready' });
 }
 
@@ -1189,6 +1221,6 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(() => {
   window.__ready = true;
 }).catch(e => { $('hint').textContent = 'Player model failed to load: ' + (e && e.message || e); console.error(e); if (EMBED && window.parent) window.parent.postMessage({ type: 'bsh:error', message: String(e && e.message || e) }, '*'); });
 // QA hooks
-window.__sim = { GS, CAM, actors, run: p => runPossession(p), demo: f => demoPossession(f), tick: (dt, n = 1) => { window.__qaDrive = true; for (let i = 0; i < n; i++) advance(dt); renderer.render(scene, camera); }, adv: dt => advance(dt), get T() { return T; }, get running() { return running; }, ball, get playEvents() { return playEvents; } };
+window.__sim = { GS, CAM, actors, run: p => runPossession(p), demo: f => demoPossession(f), tick: (dt, n = 1) => { window.__qaDrive = true; for (let i = 0; i < n; i++) advance(dt); renderer.render(scene, camera); }, adv: dt => advance(dt), get T() { return T; }, get running() { return running; }, ball, get playEvents() { return playEvents; }, dropTeams: () => { SIDES = null; } };
 })();
 </script>
