@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { InteractionsSection, type InteractionReport } from './InteractionsSection';
+import { DailyBars } from './DailyBars';
 
 // Every number fed by the summary RPC is null when that query failed (e.g. a
 // statement timeout). The cards render "—" for null; they must never show 0 as
@@ -376,7 +377,6 @@ export default function AdminAnalyticsPage() {
 function ActiveUsersSection({ title, a }: { title: string; a: ActiveUsersRolling }) {
   const stickiness = a.engagedMau > 0 ? a.engagedDau / a.engagedMau : 0;
   const series = a.dailyActive.slice(-30);
-  const max = Math.max(1, ...series.map((d) => d.all));
   return (
     <div>
       <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{title} · active users · rolling</h2>
@@ -398,22 +398,11 @@ function ActiveUsersSection({ title, a }: { title: string; a: ActiveUsersRolling
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100" />Raw</span>
             </div>
           </div>
-          <div className="flex items-end gap-[3px] h-32">
-            {series.map((d) => (
-              <div
-                key={d.day}
-                className="relative flex-1 h-full flex items-end"
-                title={`${d.day}: ${d.engaged} engaged / ${d.all} raw`}
-              >
-                <div className="absolute bottom-0 w-full rounded-t-sm bg-blue-100" style={{ height: `${(d.all / max) * 100}%` }} />
-                <div className="relative w-full rounded-t-sm bg-blue-600" style={{ height: `${(d.engaged / max) * 100}%` }} />
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between mt-1.5 text-[10px] text-gray-400">
-            <span>{series[0].day.slice(5)}</span>
-            <span>{series[series.length - 1].day.slice(5)}</span>
-          </div>
+          <DailyBars
+            bars={series.map((d) => ({ day: d.day, value: d.engaged, backdrop: d.all }))}
+            valueLabel="Engaged"
+            backdropLabel="Raw"
+          />
         </div>
       )}
     </div>
@@ -571,63 +560,14 @@ function timeAgo(iso: string, now: number): string {
 
 function SignupsChart({ data, period, now }: { data: Record<string, number>; period: Period; now: number }) {
   const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-  const labels: string[] = [];
-  const values: number[] = [];
+  const bars = Array.from({ length: days }, (_, i) => {
+    const day = new Date(now - (days - 1 - i) * 86400000).toISOString().slice(0, 10);
+    return { day, value: data[day] ?? 0 };
+  });
 
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now - i * 86400000);
-    const key = d.toISOString().slice(0, 10);
-    labels.push(key);
-    values.push(data[key] ?? 0);
-  }
-
-  const max = Math.max(...values, 1);
-
-  if (values.every(v => v === 0)) {
+  if (bars.every((b) => b.value === 0)) {
     return <div className="text-sm text-gray-400 py-4 text-center">No signups in this period</div>;
   }
 
-  // Pick ~5-7 evenly spaced X-axis labels
-  const xLabelCount = Math.min(days <= 7 ? days : 6, labels.length);
-  const xLabelStep = Math.max(1, Math.floor(labels.length / xLabelCount));
-  const xLabels = labels
-    .map((l, i) => ({ label: l, index: i }))
-    .filter((_, i) => i % xLabelStep === 0 || i === labels.length - 1);
-
-  // Y-axis ticks
-  const yTicks = max <= 3 ? Array.from({ length: max + 1 }, (_, i) => i) : [0, Math.round(max / 2), max];
-
-  return (
-    <div className="flex gap-2">
-      {/* Y-axis */}
-      <div className="flex flex-col justify-between h-32 text-[10px] text-gray-400 text-right w-6 shrink-0 py-0.5">
-        {[...yTicks].reverse().map(v => (
-          <span key={v}>{v}</span>
-        ))}
-      </div>
-      {/* Chart area */}
-      <div className="flex-1 flex flex-col">
-        <div className="flex items-end gap-px h-32">
-          {values.map((v, i) => (
-            <div
-              key={labels[i]}
-              className="flex-1 bg-blue-500 rounded-t-sm hover:bg-blue-600 transition-colors min-w-[2px]"
-              style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? '2px' : '0' }}
-              title={`${labels[i]}: ${v} signup${v !== 1 ? 's' : ''}`}
-            />
-          ))}
-        </div>
-        {/* X-axis */}
-        <div className="flex justify-between mt-1.5">
-          {xLabels.map(({ label }) => {
-            const d = new Date(label + 'T00:00:00');
-            const fmt = `${d.getMonth() + 1}/${d.getDate()}`;
-            return (
-              <span key={label} className="text-[10px] text-gray-400">{fmt}</span>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
+  return <DailyBars bars={bars} valueLabel="Signups" />;
 }
