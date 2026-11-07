@@ -147,10 +147,12 @@ export function DraftBoardCard({
       )}
 
       {/* Table — FEAT-3 + STYLE-2: cap the visible window so the board doesn't
-          sprawl, while showing enough prospects to scout meaningfully. 40rem
-          ≈ 14 rows + thead — matches the paired Draft Results card and is
-          tall enough that the lottery range (14 picks) fits without scroll. */}
-      <div className="overflow-auto max-h-[40rem]">
+          sprawl and the draft results stay reachable. sm+: 15 prospects
+          (31px thead + 15 × 55.3px rows ≈ 862px, plus room for a horizontal
+          scrollbar on narrow layouts — without one the 16th row peeks in as a
+          scroll hint). Phones cap at 70svh so the window never fills the
+          screen and the page stays scrollable around it. */}
+      <div className="overflow-auto max-h-[70svh] sm:max-h-[880px]">
         <table className="w-full text-sm min-w-[480px] sticky-col sticky-action">
           <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider sticky top-0 z-10" style={{ background: 'var(--surface)' }}>
             <tr>

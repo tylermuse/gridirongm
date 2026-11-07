@@ -8,6 +8,7 @@ import {
   heightLabel,
   prospectTier,
   recordLabel,
+  teamSlug,
   type ProspectTier,
 } from '@/lib/mockDraft/engine';
 import { getMockDraftData } from '@/lib/mockDraft/serverData';
@@ -66,6 +67,8 @@ export default async function BigBoardPage({ searchParams }: { searchParams: Sea
   const prospects = position ? data.prospects.filter((p) => p.pos === position) : data.prospects;
   const teams = new Map(data.teams.map((t) => [t.tid, t]));
   const roundOne = data.order.filter((slot) => slot.round === 1);
+  // The round-1 list misses teams that traded their 1st, so the team pages get their own full list.
+  const teamsByName = [...data.teams].sort((a, b) => `${a.region} ${a.name}`.localeCompare(`${b.region} ${b.name}`));
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -157,7 +160,9 @@ export default async function BigBoardPage({ searchParams }: { searchParams: Sea
 
       <section className="mt-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Draft order if the season ended today</h2>
-        <p className="text-sm text-gray-500 mb-4">Round 1, as of Week {data.currentWeek}.</p>
+        <p className="text-sm text-gray-500 mb-4">
+          Round 1, as of Week {data.currentWeek}. Pick a team for its full 7-round mock draft and needs.
+        </p>
         <ol className="grid sm:grid-cols-2 gap-x-6 rounded-xl border border-gray-200 bg-white px-4 py-2">
           {roundOne.map((slot) => {
             const team = teams.get(slot.tid);
@@ -167,13 +172,33 @@ export default async function BigBoardPage({ searchParams }: { searchParams: Sea
               <li key={slot.pick} className="flex items-center gap-3 py-2 border-b border-gray-100 text-sm">
                 <span className="w-6 shrink-0 tabular-nums font-semibold text-gray-500">{slot.pick}</span>
                 <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} size="sm" />
-                <span className="font-semibold text-gray-900">{team.region} {team.name}</span>
+                <Link
+                  href={`${PAGE_PATH}/${teamSlug(team)}`}
+                  prefetch={false}
+                  className="font-semibold text-gray-900 hover:text-blue-600 hover:underline"
+                >
+                  {team.region} {team.name}
+                </Link>
                 <span className="text-gray-500 tabular-nums">{recordLabel(team)}</span>
                 {via && <span className="ml-auto text-xs text-gray-500">via {via}</span>}
               </li>
             );
           })}
         </ol>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">{data.draftYear} mock drafts by team</h2>
+        <p className="text-sm text-gray-500 mb-4">Every team&apos;s picks across all 7 rounds, its needs, and the prospects in range.</p>
+        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-1 text-sm">
+          {teamsByName.map((team) => (
+            <li key={team.tid}>
+              <Link href={`${PAGE_PATH}/${teamSlug(team)}`} prefetch={false} className="text-blue-600 hover:underline">
+                {team.region} {team.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <div className="mt-10 rounded-xl border border-blue-200 bg-blue-50 p-6 text-center">

@@ -336,3 +336,92 @@ export function prospectTier(pot: number): ProspectTier {
   if (pot >= 65) return 'Day 2';
   return 'Day 3';
 }
+
+/* ─── Team pages (/mock-draft/2027/[team]) ──────────────────── */
+
+/**
+ * URL slug for a team page: the nickname, lowercased (`bears`, `49ers`). Search
+ * traffic is "bears mock draft", not "chi mock draft". The 32 nicknames are
+ * unique; a test guards that. The same slug is the tool's `?team=` preselect.
+ */
+export function teamSlug(team: Pick<MockTeam, 'name'>): string {
+  return team.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+export function findTeamBySlug(data: MockDraftData, slug: string): MockTeam | undefined {
+  const wanted = slug.toLowerCase();
+  return data.teams.find((t) => teamSlug(t) === wanted);
+}
+
+/**
+ * The `?team=bears` preselect from a team page's CTA. A team with no 1st-round
+ * pick (it was traded) starts at 3 rounds, or setup would open with it greyed out.
+ */
+export function parseTeamPreselect(
+  data: MockDraftData,
+  params: URLSearchParams,
+): { userTids: number[]; rounds: MockRounds } | null {
+  const raw = params.get('team');
+  const team = raw ? findTeamBySlug(data, raw) : undefined;
+  if (!team) return null;
+  const hasFirst = data.order.some((slot) => slot.round === 1 && slot.tid === team.tid);
+  return { userTids: [team.tid], rounds: hasFirst ? 1 : 3 };
+}
+
+export type NeedReason = 'qb' | 'below-min' | 'thin';
+
+export interface TeamNeed {
+  pos: Position;
+  reason: NeedReason;
+  /** Players on the roster at the position (best QB's OVR for a 'qb' need). */
+  value: number;
+  /** The bar it falls short of: the roster minimum, the league median count, or 75 OVR. */
+  bar: number;
+}
+
+/** QB under this OVR, with no young high-potential QB behind him, reads as a need. Matches the AI's "priority" range. */
+export const QB_NEED_OVR = 75;
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * A fuller needs list than teamNeeds for the team pages. teamNeeds only flags a
+ * position under the roster minimum, which is 2 of 32 teams on a mid-season
+ * roster. This adds a starting QB under 75 OVR (with no developing QB) and any
+ * position where the team carries fewer players than the league median. Most
+ * important first: QB, then below the minimum, then thin. K and P stay out (see teamNeeds).
+ */
+export function teamDraftNeeds(data: MockDraftData, team: MockTeam): TeamNeed[] {
+  const needs: TeamNeed[] = [];
+  if (!team.hasDevQB && team.bestQbOvr < QB_NEED_OVR) {
+    needs.push({ pos: 'QB', reason: 'qb', value: team.bestQbOvr, bar: QB_NEED_OVR });
+  }
+  const belowMin = new Set(teamNeeds(team.countByPosition));
+  const thin: TeamNeed[] = [];
+  for (const pos of BOARD_POSITIONS) {
+    if (pos === 'K' || pos === 'P' || pos === 'QB') continue;
+    const count = team.countByPosition[pos] ?? 0;
+    if (belowMin.has(pos)) {
+      needs.push({ pos, reason: 'below-min', value: count, bar: ROSTER_LIMITS[pos].min });
+      continue;
+    }
+    const leagueMedian = median(data.teams.map((t) => t.countByPosition[pos] ?? 0));
+    if (count < leagueMedian) thin.push({ pos, reason: 'thin', value: count, bar: leagueMedian });
+  }
+  return [...needs, ...thin];
+}
+
+/**
+ * The fixed all-AI 7-round mock the team pages show. One replay for all 32
+ * pages, so no prospect goes to two teams. It changes whenever the weekly data
+ * refresh does, and the tool can replay it from encodeShareQuery.
+ */
+export const HOUSE_MOCK_SETTINGS: DraftSettings = { seed: 2027, rounds: 7, userTids: [] };
+
+export function houseMock(data: MockDraftData): ReplayResult {
+  return replayDraft(data, HOUSE_MOCK_SETTINGS, []);
+}

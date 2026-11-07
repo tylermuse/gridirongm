@@ -1,6 +1,15 @@
 import { cloneElement, type ReactElement, type ReactNode, type SVGProps } from 'react';
 import { ImageResponse } from 'next/og';
-import { classGrade, isAllTeams, parseShareQuery, type MadePick, type MockDraftData, type MockTeam } from '@/lib/mockDraft/engine';
+import {
+  classGrade,
+  findTeamBySlug,
+  houseMock,
+  isAllTeams,
+  parseShareQuery,
+  type MadePick,
+  type MockDraftData,
+  type MockTeam,
+} from '@/lib/mockDraft/engine';
 import { getMockDraftData } from '@/lib/mockDraft/serverData';
 import { ICONS } from '@/components/ui/teamLogoIcons';
 
@@ -8,7 +17,8 @@ import { ICONS } from '@/components/ui/teamLogoIcons';
  * Social preview for /mock-draft. This is a route rather than opengraph-image.tsx
  * because that convention can't see the query string a share link keeps its state
  * in, and it would also override the per-link image set in generateMetadata.
- * With no usable share state it draws the static fallback card.
+ * With no usable share state it draws the static fallback card, or, with
+ * `?team=bears`, that team's picks from the house mock (for /mock-draft/2027/[team]).
  */
 
 const SIZE = { width: 1200, height: 630 };
@@ -148,10 +158,14 @@ function ShareCard({ data, team, picks }: { data: MockDraftData; team?: MockTeam
 
 export function GET(request: Request) {
   const data = getMockDraftData();
-  const share = parseShareQuery(data, new URL(request.url).searchParams);
+  const params = new URL(request.url).searchParams;
+  const share = parseShareQuery(data, params);
+  const pageTeam = share.kind === 'none' ? findTeamBySlug(data, params.get('team') ?? '') : undefined;
 
   let card = <FallbackCard data={data} />;
-  if (share.kind === 'ok') {
+  if (pageTeam) {
+    card = <ShareCard data={data} team={pageTeam} picks={houseMock(data).picks.filter((p) => p.slot.tid === pageTeam.tid)} />;
+  } else if (share.kind === 'ok') {
     const allTeams = isAllTeams(data, share.settings.userTids);
     const team = allTeams ? undefined : data.teams.find((t) => t.tid === share.settings.userTids[0]);
     card = <ShareCard data={data} team={team} picks={team ? share.replay.picks.filter((p) => p.slot.tid === team.tid) : share.replay.picks} />;

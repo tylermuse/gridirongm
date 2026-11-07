@@ -5,6 +5,7 @@ import { trackEvent } from '@bs/core/analytics/track';
 import {
   encodeShareQuery,
   parseShareQuery,
+  parseTeamPreselect,
   randomSeed,
   replayDraft,
   type DraftSettings,
@@ -78,7 +79,8 @@ function reducer(state: State, action: Action): State {
 
 function initialState(data: MockDraftData, initialQuery: string): State {
   const setup: SetupState = { screen: 'setup', notice: null, rounds: 1, userTids: [], speed: 'fast' };
-  const share = parseShareQuery(data, new URLSearchParams(initialQuery));
+  const params = new URLSearchParams(initialQuery);
+  const share = parseShareQuery(data, params);
   if (share.kind === 'ok') {
     return {
       screen: 'draft',
@@ -98,7 +100,9 @@ function initialState(data: MockDraftData, initialQuery: string): State {
       userTids: share.hint.userTids,
     };
   }
-  return setup;
+  // `?team=bears` from a team page's CTA: open setup with that team picked.
+  const preselect = parseTeamPreselect(data, params);
+  return preselect ? { ...setup, ...preselect } : setup;
 }
 
 function MockDraftSession({ data, asOf, initialQuery }: { data: MockDraftData; asOf: string; initialQuery: string }) {
