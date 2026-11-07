@@ -267,7 +267,7 @@ function extendedCombine(player: Player): DraftScoutEvaluation['combine'] {
 
 /* ─── Consensus Blurb ────────────────────────────────────────── */
 
-export function publicConsensusBlurb(player: Player): string {
+export function publicConsensusBlurb(player: { projectedRank?: number; ratings: { overall: number } }): string {
   const rank = player.projectedRank ?? 128;
   const total = 256;
   const ovr = player.ratings.overall;
