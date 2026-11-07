@@ -1222,8 +1222,10 @@ export function simulatePlayByPlay(
               state.down = 1;
               state.yardsToGo = 10;
             } else {
-              // Turnover on downs
-              switchPossession(clamp(100 - state.fieldPos, 10, 90));
+              // Turnover on downs — mirror the field like the other turnover
+              // path (clamp 1..99); the old 10/90 clamp wrongly backed the
+              // defense off its own goal line / out of true opponent-territory.
+              switchPossession(clamp(100 - state.fieldPos, 1, 99));
             }
             return true;
           } else {
@@ -1238,7 +1240,7 @@ export function simulatePlayByPlay(
               advanceClock(30);
             } else {
               addEvent('pass_incomplete', `FAKE PUNT PASS! Incomplete — turnover on downs!`, 0, false);
-              switchPossession(clamp(100 - state.fieldPos, 10, 90));
+              switchPossession(clamp(100 - state.fieldPos, 1, 99));
               advanceClock(30);
             }
             return true;

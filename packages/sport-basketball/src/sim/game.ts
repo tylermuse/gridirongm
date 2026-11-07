@@ -14,7 +14,6 @@
  *
  * v1 simplifications (deferred to v2):
  *   - No fatigue model (rotation is purely time-based, not exertion-based)
- *   - No foul-out (players keep playing past 6 fouls)
  *   - No clock-aware shot selection (no buzzer-beater fade-aways)
  *   - No coaching adjustments mid-game (no momentum changes, no defensive
  *     scheme switches based on game state)
