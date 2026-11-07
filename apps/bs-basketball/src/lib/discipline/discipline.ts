@@ -76,12 +76,70 @@ export function clearServed(league: LeagueState, day: number): LeagueState {
   return changed ? setDiscipline(league, next) : league;
 }
 
+function gameDay(game: GameResult): number {
+  return (game.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason ?? 0;
+}
+
+/** Day-of-season of each game the player's current team has left, soonest first. */
+function remainingTeamGameDays(league: LeagueState, playerId: string): number[] {
+  const team = league.teams.find(t => (t.playerIds as string[]).includes(playerId));
+  if (!team) return [];
+  return league.games
+    .filter(g => g.status === 'scheduled' && (g.homeTeamId === team.id || g.awayTeamId === team.id))
+    .map(gameDay)
+    .sort((a, b) => a - b);
+}
+
+/**
+ * The day a player suspended on `day` is available again: the day after his
+ * team's Nth remaining game, so "2 games" means two games actually missed rather
+ * than two calendar days (which an idle stretch could serve without him sitting
+ * at all). With no games left there is nothing to serve.
+ */
+function suspensionReturnDay(league: LeagueState, playerId: string, day: number, games: number): number {
+  const upcoming = remainingTeamGameDays(league, playerId).filter(d => d > day);
+  if (upcoming.length === 0) return day + 1;
+  return upcoming[Math.min(games, upcoming.length) - 1] + 1;
+}
+
+export interface ActiveSuspension {
+  record: DisciplineRecord;
+  /** Games still to be missed, counted from his team's schedule. */
+  gamesLeft: number;
+}
+
+/** The player's suspension if he still has games to miss, otherwise null. */
+export function activeSuspension(league: LeagueState, playerId: string): ActiveSuspension | null {
+  const record = getDiscipline(league)[playerId];
+  if (record?.kind !== 'suspension') return null;
+  const gamesLeft = remainingTeamGameDays(league, playerId).filter(d => d < record.returnDay).length;
+  return gamesLeft > 0 ? { record, gamesLeft } : null;
+}
+
+/**
+ * Remove records carried over from an earlier season. Rollover used to keep them
+ * while resetting the day counter, and game days stop at 170, so a suspension
+ * handed out at the end of a season could return on a day that never comes and
+ * bench the player indefinitely. Every genuine record was written on a day with
+ * a played game, which a leftover's day won't have yet. Idempotent; returns the
+ * same league when there is nothing to remove.
+ */
+export function dropStaleDiscipline<T extends LeagueState>(league: T): T {
+  const entries = Object.entries(getDiscipline(league));
+  if (entries.length === 0) return league;
+  const playedDays = new Set(league.games.filter(g => g.status === 'played').map(gameDay));
+  const kept = entries.filter(([, d]) => playedDays.has(d.occurredDay));
+  if (kept.length === entries.length) return league;
+  return setDiscipline(league, Object.fromEntries(kept)) as T;
+}
+
 /** Roll discipline for everyone who fouled out (6+ PF) in `game`. Pure. */
 export function rollGameDiscipline(
   discipline: DisciplineMap,
   game: GameResult,
   day: number,
   season: number,
+  returnDayFor: (playerId: string, games: number) => number = (_, games) => day + games,
 ): DisciplineMap {
   let result = discipline;
   for (const [pid, box] of Object.entries(game.boxScores)) {
@@ -95,7 +153,7 @@ export function rollGameDiscipline(
       rec = {
         playerId: pid as PlayerId, kind: 'suspension',
         reason: SUSPENSION_REASONS[rng.int(SUSPENSION_REASONS.length)],
-        games, fine: 0, occurredDay: day, returnDay: day + games,
+        games, fine: 0, occurredDay: day, returnDay: returnDayFor(pid, games),
       };
     } else if (roll < 0.13) {
       rec = {
@@ -119,7 +177,8 @@ export function applyDisciplineRolls(
   season: number,
 ): LeagueState {
   let discipline = getDiscipline(clearServed(league, day));
-  for (const g of playedGames) discipline = rollGameDiscipline(discipline, g, day, season);
+  const returnDayFor = (playerId: string, games: number) => suspensionReturnDay(league, playerId, day, games);
+  for (const g of playedGames) discipline = rollGameDiscipline(discipline, g, day, season, returnDayFor);
   return setDiscipline(league, discipline);
 }
 

@@ -19,11 +19,13 @@ import {
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { getHeadCoach, coachScheme, schemeFit, SCHEME_LABELS, type SchemeFit } from '@/lib/coaching/coaches';
 import { getInjuries } from '@/lib/injuries';
+import { activeSuspension, type ActiveSuspension } from '@/lib/discipline';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { lastSeasonLog } from '@/lib/stats/statLine';
 import { playerMood, moodFactors, type Mood, type MoodFactor } from '@/lib/roster/mood';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
+import { effectiveStarterIds } from '@/lib/roster/role';
 import { tradeRequestBadge } from '@/lib/roster/tradeRequests';
 import { releasePreview } from '@/lib/roster/release';
 import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
@@ -226,11 +228,14 @@ export default function RosterPage() {
   };
   const validation = validateBasketballLineup(lineup, roster);
 
+  // Judged on the lineup as shown, so fill-ins for an injured or suspended starter
+  // read as starting, the same way trade requests see them.
+  const effectiveStarters = effectiveStarterIds(league, { ...team, sportData: { ...team.sportData, lineup } }, roster);
   function moodFor(p: BasketballPlayer, isStarter: boolean): Mood {
-    return playerMood({ player: p, team: team!, talentRank: talentRank.get(p.id) ?? 99, isStarter, yearsLeft: contractYearsLeft(p, season) });
+    return playerMood({ player: p, team: team!, talentRank: talentRank.get(p.id) ?? 99, isStarter: isStarter || effectiveStarters.has(p.id), yearsLeft: contractYearsLeft(p, season) });
   }
   function moodFactorsFor(p: BasketballPlayer, isStarter: boolean): MoodFactor[] {
-    return moodFactors({ player: p, team: team!, talentRank: talentRank.get(p.id) ?? 99, isStarter, yearsLeft: contractYearsLeft(p, season) });
+    return moodFactors({ player: p, team: team!, talentRank: talentRank.get(p.id) ?? 99, isStarter: isStarter || effectiveStarters.has(p.id), yearsLeft: contractYearsLeft(p, season) });
   }
 
   // --- lineup mutations ---
@@ -320,9 +325,9 @@ export default function RosterPage() {
   function autoFill() {
     // Same lineup the sim would pick by default (bench in its rotation order,
     // which gives young prospects minutes), except that players who are OUT
-    // (not GTD) start only if there aren't five healthy bodies, and sit at the
-    // end of the bench, outside the rotation.
-    const isOut = (id: string) => { const st = injuryOf(id); return !!st && !st.gtd; };
+    // (suspended, or injured and not GTD) start only if there aren't five healthy
+    // bodies, and sit at the end of the bench, outside the rotation.
+    const isOut = (id: string) => { const st = injuryOf(id); return (!!st && !st.gtd) || !!activeSuspension(league!, id); };
     const healthy = roster.filter(p => !isOut(p.id));
     const def = buildDefaultBasketballLineup(healthy.length >= 5 ? healthy : roster);
     const nextStarters = [...def.starters] as string[];
@@ -406,6 +411,7 @@ export default function RosterPage() {
     .map(p => ({ p, st: injuryOf(p.id) }))
     .filter((x): x is { p: BasketballPlayer; st: InjuryStatus } => !!x.st)
     .sort((a, b) => (b.st.daysLeft ?? 1e9) - (a.st.daysLeft ?? 1e9));
+  const suspendedCount = roster.filter(p => activeSuspension(league, p.id)).length;
   const capClass = cap.capRoom > 10_000_000 ? 'text-green-600' : cap.capRoom > 0 ? 'text-amber-600' : 'text-red-600';
   const overLimit = !isReadOnly && roster.length > TARGET_ROSTER;
 
@@ -414,6 +420,7 @@ export default function RosterPage() {
       p={p}
       mood={moodFor(p, isStarter)}
       injury={injuryOf(p.id)}
+      suspension={activeSuspension(league, p.id)}
       season={season}
       open={moodPop?.id === p.id}
       onToggle={toggleMood}
@@ -502,6 +509,7 @@ export default function RosterPage() {
               {cap.capRoom >= 0 ? `${fmtMoney(cap.capRoom)} cap space` : `${fmtMoney(-cap.capRoom)} over cap`}
             </span>
             {injured.length > 0 && <span className="text-red-600">{injured.length} injured</span>}
+            {suspendedCount > 0 && <span style={{ color: '#a855f7' }}>{suspendedCount} suspended</span>}
           </span>
         }
         right={
@@ -1080,22 +1088,31 @@ function PlayerCells({
   );
 }
 
-/** Mood chip (opens the factor popover) — or the injury chip while hurt — plus
- *  any open trade-request flag. */
+/** Mood chip (opens the factor popover) — or the suspension or injury chip while
+ *  unavailable — plus any open trade-request flag. */
 function MoodCell({
-  p, mood, injury, season, open, onToggle,
+  p, mood, injury, suspension, season, open, onToggle,
 }: {
   p: BasketballPlayer;
   mood: Mood;
   injury: InjuryStatus | null;
+  suspension: ActiveSuspension | null;
   season: number;
   open: boolean;
   onToggle: (id: string, el: HTMLElement) => void;
 }) {
-  const tradeReq = tradeRequestBadge(p, season);
+  const tradeReq = tradeRequestBadge(p, season, mood);
   return (
     <span className="inline-flex flex-col items-center gap-0.5 justify-self-center">
-      {injury ? (
+      {suspension ? (
+        <span
+          className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap"
+          style={{ background: 'color-mix(in srgb, #a855f7 16%, transparent)', color: '#a855f7' }}
+          title={`Suspended: ${suspension.record.reason}`}
+        >
+          🚫 Out {suspension.gamesLeft}G
+        </span>
+      ) : injury ? (
         <span
           className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap"
           style={injury.gtd

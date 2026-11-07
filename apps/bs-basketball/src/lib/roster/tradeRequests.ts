@@ -29,9 +29,9 @@ import type {
   BasketballStats,
 } from '@bs/sport-basketball';
 import type { BaseLeagueState, TeamId } from '@bs/core/adapter';
-import { resolveLineup } from '../lineup';
-import { playerMood } from './mood';
+import { playerMood, type Mood } from './mood';
 import { contractYearsLeft } from './playerActions';
+import { effectiveStarterIds } from './role';
 import type { TradeRumor } from '../trade/rumors';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
@@ -98,8 +98,7 @@ export function refreshTradeRequests(league: LeagueState): LeagueState {
       .filter((p): p is BasketballPlayer => !!p);
     if (roster.length === 0) continue;
 
-    const lineup = resolveLineup(team, roster);
-    const starterIds = new Set(lineup.starters.filter((id): id is NonNullable<typeof id> => !!id));
+    const starterIds = effectiveStarterIds(league, team, roster);
     const talentRank = new Map<string, number>();
     [...roster]
       .sort((a, b) => b.ratings.overall - a.ratings.overall)
@@ -209,10 +208,19 @@ export interface TradeRequestBadge {
   emoji: string;
 }
 
-/** Roster-chip badge for a filed request/holdout, or null if none this season. */
-export function tradeRequestBadge(player: BasketballPlayer, season: number): TradeRequestBadge | null {
+/**
+ * Roster-chip badge for a filed request/holdout, or null if none this season.
+ *
+ * Mood is live but a request is only re-evaluated when a day is simmed, so a
+ * player who has just been given what he wanted would read "Thrilled" with a
+ * trade request. Pass his current mood to hide the badge once he's no longer
+ * discontent. The stored request still clears on the next simmed day rather than
+ * on a lineup save, or start-save-bench-save would erase it without a game played.
+ */
+export function tradeRequestBadge(player: BasketballPlayer, season: number, mood: Mood | null): TradeRequestBadge | null {
   const r = player.sportData.tradeRequest;
   if (!r || r.season !== season) return null;
+  if (mood && !DISCONTENT_LABELS.has(mood.label)) return null;
   if (r.stage === 'requested') return { label: 'Trade request', emoji: '📣' };
   if (r.stage === 'holdout') return { label: 'Holdout', emoji: '🚫' };
   return null;

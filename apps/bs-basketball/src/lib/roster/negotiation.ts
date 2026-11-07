@@ -53,7 +53,7 @@ import type { Offer } from '../freeAgency';
 import { extensionMarket, buildExtension, type ExtensionMarket } from './extension';
 import { playerMood } from './mood';
 import { contractYearsLeft } from './playerActions';
-import { resolveLineup } from '../lineup';
+import { effectiveStarterIds } from './role';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -144,8 +144,7 @@ export function negotiationProfile(league: LeagueState, player: BasketballPlayer
   if (team) {
     const players = league.players as Record<string, BasketballPlayer>;
     const roster = team.playerIds.map(id => players[id]).filter((p): p is BasketballPlayer => !!p);
-    const lineup = resolveLineup(team, roster);
-    isStarter = lineup.starters.includes(player.id as PlayerId);
+    isStarter = effectiveStarterIds(league, team, roster).has(player.id);
     talentRank = [...roster].sort((a, b) => b.ratings.overall - a.ratings.overall).findIndex(p => p.id === player.id);
   }
   const mood = playerMood({ player, team, talentRank: talentRank < 0 ? 99 : talentRank, isStarter, yearsLeft: contractYearsLeft(player, season) });
