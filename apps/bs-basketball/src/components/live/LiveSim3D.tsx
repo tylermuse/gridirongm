@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SimPossession, SimTeamSpec } from '@/lib/live/liveSim3d';
 
-const SIM_BUILD = 'h2g';   // bump with public/court-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'h2h';   // bump with public/court-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/court-cam/index.html?embed=1&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsbb.sim3d';
 const VIEW_KEY = 'bsbb.sim3d.view';
@@ -36,12 +36,12 @@ function useSimView(): [{ cam: SimCam; auto: boolean }, (v: Partial<{ cam: SimCa
   return [view, setView];
 }
 
-/** The browser's saved 3D choice (or the ?sim3d= override). Client only. */
+/** The browser's saved 3D choice (or the ?sim3d= override). Court Cam is on unless the viewer has switched it off. Client only. */
 export function readSim3DPref(): boolean {
   if (typeof window === 'undefined') return false;
   const q = new URLSearchParams(window.location.search).get('sim3d');
   if (q !== null) return q === '1' || q === 'on';
-  try { return window.localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
+  try { return window.localStorage.getItem(STORAGE_KEY) !== '0'; } catch { return true; }
 }
 
 export function useSim3DMode(): [boolean, (on: boolean) => void] {
