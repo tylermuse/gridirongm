@@ -78,7 +78,7 @@ export function LiveViewer({
   const { league } = useLeagueStore();
   const router = useRouter();
   const [cursor, setCursor] = useState(0);
-  const [speed, setSpeed] = useState<Speed>(2);
+  const [speed, setSpeed] = useState<Speed>(1);
   const [paused, setPaused] = useState(false);
   const [tab, setTab] = useState<Tab>('pbp');
   const [halftimeOpen, setHalftimeOpen] = useState(false);
@@ -261,7 +261,7 @@ export function LiveViewer({
     if (!home || !away || fromIndex >= events.length) return;
     const ctx = { homeAbbr: home.abbreviation, awayAbbr: away.abbreviation, homeName: home.city, awayName: away.city };
     setPaused(false);
-    if (speedRef.current === 'max') setSpeed(2);
+    if (speedRef.current === 'max') setSpeed(1);
     broadcast.start({
       count: events.length,
       fromIndex,

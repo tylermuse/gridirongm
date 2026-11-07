@@ -30,6 +30,11 @@ export async function loadClipLibrary(base = './', { maxJumpFt = 3.0, maxShotJum
     if (!c.loop && c.jump >= .9) { let apex = -1, best = -Infinity; for (let f = 0; f < n; f++) { const t = f / meta.fps; if (t < c.handPeak - .8 || t > c.handPeak + .1) continue; if (hy[f] > best) { best = hy[f]; apex = t; } }
       if (apex >= 0) release = Math.max(0, Math.min(release, apex - .03)); }
     c.release = release;
+    // which way the body faces at release, relative to the rig's forward: step-backs, fadeaways and turnarounds were
+    // captured facing 90–150° off the rig's +z at the shot, so the sim must turn the clip to put the basket in front
+    { const hb = meta.bones.indexOf('mixamorigHips'); if (hb >= 0) { const f = Math.min(n - 1, Math.max(0, Math.round(release * meta.fps))); const o = c.q / 2 + (f * nb + hb) * 4;
+      const x = i16[o] / 32767, y = i16[o + 1] / 32767, z = i16[o + 2] / 32767, w = i16[o + 3] / 32767;
+      c.faceRel = Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)); } else c.faceRel = 0; }
     tracks.push(new THREE.VectorKeyframeTrack('mixamorigHips.position', times, pos));
     const clip = new THREE.AnimationClip(name, c.dur, tracks);
     lib.clips[name] = clip;

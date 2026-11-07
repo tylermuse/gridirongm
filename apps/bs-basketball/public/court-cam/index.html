@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2h'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2i'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -594,7 +594,7 @@ function choreograph(p) {
   const pass = (from, to, t0, dur, kind = 'chest', arrive) => {   // flight from hand to the receiver's chest at arrival
     ballPlan.push({ t0, t1: t0 + dur, pass: { from, to, kind, arrive } });
     const pc = kind === 'over' ? 'overhead_pass' : 'chest_pass'; const pm = META(pc);
-    if (pm) act(from, t0 - pm.reach, t0 + .45, kind === 'over' ? 'overpass' : 'chestpass', { clip: pc, t0: t0 - pm.reach }); else act(from, t0 - .35, t0 + .25, kind === 'over' ? 'overpass' : 'chestpass');
+    if (pm) act(from, t0 - pm.reach, t0 + .45, kind === 'over' ? 'overpass' : 'chestpass', { clip: pc, t0: t0 - pm.reach, to }); else act(from, t0 - .35, t0 + .25, kind === 'over' ? 'overpass' : 'chestpass', { to });
     if (HAS('catch')) act(to, t0 + dur - .45, t0 + dur + .35, 'catch', { clip: 'catch', t0: t0 + dur - .45 }); else act(to, t0 + dur - .25, t0 + dur + .2, 'catch');
     ev(t0, () => sndNoise(.06, 700, .9, .12)); ballAt = t0 + dur; return t0 + dur; };
   const defOf = i => def[i];
@@ -690,7 +690,7 @@ function choreograph(p) {
     if (!clip) { const three = p.st === 'three'; const rise = tSet + .42; act(a, tSet - .1, rise + 1.15, 'jumper', { jump: rise, apex: three ? 1.25 : 1.1, dur: .62 });
       hold(a, tSet - .1, rise + .27, 'shot'); release = rise + .27; shotFrom = spot; return release; }
     const m = META(clip); const t0 = tSet - Math.max(0, m.handPeak - 1.0);   // the release lands ~1 s after the set-up moment
-    const rim = RIM(); const [sx, sz] = spotW; const yaw = Math.atan2(rim[0] - sx, rim[2] - sz);
+    const rim = RIM(); const [sx, sz] = spotW; const yaw = Math.atan2(rim[0] - sx, rim[2] - sz) - (m.faceRel || 0);   // basket in front of him at the release, whatever way the capture faced
     const rel = m.release ?? m.handPeak;   // let go at the top of the jump, not on the way down
     if (m.travel > 3) rootClip(a, 'jumper', clip, t0, m.handPeak, sx, sz, yaw, { release: t0 + rel }); else act(a, t0, t0 + m.dur, 'jumper', { clip, t0, release: t0 + rel });
     hold(a, Math.max(t0, tSet + .13), t0 + rel, 'shot'); release = t0 + rel; shotFrom = spot; return release; };   // after the catch hold, so the ball rises with the shooting hands
@@ -937,11 +937,14 @@ function stepActor(a, t, dt) {
   const cur = actAt(a, t); const kind = cur ? cur.kind : null;
   // facing: movement direction when moving quickly (not backpedal/shuffle), else the face target
   let faceTarget = null; const ft = faceAt(a, t);
-  if (ft === 'ball') faceTarget = a.carrying ? null : Math.atan2(ball.position.x - a.x, ball.position.z - a.z);   // a carrier keeps the facing he arrived with else if (ft === 'rim') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); } else if (Array.isArray(ft)) faceTarget = Math.atan2(ft[0] - a.x, ft[1] - a.z);
+  if (ft === 'ball') { if (!a.carrying) faceTarget = Math.atan2(ball.position.x - a.x, ball.position.z - a.z); else if (GS.busy) { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); } }   // a carrier squares up to the basket (never chases the ball in his own hand) else if (ft === 'rim') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); } else if (Array.isArray(ft)) faceTarget = Math.atan2(ft[0] - a.x, ft[1] - a.z);
   const mv = P.mv; const fastMove = P.moving && a.speed > 6 && mv && !mv.backpedal && !mv.shuffle;
   if (fastMove) faceTarget = P.dir; else if (P.moving && mv && mv.backpedal) faceTarget = faceTarget ?? P.dir + Math.PI;
   if (kind === 'backdown') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z) + Math.PI; }
-  if (kind === 'jumper' || kind === 'layup' || kind === 'dunk' || kind === 'ft') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); }
+  const clipFace = cur && cur.clip && META(cur.clip) ? (META(cur.clip).faceRel || 0) : 0;   // the capture's own facing at the key moment
+  if (kind === 'jumper' || kind === 'layup' || kind === 'dunk' || kind === 'ft') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z) - clipFace; }
+  if ((kind === 'chestpass' || kind === 'overpass') && cur.to) faceTarget = Math.atan2(cur.to.x - a.x, cur.to.z - a.z) - clipFace;   // look at the man you're passing to
+  if (kind === 'catch') faceTarget = Math.atan2(ball.position.x - a.x, ball.position.z - a.z);                                       // and at the ball coming to you
   let snapFace = false;
   if (P.root) { faceTarget = P.root.root.yaw; snapFace = t - P.root.t0 < .1; }   // a root-motion clip owns the facing; the clip turns the body itself
   if (faceTarget != null) { let d = faceTarget - a.face; d = Math.atan2(Math.sin(d), Math.cos(d)); a.face += snapFace ? d : d * (1 - Math.exp(-dt * (fastMove ? 12 : 7))); }
@@ -1055,13 +1058,16 @@ function updateBall(t, dt) {
   ball.visible = true;
   if (!seg) return;
   if (t >= seg.t1 && !seg.held && !seg.rest) t = seg.t1 - 1e-4;   // a finished flight parks at its end until the next segment starts
-  if (seg.held) { seg.held.carrying = true; seg.held.carryMode = seg.mode; pinToHand(seg.held, seg.mode, t); return; }
+  if (seg.held) {
+    // when does this hold end? (the next segment's start, or its own t1) — the dribble gathers the ball into the hands before then
+    if (seg._end == null) { let e = seg.t1; for (const s2 of ballPlan) if (s2 !== seg && s2.t0 > seg.t0 && s2.t0 < e) e = s2.t0; seg._end = e; }
+    seg.held.carrying = true; seg.held.carryMode = seg.mode; pinToHand(seg.held, seg.mode, t, seg._end - t); return; }
   if (seg.rest) { ball.position.set(seg.rest[0], seg.rest[1], seg.rest[2]); ball.visible = !seg.hidden; return; }
-  if (seg.pass) { const u = clamp((t - seg.t0) / (seg.t1 - seg.t0) * (seg.pass.cut || 1), 0, 1); if (!seg.p0) { seg.p0 = chestPos(seg.pass.from); seg.p0.y = seg.pass.kind === 'over' ? seg.pass.from.heightFt * 1.05 : seg.pass.from.heightFt * .58; }
+  if (seg.pass) { const u = clamp((t - seg.t0) / (seg.t1 - seg.t0) * (seg.pass.cut || 1), 0, 1); if (!seg.p0) { seg.p0 = ball.position.clone(); if (seg.pass.from.ref || !seg.pass.from.carrying && Math.abs(seg.p0.y - seg.pass.from.heightFt * .6) > 1.6) { seg.p0 = chestPos(seg.pass.from); seg.p0.y = seg.pass.kind === 'over' ? seg.pass.from.heightFt * 1.05 : seg.pass.from.heightFt * .58; } }   // leaves from where it actually is in his hands
     const to = chestPos(seg.pass.to); to.y = seg.pass.to.heightFt * .6; const p = seg.p0.clone().lerp(to, u); const h = seg.pass.kind === 'bounce' ? -(seg.p0.y - BALL_R) * (1 - Math.abs(u - .5) * 2) * 1.0 : seg.pass.kind === 'over' ? 2.5 * 4 * u * (1 - u) : 1.2 * 4 * u * (1 - u);
     if (seg.pass.kind === 'bounce') { const b = Math.abs(Math.sin(u * Math.PI)); p.y = lerp(seg.p0.y, to.y, u) * (1 - b) + BALL_R * b; if (u > .48 && u < .52 && !seg.bounced) { seg.bounced = true; sndBounce(.6); } } else p.y += h;
     ball.position.copy(p); ballSpin.set(8, 0, 0); return; }
-  if (seg.flyTo) { const u = clamp((t - seg.t0) / seg.flyTo.T, 0, 1); if (!seg.p0) seg.p0 = chestPos(seg.flyTo.from); const p = seg.p0.clone().lerp(seg.flyTo.to, u); p.y += 1.5 * 4 * u * (1 - u); ball.position.copy(p); return; }
+  if (seg.flyTo) { const u = clamp((t - seg.t0) / seg.flyTo.T, 0, 1); if (!seg.p0) { seg.p0 = ball.position.clone(); if (seg.p0.distanceTo(chestPos(seg.flyTo.from)) > 4) seg.p0 = chestPos(seg.flyTo.from); } const p = seg.p0.clone().lerp(seg.flyTo.to, u); p.y += 1.5 * 4 * u * (1 - u); ball.position.copy(p); return; }
   if (seg.bounceOut) { const tt = t - seg.t0; const p = seg.bounceOut.at.clone(); p.y = Math.max(BALL_R, p.y - .5 * G * tt * tt + 2 * tt); p.z += ATK * tt * 6; p.x += Math.sign(p.x) * tt * 3; ball.position.copy(p); return; }
   if (seg.loose) { const u = clamp((t - seg.t0) / (seg.t1 - seg.t0), 0, 1); if (!seg.p0) seg.p0 = ball.position.clone(); const to = chestPos(seg.loose.to); to.y = 2.5; const p = seg.p0.clone().lerp(to, u); p.y = Math.max(BALL_R, p.y - 1.4 * Math.sin(u * Math.PI)); ball.position.copy(p); return; }
   if (seg.shot) { if (!seg.p0) { seg.p0 = handPos(seg.shot.from); seg.p0.y += .25; seg.v0 = launch(seg.p0, seg.shot.to, seg.shot.T); } const tt = t - seg.t0; ball.position.copy(proj(seg.p0, seg.v0, tt)); ballSpin.set(-10, 0, 0); return; }
@@ -1071,8 +1077,9 @@ function updateBall(t, dt) {
     const bounce = y <= BALL_R + .001 ? Math.abs(Math.sin((tt - .32) * 7)) * .9 * Math.max(0, 1.2 - tt) : 0; ball.position.set(seg.net.x + tt * .3 * ATK, Math.max(y, BALL_R) + bounce, seg.net.z - ATK * tt * 1.6); return; }
   if (seg.rimOut) { const tt = t - seg.t0; if (!seg.v0) { seg.v0 = launch(seg.rimOut.from, seg.rimOut.to, seg.rimOut.T); seg.v0.y = Math.max(seg.v0.y, 6); } const p = proj(seg.rimOut.from, seg.v0, tt); ball.position.copy(p.y < BALL_R ? p.setY(BALL_R) : p); ballSpin.set(6, 3, 0); return; }
 }
-function pinToHand(a, mode, t) {
+function pinToHand(a, mode, t, left = 99) {
   a.model.updateMatrixWorld(true); const fr = frameOf(a);
+  const GATHER = .42; const gather = (mode === 'dribble' || mode === 'post') && left < GATHER ? clamp(1 - left / GATHER, 0, 1) : 0;   // the last beat of a dribble: pick the ball up into the hands
   if ((mode === 'dribble' || mode === 'post') && a.clipW > .5 && /^dribble|^mx_dribble|crossover|between|behind|spin|pullup|stepback|euro|floater|layup|finger|hook|dunk/.test(a.clipName || '')) {
     // mocap dribble: the ball lives under the right hand. The hand itself only dips a foot or so (it pushes the ball,
     // it doesn't follow it down), so the bounce is a clocked cycle — released at the hand's low point (phase 0), floor at
@@ -1084,14 +1091,22 @@ function pinToHand(a, mode, t) {
     if ((a.handVy || 0) < -2 && vy >= 0 && (ph % 1 > .7 || ph % 1 < .3)) ph = 0;   // the hand just pushed: release now
     a.handVy = vy; ph = a.dribblePhase = ph % 1;
     const top = Math.max(BALL_R + .4, h.y - .3);
-    const y = ph < .5 ? BALL_R + (top - BALL_R) * Math.abs(Math.cos(2 * Math.PI * ph)) : top;
+    let y = ph < .5 ? BALL_R + (top - BALL_R) * Math.abs(Math.cos(2 * Math.PI * ph)) : top;
+    if (gather > 0) {   // no bounce once he's picking it up: the ball rises from wherever it was into both hands at the chest
+      if (a.gatherFrom == null || gather < .05) a.gatherFrom = V3(h.x, y, h.z).addScaledVector(fr.F, .1 + Math.min(a.speed, 20) * .015);
+      const k = gather * gather * (3 - 2 * gather); const l = handPos(a, 'L'); const to = h.clone().lerp(l, .5).addScaledVector(fr.F, .25); to.y += .05;
+      ball.position.copy(a.gatherFrom).lerp(to, k); a.dribblePhase = .5; ballSpin.set(4 * (1 - k), 0, 0); return; }
+    a.gatherFrom = null;
     ball.position.set(h.x, y, h.z).addScaledVector(fr.F, .1 + Math.min(a.speed, 20) * .015);
-    if (ph > .2 && ph < .3 && !a.bounced) { a.bounced = true; sndBounce(.45); } if (ph > .5) a.bounced = false; ballSpin.set(4, 0, 0); return; }
+    if (ph > .2 && ph < .3 && !a.bounced && gather === 0) { a.bounced = true; sndBounce(.45); } if (ph > .5) a.bounced = false; ballSpin.set(4, 0, 0); return; }
   if (mode === 'dribble' || mode === 'post') { // the ball bounces beside the dribbling hand
     const period = mode === 'post' ? .62 : a.speed > 10 ? .36 : .46; a.dribblePhase = ((a.dribblePhase || 0) + (t - (a.dribbleT || t)) / period) % 1; a.dribbleT = t;
     const ph = a.dribblePhase; const side = a.dribbleSide === 'L' ? -1 : 1; const handY = a.heightFt * .42; const yy = handY - (handY - BALL_R) * Math.sin(ph * Math.PI);
-    const p = V3(a.x, 0, a.z).addScaledVector(fr.R, side * 1.15).addScaledVector(fr.F, .65 + a.speed * .03); p.y = yy; ball.position.copy(p);
-    if (ph > .45 && ph < .55 && !a.bounced) { a.bounced = true; sndBounce(.45); } if (ph > .6) a.bounced = false;
+    const p = V3(a.x, 0, a.z).addScaledVector(fr.R, side * 1.15).addScaledVector(fr.F, .65 + a.speed * .03); p.y = yy;
+    if (gather > 0) { if (a.gatherFrom == null || gather < .05) a.gatherFrom = p.clone(); const k = gather * gather * (3 - 2 * gather);
+      const h = handPos(a), l = handPos(a, 'L'); const to = h.lerp(l, .5).addScaledVector(fr.F, .25); to.y += .05; ball.position.copy(a.gatherFrom).lerp(to, k); a.dribblePhase = 0; ballSpin.set(4 * (1 - k), 0, 0); return; }
+    a.gatherFrom = null; ball.position.copy(p);
+    if (ph > .45 && ph < .55 && !a.bounced && gather === 0) { a.bounced = true; sndBounce(.45); } if (ph > .6) a.bounced = false;
     ballSpin.set(4, 0, 0); return; }
   if (mode === 'shot' || mode === 'ft') { const h = handPos(a); const l = handPos(a, 'L'); ball.position.copy(h.lerp(l, .35)); ball.position.y += .3; ball.position.addScaledVector(fr.F, .12); return; }
   if (mode === 'layup' || mode === 'dunk') { const h = handPos(a); ball.position.copy(h); ball.position.y += .35; ball.position.addScaledVector(fr.F, .15); return; }
@@ -1383,6 +1398,6 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(() => {
   window.__ready = true;
 }).catch(e => { $('hint').textContent = 'Player model failed to load: ' + (e && e.message || e); console.error(e); if (EMBED && window.parent) window.parent.postMessage({ type: 'bsh:error', message: String(e && e.message || e) }, '*'); });
 // QA hooks
-window.__sim = { GS, CAM, actors, run: p => runPossession(p), demo: f => demoPossession(f), tick: (dt, n = 1) => { window.__qaDrive = true; for (let i = 0; i < n; i++) advance(dt); renderer.render(scene, camera); }, adv: dt => advance(dt), get T() { return T; }, get running() { return running; }, ball, get playEvents() { return playEvents; }, dropTeams: () => { SIDES = null; }, camera, renderer, scene };
+window.__sim = { GS, CAM, actors, run: p => runPossession(p), demo: f => demoPossession(f), tick: (dt, n = 1) => { window.__qaDrive = true; for (let i = 0; i < n; i++) advance(dt); renderer.render(scene, camera); }, adv: dt => advance(dt), get T() { return T; }, get running() { return running; }, ball, get playEvents() { return playEvents; }, dropTeams: () => { SIDES = null; }, camera, renderer, scene, RIM, get ballPlan() { return ballPlan; } };
 })();
 </script>
