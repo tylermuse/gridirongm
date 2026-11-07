@@ -58,6 +58,9 @@ function TeamPicker() {
     searchParams.get('startMode') === 'regular' ? 'regular' : 'offseason'
   );
   const [teamSearch, setTeamSearch] = useState('');
+  // ?team=ABBR (from the /mock-draft CTA) puts that team first and highlights it.
+  // It doesn't start the league: picking a team is still the user's click.
+  const preselectedTeam = searchParams.get('team')?.toUpperCase() ?? null;
   const autoLoadedRef = useRef(false);
 
   // Auto-load roster from ?roster= query param (e.g. from /rosters page)
@@ -558,17 +561,21 @@ function TeamPicker() {
               t.name.toLowerCase().includes(teamSearch.toLowerCase()) ||
               t.abbreviation.toLowerCase().includes(teamSearch.toLowerCase())
             )
-            .sort((a, b) => a.city.localeCompare(b.city)).map(team => (
+            .sort((a, b) => Number(b.abbreviation === preselectedTeam) - Number(a.abbreviation === preselectedTeam) || a.city.localeCompare(b.city)).map(team => (
             <button
               key={team.abbreviation}
               onClick={() => handlePick(team.abbreviation)}
-              className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]
-                         hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left"
+              className={`group flex items-center gap-3 p-3 rounded-xl border bg-[var(--surface)]
+                         hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left
+                         ${team.abbreviation === preselectedTeam ? 'border-blue-500 ring-2 ring-blue-500' : 'border-[var(--border)]'}`}
             >
               <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
               <div className="min-w-0">
                 <div className="text-sm font-bold truncate">{team.city}</div>
                 <div className="text-xs text-[var(--text-sec)] truncate">{team.name}</div>
+                {team.abbreviation === preselectedTeam && (
+                  <div className="text-xs font-semibold text-blue-600 truncate">Your mock draft team</div>
+                )}
               </div>
             </button>
           ))}
