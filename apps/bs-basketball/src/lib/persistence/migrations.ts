@@ -15,6 +15,7 @@ import type { BasketballLeagueState } from './db';
 import type { BasketballPlayer } from '@bs/sport-basketball';
 import { consensus2026Rank, consensus2026Value } from '../data/draft2026';
 import { ensureCoachingStaff } from '../coaching/carousel';
+import { dropStaleDiscipline } from '../discipline';
 
 /** Bump this when the persisted shape changes; register the migration below. */
 export const CURRENT_SAVE_VERSION = 2;
@@ -49,6 +50,10 @@ export function migrateSave(state: BasketballLeagueState): { state: BasketballLe
     s = { ...s, displayName: s.displayName.replace(/^NBA /, 'BS Hoops ') };
     migrated = true;
   }
+
+  // Free players stuck serving a suspension left over from an earlier season.
+  const withoutStale = dropStaleDiscipline(s);
+  if (withoutStale !== s) { s = withoutStale; migrated = true; }
 
   // Lift consensus-board draft prospects to their big-board rating in saves made
   // before they were on the board (the consensus value is otherwise only stamped

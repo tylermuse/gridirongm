@@ -8,6 +8,9 @@ import {
   rollGameDiscipline, isSuspendedOn, clearServed, applyDisciplineRolls, getDiscipline,
   type DisciplineMap,
 } from '@/../apps/bs-basketball/src/lib/discipline';
+import { initializePlayoffs, simPlayoffDay, getBracket, isRegularSeasonComplete } from '@/../apps/bs-basketball/src/lib/playoffs';
+import { advanceToNextSeason } from '@/../apps/bs-basketball/src/lib/season';
+import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
 import { simThroughDay } from '@/../apps/bs-basketball/src/lib/sim/simRange';
 import type { BaseGameResult } from '@bs/core/adapter';
@@ -63,5 +66,27 @@ describe('discipline', () => {
     const out = applyDisciplineRolls(simThroughDay(fresh, 40).league, [], 40, 2026);
     // The map is well-formed (every record keyed by its own playerId).
     for (const [id, rec] of Object.entries(getDiscipline(out))) expect(rec.playerId).toBe(id);
+  });
+
+  it('clears at season rollover, leaving nobody suspended on the new calendar', () => {
+    let league = createNewBasketballLeague({ rngSeed: 'disc-rollover' });
+    for (let guard = 0; !isRegularSeasonComplete(league) && guard < 400; guard++) {
+      const r = simNextDay(league);
+      if (!r) break;
+      league = r.league;
+    }
+    league = initializePlayoffs(league);
+    for (let guard = 0; !getBracket(league)!.complete && guard < 200; guard++) {
+      const r = simPlayoffDay(league);
+      if (!r) break;
+      league = r.league;
+    }
+    const id = league.teams[0].playerIds[0];
+    const stuck: DisciplineMap = {
+      [id]: { playerId: id, kind: 'suspension', reason: 'test', games: 2, fine: 0, occurredDay: 170, returnDay: 172 },
+    };
+    const next = advanceToNextSeason({ ...league, sportData: { ...(league.sportData as object), discipline: stuck } });
+    expect(next.currentTick).toBe(1);
+    expect(getDiscipline(next)).toEqual({});
   });
 });

@@ -576,6 +576,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
   delete sportData.expansion; // completed expansion (history kept in expansionHistory)
   delete sportData.pendingResign; // re-sign decisions resolved for this offseason
   delete sportData.injuries; // everyone starts the new season healthy
+  delete sportData.discipline; // ...and available: return days are per-season and the day counter resets
   sportData.freeAgentLastTeam = freeAgentLastTeam;
   sportData.faDay = 0; // fresh free-agency window for the new preseason
   sportData.seasonStarted = false; // user hasn't tipped off the regular season yet
