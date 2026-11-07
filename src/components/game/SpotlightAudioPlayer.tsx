@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { listenState, nextCreditReset, formatResetDate } from '@/lib/engine/spotlightAccess';
+import { trackFeature } from '@bs/core/analytics/feature';
 
 interface SpotlightAudioPlayerProps {
   topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
@@ -106,6 +107,7 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
 
       await audio.play();
       setState('playing');
+      trackFeature('spotlight_audio', { team: teamName });
     } catch {
       setState('error');
     }

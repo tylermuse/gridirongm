@@ -24,4 +24,8 @@ export {
   getCurrentSubscriptionTier,
   getCurrentSubscriptionAllocations,
   isPremiumActive,
+  setCurrentPlan,
+  getCurrentPlan,
+  resolvePlan,
 } from './state';
+export type { Plan } from './state';

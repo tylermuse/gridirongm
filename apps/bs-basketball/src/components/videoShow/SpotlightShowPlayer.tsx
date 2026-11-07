@@ -28,6 +28,7 @@ import { ShowPlayerAvatar, ShowTeamLogo } from './ShowArt';
 import { ShowCaption, ShowGraphic, ThemeCard, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
 import { wideLineAt, type Calls, type ShowThemeId, type Verdict } from '@/lib/videoShow/showThemes';
 import { ALL_SFX, MUSIC_LEVEL, SFX_GAIN, graphicCues, sfxSrc, type MusicId, type SfxId } from '@/lib/videoShow/showSfx';
+import { trackFeature } from '@bs/core/analytics/feature';
 
 /** Over-the-shoulder listening loops (studio screens frozen, so the
  *  footage on them doesn't run backward on the loop). */
@@ -924,6 +925,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     }
     phaseRef.current = 'playing';
     setPhase('playing');
+    trackFeature('spotlight_show');
     playSegment(0);
   }
 

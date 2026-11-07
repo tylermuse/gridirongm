@@ -27,6 +27,7 @@ import { UNLOCK_AUDIO } from '@/lib/engine/unlockAudio';
 import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { trackEvent } from '@bs/core/analytics/track';
+import { trackFeature } from '@bs/core/analytics/feature';
 import type { Player, Position, GameResult, Team, PlayerStats } from '@/types';
 
 /** Merge two player-stat maps by summing numeric fields. Used to combine the
@@ -1192,6 +1193,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const sim3dDeadIdRef = useRef<number | null>(null);
   const sim3dOnRef = useRef(sim3dOn);
   sim3dOnRef.current = sim3dOn;
+  // One feature_used per game actually watched in 3D (not per toggle).
+  const sim3dTrackedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sim3dActive || sim3dTrackedRef.current === id) return;
+    sim3dTrackedRef.current = id;
+    trackFeature('live_sim_3d', { game_id: id });
+  }, [sim3dActive, id]);
   // Live speed ref so the broadcast can read the current speed for inter-call
   // dwell without restarting. Slower speed = longer gaps; the call is never cut.
   const speedRef = useRef(speed);
@@ -1220,6 +1228,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setTeaserUsedToday(true);
       try { window.localStorage.setItem(TEASER_DAY_KEY, utcDay()); } catch { /* storage blocked */ }
       trackEvent('broadcast_teaser_started', { game_id: id, sim3d: sim3dOn });
+    } else {
+      trackFeature('broadcast', { game_id: id, sim3d: sim3dOn });
     }
     broadcast.start({
       fromIndex,

@@ -10,6 +10,7 @@
     "./adapter": "./src/adapter/index.ts",
     "./analytics": "./src/analytics/index.ts",
     "./analytics/track": "./src/analytics/track.ts",
+    "./analytics/feature": "./src/analytics/feature.ts",
     "./analytics/server": "./src/analytics/server.ts",
     "./analytics/attribution": "./src/analytics/attribution.ts",
     "./feedback/server": "./src/feedback/server.ts",
