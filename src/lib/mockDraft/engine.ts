@@ -1,0 +1,338 @@
+/**
+ * Pure /mock-draft engine: no React, no store, no league state.
+ *
+ * A mock is fully described by (seed, rounds, user teams, user picks). Every
+ * screen, share link and OG image gets its picks by replaying that state with
+ * replayDraft, so there is exactly one code path and undo is just "replay with
+ * one fewer user pick".
+ */
+
+import { ROSTER_LIMITS, type Position } from '@/types';
+import { chooseDraftPick, type DraftAIProspect, type DraftAITeamContext } from '@/lib/engine/draftAI';
+import { gradeValue, pickGrade, teamDraftGrade } from '@/lib/engine/draftGrades';
+
+/* ─── Data file shape (public/mock/nfl-2027.json) ───────────── */
+
+export interface MockTeam {
+  tid: number;
+  abbrev: string;
+  region: string;
+  name: string;
+  colors: string[];
+  cid: number;
+  did: number;
+  won: number;
+  lost: number;
+  tied: number;
+  pf: number;
+  pa: number;
+  sos: number;
+  countByPosition: Record<Position, number>;
+  bestQbOvr: number;
+  hasDevQB: boolean;
+}
+
+export interface MockOrderEntry {
+  pick: number;
+  round: number;
+  pickInRound: number;
+  /** Current owner of the pick. */
+  tid: number;
+  originalTid: number;
+  dpid: number;
+}
+
+export interface MockProspect {
+  pid: number;
+  rank: number;
+  firstName: string;
+  lastName: string;
+  pos: Position;
+  college: string;
+  ovr: number;
+  pot: number;
+  value: number;
+  age: number;
+  /** Inches. */
+  hgt: number;
+  weight: number;
+  imgURL?: string;
+}
+
+export interface MockDraftData {
+  draftYear: number;
+  season: number;
+  asOf: string;
+  currentWeek: number;
+  numRounds: number;
+  teams: MockTeam[];
+  order: MockOrderEntry[];
+  prospects: MockProspect[];
+}
+
+/* ─── Settings ──────────────────────────────────────────────── */
+
+export const ROUND_OPTIONS = [1, 3, 7] as const;
+export type MockRounds = (typeof ROUND_OPTIONS)[number];
+
+export const BOARD_POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'];
+
+export interface DraftSettings {
+  /** 32-bit seed for the AI's noise. */
+  seed: number;
+  rounds: MockRounds;
+  /** Teams the user drafts for, in the order they were chosen. Empty = all AI. */
+  userTids: number[];
+}
+
+export function randomSeed(): number {
+  return Math.floor(Math.random() * 4294967296);
+}
+
+/** Same LCG as tests/unit/mockDraftData.test.ts. Integer math only, so it is identical in every browser. */
+export function seededRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+}
+
+export function slotsForRounds(data: MockDraftData, rounds: number): MockOrderEntry[] {
+  return data.order.filter((slot) => slot.round <= rounds);
+}
+
+/* ─── Replay ────────────────────────────────────────────────── */
+
+export interface MadePick {
+  slot: MockOrderEntry;
+  prospect: MockProspect;
+  isUser: boolean;
+  grade: string;
+}
+
+export interface ReplayResult {
+  /** Every pick made so far. Stops at the first user slot with no pick yet. */
+  picks: MadePick[];
+  /** The user slot waiting on a pick, or null once the draft is complete. */
+  onClock: MockOrderEntry | null;
+  complete: boolean;
+  /** Undrafted prospects at the stopping point, in rank order. */
+  available: MockProspect[];
+  /** Live position counts per team at the stopping point. */
+  countsByTeam: Map<number, Record<Position, number>>;
+  /** A user pick was not on the board, or there were more user picks than user slots. */
+  invalid: boolean;
+}
+
+/**
+ * Grade one pick. Always pass the full 7-round pick count: pickGrade derives the
+ * round from `totalPicks / 7`, so passing a 1-round draft's 32 would read pick 6
+ * as round 2. It grades `value`, not `ovr`: pickGrade's expectations (pick 1 ~82,
+ * pick 32 ~67) are for a draft-eve class, while this class is mostly 50-60 OVR a
+ * year out. On `ovr`, taking the best player available in round 1 grades C or D.
+ */
+export function gradePick(data: MockDraftData, pick: number, prospect: MockProspect): string {
+  return pickGrade(pick, data.order.length, prospect.value, prospect.pot);
+}
+
+/** Letter grade for a set of picks, or null if there are none. */
+export function classGrade(picks: MadePick[]): string | null {
+  if (picks.length === 0) return null;
+  return teamDraftGrade(picks.reduce((sum, p) => sum + gradeValue(p.grade), 0) / picks.length);
+}
+
+export function replayDraft(data: MockDraftData, settings: DraftSettings, userPicks: number[]): ReplayResult {
+  const rng = seededRng(settings.seed);
+  const userTids = new Set(settings.userTids);
+  const prospectsById = new Map(data.prospects.map((p) => [p.pid, p]));
+  const contexts = new Map<number, DraftAITeamContext>(
+    data.teams.map((t) => [
+      t.tid,
+      { countByPosition: { ...t.countByPosition }, bestQbOvr: t.bestQbOvr, hasDevQB: t.hasDevQB },
+    ]),
+  );
+
+  let aiBoard: DraftAIProspect[] = data.prospects.map((p) => ({
+    id: String(p.pid),
+    position: p.pos,
+    overall: p.ovr,
+    potential: p.pot,
+    // Without boardScore the AI ranks on current OVR, which is noise for a pre-draft class.
+    boardScore: p.value * 15,
+  }));
+
+  const picks: MadePick[] = [];
+  let userPicksUsed = 0;
+  let onClock: MockOrderEntry | null = null;
+  let invalid = false;
+
+  for (const slot of slotsForRounds(data, settings.rounds)) {
+    const team = contexts.get(slot.tid);
+    if (!team) {
+      invalid = true;
+      break;
+    }
+    const isUser = userTids.has(slot.tid);
+    let pid: number | undefined;
+    if (isUser) {
+      if (userPicksUsed >= userPicks.length) {
+        onClock = slot;
+        break;
+      }
+      pid = userPicks[userPicksUsed++];
+    } else {
+      // TODO(consensus): pass a hand-curated round-1 list as mockPlayerId. The AI takes
+      // ~8 QBs in round 1 because of its QB-need logic; real drafts take 3-5.
+      const id = chooseDraftPick({ overallPick: slot.pick, available: aiBoard, team, rng });
+      pid = id === undefined ? undefined : Number(id);
+    }
+
+    const prospect = pid === undefined ? undefined : prospectsById.get(pid);
+    const boardIndex = prospect ? aiBoard.findIndex((p) => p.id === String(prospect.pid)) : -1;
+    if (!prospect || boardIndex < 0) {
+      invalid = true;
+      break;
+    }
+    aiBoard = aiBoard.filter((_, i) => i !== boardIndex);
+    team.countByPosition[prospect.pos] = (team.countByPosition[prospect.pos] ?? 0) + 1;
+    picks.push({ slot, prospect, isUser, grade: gradePick(data, slot.pick, prospect) });
+  }
+
+  if (!onClock && userPicksUsed < userPicks.length) invalid = true;
+
+  const taken = new Set(picks.map((p) => p.prospect.pid));
+  return {
+    picks,
+    onClock,
+    complete: !onClock && !invalid,
+    available: data.prospects.filter((p) => !taken.has(p.pid)),
+    countsByTeam: new Map([...contexts].map(([tid, ctx]) => [tid, ctx.countByPosition])),
+    invalid,
+  };
+}
+
+/**
+ * Positions the team is short at. K and P never show: the data file caps every
+ * count at max-1 so the AI's roster-max penalty stays quiet, which makes K and
+ * P read 0 for all 32 teams whether or not they have a specialist.
+ */
+export function teamNeeds(counts: Record<Position, number>): Position[] {
+  return BOARD_POSITIONS.filter((pos) => pos !== 'K' && pos !== 'P' && (counts[pos] ?? 0) < ROSTER_LIMITS[pos].min);
+}
+
+/* ─── Share URL ─────────────────────────────────────────────── */
+
+/**
+ * Short hash of everything that changes a replay or a grade. The weekly refresh
+ * can keep every pid and still move the order, which would silently change an
+ * old link's results, so "are the pids still there" is not enough of a check.
+ */
+export function dataFingerprint(data: MockDraftData): string {
+  const source = JSON.stringify([
+    data.order.map((o) => [o.pick, o.tid]),
+    data.teams.map((t) => [t.tid, t.countByPosition, t.bestQbOvr, t.hasDevQB]),
+    data.prospects.map((p) => [p.pid, p.pos, p.ovr, p.pot, p.value]),
+  ]);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export function isAllTeams(data: MockDraftData, userTids: number[]): boolean {
+  return userTids.length === data.teams.length;
+}
+
+/** The query string for a finished mock. Built by hand so `,` stays readable. */
+export function encodeShareQuery(data: MockDraftData, settings: DraftSettings, userPicks: number[]): string {
+  const parts = [`s=${settings.seed.toString(36)}`, `r=${settings.rounds}`];
+  if (settings.userTids.length > 0) {
+    parts.push(`t=${isAllTeams(data, settings.userTids) ? 'all' : settings.userTids.join(',')}`);
+  }
+  if (userPicks.length > 0) parts.push(`p=${userPicks.map((pid) => pid.toString(36)).join('.')}`);
+  parts.push(`d=${dataFingerprint(data)}`);
+  return parts.join('&');
+}
+
+export type ShareState =
+  | { kind: 'none' }
+  /** A share link we can't reproduce. `hint` carries whatever still applies to the setup screen. */
+  | { kind: 'stale'; hint: { rounds?: MockRounds; userTids: number[] } }
+  | { kind: 'ok'; settings: DraftSettings; userPicks: number[]; replay: ReplayResult };
+
+function parseRounds(raw: string | null): MockRounds | undefined {
+  return ROUND_OPTIONS.find((r) => String(r) === raw);
+}
+
+function parseTeams(data: MockDraftData, raw: string | null): number[] | null {
+  if (!raw) return [];
+  if (raw === 'all') return data.teams.map((t) => t.tid);
+  const valid = new Set(data.teams.map((t) => t.tid));
+  const tids = raw.split(',').map((part) => (/^\d+$/.test(part) ? Number(part) : NaN));
+  if (tids.some((tid) => !valid.has(tid)) || new Set(tids).size !== tids.length) return null;
+  return tids;
+}
+
+function parseSeed(raw: string | null): number | null {
+  if (!raw || !/^[0-9a-z]{1,7}$/.test(raw)) return null;
+  const seed = parseInt(raw, 36);
+  return seed < 4294967296 ? seed : null;
+}
+
+function parsePicks(raw: string | null): number[] | null {
+  if (!raw) return [];
+  const parts = raw.split('.');
+  if (parts.some((part) => !/^[0-9a-z]{1,6}$/.test(part))) return null;
+  return parts.map((part) => parseInt(part, 36));
+}
+
+export function parseShareQuery(data: MockDraftData, params: URLSearchParams): ShareState {
+  if (!params.has('s')) return { kind: 'none' };
+
+  const rounds = parseRounds(params.get('r'));
+  const userTids = parseTeams(data, params.get('t'));
+  const stale: ShareState = { kind: 'stale', hint: { rounds, userTids: userTids ?? [] } };
+
+  const seed = parseSeed(params.get('s'));
+  const userPicks = parsePicks(params.get('p'));
+  if (seed === null || !rounds || !userTids || !userPicks) return stale;
+  if (params.get('d') !== dataFingerprint(data)) return stale;
+
+  const settings: DraftSettings = { seed, rounds, userTids };
+  const replay = replayDraft(data, settings, userPicks);
+  // A share link is always a finished draft.
+  return replay.complete ? { kind: 'ok', settings, userPicks, replay } : stale;
+}
+
+/* ─── Display helpers ───────────────────────────────────────── */
+
+export function heightLabel(inches: number): string {
+  return `${Math.floor(inches / 12)}'${inches % 12}"`;
+}
+
+export function recordLabel(team: Pick<MockTeam, 'won' | 'lost' | 'tied'>): string {
+  return team.tied > 0 ? `${team.won}-${team.lost}-${team.tied}` : `${team.won}-${team.lost}`;
+}
+
+/** `asOf` is a bare date, which JS parses as UTC midnight. Format in UTC or US visitors see the day before. */
+export function asOfLabel(asOf: string): string {
+  return new Date(`${asOf}T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+export type ProspectTier = 'Blue-chip' | '1st-round' | 'Day 2' | 'Day 3';
+
+/** Cut so the tiers roughly match the draft: 37 prospects are 75+ pot, 107 are 65+. */
+export function prospectTier(pot: number): ProspectTier {
+  if (pot >= 80) return 'Blue-chip';
+  if (pot >= 75) return '1st-round';
+  if (pot >= 65) return 'Day 2';
+  return 'Day 3';
+}
