@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useSyncExternalStore } from 'react';
+import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
 import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites } from '@bs/core/storage';
 import { scheduleCloudPush, isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 function uuid(): string {
@@ -452,16 +453,20 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     if (mockPickId) {
       // Pick 1: ALWAYS use mock (guaranteed #1 overall)
       if (overallPick === 1) return mockPickId;
-      const mockChance = overallPick <= 3 ? 0.75 : overallPick <= 10 ? 0.60 : overallPick <= 20 ? 0.50 : 0.40;
-      if (Math.random() < mockChance) return mockPickId;
+      if (Math.random() < mockFollowChance(overallPick)) return mockPickId;
     }
   }
 
   const roster = state.players.filter((player) => player.teamId === pickingTeamId);
-  const countByPosition = POSITIONS.reduce<Record<Position, number>>((acc, position) => {
-    acc[position] = roster.filter((player) => player.position === position).length;
-    return acc;
-  }, {} as Record<Position, number>);
+  const teamCtx = teamContextFromRoster(
+    roster.map((player) => ({
+      position: player.position,
+      overall: player.ratings.overall,
+      experience: player.experience,
+      potential: player.potential,
+    })),
+    POSITIONS,
+  );
 
   let prospects = state.freeAgents
     .map((id) => state.players.find((player) => player.id === id))
@@ -484,97 +489,10 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     return undefined;
   }
 
-  // Position draft value premium — mirrors real NFL draft tendencies.
-  // QBs, OL, DL, and edge rushers are valued higher; RBs are devalued.
-  const POSITION_DRAFT_VALUE: Record<Position, number> = {
-    QB: 35,   // QBs go early — massive positional value
-    OL: 20,   // Protect the QB — OL valued in early rounds
-    DL: 18,   // Pass rushers are premium picks
-    WR: 10,   // WRs go throughout the draft
-    LB: 8,    // Linebackers — solid mid-round value
-    CB: 5,    // CBs — slightly less premium than pass rush
-    TE: 5,    // TEs go mid-rounds unless elite
-    S: 0,     // Safeties — least valued in early rounds
-    RB: -15,  // RBs devalued — "don't draft a RB in round 1" effect
-    K: -50,   // Kickers/punters go very late
-    P: -50,
-  };
-
-  const ranked = prospects
-    .map((prospect) => {
-      const limits = ROSTER_LIMITS[prospect.position];
-      const count = countByPosition[prospect.position];
-      const minNeed = Math.max(0, limits.min - count);
-      const needScore = minNeed * 12;
-      const posValue = POSITION_DRAFT_VALUE[prospect.position] ?? 0;
-      let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore + posValue;
-      score += (Math.random() - 0.5) * 8;
-
-      // Position max enforcement: heavily penalize positions already at or above max
-      if (count >= limits.max) {
-        score *= 0.05; // Nearly eliminate chance of drafting surplus positions
-      }
-
-      // QB premium: QBs are the most valuable position in football. Teams
-      // draft QBs early and often — even with decent starters, they chase
-      // upside (see Jets/Patriots/Steelers picking QBs every year).
-      // Previous curve was too stingy once a team had a 78+ OVR starter;
-      // real NFL teams still draft dev/bridge QBs behind capable starters.
-      if (prospect.position === 'QB') {
-        const qbs = roster.filter(p => p.position === 'QB');
-        const bestQB = qbs.slice().sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
-        const qbOvr = bestQB?.ratings.overall ?? 0;
-        // A young, high-potential QB already on the roster satisfies the
-        // future-QB need even while his current OVR is still low. Without this,
-        // a freshly drafted dev rookie keeps reading as "terrible QB, must
-        // upgrade" and the team stacks a second (then third) QB in the SAME
-        // draft. Treat such a QB as addressing the need.
-        const hasDevQB = qbs.some(p => (p.experience ?? 0) <= 1 && (p.potential ?? 0) >= 80);
-        if (count >= 2) {
-          // QB-saturated: two arms is plenty. Suppress the low-OVR upgrade
-          // bonuses entirely so a team never stacks a 3rd QB purely because
-          // current overalls are low. The position-max penalty (count >= max)
-          // still guards the hard roster cap.
-          // (no QB bonus)
-        } else if (count === 0) {
-          score += 250; // No QB on roster — must draft one
-        } else if (hasDevQB) {
-          // Already invested a pick in a high-upside young QB — the future is
-          // covered, so don't let his low current OVR re-trigger the QB chase.
-          // Only a genuine blue-chip prospect is worth a modest nudge.
-          score += prospect.potential >= 90 ? 20 : 0;
-        } else if (qbOvr < 60) {
-          score += 180; // Terrible veteran QB — strong upgrade motivation
-        } else if (qbOvr < 68) {
-          score += 130; // Bad QB — still a priority
-        } else if (qbOvr < 75) {
-          score += 85; // Below average — "bridge QB" territory
-        } else if (qbOvr < 78) {
-          // Below-average starter — an upgrade is a real priority.
-          const upsideBonus = prospect.potential >= 85 ? 55 :
-                              prospect.potential >= 80 ? 35 :
-                              prospect.ratings.overall > qbOvr ? 20 : 8;
-          score += upsideBonus;
-        } else if (qbOvr < 82) {
-          // Capable starter (Cam Ward range) — only seek a backup if the team
-          // doesn't already have one, so it stops drafting a QB every single year.
-          if (count < 2) {
-            score += prospect.potential >= 88 ? 20 : prospect.potential >= 85 ? 10 : 0;
-          }
-        } else {
-          // Elite QB (82+) — don't chase dev QBs unless truly short-handed.
-          if (count < 2) {
-            score += prospect.potential >= 90 ? 15 : 0;
-          }
-        }
-      }
-
-      if (prospect.position === 'K' || prospect.position === 'P') {
-        score = minNeed > 0 ? score * 0.4 : score * 0.15;
-      }
-      return { playerId: prospect.id, score };
-    })
-    .sort((a, b) => b.score - a.score);
+  const ranked = rankProspects(
+    prospects.map((p) => ({ id: p.id, position: p.position, overall: p.ratings.overall, potential: p.potential })),
+    teamCtx,
+  );
 
   // Walk down the ranked list — return the first one whose player exists.
   for (const r of ranked) {
