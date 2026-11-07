@@ -1793,7 +1793,13 @@ export default function DraftPage() {
               })()}
             </details>
 
-            <div className="overflow-x-auto">
+            {/* Fixed window: 15 prospects tall (32.5px thead + 15 × 55.3px rows + 2px border + 15px for the
+                horizontal scrollbar the narrow two-column layout adds; without it the 16th
+                row peeks in as a scroll hint) so the draft
+                results below stay reachable — the full 50-row list made the page ~3,600px
+                taller on phones. Phones cap at 70svh so the window never fills the screen
+                and the page stays scrollable around it. Header sticks while scrolling. */}
+            <div className="overflow-auto max-h-[70svh] sm:max-h-[880px] rounded-lg border border-[var(--border)] [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-20 [&_thead_th]:bg-[var(--surface)] [&_thead_th]:pt-2">
             {/* Mobile: 4 columns (Player / OVR / Scout / Draft) so the whole row fits a phone
                 without side-scrolling — the 7-column layout with sticky edge columns hid the name
                 behind the chevron and pushed Scout off-screen (Tyler 10/28). Chevron, Proj and
@@ -1801,13 +1807,13 @@ export default function DraftPage() {
             <table className="w-full text-sm sm:min-w-[520px] sticky-col-sm sticky-action-sm">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
-                  <th className="hidden sm:table-cell text-left pb-2 pl-2 w-6"></th>
+                  <th className="hidden sm:table-cell text-left pb-2 pl-2 w-6 !z-30"></th>
                   <th className="hidden sm:table-cell text-center pb-2 w-12">Proj</th>
                   <th className="text-left pb-2 pl-2 sm:pl-0 w-full sm:w-auto">Player</th>
                   <th className="hidden sm:table-cell text-center pb-2">Pos</th>
                   <th className="text-center pb-2 px-1">OVR</th>
                   <th className="text-center pb-2 px-1">Scout</th>
-                  <th className="text-right pb-2 pr-2 bg-[var(--surface)]">Draft</th>
+                  <th className="text-right pb-2 pr-2 bg-[var(--surface)] !z-30">Draft</th>
                 </tr>
               </thead>
               <tbody>

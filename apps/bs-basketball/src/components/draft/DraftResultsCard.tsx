@@ -59,8 +59,9 @@ export function DraftResultsCard({
           (Tyler's screenshot of the half-visible OKC #12). 40rem now shows ~14
           clean rows with thead, matches the eyeline of the Draft Board next to
           it without either table dead-ending the user before the lottery picks
-          finish. */}
-      <div className="overflow-x-auto max-h-[40rem] overflow-y-auto">
+          finish. Height now tracks the Draft Board window (15 prospects on sm+,
+          70svh on phones) so the two cards keep lining up side by side. */}
+      <div className="overflow-x-auto max-h-[70svh] sm:max-h-[880px] overflow-y-auto">
         <table className="w-full text-sm sticky-col">
           <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider sticky top-0" style={{ background: 'var(--surface)' }}>
             <tr>
