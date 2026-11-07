@@ -24,6 +24,7 @@ import { trackEvent } from './track';
 import { setInteractionPage, startInteractionTracking } from './interactions';
 
 export { trackEvent, flushEvents } from './track';
+export { trackFeature } from './feature';
 
 const AUTH_EVENT_KEY = 'gg-auth-event';
 /** Collapse repeated SIGNED_IN callbacks for the same user into one event. */

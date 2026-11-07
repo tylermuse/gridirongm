@@ -42,3 +42,30 @@ export function getCurrentSubscriptionAllocations(): ScoutingAllocations {
 export function isPremiumActive(): boolean {
   return currentTier === 'premium';
 }
+
+/**
+ * Who the current viewer is, commercially. Finer than Tier, which collapses
+ * paid subscribers, Founding Members and admins into 'premium'. Stamped on
+ * every `feature_used` event so usage can be split by plan without a join.
+ */
+export type Plan = 'guest' | 'free' | 'paid' | 'founder' | 'admin';
+
+let currentPlan: Plan = 'guest';
+
+/** Set by SubscriptionProvider whenever the resolved entitlement changes. */
+export function setCurrentPlan(plan: Plan): void {
+  currentPlan = plan;
+}
+
+export function getCurrentPlan(): Plan {
+  return currentPlan;
+}
+
+/** Resolution order matches the providers: admin → founder → paid sub → free. */
+export function resolvePlan(o: { signedIn: boolean; admin: boolean; founder: boolean; paid: boolean }): Plan {
+  if (!o.signedIn) return 'guest';
+  if (o.admin) return 'admin';
+  if (o.founder) return 'founder';
+  if (o.paid) return 'paid';
+  return 'free';
+}

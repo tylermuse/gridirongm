@@ -12,6 +12,9 @@ import {
   type FallbackReason, type LineTiming, type ShowAudioRequestBody,
 } from '@/lib/show/showAudio';
 import { isSpeechSupported, speakLine, stopSpeech } from '@/lib/ui/speech';
+import { trackFeature } from '@bs/core/analytics/feature';
+
+const trackedEpisodes = new Set<string>();
 
 type Phase = 'idle' | 'generating' | 'ready' | 'playing' | 'paused' | 'ended';
 type Mode = 'studio' | 'browser';
@@ -202,7 +205,12 @@ function PlayerInner({ episode, compact = false, autoStart = false, onClose, bod
     });
     const live = () => audioRef.current === a; // ignore a detached element
     a.addEventListener('timeupdate', () => { if (live()) setTime(a.currentTime); });
-    a.addEventListener('play', () => { if (live()) setPhase('playing'); });
+    a.addEventListener('play', () => {
+      if (!live()) return;
+      setPhase('playing');
+      // Count each episode once per page load, not every resume.
+      if (!trackedEpisodes.has(key)) { trackedEpisodes.add(key); trackFeature('spotlight_audio'); }
+    });
     a.addEventListener('pause', () => { if (live()) setPhase(p => (p === 'ended' ? p : 'paused')); });
     a.addEventListener('ended', () => { if (live()) setPhase('ended'); });
     a.addEventListener('error', () => {

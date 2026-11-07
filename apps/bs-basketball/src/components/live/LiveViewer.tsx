@@ -19,6 +19,7 @@ import { winProbability, secondsLeftInGame } from '@/lib/live/winProbability';
 import { LiveSim3D, SIM_RATE, useSim3DMode } from '@/components/live/LiveSim3D';
 import { isRealPhoto, lineupsAt, sampleSkinFromPhoto, toSimPlayers, toSimPossession, toSimTeam, type SimPossession } from '@/lib/live/liveSim3d';
 import { useLiveGameTelemetry } from '@/lib/telemetry/useLiveGameTelemetry';
+import { trackFeature } from '@bs/core/analytics/feature';
 import type { BaseGameResult } from '@bs/core/adapter';
 import type { BasketballPlayer, BasketballStats, BasketballTeam, PlayLog } from '@bs/sport-basketball';
 
@@ -256,12 +257,20 @@ export function LiveViewer({
   sim3dActiveRef.current = sim3dActive;
   const sim3dEnabledRef = useRef(sim3dEnabled);
   sim3dEnabledRef.current = sim3dEnabled;
+  // One feature_used per game actually watched in Court Cam (not per toggle).
+  const sim3dTrackedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sim3dActive || sim3dTrackedRef.current === userGameId) return;
+    sim3dTrackedRef.current = userGameId;
+    trackFeature('live_sim_3d', { game_id: userGameId });
+  }, [sim3dActive, userGameId]);
   /** `open`: start with the show open (false when picking back up after a skip). */
   const startBroadcast = useCallback((fromIndex: number, open = true) => {
     if (!home || !away || fromIndex >= events.length) return;
     const ctx = { homeAbbr: home.abbreviation, awayAbbr: away.abbreviation, homeName: home.city, awayName: away.city };
     setPaused(false);
     if (speedRef.current === 'max') setSpeed(1);
+    if (open) trackFeature('broadcast', { game_id: userGameId, sim3d: sim3dEnabledRef.current });
     broadcast.start({
       count: events.length,
       fromIndex,

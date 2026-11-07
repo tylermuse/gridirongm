@@ -42,6 +42,9 @@ export default function HomeIntro() {
           <Link href="/predictions" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:border-blue-300 hover:text-blue-700 transition-colors">
             NFL playoff odds this week
           </Link>
+          <Link href="/mock-draft" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:border-blue-300 hover:text-blue-700 transition-colors">
+            2027 NFL mock draft simulator
+          </Link>
           <Link href="/rosters/2026" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:border-blue-300 hover:text-blue-700 transition-colors">
             Browse 2026 team rosters
           </Link>
