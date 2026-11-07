@@ -6,7 +6,7 @@
  * the set the owner will hand out on the first simmed day (old saves).
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { currentObjectives, objectiveProgress, type ProgressStatus } from '@/lib/owner/objectives';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
@@ -35,12 +35,29 @@ export function OwnerObjectivesCard({ league, team, className = '' }: { league: 
   const set = useMemo(() => currentObjectives(league), [league]);
   const rows = useMemo(() => (set ? objectiveProgress(league, set) : []), [league, set]);
   const job = JOB_SECURITY_META[team.approval.jobSecurity] ?? JOB_SECURITY_META.safe;
+  const [expanded, setExpanded] = useState(false);
   if (!set || rows.length === 0) return null;
+  const worrying = rows.filter(r => r.status === 'at_risk' || r.status === 'behind' || r.status === 'missed').length;
 
   return (
     <section className={`rounded-xl border p-4 ${className}`} style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-      <header className="flex flex-wrap items-center gap-2 mb-3">
-        <h2 className="text-xs uppercase tracking-widest text-[var(--text-sec)] mr-auto">Owner objectives · {set.season}</h2>
+      {/* Phones: one tappable line; the full list is a tap away. */}
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        className="md:hidden w-full flex items-center justify-between gap-3 text-left"
+      >
+        <span className="text-xs uppercase tracking-widest text-[var(--text-sec)]">Owner objectives</span>
+        <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide shrink-0">
+          <span style={{ color: worrying > 0 ? STATUS.at_risk.color : STATUS.on_track.color }}>
+            {worrying > 0 ? `${worrying} at risk` : `${rows.length} on track`}
+          </span>
+          <span className={`text-[var(--text-sec)] transition-transform ${expanded ? 'rotate-90' : ''}`} aria-hidden>›</span>
+        </span>
+      </button>
+      <header className={`${expanded ? 'flex mt-3' : 'hidden'} md:flex flex-wrap items-center gap-2 mb-3 md:mt-0`}>
+        <h2 className="text-xs uppercase tracking-widest text-[var(--text-sec)] mr-auto hidden md:block">Owner objectives · {set.season}</h2>
         <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }}>
           {POSTURE_LABEL[set.posture]} mode
         </span>
@@ -48,7 +65,7 @@ export function OwnerObjectivesCard({ league, team, className = '' }: { league: 
           {job.label}
         </span>
       </header>
-      <ul className="space-y-3">
+      <ul className={`${expanded ? 'block' : 'hidden'} md:block space-y-3`}>
         {rows.map(r => {
           const st = STATUS[r.status];
           return (
@@ -65,7 +82,7 @@ export function OwnerObjectivesCard({ league, team, className = '' }: { league: 
           );
         })}
       </ul>
-      <p className="text-[11px] text-[var(--text-sec)] mt-3">Graded at season end — each met objective raises owner approval, each miss costs it.</p>
+      <p className={`${expanded ? 'block' : 'hidden'} md:block text-[11px] text-[var(--text-sec)] mt-3`}>Graded at season end — each met objective raises owner approval, each miss costs it.</p>
     </section>
   );
 }

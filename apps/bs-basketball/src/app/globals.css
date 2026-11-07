@@ -197,3 +197,20 @@ html, body {
 
 /* Football's display headline: heavy, uppercase, tight. Used by PageHeader. */
 .font-display { font-family: var(--font-display), sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }
+
+/* Roster lineup grid. It's wider than a phone, so below `sm` the row reorders to
+ * Min, Name, Pos, OVR, Action, then everything else: the rating and the Start /
+ * Bench button no longer need a sideways scroll. Every row has 12 cells. */
+.lineup-row {
+  grid-template-columns: 2.5rem minmax(9rem, 1fr) 2.4rem 2.4rem 3.4rem 3.2rem 5.2rem 6rem 2.4rem minmax(8rem, 1fr) 5rem 7rem;
+}
+@media (max-width: 639px) {
+  .lineup-row {
+    grid-template-columns: 2rem 5.5rem 2.4rem 3.4rem 6rem 2.4rem 3.2rem 5.2rem 6rem 2.4rem 8rem 5rem;
+    column-gap: 0.375rem;
+    min-width: 56rem;
+  }
+  .lineup-row > :nth-child(n + 4):not(:nth-child(5)):not(:last-child) { order: 2; }
+  .lineup-row > :last-child { order: 1; }
+  .lineup-row > :nth-child(2) { font-size: 0.8125rem; }
+}
