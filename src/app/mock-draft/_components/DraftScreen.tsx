@@ -7,7 +7,8 @@ import {
   BOARD_POSITIONS,
   heightLabel,
   slotsForRounds,
-  teamNeeds,
+  needLabel,
+  teamDraftNeeds,
   type DraftSettings,
   type MadePick,
   type MockDraftData,
@@ -30,7 +31,7 @@ function useTeamsById(data: MockDraftData) {
 }
 
 const TeamBadge = ({ team, size = 'xs' }: { team: MockTeam; size?: 'xs' | 'sm' | 'md' }) => (
-  <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} size={size} />
+  <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} logoUrl={team.imgURL || undefined} logoOnWhite size={size} />
 );
 
 /* ─── Pick ticker ───────────────────────────────────────────── */
@@ -169,24 +170,26 @@ const BoardRow = memo(function BoardRow({
   );
 });
 
-function NeedsStrip({ team, counts }: { team: MockTeam; counts: Record<Position, number> }) {
-  const needs = teamNeeds(counts);
+function NeedsStrip({ data, team, counts }: { data: MockDraftData; team: MockTeam; counts: Record<Position, number> }) {
+  // Live counts, so a need the user has just drafted for drops off the list.
+  const needs = teamDraftNeeds(data, team, counts);
+  const needByPos = new Map(needs.map((n) => [n.pos, n]));
   // K and P are left out: the data file doesn't carry a real count for them (see teamNeeds).
   const positions = BOARD_POSITIONS.filter((pos) => pos !== 'K' && pos !== 'P');
   return (
     <div className="mb-3">
       <div className="text-xs font-semibold text-[var(--text-sec)] mb-1">
-        {team.abbrev} needs: {needs.length > 0 ? needs.join(', ') : 'none under the roster minimum'}
+        {team.abbrev} needs: {needs.length > 0 ? needs.map((n) => n.pos).join(', ') : 'no glaring holes, best player available'}
       </div>
       <div className="flex flex-wrap gap-1">
         {positions.map((pos) => {
-          const isNeed = needs.includes(pos);
+          const need = needByPos.get(pos);
           return (
             <span
               key={pos}
-              title={`${counts[pos]} on the roster, minimum ${ROSTER_LIMITS[pos].min}`}
+              title={need ? needLabel(need, data.teams.length) : `${counts[pos]} on the roster, minimum ${ROSTER_LIMITS[pos].min}`}
               className={`px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums ${
-                isNeed ? 'bg-red-100 text-red-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)]'
+                need ? 'bg-red-100 text-red-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)]'
               }`}
             >
               {pos} {counts[pos]}
@@ -194,6 +197,13 @@ function NeedsStrip({ team, counts }: { team: MockTeam; counts: Record<Position,
           );
         })}
       </div>
+      {needs.length > 0 && (
+        <ul className="mt-1.5 text-xs text-[var(--text-sec)] space-y-0.5">
+          {needs.slice(0, 3).map((need) => (
+            <li key={need.pos}>{needLabel(need, data.teams.length)}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -451,7 +461,7 @@ export function DraftScreen({
         <div className={showOn('board')}>
           {onClockSlot && currentTeam && counts ? (
             <>
-              <NeedsStrip team={currentTeam} counts={counts} />
+              <NeedsStrip data={data} team={currentTeam} counts={counts} />
               <AvailableBoard key={onClockSlot.pick} available={replay.available} team={currentTeam} onDraft={onDraft} />
             </>
           ) : (

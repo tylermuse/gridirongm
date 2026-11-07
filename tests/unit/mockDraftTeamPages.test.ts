@@ -4,7 +4,9 @@ import path from 'node:path';
 import {
   findTeamBySlug,
   houseMock,
+  needLabel,
   parseTeamPreselect,
+  starterRank,
   teamDraftNeeds,
   teamSlug,
   type MockDraftData,
@@ -55,6 +57,25 @@ describe('mock draft team pages', () => {
     expect(needs[0]).toMatchObject({ pos: 'QB', reason: 'qb' });
     expect(needs.find((n) => n.pos === 'LB')).toMatchObject({ reason: 'below-min', value: 1, bar: 3 });
     expect(teamDraftNeeds(data, { ...weak, hasDevQB: true }).some((n) => n.pos === 'QB')).toBe(false);
+  });
+
+  it('flags bottom-quarter starters as weak, worst first, and drops a need once it is drafted for', () => {
+    const chi = findTeamBySlug(data, 'bears')!;
+    const needs = teamDraftNeeds(data, chi);
+    const weak = needs.filter((n) => n.reason === 'weak');
+    for (const need of weak) expect(starterRank(data, chi, need.pos)).toBeGreaterThanOrEqual(25);
+    for (let i = 1; i < weak.length; i++) expect(weak[i - 1].rank!).toBeGreaterThanOrEqual(weak[i].rank!);
+    // Every team gets a reasoned list from the data, not just the 2 the roster-minimum check finds.
+    expect(data.teams.filter((t) => teamDraftNeeds(data, t).length > 0).length).toBeGreaterThan(28);
+
+    const first = needs[0];
+    expect(needLabel(first)).toMatch(new RegExp(`^${first.pos}: `));
+    const live = { ...chi.countByPosition, [first.pos]: chi.countByPosition[first.pos] + 1 };
+    expect(teamDraftNeeds(data, chi, live).some((n) => n.pos === first.pos)).toBe(false);
+  });
+
+  it('carries a logo URL for every team', () => {
+    for (const team of data.teams) expect(team.imgURL).toMatch(/^https:\/\//);
   });
 
   it('runs one complete, deterministic house mock', () => {

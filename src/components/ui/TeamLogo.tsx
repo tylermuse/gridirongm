@@ -12,6 +12,12 @@ interface TeamLogoProps {
   className?: string;
   /** External logo image URL (from imported league files) */
   logoUrl?: string;
+  /**
+   * Put a logoUrl image on a white tile instead of the team color. Real logos
+   * are often drawn in the team color (the Jets' green wordmark vanishes on a
+   * green tile). No effect on the bundled icons.
+   */
+  logoOnWhite?: boolean;
 }
 
 const SIZE_CLASSES: Record<string, string> = {
@@ -42,7 +48,7 @@ const FONT_SIZES: Record<string, string> = {
 };
 
 
-export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'md', className = '', logoUrl }: TeamLogoProps) {
+export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'md', className = '', logoUrl, logoOnWhite = false }: TeamLogoProps) {
   const sizeClass = SIZE_CLASSES[size] ?? SIZE_CLASSES.md;
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -55,12 +61,21 @@ export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'm
     return (
       <div
         className={`${sizeClass} shrink-0 overflow-hidden box-border relative ${className}`}
-        style={{
-          backgroundColor: primaryColor,
-          boxShadow: `0 3px 8px ${primaryColor}55, 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15)`,
-          border: `1px solid rgba(255,255,255,0.12)`,
-          borderRadius: '22%',
-        }}
+        style={
+          logoOnWhite
+            ? {
+                backgroundColor: '#ffffff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                border: '1px solid rgba(0,0,0,0.08)',
+                borderRadius: '22%',
+              }
+            : {
+                backgroundColor: primaryColor,
+                boxShadow: `0 3px 8px ${primaryColor}55, 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15)`,
+                border: `1px solid rgba(255,255,255,0.12)`,
+                borderRadius: '22%',
+              }
+        }
       >
         <img
           src={logoUrl}

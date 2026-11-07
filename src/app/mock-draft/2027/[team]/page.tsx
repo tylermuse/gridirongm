@@ -10,6 +10,7 @@ import {
   findTeamBySlug,
   heightLabel,
   houseMock,
+  needLabel,
   prospectTier,
   recordLabel,
   teamDraftNeeds,
@@ -18,7 +19,6 @@ import {
   type MockDraftData,
   type MockProspect,
   type MockTeam,
-  type TeamNeed,
 } from '@/lib/mockDraft/engine';
 import { getMockDraftData } from '@/lib/mockDraft/serverData';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -44,12 +44,6 @@ function fullName(team: Pick<MockTeam, 'region' | 'name'>): string {
 
 function prospectName(p: MockProspect): string {
   return `${p.firstName} ${p.lastName}`;
-}
-
-function needLabel(need: TeamNeed): string {
-  if (need.reason === 'qb') return `QB: best QB is ${need.value} OVR, with no young passer developing behind him`;
-  if (need.reason === 'below-min') return `${need.pos}: ${need.value} on the roster, under the minimum of ${need.bar}`;
-  return `${need.pos}: ${need.value} on the roster, fewer than most teams (${need.bar})`;
 }
 
 /** Everything a team page shows, from one read of the data file. */
@@ -236,7 +230,7 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
       </nav>
 
       <div className="flex items-center gap-4">
-        <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} size="lg" />
+        <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} logoUrl={team.imgURL || undefined} logoOnWhite size="lg" />
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
           {name} {data.draftYear} Mock Draft
         </h1>
@@ -347,17 +341,18 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
         {needs.length > 0 ? (
           <ul className="list-disc pl-5 text-gray-700 space-y-1">
             {needs.map((need) => (
-              <li key={need.pos}>{needLabel(need)}</li>
+              <li key={need.pos}>{needLabel(need, data.teams.length)}</li>
             ))}
           </ul>
         ) : (
           <p className="text-gray-700">
-            No glaring holes: the {team.name} carry at least a typical number of players at every position, so expect
-            them to take the best player available.
+            No glaring holes: the {team.name}&apos; starters rank outside the league&apos;s bottom quarter at every
+            position, so expect them to take the best player available.
           </p>
         )}
         <p className="text-xs text-gray-500 mt-2">
-          Counts are players on the current roster. Kickers and punters aren&apos;t counted.
+          Chips show players on the current roster at each position. Needs compare this roster&apos;s starters with the
+          rest of the league. Kickers and punters aren&apos;t counted.
         </p>
       </section>
 

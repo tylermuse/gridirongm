@@ -9,9 +9,9 @@ and team needs track the real season.
 
 Contents:
   - prospects: the 2027 class (tid -2, draft.year 2027), ranked by value
-  - teams: real record, strength of schedule so far, and the roster context
+  - teams: real record, strength of schedule so far, the roster context
     the shared draft AI needs (countByPosition, bestQbOvr, hasDevQB —
-    see src/lib/engine/draftAI.ts)
+    see src/lib/engine/draftAI.ts), and starterOvr (display-only needs signal)
   - order: all 224 picks, "if the season ended today". Teams sorted by win %
     ascending, ties broken by lower strength of schedule (the NFL's first
     draft-order tiebreaker), then tid. Each slot carries its CURRENT owner, so
@@ -34,11 +34,22 @@ ROSTER_MAX = {"QB": 3, "RB": 4, "WR": 6, "TE": 3, "OL": 10, "DL": 10, "LB": 8, "
 CORE_ROSTER = 53
 REAL_QB_OVR = 65  # a QB below this doesn't count as "has a QB" for the QB-need logic
 SEASON_ENDING = 50  # injury gamesRemaining at/above this = out for the year
+# Starters per position for starterOvr, the "where is this team weak" signal on
+# the team pages and the tool's needs strip. Display only: the draft AI doesn't read it.
+STARTERS = {"QB": 1, "RB": 1, "WR": 3, "TE": 1, "OL": 5, "DL": 4, "LB": 3, "CB": 3, "S": 2, "K": 1, "P": 1}
+EMPTY_SLOT_OVR = 40  # a starting slot the team can't fill counts as replacement level
 
 
 def pct(w, l, t):
     g = w + l + t
     return (w + 0.5 * t) / g if g else 0.0
+
+
+def starter_ovr(roster, pos):
+    """Mean OVR of the team's best STARTERS[pos] players at pos, rounded to a tenth."""
+    best = sorted((x[1] for x in roster if x[0] == pos), reverse=True)[: STARTERS[pos]]
+    best += [EMPTY_SLOT_OVR] * (STARTERS[pos] - len(best))
+    return round(sum(best) / len(best), 1)
 
 
 def main():
@@ -84,12 +95,13 @@ def main():
         counts["QB"] = min(sum(1 for x in qbs if x[1] >= REAL_QB_OVR) or (1 if qbs else 0), ROSTER_MAX["QB"] - 1)
         team_out.append({
             "tid": t["tid"], "abbrev": t["abbrev"], "region": t["region"], "name": t["name"],
-            "colors": t.get("colors"), "cid": t.get("cid"), "did": t.get("did"),
+            "colors": t.get("colors"), "imgURL": t.get("imgURL", ""), "cid": t.get("cid"), "did": t.get("did"),
             "won": w, "lost": l, "tied": ti, "pf": pf[t["tid"]], "pa": pa[t["tid"]],
             "sos": round(sos(t["tid"]), 4),
             "countByPosition": counts,
             "bestQbOvr": max((x[1] for x in qbs), default=0),
             "hasDevQB": any(x[3] <= 1 and x[2] >= 80 for x in qbs),
+            "starterOvr": {pos: starter_ovr(roster, pos) for pos in POSITIONS},
         })
 
     # --- draft order, if the season ended today ---

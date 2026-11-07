@@ -156,7 +156,7 @@ export function SetupScreen({
                     : 'border-[var(--border)] bg-[var(--surface)] hover:border-blue-400'
                 } ${hasPick ? '' : 'opacity-50 cursor-not-allowed'}`}
               >
-                <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} size="md" />
+                <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} logoUrl={team.imgURL || undefined} logoOnWhite size="md" />
                 <span className="min-w-0">
                   <span className="block text-sm font-bold text-[var(--text)] truncate">
                     {team.abbrev} <span className="font-normal text-[var(--text-sec)]">{recordLabel(team)}</span>
