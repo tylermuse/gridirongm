@@ -171,7 +171,7 @@ export default async function BigBoardPage({ searchParams }: { searchParams: Sea
             return (
               <li key={slot.pick} className="flex items-center gap-3 py-2 border-b border-gray-100 text-sm">
                 <span className="w-6 shrink-0 tabular-nums font-semibold text-gray-500">{slot.pick}</span>
-                <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} size="sm" />
+                <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} logoUrl={team.imgURL || undefined} logoOnWhite size="sm" />
                 <Link
                   href={`${PAGE_PATH}/${teamSlug(team)}`}
                   prefetch={false}

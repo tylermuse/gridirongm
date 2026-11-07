@@ -19,6 +19,8 @@ export interface MockTeam {
   region: string;
   name: string;
   colors: string[];
+  /** Team logo from the roster file, the same one the game shows. Empty if the file has none. */
+  imgURL?: string;
   cid: number;
   did: number;
   won: number;
@@ -30,6 +32,8 @@ export interface MockTeam {
   countByPosition: Record<Position, number>;
   bestQbOvr: number;
   hasDevQB: boolean;
+  /** Mean OVR of the team's starters at each position (scripts/build_mock_draft.py STARTERS). Display only. */
+  starterOvr?: Record<Position, number>;
 }
 
 export interface MockOrderEntry {
@@ -368,19 +372,23 @@ export function parseTeamPreselect(
   return { userTids: [team.tid], rounds: hasFirst ? 1 : 3 };
 }
 
-export type NeedReason = 'qb' | 'below-min' | 'thin';
+export type NeedReason = 'qb' | 'below-min' | 'weak' | 'thin';
 
 export interface TeamNeed {
   pos: Position;
   reason: NeedReason;
-  /** Players on the roster at the position (best QB's OVR for a 'qb' need). */
+  /** Starters' average OVR ('qb', 'weak'), or players on the roster ('below-min', 'thin'). */
   value: number;
-  /** The bar it falls short of: the roster minimum, the league median count, or 75 OVR. */
+  /** What it falls short of: 75 OVR, the roster minimum, or the league median count. 'weak' has none. */
   bar: number;
+  /** League rank of the starters at this position, 1 = best. Absent when the data file has no starterOvr. */
+  rank?: number;
 }
 
 /** QB under this OVR, with no young high-potential QB behind him, reads as a need. Matches the AI's "priority" range. */
 export const QB_NEED_OVR = 75;
+/** Starters ranked this low or worse (of 32) at a position make it a need. Bottom quarter of the league. */
+export const WEAK_RANK = 25;
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
@@ -388,31 +396,82 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+/** League rank (1 = best) of the team's starters at pos, or undefined without starterOvr in the data. */
+export function starterRank(data: MockDraftData, team: MockTeam, pos: Position): number | undefined {
+  const mine = team.starterOvr?.[pos];
+  if (mine === undefined) return undefined;
+  return 1 + data.teams.filter((t) => (t.starterOvr?.[pos] ?? -Infinity) > mine).length;
+}
+
 /**
- * A fuller needs list than teamNeeds for the team pages. teamNeeds only flags a
- * position under the roster minimum, which is 2 of 32 teams on a mid-season
- * roster. This adds a starting QB under 75 OVR (with no developing QB) and any
- * position where the team carries fewer players than the league median. Most
- * important first: QB, then below the minimum, then thin. K and P stay out (see teamNeeds).
+ * Where the team is weak, most pressing first. teamNeeds only flags a position
+ * under the roster minimum, which is 2 of 32 teams mid-season, so this also
+ * counts quality and depth:
+ *   - qb: best QB under 75 OVR with no young high-potential QB developing
+ *   - below-min: fewer players than the roster minimum
+ *   - weak: starters rank in the league's bottom quarter (starterOvr)
+ *   - thin: fewer players than the league median
+ * Pass the live counts from a mock in progress and a position the team has
+ * drafted at counts as addressed. K and P stay out (see teamNeeds).
  */
-export function teamDraftNeeds(data: MockDraftData, team: MockTeam): TeamNeed[] {
-  const needs: TeamNeed[] = [];
-  if (!team.hasDevQB && team.bestQbOvr < QB_NEED_OVR) {
-    needs.push({ pos: 'QB', reason: 'qb', value: team.bestQbOvr, bar: QB_NEED_OVR });
-  }
-  const belowMin = new Set(teamNeeds(team.countByPosition));
+export function teamDraftNeeds(
+  data: MockDraftData,
+  team: MockTeam,
+  liveCounts: Record<Position, number> = team.countByPosition,
+): TeamNeed[] {
+  const addressed = (pos: Position) => (liveCounts[pos] ?? 0) > (team.countByPosition[pos] ?? 0);
+  const qb: TeamNeed[] = [];
+  const belowMin: TeamNeed[] = [];
+  const weak: TeamNeed[] = [];
   const thin: TeamNeed[] = [];
+
   for (const pos of BOARD_POSITIONS) {
-    if (pos === 'K' || pos === 'P' || pos === 'QB') continue;
-    const count = team.countByPosition[pos] ?? 0;
-    if (belowMin.has(pos)) {
-      needs.push({ pos, reason: 'below-min', value: count, bar: ROSTER_LIMITS[pos].min });
+    if (pos === 'K' || pos === 'P') continue;
+    const count = liveCounts[pos] ?? 0;
+    const rank = starterRank(data, team, pos);
+    if (count < ROSTER_LIMITS[pos].min) {
+      belowMin.push({ pos, reason: 'below-min', value: count, bar: ROSTER_LIMITS[pos].min, rank });
+      continue;
+    }
+    if (addressed(pos)) continue;
+    if (pos === 'QB') {
+      if (team.hasDevQB) continue;
+      if (team.bestQbOvr < QB_NEED_OVR) {
+        qb.push({ pos, reason: 'qb', value: team.bestQbOvr, bar: QB_NEED_OVR, rank });
+        continue;
+      }
+    }
+    if (rank !== undefined && rank >= WEAK_RANK) {
+      weak.push({ pos, reason: 'weak', value: team.starterOvr?.[pos] ?? 0, bar: 0, rank });
       continue;
     }
     const leagueMedian = median(data.teams.map((t) => t.countByPosition[pos] ?? 0));
-    if (count < leagueMedian) thin.push({ pos, reason: 'thin', value: count, bar: leagueMedian });
+    if (pos !== 'QB' && count < leagueMedian) thin.push({ pos, reason: 'thin', value: count, bar: leagueMedian, rank });
   }
-  return [...needs, ...thin];
+
+  weak.sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
+  return [...qb, ...belowMin, ...weak, ...thin];
+}
+
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`;
+}
+
+/** One-line reason for a need, e.g. "OL: starters average 60.2 OVR, 29th of 32". */
+export function needLabel(need: TeamNeed, teamCount = 32): string {
+  const ranked = need.rank !== undefined ? `, ${ordinal(need.rank)} of ${teamCount}` : '';
+  switch (need.reason) {
+    case 'qb':
+      return `QB: best QB is ${need.value} OVR${ranked}, with no young passer developing behind him`;
+    case 'below-min':
+      return `${need.pos}: only ${need.value} on the roster, under the minimum of ${need.bar}`;
+    case 'weak':
+      return `${need.pos}: starters average ${need.value} OVR${ranked}`;
+    case 'thin':
+      return `${need.pos}: ${need.value} on the roster, fewer than most teams (${need.bar})`;
+  }
 }
 
 /**

@@ -36,7 +36,24 @@ function gradeHex(grade: string): string {
   return '#dc2626';
 }
 
-function Logo({ team, size }: { team: MockTeam; size: number }) {
+/**
+ * The team's logo from the roster file as a data URL, or null if it has none or
+ * the host doesn't answer in time. Fetched here rather than left to Satori so a
+ * dead link falls back to the bundled icon instead of failing the whole image.
+ */
+async function fetchLogo(url: string | undefined): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    const type = res.headers.get('content-type') ?? '';
+    if (!res.ok || !type.startsWith('image/')) return null;
+    return `data:${type};base64,${Buffer.from(await res.arrayBuffer()).toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
+function Logo({ team, size, logoSrc }: { team: MockTeam; size: number; logoSrc: string | null }) {
   const icon = ICONS[team.abbrev];
   return (
     <div
@@ -47,14 +64,19 @@ function Logo({ team, size }: { team: MockTeam; size: number }) {
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: size * 0.22,
-        backgroundColor: team.colors[0],
+        // Real logos are often drawn in the team color, so they sit on white (see TeamLogo logoOnWhite).
+        backgroundColor: logoSrc ? '#ffffff' : team.colors[0],
+        border: logoSrc ? `2px solid ${BORDER}` : 'none',
         color: '#ffffff',
         fontSize: size * 0.32,
         fontWeight: 700,
       }}
     >
       {/* The icons size to their parent in CSS. Satori needs explicit dimensions on the svg. */}
-      {icon ? cloneElement(icon(team.colors[1], team.colors[0]) as ReactElement<SVGProps<SVGSVGElement>>, { width: size * 0.8, height: size * 0.8 }) : team.abbrev}
+      {logoSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Satori renders plain <img>, not next/image.
+        <img src={logoSrc} alt="" width={size * 0.8} height={size * 0.8} style={{ objectFit: 'contain' }} />
+      ) : icon ? cloneElement(icon(team.colors[1], team.colors[0]) as ReactElement<SVGProps<SVGSVGElement>>, { width: size * 0.8, height: size * 0.8 }) : team.abbrev}
     </div>
   );
 }
@@ -126,13 +148,23 @@ function FallbackCard({ data }: { data: MockDraftData }) {
   );
 }
 
-function ShareCard({ data, team, picks }: { data: MockDraftData; team?: MockTeam; picks: MadePick[] }) {
+function ShareCard({
+  data,
+  team,
+  picks,
+  logoSrc,
+}: {
+  data: MockDraftData;
+  team?: MockTeam;
+  picks: MadePick[];
+  logoSrc: string | null;
+}) {
   const grade = team ? classGrade(picks) : null;
   return (
     <Frame>
       <div style={{ display: 'flex', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: 400, marginRight: 40 }}>
-          {team && <Logo team={team} size={170} />}
+          {team && <Logo team={team} size={170} logoSrc={logoSrc} />}
           <div style={{ display: 'flex', fontSize: 44, fontWeight: 700, lineHeight: 1.1, marginTop: team ? 24 : 0 }}>
             {team ? `${team.region} ${team.name}` : `${data.draftYear} NFL mock draft`}
           </div>
@@ -156,7 +188,7 @@ function ShareCard({ data, team, picks }: { data: MockDraftData; team?: MockTeam
   );
 }
 
-export function GET(request: Request) {
+export async function GET(request: Request) {
   const data = getMockDraftData();
   const params = new URL(request.url).searchParams;
   const share = parseShareQuery(data, params);
@@ -164,11 +196,15 @@ export function GET(request: Request) {
 
   let card = <FallbackCard data={data} />;
   if (pageTeam) {
-    card = <ShareCard data={data} team={pageTeam} picks={houseMock(data).picks.filter((p) => p.slot.tid === pageTeam.tid)} />;
+    const logoSrc = await fetchLogo(pageTeam.imgURL);
+    const picks = houseMock(data).picks.filter((p) => p.slot.tid === pageTeam.tid);
+    card = <ShareCard data={data} team={pageTeam} picks={picks} logoSrc={logoSrc} />;
   } else if (share.kind === 'ok') {
     const allTeams = isAllTeams(data, share.settings.userTids);
     const team = allTeams ? undefined : data.teams.find((t) => t.tid === share.settings.userTids[0]);
-    card = <ShareCard data={data} team={team} picks={team ? share.replay.picks.filter((p) => p.slot.tid === team.tid) : share.replay.picks} />;
+    const logoSrc = await fetchLogo(team?.imgURL);
+    const picks = team ? share.replay.picks.filter((p) => p.slot.tid === team.tid) : share.replay.picks;
+    card = <ShareCard data={data} team={team} picks={picks} logoSrc={logoSrc} />;
   }
 
   return new ImageResponse(card, { ...SIZE, headers: { 'Cache-Control': CACHE_CONTROL } });

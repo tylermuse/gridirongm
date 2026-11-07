@@ -25,7 +25,7 @@ function PickRow({ pick, team, via }: { pick: MadePick; team?: MockTeam; via?: s
   return (
     <li className={`flex items-center gap-2 px-3 py-2 text-sm border-b border-[var(--border)] last:border-b-0 ${pick.isUser ? 'bg-amber-50' : ''}`}>
       <span className="w-7 shrink-0 text-xs font-semibold tabular-nums text-[var(--text-sec)]">{slot.pick}</span>
-      {team && <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} size="xs" />}
+      {team && <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} logoUrl={team.imgURL || undefined} logoOnWhite size="xs" />}
       {team && (
         <span className="w-20 shrink-0 text-xs text-[var(--text-sec)] truncate">
           {team.abbrev}
@@ -170,7 +170,7 @@ export function ResultsScreen({
               return (
                 <Card key={team.tid} className="!p-0 overflow-hidden">
                   <div className="flex items-center gap-3 p-4 border-b border-[var(--border)]">
-                    <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} size="lg" />
+                    <TeamLogo abbreviation={team.abbrev} primaryColor={team.colors[0]} secondaryColor={team.colors[1]} logoUrl={team.imgURL || undefined} logoOnWhite size="lg" />
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-[var(--text)] truncate">
                         {team.region} {team.name}
