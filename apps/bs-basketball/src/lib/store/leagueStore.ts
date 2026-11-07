@@ -86,6 +86,7 @@ import { applyRealHeadCoaches } from '../coaching/realHeadCoaches';
 import { createRng } from '@bs/sport-basketball';
 import { clearGmFired, getGmFired } from '../approval';
 import { trackEvent } from '@bs/core/analytics/track';
+import { trackFeature } from '@bs/core/analytics/feature';
 import {
   daySimmedProps,
   rosterFileName,
@@ -825,6 +826,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     const league = revealFaIntel(current, playerId);
     if (league === current) return;
     set({ league });
+    trackFeature('fa_intel');
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] revealFaIntel failed:', err); }
   },
 
@@ -1277,6 +1279,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       if (league === current) return;
       await saveLeague(league);
       set({ league });
+      trackFeature('scouting', { level });
     } catch (err) {
       console.error('[bs-hoops] scoutProspect failed:', err);
       set({ error: err instanceof Error ? err.message : String(err) });

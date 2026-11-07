@@ -18,7 +18,7 @@ import {
   hasScouting as checkScouting,
   PODCAST_CREDITS_PER_MONTH,
 } from '@bs/core/billing';
-import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
+import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier, setCurrentPlan, resolvePlan } from '@bs/core/billing';
 import { getHoopsScoutingAllocations, HOOPS_FREE_SCOUT_POINTS } from '@/lib/billing/allocations';
 import { trackAuthEvent } from '@bs/core/analytics';
 import { captureAttribution, saveAttribution } from '@bs/core/analytics/attribution';
@@ -354,6 +354,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // Sync the override back into the engine's subscriptionState module so
   // store actions (draft init, FA init, etc.) read the same allocation the
   // UI does.
+  // Plan (guest/free/paid/founder/admin) is stamped on every feature_used event.
+  useEffect(() => {
+    setCurrentPlan(resolvePlan({
+      signedIn: !!user,
+      admin: effectiveIsAdmin,
+      founder: effectiveIsFoundingMember,
+      paid: effectiveTier === 'premium',
+    }));
+  }, [user, effectiveTier, effectiveIsAdmin, effectiveIsFoundingMember]);
+
   useEffect(() => {
     setCurrentSubscriptionTier(effectiveTier);
     setCurrentSubscriptionAllocations(

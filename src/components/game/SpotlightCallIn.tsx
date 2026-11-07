@@ -8,6 +8,7 @@ import { buildLeagueScoutPacket, fallbackFollowUps } from '@/lib/engine/leagueSc
 import { useGameStore } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { useBoothStore, boothEpisodeKey, EMPTY_BOOTH_LOG, type BoothEpisodeTopic, type BoothHost, type BoothMsg, type BoothLog } from '@/lib/engine/boothStore';
+import { trackFeature } from '@bs/core/analytics/feature';
 
 /**
  * "Call In to the Show" — the Booth. Ask Marcus Cole & Tony Blaze a question
@@ -254,6 +255,7 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
   function tapChip(id: string, label: string) {
     if (busy) return;
     onAsk?.();
+    trackFeature('call_in', { mode: 'chip', chip: id });
     setError(null);
     setExpanded(null);
     setFollowUps(null);
@@ -280,6 +282,7 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
     const text = (preset ?? input).trim();
     if (!text || busy || !canType) return;
     onAsk?.();
+    trackFeature('call_in', { mode: preset ? 'follow_up' : 'typed', open_mic: isPremium });
     setError(null);
     setExpanded(null);
     setBusy(true);

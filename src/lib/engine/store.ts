@@ -42,6 +42,7 @@ import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from 
 import { clearRolloverTickInstrumentation, setAutocutSubstep, recordTickTiming, recordTickRosterSize } from '@/lib/instrumentation/rolloverTickTimings';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { trackEvent } from '@bs/core/analytics/track';
+import { trackFeature } from '@bs/core/analytics/feature';
 
 const SAVE_VERSION = 36;
 const AUTOSAVE_KEY = 'gridiron-gm-autosave';
@@ -8066,6 +8067,7 @@ export const useGameStore = create<GameStore>()(
             },
           });
         }
+        trackFeature('scouting', { points_left: Math.max(0, savedPoints - 1) });
         return true;
       },
 
@@ -8827,6 +8829,7 @@ export const useGameStore = create<GameStore>()(
           },
           faRefusals: newRefusals,
         });
+        trackFeature('fa_intel', { points_left: ps.pursuitPoints - 1 });
 
         return true;
       },
