@@ -3,7 +3,7 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { getInjuries, getPlayThrough, isPlayingThrough, canPlayThrough, SEVERITY_LABEL, type InjuryRecord } from '@/lib/injuries';
-import { getDiscipline, type DisciplineRecord } from '@/lib/discipline';
+import { activeSuspension, type ActiveSuspension } from '@/lib/discipline';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
@@ -34,11 +34,10 @@ export function InjuryReport({ league, team, className = 'mb-6' }: { league: Lea
     .filter((x): x is { p: BasketballPlayer; rec: InjuryRecord } => !!x.p && !!x.rec && x.rec.returnDay > day)
     .sort((a, b) => b.rec.returnDay - a.rec.returnDay);
 
-  const discipline = getDiscipline(league);
   const suspended = team.playerIds
-    .map(id => ({ p: players[id], rec: discipline[id] as DisciplineRecord | undefined }))
-    .filter((x): x is { p: BasketballPlayer; rec: DisciplineRecord } => !!x.p && !!x.rec && x.rec.kind === 'suspension' && x.rec.returnDay > day)
-    .sort((a, b) => b.rec.returnDay - a.rec.returnDay);
+    .map(id => ({ p: players[id], susp: activeSuspension(league, id) }))
+    .filter((x): x is { p: BasketballPlayer; susp: ActiveSuspension } => !!x.p && !!x.susp)
+    .sort((a, b) => b.susp.gamesLeft - a.susp.gamesLeft);
 
   if (injured.length === 0 && suspended.length === 0 && gritty.length === 0) return null;
 
@@ -78,17 +77,14 @@ export function InjuryReport({ league, team, className = 'mb-6' }: { league: Lea
             <span className="text-xs font-semibold tabular-nums w-20 text-right" style={{ color: '#f59e0b' }}>Active</span>
           </div>
         ))}
-        {suspended.map(({ p, rec }) => {
-          const left = rec.returnDay - day;
-          return (
-            <div key={p.id} className="flex items-center gap-2 text-sm">
-              <span className="shrink-0" aria-hidden>🚫</span>
-              <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
-              <span className="text-xs text-[var(--text-sec)] truncate">Suspended</span>
-              <span className="text-xs font-semibold tabular-nums w-20 text-right" style={{ color: '#a855f7' }}>{left} game{left === 1 ? '' : 's'}</span>
-            </div>
-          );
-        })}
+        {suspended.map(({ p, susp }) => (
+          <div key={p.id} className="flex items-center gap-2 text-sm">
+            <span className="shrink-0" aria-hidden>🚫</span>
+            <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
+            <span className="text-xs text-[var(--text-sec)] truncate">Suspended</span>
+            <span className="text-xs font-semibold tabular-nums w-20 text-right" style={{ color: '#a855f7' }}>{susp.gamesLeft} game{susp.gamesLeft === 1 ? '' : 's'}</span>
+          </div>
+        ))}
       </div>
     </Card>
   );

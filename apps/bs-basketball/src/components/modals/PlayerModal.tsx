@@ -37,10 +37,11 @@ import {
   ovrHistoryPoints,
   playerAwardChips,
 } from './PlayerCardSections';
-import { resolveLineup } from '@/lib/lineup/lineup';
+import { activeSuspension } from '@/lib/discipline';
 import { playerMood, moodFactors } from '@/lib/roster/mood';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { releasePreview } from '@/lib/roster/release';
+import { effectiveStarterIds } from '@/lib/roster/role';
 import { tradeRequestBadge } from '@/lib/roster/tradeRequests';
 import { getHeadCoach, coachScheme, schemeFit } from '@/lib/coaching/coaches';
 import { fmtMoney } from '@/lib/dashboard/summary';
@@ -100,6 +101,7 @@ export function PlayerModal({ playerId, onClose, onReleased }: PlayerModalProps)
   const injury = player ? injuries[player.id] : undefined;
   const day = league?.currentTick ?? 0;
   const injuryActive = !!injury && injury.returnDay > day;
+  const suspension = player && league ? activeSuspension(league, player.id) : null;
 
   // "Trade for this player" — only for players on another team while managing.
   const canTradeFor =
@@ -127,7 +129,7 @@ export function PlayerModal({ playerId, onClose, onReleased }: PlayerModalProps)
   if (player && team && league) {
     const players = league.players as Record<string, BasketballPlayer>;
     const teamRoster = team.playerIds.map(id => players[id]).filter((p): p is BasketballPlayer => !!p);
-    const isStarter = resolveLineup(team, teamRoster).starters.includes(player.id);
+    const isStarter = effectiveStarterIds(league, team, teamRoster).has(player.id);
     const talentRank = [...teamRoster].sort((a, b) => b.ratings.overall - a.ratings.overall).findIndex(p => p.id === player.id);
     const moodOpts = { player, team, talentRank: talentRank < 0 ? 99 : talentRank, isStarter, yearsLeft };
     mood = playerMood(moodOpts);
@@ -138,7 +140,7 @@ export function PlayerModal({ playerId, onClose, onReleased }: PlayerModalProps)
   const userCoach = league?.userTeamId ? getHeadCoach(league, league.userTeamId) : null;
   const fit = player && userCoach ? schemeFit(player, coachScheme(userCoach)) : null;
 
-  const tradeReq = player ? tradeRequestBadge(player, season) : null;
+  const tradeReq = player ? tradeRequestBadge(player, season, mood) : null;
   const release = player && isOnUserTeam ? releasePreview(player, season) : null;
   const archetype = player ? archetypeFor(player) : null;
   const tierChip = archetype ? { emoji: ARCHETYPE_EMOJI[archetype] ?? '🏀', label: titleCase(archetype) } : null;
@@ -284,6 +286,9 @@ export function PlayerModal({ playerId, onClose, onReleased }: PlayerModalProps)
                 </Badge>
                 {player.sportData.isTwoWay && <Badge variant="amber">Two-way</Badge>}
                 {tradeReq && <Badge variant="red">{tradeReq.emoji} {tradeReq.label}</Badge>}
+                {suspension && (
+                  <Badge variant="red">{`🚫 Suspended · ${suspension.gamesLeft} game${suspension.gamesLeft === 1 ? '' : 's'}`}</Badge>
+                )}
                 {injuryActive && injury && (
                   canPlayThrough(injury) ? (
                     <Badge variant="amber">
