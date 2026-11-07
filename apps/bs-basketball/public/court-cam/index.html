@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2i'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2j'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -959,7 +959,7 @@ function stepActor(a, t, dt) {
       if (!P.moving || sp < 1.2) want = a.carryMode === 'hold' || a.carryMode === 'post' ? 'triple' : 'dribble_idle';
       else want = sp < 7 ? 'dribble_walk' : sp < 14 ? 'dribble_jog' : 'dribble_run';
       wantLoop = true;
-    } else if (a.side === 'def' && (kind == null || kind === 'stance' || kind === 'closeout' || kind === 'laneWait' || kind === 'bodyup' || kind === 'poke' || kind === 'reachin')) {
+    } else if (a.side === 'def' && (kind == null || kind === 'stance' || kind === 'closeout' || kind === 'bodyup' || kind === 'poke' || kind === 'reachin')) {   // not laneWait: nobody is in a stance during a free throw
       if (!P.moving || a.speed < 1.2) want = 'def_idle';
       else if (shuffle) { const fr0 = frameOf(a); const mdir = V3(Math.sin(P.dir), 0, Math.cos(P.dir)); const lateral = mdir.dot(fr0.R); const back = mdir.dot(fr0.F) < -.5;
         want = back ? 'mx_jog_back' : lateral > 0 ? 'def_slide_r' : 'def_slide_l'; }
@@ -1036,7 +1036,8 @@ function stepActor(a, t, dt) {
       arms(R, L); break; }
     case 'rebound': case 'block': { if (cur.jump == null) break; const u = smooth01((t - (cur.jump - .15)) / .3); const R = blendPose(POSE.hold, POSE.reach, u); arms(R, kind === 'block' ? blendPose(POSE.hold, [[.2, .5, -.6], [.5, .3, -.3]], u) : R); if (kind === 'block' && t > cur.jump + .25) { const v = smooth01((t - cur.jump - .25) / .25); poseArm(a, 'R', blendPose(POSE.reach, [[.9, .1, .35], [.95, 0, .2]], v), fr, ramp); } break; }
     case 'contest': case 'closeout': { if (cur.jump != null && t > cur.jump - .1 && kind === 'contest') { const u = smooth01((t - cur.jump + .1) / .25); arms(blendPose(POSE.stance, POSE.reach, u), blendPose(POSE.stance, [[.2, .6, .2], [.5, .4, .1]], u)); } else arms(POSE.stance, POSE.stance); break; }
-    case 'stance': case 'bodyup': case 'laneWait': arms(kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, kind === 'laneWait' ? .5 : 1); break;
+    case 'stance': case 'bodyup': arms(kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, 1); break;
+    case 'laneWait': break;   // upright and relaxed on the lane (the idle clip), hands down
     case 'screen': arms(POSE.screen, POSE.screen); break;
     case 'boxout': arms([[.3, .7, -.6], [.6, .4, -.5]], [[.3, .7, -.6], [.6, .4, -.5]]); spineLean(a, .15 * ramp); break;
     case 'poke': case 'reachin': { arms([[.85, .15, .1], [.98, .05, .1]], POSE.stance); break; }
