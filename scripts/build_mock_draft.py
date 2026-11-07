@@ -22,6 +22,12 @@ from collections import defaultdict
 
 ROSTER = "public/rosters/FBGM_NFL_Roster_2026_Updated.json"
 OUT = "public/mock/nfl-2027.json"
+# The draft room's Scout panel, loaded only when someone opens it: each
+# prospect's ratings, plus the researched profile where there is one.
+SCOUT_OUT = "public/mock/scout-2027.json"
+SCOUT_PROFILES = "scripts/data/mock_scout_profiles_2027.json"
+RATING_KEYS = ["stre", "spd", "endu", "thv", "thp", "tha", "bsc", "elu", "rtr", "hnd", "rbk", "pbk",
+               "pcv", "tck", "prs", "rns", "kpw", "kac", "ppw", "pac"]
 SEASON, DRAFT_YEAR = 2026, 2027
 POSITIONS = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "CB", "S", "K", "P"]
 # Mirrors ROSTER_LIMITS max in src/types/index.ts. Real NFL rosters in the file
@@ -134,8 +140,23 @@ def main():
            "order": order, "prospects": prospects}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(out, open(OUT, "w"), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+    # --- scout panel data ---
+    researched = json.load(open(SCOUT_PROFILES)) if os.path.exists(SCOUT_PROFILES) else {}
+    profiles = researched.get("profiles", {})
+    scout = {}
+    for p in cls:
+        r = p["ratings"][-1]
+        entry = {"ratings": {k: r[k] for k in RATING_KEYS if r.get(k)}, "skills": r.get("skills", [])}
+        prof = profiles.get(str(p["pid"]))
+        if prof:
+            entry["profile"] = {k: v for k, v in prof.items() if k != "name"}
+        scout[str(p["pid"])] = entry
+    json.dump({"asOf": out["asOf"], "researchedAt": researched.get("researchedAt"), "prospects": scout}, open(SCOUT_OUT, "w"),
+              ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     traded = sum(1 for o in order if o["tid"] != o["originalTid"])
     print(json.dumps({"mockDraft": OUT, "prospects": len(prospects), "picks": len(order),
+                      "scoutProfiles": sum(1 for v in scout.values() if "profile" in v),
                       "tradedPicks": traded, "week": out["currentWeek"],
                       "top3Order": [next(t["abbrev"] for t in team_out if t["tid"] == o["tid"]) for o in order[:3]]}))
 

@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { ScoutPanel } from './ScoutPanel';
 import type { Speed } from './SetupScreen';
 
 const BOARD_PAGE_SIZE = 60;
@@ -133,10 +134,12 @@ const BoardRow = memo(function BoardRow({
   prospect,
   teamColor,
   onDraft,
+  onScout,
 }: {
   prospect: MockProspect;
   teamColor: string;
   onDraft: (pid: number) => void;
+  onScout: (prospect: MockProspect) => void;
 }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2 border-b border-[var(--border)] last:border-b-0">
@@ -163,6 +166,9 @@ const BoardRow = memo(function BoardRow({
       <Badge variant="blue" className="shrink-0">
         {prospect.pos}
       </Badge>
+      <Button size="sm" variant="secondary" onClick={() => onScout(prospect)} className="shrink-0">
+        Scout
+      </Button>
       <Button size="sm" onClick={() => onDraft(prospect.pid)} className="shrink-0">
         Draft
       </Button>
@@ -209,14 +215,19 @@ function NeedsStrip({ data, team, counts }: { data: MockDraftData; team: MockTea
 }
 
 function AvailableBoard({
+  data,
   available,
   team,
+  counts,
   onDraft,
 }: {
+  data: MockDraftData;
   available: MockProspect[];
   team: MockTeam;
+  counts: Record<Position, number>;
   onDraft: (pid: number) => void;
 }) {
+  const [scouting, setScouting] = useState<MockProspect | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(BOARD_PAGE_SIZE);
@@ -268,7 +279,7 @@ function AvailableBoard({
       ) : (
         <ul className="lg:max-h-[calc(100vh-22rem)] overflow-y-auto">
           {filtered.slice(0, limit).map((p) => (
-            <BoardRow key={p.pid} prospect={p} teamColor={team.colors[0]} onDraft={onDraft} />
+            <BoardRow key={p.pid} prospect={p} teamColor={team.colors[0]} onDraft={onDraft} onScout={setScouting} />
           ))}
           {filtered.length > limit && (
             <li className="p-3 text-center">
@@ -278,6 +289,19 @@ function AvailableBoard({
             </li>
           )}
         </ul>
+      )}
+      {scouting && (
+        <ScoutPanel
+          data={data}
+          prospect={scouting}
+          team={team}
+          counts={counts}
+          onDraft={() => {
+            setScouting(null);
+            onDraft(scouting.pid);
+          }}
+          onClose={() => setScouting(null)}
+        />
       )}
     </div>
   );
@@ -462,7 +486,14 @@ export function DraftScreen({
           {onClockSlot && currentTeam && counts ? (
             <>
               <NeedsStrip data={data} team={currentTeam} counts={counts} />
-              <AvailableBoard key={onClockSlot.pick} available={replay.available} team={currentTeam} onDraft={onDraft} />
+              <AvailableBoard
+                key={onClockSlot.pick}
+                data={data}
+                available={replay.available}
+                team={currentTeam}
+                counts={counts}
+                onDraft={onDraft}
+              />
             </>
           ) : (
             <LatestPicks data={data} picks={replay.picks.slice(0, visibleCount)} />
