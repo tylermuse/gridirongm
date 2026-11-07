@@ -1503,7 +1503,7 @@ export default function RosterPage() {
                                 {p.firstName} {p.lastName}
                               </button>
                             </td>
-                            <td className="py-2 text-center text-xs font-bold text-[var(--text-sec)]">{p.position}</td>
+                            <td className="py-2 text-center text-xs font-bold text-[var(--text)]">{p.position}</td>
                             <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                             <td className="py-2 text-center">{p.age}</td>
                             <td className="py-2 text-center">{p.experience}</td>
@@ -1564,7 +1564,7 @@ export default function RosterPage() {
                                 {p.firstName} {p.lastName}
                               </button>
                             </td>
-                            <td className="py-2 text-center text-xs font-bold text-[var(--text-sec)]">{p.position}</td>
+                            <td className="py-2 text-center text-xs font-bold text-[var(--text)]">{p.position}</td>
                             <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                             <td className="py-2 text-center">{p.age}</td>
                             <td className="py-2 text-center">{p.experience}</td>
