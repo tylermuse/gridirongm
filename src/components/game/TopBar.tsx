@@ -176,6 +176,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   // Phase banner context
   let bannerText = '';
+  let phoneStatus: string | null = null;
   if (phase === 'regular') {
     const wins = userTeam?.record.wins ?? 0;
     const losses = userTeam?.record.losses ?? 0;
@@ -190,6 +191,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     const isBye = userWeekGames.length === 0;
     const recordStr = ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
     bannerText = `Week ${week} of ${maxWeek}${isBye ? ' — BYE WEEK' : ''} · Record: ${recordStr} · ${gamesLeft} game${gamesLeft !== 1 ? 's' : ''} remaining${tradeDeadlineNote}`;
+    phoneStatus = `Wk ${week}/${maxWeek}${isBye ? ' · BYE' : ''}\n${recordStr}`;
   } else if (phase === 'playoffs') {
     if (playoffSeeds && userTeamId) {
       const acSeed = playoffSeeds.AC.indexOf(userTeamId);
@@ -213,16 +215,19 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     const remaining = resigningPlayers.length;
     const capSpace = userTeam ? (userTeam.salaryCap - userTeam.totalPayroll) : 0;
     bannerText = `${remaining} player${remaining !== 1 ? 's' : ''} to re-sign · $${Math.round(capSpace * 10) / 10}M cap space`;
+    phoneStatus = `${remaining} to re-sign\n$${Math.round(capSpace * 10) / 10}M cap`;
   } else if (phase === 'draft') {
     const currentPickTeam = teams.find(t => t.id === draftOrder[0]);
     const totalPicks = teams.length * 7;
     const pickNum = totalPicks - draftOrder.length + 1;
     const round = Math.ceil(pickNum / teams.length);
     bannerText = `Round ${round} · Pick #${pickNum}${currentPickTeam ? ` · ${currentPickTeam.abbreviation} on the clock` : ''}`;
+    phoneStatus = `Rd ${round} · #${pickNum}${currentPickTeam ? `\n${currentPickTeam.abbreviation} up` : ''}`;
   } else if (phase === 'freeAgency') {
     const remaining = freeAgents.length;
     const capSpace = userTeam ? (userTeam.salaryCap - userTeam.totalPayroll) : 0;
     bannerText = `Day ${faDay} of 30 · ${remaining} free agent${remaining !== 1 ? 's' : ''} available · $${Math.round(capSpace * 10) / 10}M cap space`;
+    phoneStatus = `Day ${faDay}/30\n$${Math.round(capSpace * 10) / 10}M cap`;
   }
 
   return (
@@ -232,8 +237,13 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           free that vertical space — hide the header on mobile only when the
           user is inside a game, so phone screens don't waste 56px. */}
       <header className={`${pathname.startsWith('/game/') ? 'hidden md:block' : ''} border-b border-[var(--border)] bg-[var(--surface)]`}>
-        <div className="h-14 flex items-center justify-between px-3 md:px-6">
-          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)]">
+        <div className="h-12 sm:h-14 flex items-center justify-between gap-2 px-3 md:px-6">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)] shrink-0">
+            {/* Phones: the status strip's facts live here instead of costing a
+                second sticky row. */}
+            <span className="sm:hidden text-[11px] font-semibold leading-tight whitespace-pre-line max-w-[5.5rem] line-clamp-2">
+              {phoneStatus ?? bannerText}
+            </span>
             <span className="hidden sm:inline">
               {phase === 'preseason' && `Preseason Game ${(useGameStore.getState().preseasonWeek ?? 1)}`}
               {phase === 'regular' && `Week ${week} · Regular Season`}
@@ -245,7 +255,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             </span>
           </div>
 
-          <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
+          {/* One row on phones, always: extra actions scroll sideways rather than
+              wrapping and pushing the page further down. */}
+          <div className="flex items-center gap-1 md:gap-2 flex-nowrap sm:flex-wrap sm:justify-end min-w-0 overflow-x-auto sm:overflow-visible no-scrollbar [&_button]:whitespace-nowrap [&>*]:shrink-0">
             {phase === 'preseason' && (
               <>
                 <Button onClick={() => {
@@ -255,7 +267,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   console.log('[TopBar.sim-preseason]', { before, after });
                   if (after === 'regular') router.push('/roster');
                 }} size="sm" className="active:scale-95 transition-transform">
-                  Sim Preseason Game
+                  <span className="hidden sm:inline">Sim Preseason Game</span>
+                  <span className="sm:hidden">Sim Game</span>
                 </Button>
                 <Button onClick={() => {
                   const before = useGameStore.getState().phase;
@@ -264,7 +277,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   console.log('[TopBar.skip-preseason]', { before, after });
                   router.push('/roster');
                 }} size="sm" variant="secondary" className="active:scale-95 transition-transform">
-                  Skip to Regular Season
+                  <span className="hidden sm:inline">Skip to Regular Season</span>
+                  <span className="sm:hidden">Skip →</span>
                 </Button>
               </>
             )}
@@ -323,15 +337,18 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     Roster {53 + rosterOverBy}/53 · cut {rosterOverBy} to sim
                   </span>
                 )}
-                <Button
-                  onClick={() => runSim('sim-week', handleSimWeek)}
-                  size="sm"
-                  className="active:scale-95 transition-transform"
-                  busy={simBusy === 'sim-week'}
-                  disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
-                >
-                  Sim Week {week}
-                </Button>
+                {/* Phones get Sim Week + Sim Season in the thumb bar below. */}
+                <span className="hidden sm:inline-flex">
+                  <Button
+                    onClick={() => runSim('sim-week', handleSimWeek)}
+                    size="sm"
+                    className="active:scale-95 transition-transform"
+                    busy={simBusy === 'sim-week'}
+                    disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
+                  >
+                    Sim Week {week}
+                  </Button>
+                </span>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
                   <Button
                     onClick={() => runSim('sim-deadline', handleSimToDeadline)}
@@ -341,19 +358,22 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     disabled={!!simBusy}
                     className="active:scale-95 transition-transform"
                   >
-                    Sim to Deadline
+                    <span className="hidden sm:inline">Sim to Deadline</span>
+                    <span className="sm:hidden">Deadline</span>
                   </Button>
                 )}
-                <Button
-                  onClick={() => runSim('sim-season', handleSimSeason)}
-                  variant="secondary"
-                  size="sm"
-                  busy={simBusy === 'sim-season'}
-                  disabled={!!simProgress || rosterOverBy > 0 || !!simBusy}
-                  className="active:scale-95 transition-transform"
-                >
-                  {simProgress ? `Week ${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
-                </Button>
+                <span className="hidden sm:inline-flex">
+                  <Button
+                    onClick={() => runSim('sim-season', handleSimSeason)}
+                    variant="secondary"
+                    size="sm"
+                    busy={simBusy === 'sim-season'}
+                    disabled={!!simProgress || rosterOverBy > 0 || !!simBusy}
+                    className="active:scale-95 transition-transform"
+                  >
+                    {simProgress ? `Week ${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
+                  </Button>
+                </span>
               </>
             )}
             {phase === 'playoffs' && (
@@ -377,7 +397,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       disabled={!nextPlayoffGame || !!simBusy}
                       className="active:scale-95 transition-transform"
                     >
-                      Sim Next Game
+                      <span className="hidden sm:inline">Sim Next Game</span>
+                      <span className="sm:hidden">Next Game</span>
                     </Button>
                     <Button
                       onClick={() => runSim('playoff-round', onlyUserGameLeftInRound ? simNextPlayoffGame : simPlayoffRound)}
@@ -397,7 +418,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       disabled={!nextPlayoffGame || !!simBusy}
                       className="active:scale-95 transition-transform"
                     >
-                      Sim Remaining
+                      <span className="hidden sm:inline">Sim Remaining</span>
+                      <span className="sm:hidden">Sim All</span>
                     </Button>
                   </>
                 )}
@@ -516,7 +538,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     )}
                     {draftOrder[0] !== userTeamId && (
                       <Button onClick={() => runSim('draft-to-mine', simToUserDraftPick)} size="sm" variant="secondary" busy={simBusy === 'draft-to-mine'} disabled={!!simBusy}>
-                        Sim to My Pick
+                        <span className="hidden sm:inline">Sim to My Pick</span>
+                        <span className="sm:hidden">To My Pick</span>
                       </Button>
                     )}
                     <Button
@@ -526,10 +549,12 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                         router.push('/draft-recap');
                       })}
                       size="sm"
+                      variant="secondary"
                       busy={simBusy === 'draft-all'}
                       disabled={!!simBusy}
                     >
-                      Auto-Draft All
+                      <span className="hidden sm:inline">Auto-Draft All</span>
+                      <span className="sm:hidden">Auto All</span>
                     </Button>
                   </>
                 ) : (
@@ -573,7 +598,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
         {/* Phase context banner */}
         {bannerText && (
-          <div className="px-3 md:px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)] truncate">
+          <div className="hidden sm:block px-3 md:px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)] truncate">
             {bannerText}
           </div>
         )}

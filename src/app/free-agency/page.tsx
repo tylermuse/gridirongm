@@ -453,7 +453,7 @@ export default function FreeAgencyPage() {
 
   return (
     <GameShell>
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto flex flex-col sm:block">
         {!hasScouting && (
           <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-between gap-3">
             <div className="text-xs text-blue-800">
@@ -466,7 +466,7 @@ export default function FreeAgencyPage() {
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-2xl font-black">{phase === 'regular' ? 'Sign Free Agents' : 'Free Agency'}</h2>
+            <h2 className="text-xl sm:text-2xl font-black">{phase === 'regular' ? 'Sign Free Agents' : 'Free Agency'}</h2>
             <div className="text-sm text-[var(--text-sec)]">
               {phase === 'freeAgency' && (
                 <span className="font-semibold text-blue-600 mr-2">Day {faDay} of 30</span>
@@ -486,6 +486,7 @@ export default function FreeAgencyPage() {
                   variant="secondary"
                   onClick={advanceFADay}
                   disabled={faDay >= 30}
+                  className="whitespace-nowrap"
                 >
                   Skip Day →
                 </Button>
@@ -494,6 +495,7 @@ export default function FreeAgencyPage() {
                   variant="secondary"
                   onClick={advanceFAWeek}
                   disabled={faDay >= 30}
+                  className="whitespace-nowrap"
                 >
                   Skip Week ⏩
                 </Button>
@@ -516,7 +518,8 @@ export default function FreeAgencyPage() {
                 )}
               </div>
             )}
-            <div className="text-right">
+            {/* Phones already show cap space in the sticky header. */}
+            <div className="hidden sm:block text-right">
               <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
                 ${capSpace}M
               </div>
@@ -526,11 +529,11 @@ export default function FreeAgencyPage() {
         </div>
 
         {/* Free-tier ad slot. Hidden for premium. */}
-        <AdSlot size="leaderboard" slotId="9035391068" />
+        <AdSlot size="leaderboard" slotId="9035391068" className="order-last sm:order-none" />
 
         {/* FA Day progress bar */}
         {phase === 'freeAgency' && (
-          <div className="mb-4">
+          <div className="hidden sm:block mb-4">
             <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
               <div
                 className="h-full rounded-full bg-blue-500 transition-all"
@@ -566,15 +569,21 @@ export default function FreeAgencyPage() {
         )}
 
         {/* Roster Composition — top-level on mobile, hidden on md+ (sidebar has it) */}
-        <div className="md:hidden mb-4">
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-bold">Roster: {roster.length}/53</span>
-              <span className={`text-sm font-mono font-bold ${capSpace > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                Cap: ${capSpace}M
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-1.5">
+        <div className="md:hidden mb-3">
+          <details className="group bg-[var(--surface)] border border-[var(--border)] rounded-lg">
+            <summary className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+              <span className="font-bold shrink-0">Roster {roster.length}/53</span>
+              {(() => {
+                const shortPositions = POSITIONS.filter(pos => positionCounts[pos] < ROSTER_LIMITS[pos].min);
+                return (
+                  <span className={`font-semibold truncate ${shortPositions.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {shortPositions.length > 0 ? `Short: ${shortPositions.join(', ')}` : 'All positions covered'}
+                    <span className="ml-1.5 inline-block text-[var(--text-sec)] transition-transform group-open:rotate-90" aria-hidden>›</span>
+                  </span>
+                );
+              })()}
+            </summary>
+            <div className="px-3 pb-3 grid grid-cols-4 gap-1.5">
               {POSITIONS.map(pos => {
                 const count = positionCounts[pos];
                 const limits = ROSTER_LIMITS[pos];
@@ -601,15 +610,7 @@ export default function FreeAgencyPage() {
                 );
               })}
             </div>
-            {(() => {
-              const needPositions = POSITIONS.filter(pos => positionCounts[pos] < ROSTER_LIMITS[pos].min);
-              return needPositions.length > 0 ? (
-                <div className="mt-2 text-xs text-red-600 font-medium">
-                  Needs: {needPositions.map(pos => `${pos} (${positionCounts[pos]}/${ROSTER_LIMITS[pos].min})`).join(' · ')}
-                </div>
-              ) : null;
-            })()}
-          </div>
+          </details>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">

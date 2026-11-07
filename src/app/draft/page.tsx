@@ -230,7 +230,7 @@ function OnTheClockSection({
     <div className="space-y-0">
       {/* On The Clock Header */}
       <div
-        className={`rounded-t-xl border border-[var(--border)] px-5 py-4${isUserPick ? ' border-transparent' : ''}`}
+        className={`rounded-t-xl border border-[var(--border)] px-4 sm:px-5 py-3 sm:py-4${isUserPick ? ' border-transparent' : ' rounded-b-xl sm:rounded-b-none'}`}
         style={isUserPick
           ? { background: `linear-gradient(135deg, ${teamColor}, ${currentTeam?.secondaryColor ?? teamColor})` }
           : { borderLeft: `4px solid ${teamColor}` }
@@ -280,20 +280,22 @@ function OnTheClockSection({
                 className="text-xs font-bold sm:hidden w-full"
                 style={isUserPick ? { color: 'var(--team-text-on-primary)', opacity: 0.85 } : undefined}
               >Rd {currentRound}, Pick {currentPickInRound}</span>
-              {!isUserPick && (
-                <Button onClick={simDraftPick} size="sm" variant="secondary" busy={simBusy === 'draft-pick'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
-                  Sim Pick
+              {/* Phones: these three are always in the sticky header above. */}
+              <span className="hidden sm:contents">
+                {!isUserPick && (
+                  <Button onClick={simDraftPick} size="sm" variant="secondary" busy={simBusy === 'draft-pick'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
+                    Sim Pick
+                  </Button>
+                )}
+                {!isUserPick && (
+                  <Button onClick={simToUserDraftPick} size="sm" variant="secondary" busy={simBusy === 'draft-to-mine'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
+                    Sim to My Pick
+                  </Button>
+                )}
+                <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" busy={simBusy === 'draft-all'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
+                  Auto-Draft All
                 </Button>
-              )}
-              {!isUserPick && (
-                <Button onClick={simToUserDraftPick} size="sm" variant="secondary" busy={simBusy === 'draft-to-mine'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
-                  Sim to My Pick
-                </Button>
-              )}
-              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" busy={simBusy === 'draft-all'} disabled={!canSimulate || !!simBusy} className="flex-1 min-w-[80px]">
-                <span className="hidden sm:inline">Auto-Draft All</span>
-                <span className="sm:hidden">Auto All</span>
-              </Button>
+              </span>
               {canSimulate && (
                 <Button onClick={() => onTradePick?.()} size="sm" className="flex-1 min-w-[80px] bg-indigo-600 hover:bg-indigo-700 text-white">
                   <span className="hidden sm:inline">Trade Pick</span>
@@ -311,7 +313,7 @@ function OnTheClockSection({
       </div>
 
       {/* Needs Row */}
-      <div className="border-x border-[var(--border)] px-5 py-3 bg-[var(--surface)]" style={{ borderLeft: `4px solid ${teamColor}` }}>
+      <div className={`${isUserPick ? '' : 'hidden sm:block'} border-x border-[var(--border)] px-5 py-3 bg-[var(--surface)]`} style={{ borderLeft: `4px solid ${teamColor}` }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-[var(--text-sec)] uppercase">Needs</span>
@@ -336,10 +338,11 @@ function OnTheClockSection({
         </div>
       </div>
 
-      {/* Best Available + Best Fit */}
+      {/* Best Available + Best Fit — phones only need these on your own pick;
+          while the AI is on the clock the board below is what matters. */}
       {!draftComplete && (
         <div
-          className="border-x border-[var(--border)] px-5 py-4 bg-[var(--surface-2)]"
+          className={`${isUserPick ? '' : 'hidden sm:block'} border-x border-[var(--border)] px-5 py-4 bg-[var(--surface-2)]`}
           style={{ borderLeft: `4px solid ${teamColor}` }}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -409,7 +412,7 @@ function OnTheClockSection({
       {/* Next Pick Preview */}
       {nextPickTeam && !draftComplete && (
         <div
-          className="rounded-b-xl border border-[var(--border)] px-5 py-3 bg-[var(--surface)]"
+          className="hidden sm:block rounded-b-xl border border-[var(--border)] px-5 py-3 bg-[var(--surface)]"
           style={{ borderLeft: `4px solid ${nextPickTeam.primaryColor ?? '#374151'}` }}
         >
           <div className="flex items-center justify-between">
@@ -1165,6 +1168,8 @@ export default function DraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, orphanCount]);
   const [showMockDraft, setShowMockDraft] = useState(false);
+  // Roster Needs starts collapsed on phones, where it would push the board down.
+  const [startNeedsCollapsed] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches);
 
   const { hasScouting, scoutingAllocations, tier } = useSubscription();
   const scoutPlayer = useGameStore(s => s.scoutPlayer);
@@ -1459,7 +1464,9 @@ export default function DraftPage() {
 
   return (
     <GameShell>
-      <div className="max-w-7xl mx-auto space-y-4">
+      {/* Phones: the board comes straight after On The Clock; mock draft,
+          import/export and the ad slot move below it. */}
+      <div className="max-w-7xl mx-auto flex flex-col gap-4 sm:block sm:space-y-4">
         <h2 className="text-2xl font-black">Draft</h2>
 
         {/* Import Draft Class Modal */}
@@ -1583,14 +1590,14 @@ export default function DraftPage() {
 
         {/* Mock Draft button + dropdown */}
         {nflMockDraft && nflMockDraft.length > 0 && (
-          <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3">
+          <div className="order-last sm:order-none flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3">
             <div>
               <div className="text-sm font-bold">🔮 Pre-Draft Mock Projection</div>
               <div className="text-xs text-[var(--text-sec)]">Round 1 projections from the BS Football war room</div>
             </div>
             <button
               onClick={() => setShowMockDraft(!showMockDraft)}
-              className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+              className="shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
             >
               {showMockDraft ? 'Hide' : 'View'} Mock Draft
             </button>
@@ -1598,7 +1605,7 @@ export default function DraftPage() {
         )}
 
         {showMockDraft && nflMockDraft && nflMockDraft.length > 0 && (
-          <Card>
+          <Card className="order-last sm:order-none">
             <CardHeader><CardTitle>Round 1 Mock Projection</CardTitle></CardHeader>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1632,10 +1639,12 @@ export default function DraftPage() {
         )}
 
         {/* Import Draft Class */}
-        <ImportDraftClassPanel season={season} />
+        <div className="order-last sm:order-none">
+          <ImportDraftClassPanel season={season} />
+        </div>
 
         {/* Free-tier ad slot above the draft board. Hidden for premium. */}
-        <AdSlot size="leaderboard" slotId="5378648863" />
+        <AdSlot size="leaderboard" slotId="5378648863" className="order-last sm:order-none" />
 
         <div className="grid grid-cols-12 gap-4">
           {/* Top Prospects */}
@@ -1753,7 +1762,7 @@ export default function DraftPage() {
               )}
             </div>
             {/* Roster Needs Snapshot */}
-            <details className="mb-3" open>
+            <details className="mb-3" open={!startNeedsCollapsed}>
               <summary className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider cursor-pointer hover:text-[var(--text)] transition-colors">
                 Roster Needs
               </summary>

@@ -111,8 +111,8 @@ export function AdSlot({ size = 'leaderboard', slotId, className }: AdSlotProps)
   return (
     <div
       data-ad-slot={slotId ?? size}
-      className={`mx-auto my-4 flex items-center justify-center gap-4 px-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 ${className ?? ''}`}
-      style={{ width: dims.width, maxWidth: '100%', height: dims.height }}
+      className={`mx-auto my-4 ${className ?? ''}`}
+      style={{ width: dims.width, maxWidth: '100%' }}
     >
       <UpgradePromptInner dims={dims} />
     </div>
@@ -122,22 +122,24 @@ export function AdSlot({ size = 'leaderboard', slotId, className }: AdSlotProps)
 function UpgradePromptInner({ dims }: { dims: { width: string; height: string; label: string } }) {
   return (
     <div
-      className="flex items-center justify-center gap-4 px-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50"
-      style={{ width: '100%', height: dims.height }}
+      className="flex items-center justify-between sm:justify-center gap-3 sm:gap-4 px-3 sm:px-4 py-2.5 sm:py-0 sm:min-h-[var(--ad-height)] rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50"
+      style={{ width: '100%', '--ad-height': dims.height } as React.CSSProperties}
     >
       <div className="min-w-0 text-left">
-        <div className="text-sm font-bold text-[var(--text,#111827)] truncate">
+        <div className="text-sm font-bold text-[var(--text,#111827)]">
           Enjoying BS Football?
         </div>
-        <p className="text-xs text-[var(--text-sec,#6b7280)] truncate">
+        <p className="text-xs text-[var(--text-sec,#6b7280)]">
           Premium unlocks AI commentary, 3× scouting, and podcasts.
+          <span className="sm:hidden"> $4.99/mo.</span>
         </p>
       </div>
       <Link
         href="/pricing"
-        className="shrink-0 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors whitespace-nowrap"
+        className="shrink-0 px-3 sm:px-4 py-2 sm:py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors whitespace-nowrap"
       >
-        Go Premium — $4.99/mo
+        <span className="sm:hidden">Go Premium</span>
+        <span className="hidden sm:inline">Go Premium — $4.99/mo</span>
       </Link>
     </div>
   );
