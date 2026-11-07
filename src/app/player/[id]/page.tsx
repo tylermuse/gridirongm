@@ -411,7 +411,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-[var(--text-sec)]">Passer Rating</span>
-                        <span className="font-mono">{calcPasserRating(stats.passCompletions, stats.passAttempts, stats.passYards, stats.passTDs, stats.interceptions)}</span>
+                        <span className="font-mono">{calcPasserRating(stats.passCompletions ?? 0, stats.passAttempts ?? 0, stats.passYards ?? 0, stats.passTDs ?? 0, stats.interceptions ?? 0)}</span>
                       </div>
                     </>
                   )}
