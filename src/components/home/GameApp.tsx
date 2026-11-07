@@ -12,7 +12,8 @@ import { buildGameTopics, gameTopicsForMoment } from '@/lib/spotlight/showGame';
 import { computeShowStatLine } from '@/lib/spotlight/teamStats';
 import { useAiCommentary } from '@/components/providers/useAiCommentary';
 
-import { useGameStore, computeLuxuryTax, whenSaveLoadSettles, retrySaveLoad } from '@/lib/engine/store';
+import { useGameStore, computeLuxuryTax, whenSaveLoadSettles, retrySaveLoad, flushToStorage, type MockDraftStartPlan, type MockDraftStartStage } from '@/lib/engine/store';
+import { draftStartPlan, parseShareQuery, type MockDraftData } from '@/lib/mockDraft/engine';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
 import { setItem as idbSetItem } from '@bs/core/storage';
 import { pullCloudSave, getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
@@ -62,6 +63,25 @@ function TeamPicker() {
   // It doesn't start the league: picking a team is still the user's click.
   const preselectedTeam = searchParams.get('team')?.toUpperCase() ?? null;
   const autoLoadedRef = useRef(false);
+
+  // ?mock=<share query> (from a finished /mock-draft): offer to open the league
+  // at that draft, with the mock's picks already made. Read from the same data
+  // file the mock used; an older mock (stale order) just doesn't offer it.
+  const mockParam = searchParams.get('mock');
+  const [mockPlan, setMockPlan] = useState<MockDraftStartPlan | null>(null);
+  const [mockProgress, setMockProgress] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mockParam) return;
+    let cancelled = false;
+    fetch('/mock/nfl-2027.json')
+      .then((res) => (res.ok ? (res.json() as Promise<MockDraftData>) : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data) => {
+        const share = parseShareQuery(data, new URLSearchParams(mockParam));
+        if (!cancelled && share.kind === 'ok') setMockPlan(draftStartPlan(data, share.replay));
+      })
+      .catch(() => { /* no offer; the normal picker still works */ });
+    return () => { cancelled = true; };
+  }, [mockParam]);
 
   // Auto-load roster from ?roster= query param (e.g. from /rosters page)
   useEffect(() => {
@@ -206,7 +226,7 @@ function TeamPicker() {
     }
   }
 
-  async function handlePick(abbr: string, spectator: boolean = false) {
+  async function handlePick(abbr: string, spectator: boolean = false, plan: MockDraftStartPlan | null = null) {
     // Auto-save current league to next available slot before starting new one
     if (savedGame) {
       const { saveToSlot } = useGameStore.getState();
@@ -233,6 +253,28 @@ function TeamPicker() {
     }
     setLoading(true);
     setError(null);
+    if (plan && activeUrl) {
+      const labels: Record<MockDraftStartStage, string> = {
+        loading: 'Loading rosters…',
+        season: 'Simming the rest of the season',
+        playoffs: 'Simming the playoffs…',
+        offseason: 'Running the offseason',
+        draft: 'Making your mock picks…',
+        done: 'Heading to the draft…',
+      };
+      try {
+        await useGameStore.getState().startAtMockDraft(abbr, activeUrl, plan, (stage, detail) => {
+          setMockProgress(detail ? `${labels[stage]}: ${detail}` : labels[stage]);
+        });
+        await flushToStorage();
+        window.location.href = '/draft';
+      } catch {
+        setMockProgress(null);
+        setError('Failed to start at the draft. Please try again.');
+        setLoading(false);
+      }
+      return;
+    }
     try {
       await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined, spectator);
       // Clear ?roster= from the URL so HomeContent stops forcing TeamPicker.
@@ -531,6 +573,26 @@ function TeamPicker() {
             </button>
           </div>
         )}
+
+        {mockPlan && preselectedTeam && activeUrl && (() => {
+          const mockTeam = importedTeams?.teams.find(t => t.abbreviation === preselectedTeam);
+          if (!mockTeam) return null;
+          return (
+            <div className="w-full max-w-4xl mb-4 rounded-xl border-2 border-blue-500 bg-blue-50 p-4 text-left">
+              <div className="text-sm font-bold text-gray-900">
+                Start at the {mockPlan.draftYear} draft as the {mockTeam.city} {mockTeam.name}
+              </div>
+              <p className="text-xs text-gray-700 mt-1 mb-3 max-w-2xl">
+                Your mock picks are already made and the draft runs in your mock&apos;s order. To get there, the rest of
+                the {mockPlan.draftYear - 1} season, the playoffs, re-signing and free agency are simmed, with the AI
+                running every team, yours included. Then you take over.
+              </p>
+              <Button onClick={() => handlePick(mockTeam.abbreviation, false, mockPlan)} disabled={loading}>
+                {mockProgress ?? `Start at the ${mockPlan.draftYear} draft →`}
+              </Button>
+            </div>
+          );
+        })()}
 
         <input
           id="team-picker"
