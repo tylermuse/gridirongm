@@ -133,18 +133,23 @@ export function ResultsScreen({
 
   // All-32 and AI-only mocks have no one team to hand off to, so the CTA opens the plain picker.
   const primaryTeam = allTeams ? undefined : userClasses[0]?.team;
-  const leagueHref = `/?roster=/rosters/${ROSTER_FILE}?v=${asOf}&startMode=regular${primaryTeam ? `&team=${primaryTeam.abbrev}` : ''}`;
+  // With one team, the game can open at this draft with these picks made (startAtMockDraft).
+  const leagueHref = `/?roster=/rosters/${ROSTER_FILE}?v=${asOf}&startMode=regular${
+    primaryTeam ? `&team=${primaryTeam.abbrev}&mock=${encodeURIComponent(shareQuery)}` : ''
+  }`;
 
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
         <h2 className="text-lg font-bold text-gray-900">
           {primaryTeam
-            ? `Take over the ${primaryTeam.name} at Week ${data.currentWeek} and draft this class for real next spring`
+            ? `Keep going: start a ${primaryTeam.name} league at this draft, with these picks on your roster`
             : `Take over any team at Week ${data.currentWeek} and draft this class for real next spring`}
         </h2>
         <p className="text-sm text-[var(--text-sec)] mt-1 mb-4">
-          In BS Football, the {data.draftYear} draft comes after you finish the {data.season} season. It&apos;s free to play in your browser.
+          {primaryTeam
+            ? `BS Football sims the rest of the ${data.season} season and the offseason, then opens the ${data.draftYear} draft in this order with your picks made. Finish the draft, then run the team. It's free to play in your browser.`
+            : `In BS Football, the ${data.draftYear} draft comes after you finish the ${data.season} season. It's free to play in your browser.`}
         </p>
         <div className="flex flex-wrap items-start gap-3">
           <Link
@@ -152,7 +157,7 @@ export function ResultsScreen({
             onClick={() => trackEvent('mock_draft_cta_click', { team: primaryTeam?.abbrev ?? null, rounds: settings.rounds })}
             className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors"
           >
-            Play this class in BS Football →
+            {primaryTeam ? 'Start at the draft in BS Football →' : 'Play this class in BS Football →'}
           </Link>
           <ShareButton data={data} shareQuery={shareQuery} primaryTeam={primaryTeam} />
           <Button variant="ghost" size="lg" onClick={onRunAnother}>

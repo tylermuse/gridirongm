@@ -484,3 +484,27 @@ export const HOUSE_MOCK_SETTINGS: DraftSettings = { seed: 2027, rounds: 7, userT
 export function houseMock(data: MockDraftData): ReplayResult {
   return replayDraft(data, HOUSE_MOCK_SETTINGS, []);
 }
+
+/* ─── Handing a mock to the game ────────────────────────────── */
+
+/**
+ * The game's startAtMockDraft input for a finished mock: every slot of the
+ * 7-round order (so later rounds follow the mock's order too), with the mock's
+ * pick on each slot it made. Structurally the store's MockDraftStartPlan; it's
+ * redeclared rather than imported so this file never pulls in the game store.
+ */
+export function draftStartPlan(
+  data: MockDraftData,
+  replay: Pick<ReplayResult, 'picks'>,
+): { draftYear: number; slots: { round: number; originalTid: number; tid: number; pid?: number }[] } {
+  const pidByPick = new Map(replay.picks.map((p) => [p.slot.pick, p.prospect.pid]));
+  return {
+    draftYear: data.draftYear,
+    slots: data.order.map((slot) => ({
+      round: slot.round,
+      originalTid: slot.originalTid,
+      tid: slot.tid,
+      ...(pidByPick.has(slot.pick) ? { pid: pidByPick.get(slot.pick) } : {}),
+    })),
+  };
+}

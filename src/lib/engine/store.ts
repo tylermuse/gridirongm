@@ -150,6 +150,18 @@ export function computeLuxuryTax(payroll: number, cap: number): number {
   return Math.round(overCap * LUXURY_TAX_RATE * 10) / 10;
 }
 
+/**
+ * A finished /mock-draft, as the game needs it to open a league at that draft.
+ * `slots` is every pick of the draft in overall order (FBGM tids); `pid` is set
+ * for the picks the mock made (a prefix: the mocked rounds).
+ */
+export interface MockDraftStartPlan {
+  draftYear: number;
+  slots: { round: number; originalTid: number; tid: number; pid?: number }[];
+}
+
+export type MockDraftStartStage = 'loading' | 'season' | 'playoffs' | 'offseason' | 'draft' | 'done';
+
 interface GameStore extends LeagueState {
   initialized: boolean;
   /** Dev-only sim-balance telemetry — capped at SIM_TELEMETRY_CAP rows.
@@ -157,6 +169,19 @@ interface GameStore extends LeagueState {
    *  save storage (runtime only). */
   simTelemetry?: SimTelemetryRecord[];
   newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean) => Promise<void>;
+  /**
+   * New league that opens at the draft a /mock-draft just ran: starts at the
+   * current real week, has the AI run every team (user's included) through the
+   * rest of the season, playoffs, re-signing and free agency, then puts the
+   * draft in the mock's order with the mock's picks already made. Resolves
+   * with the user on the clock (or the draft over, for a 7-round mock).
+   */
+  startAtMockDraft: (
+    teamId: string,
+    leagueFileUrl: string,
+    plan: MockDraftStartPlan,
+    onProgress?: (stage: MockDraftStartStage, detail?: string) => void,
+  ) => Promise<{ applied: number; skipped: number }>;
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
   setNextGamePlan: (plan: {
@@ -3277,6 +3302,102 @@ export const useGameStore = create<GameStore>()(
           start_mode: isSpectator ? 'spectator' : 'offseason',
           season: 2026,
         });
+      },
+
+      startAtMockDraft: async (teamId, leagueFileUrl, plan, onProgress) => {
+        // Let the browser paint between weeks so the progress overlay stays live.
+        const breathe = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+        onProgress?.('loading');
+        // Spectator: the AI makes every team's moves, the user's included, until the draft.
+        await get().newLeague(teamId, leagueFileUrl, 'regular', true);
+        if (!get().initialized) throw new Error('League failed to load');
+
+        for (let guard = 0; get().phase === 'regular' && guard < 30; guard++) {
+          onProgress?.('season', `Week ${get().week}`);
+          get().simWeek();
+          await breathe();
+        }
+        if (get().phase === 'playoffs') {
+          onProgress?.('playoffs');
+          await breathe();
+          get().simAllPlayoffGames();
+          get().advanceToResigning();
+        }
+        if (get().phase === 'resigning') {
+          onProgress?.('offseason', 'Re-signing');
+          await breathe();
+          get().advanceToFreeAgency();
+        }
+        if (get().phase === 'freeAgency') {
+          onProgress?.('offseason', 'Free agency');
+          await breathe();
+          get().advanceToDraft();
+        }
+        if (get().phase !== 'draft') throw new Error(`Expected the draft, reached ${get().phase}`);
+
+        // Hand the user their team back for the draft.
+        const userTeamId = get().teams.find((t) => t.abbreviation === teamId)?.id ?? get().userTeamId;
+        set({ isSpectator: false, userTeamId });
+
+        // Put the draft in the mock's order. A slot is a (round, original team)
+        // pick; the mock's owner gets it even if the AI traded it during the sim.
+        onProgress?.('draft');
+        const state = get();
+        const draftYear = state.currentDraftYear ?? plan.draftYear;
+        const unused = state.teams.flatMap((t) => t.draftPicks.filter((pk) => pk.year === draftYear && !pk.playerId));
+        const taken = new Set<string>();
+        const orderedPicks: { id: string; owner: string }[] = [];
+        for (const slot of plan.slots) {
+          const pk = unused.find(
+            (p) => !taken.has(p.id) && p.round === slot.round && p.originalTeamId === `team-${slot.originalTid}`,
+          );
+          if (!pk) break;
+          taken.add(pk.id);
+          orderedPicks.push({ id: pk.id, owner: `team-${slot.tid}` });
+        }
+        // Only reorder when every slot matched. Otherwise the game's own order stands and nothing is pre-picked.
+        if (orderedPicks.length !== plan.slots.length) {
+          console.warn('[startAtMockDraft] draft picks did not match the mock; keeping the game order');
+          onProgress?.('done');
+          return { applied: 0, skipped: plan.slots.filter((s) => s.pid !== undefined).length };
+        }
+        const ownerById = new Map(orderedPicks.map((p) => [p.id, p.owner]));
+        const allPicks = new Map(state.teams.flatMap((t) => t.draftPicks.map((pk) => [pk.id, pk] as const)));
+        const teams = state.teams.map((t) => {
+          const kept = t.draftPicks.filter((pk) => (ownerById.get(pk.id) ?? t.id) === t.id);
+          const incoming = orderedPicks
+            .filter((p) => p.owner === t.id && !t.draftPicks.some((pk) => pk.id === p.id))
+            .map((p) => ({ ...allPicks.get(p.id)!, ownerTeamId: t.id }));
+          return kept.length === t.draftPicks.length && incoming.length === 0
+            ? t
+            : { ...t, draftPicks: [...kept, ...incoming].map((pk) => (ownerById.has(pk.id) ? { ...pk, ownerTeamId: ownerById.get(pk.id)! } : pk)) };
+        });
+        // Any pick the mock doesn't know about (none, normally) keeps its place after the mock's.
+        const extraIds = (state.draftPickOrder ?? []).filter((id) => !ownerById.has(id));
+        const extraOwners = extraIds.map((id) => allPicks.get(id)?.ownerTeamId ?? '');
+        set({
+          teams,
+          draftPickOrder: [...orderedPicks.map((p) => p.id), ...extraIds],
+          draftOrder: [...orderedPicks.map((p) => p.owner), ...extraOwners],
+        });
+
+        // Make the mock's picks. A prospect who isn't on the board (shouldn't
+        // happen: same file, same class) gets an AI pick instead.
+        let applied = 0;
+        let skipped = 0;
+        for (const slot of plan.slots) {
+          if (slot.pid === undefined) break;
+          const playerId = `player-${slot.pid}`;
+          if (get().freeAgents.includes(playerId)) {
+            get().draftPlayer(playerId);
+            applied++;
+          } else {
+            get().simDraftPick();
+            skipped++;
+          }
+        }
+        onProgress?.('done');
+        return { applied, skipped };
       },
 
       resetLeague: () => {
