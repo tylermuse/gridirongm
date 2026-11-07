@@ -232,6 +232,8 @@ interface ShellActions {
   running: ActionKey | null;
   run: (key: ActionKey) => void;
   banner: string | null;
+  /** Shorter status for the phone header, where it shares a row with Sim. */
+  phoneBanner: string | null;
   userTeam: BasketballTeam | null;
 }
 
@@ -326,6 +328,7 @@ function useShellActions(league: League, pathname: string): ShellActions {
     running,
     run,
     banner: bannerText(league, userTeam),
+    phoneBanner: bannerText(league, userTeam, true),
     userTeam,
   };
 }
@@ -382,17 +385,32 @@ function actionLabel(a: ShellActions['visible'][number], running: ActionKey | nu
 /** Phase label on the left, the next-action buttons on the right (they wrap
  *  instead of crushing the ticker), then the phase-specific status line. */
 function TopBar({ league, actions }: { league: League; actions: ShellActions }) {
-  const { visible, running, run, banner, userTeam, phaseLabel } = actions;
+  const { visible, running, run, banner, phoneBanner, userTeam, phaseLabel } = actions;
   const store = useLeagueStore();
   const locked = !!running || store.loading;
   const progress = store.simProgress;
   const { canWatch, watchLive } = useWatchLive();
   return (
     <header className="border-b" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-      <div className="min-h-12 flex flex-wrap items-center gap-2 px-3 md:px-6 py-2">
-        <span className="text-sm font-semibold text-[var(--text-sec)] truncate min-w-0 mr-auto">
-          {league.currentSeason} · {phaseLabel}
-        </span>
+      <div className="min-h-12 flex flex-nowrap sm:flex-wrap items-center gap-2 px-3 md:px-6 py-1.5 sm:py-2">
+        <div className="min-w-0 mr-auto text-[var(--text-sec)]">
+          <div className="text-xs sm:text-sm font-semibold truncate">
+            {league.currentSeason} · {phaseLabel}
+          </div>
+          {/* Phones: the status strip's facts live here instead of costing a
+              second sticky row. */}
+          {(phoneBanner || progress) && (
+            <div className="sm:hidden text-[11px] leading-tight truncate">
+              {progress
+                ? (
+                  <span className="font-semibold" style={{ color: 'var(--accent)' }}>
+                    {progress.total > 0 ? `⏩ ${progress.done} of ${progress.total} game days` : `⏩ ${progress.done} day${progress.done === 1 ? '' : 's'} played`}
+                  </span>
+                )
+                : phoneBanner}
+            </div>
+          )}
+        </div>
         {canWatch && (
           // Football's red, pulsing Watch Live — on every page, not just Home.
           <span className="hidden sm:inline-flex">
@@ -438,7 +456,7 @@ function TopBar({ league, actions }: { league: League; actions: ShellActions }) 
       </div>
 
       {(banner || progress) && (
-        <div className="px-3 md:px-6 py-1.5 border-t text-xs text-[var(--text-sec)] truncate" style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}>
+        <div className="hidden sm:block px-3 md:px-6 py-1.5 border-t text-xs text-[var(--text-sec)] truncate" style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}>
           {progress
             ? (
               <span className="font-semibold" style={{ color: 'var(--accent)' }}>
@@ -538,7 +556,7 @@ function MobileActionBar({ actions }: { actions: ShellActions }) {
 }
 
 /** Phase-specific context line under the top bar (football's status banner). */
-function bannerText(league: League, userTeam: BasketballTeam | null): string | null {
+function bannerText(league: League, userTeam: BasketballTeam | null, compact = false): string | null {
   const rec = userTeam ? `${userTeam.record.wins}–${userTeam.record.losses}` : null;
   const money = (n: number) => `$${(n / 1e6).toFixed(1)}M`;
 
@@ -585,6 +603,9 @@ function bannerText(league: League, userTeam: BasketballTeam | null): string | n
   const deadlineNote = league.currentTick <= deadline
     ? `Trade deadline: Day ${deadline}`
     : 'Trade window closed';
+  if (compact) {
+    return `${rec} · ${remaining} left · ${league.currentTick <= deadline ? `Deadline Day ${deadline}` : 'Deadline passed'}`;
+  }
   return [
     lastDay > 0 ? `Day ${league.currentTick} of ${lastDay}` : null,
     `Record ${rec}`,

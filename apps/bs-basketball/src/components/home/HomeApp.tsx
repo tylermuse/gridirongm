@@ -333,17 +333,20 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
         {/* Dashboard order mirrors football's: approval + owner objectives
             right under the hero, the achievements strip, next game beside
             the availability report, then the standings / cap / stats row,
-            leaders + news, and the show last. */}
+            leaders + news, and the show last. Phones lead with the next game,
+            the thing you came here to act on. */}
         {userTeam && (
           <>
-            <div className="flex flex-col md:flex-row gap-4 mb-4 md:items-stretch">
-              <ApprovalRings team={userTeam as BasketballTeam} className="md:w-60 shrink-0" />
-              <OwnerObjectivesCard league={league} team={userTeam as BasketballTeam} className="flex-1 min-w-0" />
-            </div>
-            <TrophyCase league={league} team={userTeam as BasketballTeam} />
-            <div className="grid gap-4 mb-6 md:grid-flow-col md:auto-cols-fr">
-              <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void watchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} className="" />
-              <InjuryReport league={league} team={userTeam as BasketballTeam} className="" />
+            <div className="flex flex-col md:contents">
+              <div className="flex flex-col md:flex-row gap-4 mb-4 md:items-stretch">
+                <ApprovalRings team={userTeam as BasketballTeam} className="md:w-60 shrink-0" />
+                <OwnerObjectivesCard league={league} team={userTeam as BasketballTeam} className="flex-1 min-w-0" />
+              </div>
+              <TrophyCase league={league} team={userTeam as BasketballTeam} />
+              <div className="order-first md:order-none grid gap-4 mb-4 md:mb-6 md:grid-flow-col md:auto-cols-fr">
+                <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void watchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} className="" />
+                <InjuryReport league={league} team={userTeam as BasketballTeam} className="" />
+              </div>
             </div>
             {isGodMode(league) && (
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>

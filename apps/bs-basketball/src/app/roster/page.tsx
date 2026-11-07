@@ -57,11 +57,12 @@ const FIT_LEGEND_COLOR: Record<SchemeFit['tier'], string> = {
 
 // The lineup grid is wider than a phone, so it scrolls sideways with the Min +
 // Name cells pinned. min-w matches the column sum so row fills/borders span it.
-const ROW_GRID = 'grid items-center gap-2 px-2 py-1.5 min-w-[63rem]';
-const ROW_COLS = { gridTemplateColumns: '2.5rem minmax(9rem,1fr) 2.4rem 2.4rem 3.4rem 3.2rem 5.2rem 6rem 2.4rem minmax(8rem,1fr) 5rem 7rem' };
+// `.lineup-row` (globals.css) holds the columns: phones reorder them so OVR and
+// Start/Bench are on screen without scrolling sideways.
+const ROW_GRID = 'lineup-row grid items-center gap-2 px-2 py-1.5 min-w-[63rem]';
 // Pinned cells inherit the row's (opaque) fill so scrolled cells pass beneath.
 const PIN_MIN = 'sticky left-0 z-[1] self-stretch flex items-center justify-center';
-const PIN_NAME = 'sticky left-10 z-[1] self-stretch';
+const PIN_NAME = 'sticky left-8 sm:left-10 z-[1] self-stretch';
 const INHERIT_BG = { background: 'inherit' } as const;
 
 /** Opaque tint of `color` over the surface — an alpha tint that stays solid
@@ -476,13 +477,14 @@ export default function RosterPage() {
         className="mb-4"
         title={
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span>{team.city} {team.name} Roster</span>
+            {/* Phones: the team picker beside this already names the team. */}
+            <span className="sr-only sm:not-sr-only">{team.city} {team.name} Roster</span>
             {/* FEAT-26: team switcher — view any team's roster read-only */}
             <select
               aria-label="View team roster"
               value={team.id}
               onChange={e => setViewTeamId(e.target.value)}
-              className="h-8 px-2 text-xs font-semibold normal-case tracking-normal rounded border bg-[var(--surface-2)] hover:bg-[var(--surface)] cursor-pointer"
+              className="h-10 sm:h-8 px-2 text-sm sm:text-xs font-semibold normal-case tracking-normal rounded border bg-[var(--surface-2)] hover:bg-[var(--surface)] cursor-pointer"
               style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
             >
               {[...league.teams]
@@ -536,7 +538,7 @@ export default function RosterPage() {
 
       {/* Position composition bar */}
       {(tab === 'lineup' || tab === 'roster') && (
-        <div className="mb-4">
+        <div className="hidden sm:block mb-4">
           <div className="flex h-3 rounded-full overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
             {POSITIONS.map(pos => counts[pos] > 0 && (
               <div key={pos} title={`${pos}: ${counts[pos]}`} style={{ width: `${(counts[pos] / roster.length) * 100}%`, background: POS_COLORS[pos] }} />
@@ -552,7 +554,7 @@ export default function RosterPage() {
 
       {/* Scheme-fit legend */}
       {hcScheme && (tab === 'lineup' || tab === 'roster') && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-[11px] text-[var(--text-sec)]">
+        <div className="hidden sm:flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-[11px] text-[var(--text-sec)]">
           <span>Scheme fit ({SCHEME_LABELS[hcScheme]}):</span>
           {(['great', 'good', 'neutral', 'poor'] as const).map(label => (
             <span key={label} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: FIT_LEGEND_COLOR[label] }} />{label}</span>
@@ -570,7 +572,10 @@ export default function RosterPage() {
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <p className="text-xs text-[var(--text-sec)] mr-auto">Drag a player onto a starting slot, or use <b>Start</b> / <b>Bench</b>, then save.</p>
+              <p className="basis-full sm:basis-auto text-xs text-[var(--text-sec)] sm:mr-auto">
+                <span className="hidden sm:inline">Drag a player onto a starting slot, or use <b>Start</b> / <b>Bench</b>, then save.</span>
+                <span className="sm:hidden">Use <b>Start</b> / <b>Bench</b>, then save.</span>
+              </p>
               <Button variant="ghost" onClick={autoFill}>Auto-fill</Button>
               <Button variant="primary" disabled={!validation.valid || store.loading} onClick={() => void save()}>
                 {store.loading ? 'Working…' : 'Save Lineup'}
@@ -585,7 +590,7 @@ export default function RosterPage() {
           )}
 
           <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-            <div className={`${ROW_GRID} bg-[var(--surface)] text-[10px] uppercase tracking-wide text-[var(--text-sec)] border-b font-semibold`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
+            <div className={`${ROW_GRID} bg-[var(--surface)] text-[10px] uppercase tracking-wide text-[var(--text-sec)] border-b font-semibold`} style={{ borderColor: 'var(--border)' }}>
               <span className={PIN_MIN} style={INHERIT_BG}>Min</span>
               <span className={`${PIN_NAME} flex items-center`} style={INHERIT_BG}>Name</span>
               <span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span>
@@ -608,7 +613,7 @@ export default function RosterPage() {
                   onDragLeave={isReadOnly ? undefined : () => setDragOverSlot(s => (s === slot ? null : s))}
                   onDrop={isReadOnly ? undefined : e => onDropSlot(slot, e)}
                   className={`${ROW_GRID} border-t`}
-                  style={{ ...ROW_COLS, borderColor: 'var(--border)', background: dragOverSlot === slot ? tint('var(--accent)', 14) : tint('var(--accent)', 5) }}
+                  style={{ borderColor: 'var(--border)', background: dragOverSlot === slot ? tint('var(--accent)', 14) : tint('var(--accent)', 5) }}
                   title={`Open starting slot (${pos})`}
                 >
                   <span className={`${PIN_MIN} text-[10px] font-black`} style={{ ...INHERIT_BG, color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
@@ -651,7 +656,7 @@ export default function RosterPage() {
                       onDragLeave={isReadOnly ? undefined : isStarter ? () => setDragOverSlot(s => (s === slot ? null : s)) : () => setDragOverBenchId(cur => (cur === p.id ? null : cur))}
                       onDrop={isReadOnly ? undefined : isStarter ? e => onDropSlot(slot, e) : e => onDropBench(p.id, e)}
                       className={`${ROW_GRID} border-t ${rowBg ? '' : 'bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors'} ${!isReadOnly ? 'cursor-grab' : ''}`}
-                      style={{ ...ROW_COLS, borderColor: 'var(--border)', ...(rowBg ? { background: rowBg } : null) }}
+                      style={{ borderColor: 'var(--border)', ...(rowBg ? { background: rowBg } : null) }}
                       title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : (!isStarter && !isReadOnly ? 'Drag up onto another bench player to move up the rotation (more minutes)' : undefined)}
                     >
                       <span
@@ -1193,9 +1198,11 @@ function ActionCell({
           onClick={e => onMenu(playerId, e.currentTarget)}
           aria-haspopup="menu"
           aria-expanded={!!menuOpen}
-          className={`bs-touch-target px-2 py-0.5 text-[11px] rounded font-medium whitespace-nowrap transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] ${menuOpen ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-sec)]'}`}
+          aria-label="Actions"
+          className={`bs-touch-target px-1 sm:px-2 py-0.5 text-[11px] rounded font-medium whitespace-nowrap transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] ${menuOpen ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-sec)]'}`}
         >
-          Actions ▾
+          <span className="hidden sm:inline">Actions ▾</span>
+          <span className="sm:hidden text-base leading-none" aria-hidden>⋯</span>
         </button>
       )}
     </span>
