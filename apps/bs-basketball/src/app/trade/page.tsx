@@ -316,7 +316,7 @@ function TradePage() {
       />
 
       {/* Short labels on phones, full labels from sm up (football's tab set). */}
-      <div className="mb-6 max-w-full overflow-x-auto">
+      <div className="mb-4 sm:mb-6 max-w-full overflow-x-auto">
         <div className="sm:hidden">
           <SegmentedControl options={tabOptions(true, pendingCount)} value={activeTab} onChange={setTab} size="sm" />
         </div>
@@ -564,12 +564,28 @@ function HistoryRow({ rec }: { rec: ProposalRecord }) {
 function RumorsPanel({ league, onOpen }: { league: League; onOpen: (rumor: TradeRumor) => void }) {
   const rumors = useMemo(() => getActiveRumors(league), [league]);
   const acc = useMemo(() => rumorAccuracy(league), [league]);
+  const [expanded, setExpanded] = useState(false);
 
   if (rumors.length === 0 && acc.resolved === 0) return null;
 
   return (
-    <section className="mb-6 rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+    <section className="mb-3 sm:mb-6 rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+      {/* Phones: rumors used to push the Offers / Block / Propose tabs a full
+          screen down, so they start as one tappable line. */}
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        className="sm:hidden w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left"
+        style={{ background: 'var(--surface-2)' }}
+      >
+        <span className="font-bold text-sm">📰 Trade Rumors</span>
+        <span className="flex items-center gap-2 text-xs font-semibold text-[var(--text-sec)]">
+          {rumors.length > 0 ? `${rumors.length} active` : 'Quiet'}
+          <span className={`transition-transform ${expanded ? 'rotate-90' : ''}`} aria-hidden>›</span>
+        </span>
+      </button>
+      <div className="hidden sm:flex flex-wrap items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
         <span className="font-bold text-sm">📰 Trade Rumors</span>
         <span className="ml-auto text-xs font-semibold text-[var(--text-sec)]">
           {acc.resolved === 0
@@ -578,9 +594,9 @@ function RumorsPanel({ league, onOpen }: { league: League; onOpen: (rumor: Trade
         </span>
       </div>
       {rumors.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-[var(--text-sec)]">The mill is quiet right now — sim toward the deadline and the rumors will heat up.</p>
+        <p className={`${expanded ? 'block' : 'hidden'} sm:block px-4 py-3 text-sm text-[var(--text-sec)]`}>The mill is quiet right now — sim toward the deadline and the rumors will heat up.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+        <div className={`${expanded ? 'grid' : 'hidden'} sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3`}>
           {rumors.map(r => <RumorCard key={r.id} league={league} rumor={r} onOpen={onOpen} />)}
         </div>
       )}
