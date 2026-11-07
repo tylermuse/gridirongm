@@ -892,7 +892,7 @@ function choreograph(p) {
     // everyone to the lane: offense/defense alternate on the blocks
     const spotsL = [[10, 40], [-10, 40], [10, 37], [-10, 37], [10, 34]]; let k = 0;   // outside the 16-ft lane, on the lane-space marks
     const lane = [def[4], def[3], off[4], off[3], def[2]]; /* defense takes the low spots on both sides, offense the next ones up */ lane.forEach((a, i) => { const [x, z] = W(...spotsL[i]); move(a, t0 - .9, t0 + .4 + i * .08, x, z); act(a, t0 + .3, t0 + 99, 'laneWait'); });
-    const others = [...off, ...def].filter(a => !lane.includes(a) && a !== shooterA); others.forEach((a, i) => move(a, t0 - .9, t0 + .6, ...W(i % 2 ? -18 : 18, 22 - i * 2)));
+    const others = [...off, ...def].filter(a => !lane.includes(a) && a !== shooterA); others.forEach((a, i) => { move(a, t0 - .9, t0 + .6, ...W(i % 2 ? -18 : 18, 22 - i * 2)); act(a, t0 + .5, t0 + 99, 'ftWait'); });   // the two up top stand and watch, upright (no defensive crouch)
     const walk = move(shooterA, t0 - .9, t0 + .2, lx, lz); walk.t1 = Math.max(walk.t1, walk.t0 + Math.hypot(walk.x - walk.sx, walk.z - walk.sz) / 11);   // a finisher landing under the rim walks back, he doesn't teleport
     faceTo(shooterA, t0 - .9, 'rim'); const atLine = walk.t1 + .3;
     // the lead official stands under the basket and feeds the shooter; the shooter takes his dribbles before each attempt
@@ -965,8 +965,10 @@ function stepActor(a, t, dt) {
         want = back ? 'mx_jog_back' : lateral > 0 ? 'def_slide_r' : 'def_slide_l'; }
       else want = a.speed < 7 ? 'walk' : a.speed < 14 ? 'jog' : 'run';
       wantLoop = true;
-    } else if (kind == null || kind === 'dribble' || kind === 'hold' || kind === 'triple' || kind === 'cheer' || kind === 'three' || kind === 'flex' || kind === 'stance' || kind === 'laneWait') {
-      if (!P.moving || a.speed < 1.2) want = kind === 'hold' || kind === 'triple' ? 'triple' : 'idle';
+    } else if (kind == null || kind === 'dribble' || kind === 'hold' || kind === 'triple' || kind === 'cheer' || kind === 'three' || kind === 'flex' || kind === 'stance' || kind === 'laneWait' || kind === 'ftWait') {
+      // standing without the ball: the rig's own base idle (arms relaxed). The mocap 'idle' (Animo PlayerA_Idle) pumps
+      // an empty right hand like a dribble, so lane players and everyone after a score looked like they were dribbling air.
+      if (!P.moving || a.speed < 1.2) want = kind === 'hold' || kind === 'triple' ? 'triple' : null;
       else want = a.speed < 7 ? 'walk' : a.speed < 14 ? 'jog' : 'run';
       wantLoop = true;
     }
@@ -1037,7 +1039,7 @@ function stepActor(a, t, dt) {
     case 'rebound': case 'block': { if (cur.jump == null) break; const u = smooth01((t - (cur.jump - .15)) / .3); const R = blendPose(POSE.hold, POSE.reach, u); arms(R, kind === 'block' ? blendPose(POSE.hold, [[.2, .5, -.6], [.5, .3, -.3]], u) : R); if (kind === 'block' && t > cur.jump + .25) { const v = smooth01((t - cur.jump - .25) / .25); poseArm(a, 'R', blendPose(POSE.reach, [[.9, .1, .35], [.95, 0, .2]], v), fr, ramp); } break; }
     case 'contest': case 'closeout': { if (cur.jump != null && t > cur.jump - .1 && kind === 'contest') { const u = smooth01((t - cur.jump + .1) / .25); arms(blendPose(POSE.stance, POSE.reach, u), blendPose(POSE.stance, [[.2, .6, .2], [.5, .4, .1]], u)); } else arms(POSE.stance, POSE.stance); break; }
     case 'stance': case 'bodyup': arms(kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, kind === 'bodyup' ? [[.5, .5, -.5], [.9, -.2, .1]] : POSE.stance, 1); break;
-    case 'laneWait': break;   // upright and relaxed on the lane (the idle clip), hands down
+    case 'laneWait': case 'ftWait': break;   // upright and relaxed on the lane (the idle clip), hands down
     case 'screen': arms(POSE.screen, POSE.screen); break;
     case 'boxout': arms([[.3, .7, -.6], [.6, .4, -.5]], [[.3, .7, -.6], [.6, .4, -.5]]); spineLean(a, .15 * ramp); break;
     case 'poke': case 'reachin': { arms([[.85, .15, .1], [.98, .05, .1]], POSE.stance); break; }
