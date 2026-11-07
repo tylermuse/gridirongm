@@ -2,6 +2,8 @@ import type { MetadataRoute } from 'next';
 import { blogPosts } from '@/lib/content/posts';
 import { seoPages } from '@/lib/content/pages';
 import { listEras, getTeams } from '@/lib/data/referenceRosters';
+import { teamSlug } from '@/lib/mockDraft/engine';
+import { getMockDraftData } from '@/lib/mockDraft/serverData';
 
 const BASE_URL = 'https://bs-football.com';
 
@@ -44,5 +46,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }
   }
 
-  return [...staticPages, ...blogPages, ...sectionPages, ...rosterPages];
+  const mockDraftTeamPages: MetadataRoute.Sitemap = getMockDraftData().teams.map((team) => ({
+    url: `${BASE_URL}/mock-draft/2027/${teamSlug(team)}`,
+    lastModified: now,
+    changeFrequency: 'weekly' as const,
+    priority: 0.8,
+  }));
+
+  return [...staticPages, ...blogPages, ...sectionPages, ...rosterPages, ...mockDraftTeamPages];
 }
