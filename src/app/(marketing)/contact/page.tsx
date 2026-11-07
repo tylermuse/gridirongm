@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://bs-football.com/contact' },
 };
 
+// Stripe-hosted Customer Portal login (Stripe Dashboard → Settings → Billing →
+// Customer portal → "Login page"). Lets a subscriber who can't sign in to the
+// game cancel by entering the email on their receipt. Rendered only when set.
+const PORTAL_LOGIN_URL = process.env.NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL;
+
 export default function ContactPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
@@ -53,6 +58,30 @@ export default function ContactPage() {
             Join our Discord
           </a>
         </div>
+      </div>
+
+      <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Manage or cancel your Premium subscription</h2>
+        <p className="text-gray-600 mb-3">
+          You can cancel at any time &mdash; no email required. Sign in, open{' '}
+          <Link href="/settings" className="text-blue-600 hover:underline">Settings</Link>, and click{' '}
+          <strong>Manage subscription</strong> to cancel, update your card, or download invoices. Cancellation takes
+          effect at the end of the current billing period, so you keep Premium until then.
+        </p>
+        {PORTAL_LOGIN_URL && (
+          <p className="text-gray-600 mb-3">
+            Can&apos;t sign in, or not sure which account you subscribed with? Use the{' '}
+            <a href={PORTAL_LOGIN_URL} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+              billing portal
+            </a>{' '}
+            &mdash; enter the email on your receipt and we&apos;ll send you a secure link.
+          </p>
+        )}
+        <p className="text-gray-600">
+          Charged when you didn&apos;t expect it? Email{' '}
+          <a href="mailto:support@bs-football.com" className="text-blue-600 hover:underline">support@bs-football.com</a>{' '}
+          with the email on your receipt and we&apos;ll take care of it.
+        </p>
       </div>
 
       <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6">

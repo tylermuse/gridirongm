@@ -66,6 +66,8 @@ export default function TermsPage() {
           <li>
             Subscriptions renew automatically for the applicable billing period unless canceled before the renewal
             date. You can cancel at any time, and cancellation takes effect at the end of the current billing period.
+            To cancel, sign in and choose <strong>Manage subscription</strong> under Settings, or see our{' '}
+            <Link href="/contact">Contact page</Link> for other ways to reach us about billing.
           </li>
           <li>
             Except where required by law, payments are non-refundable. Prices and features may change; we will give

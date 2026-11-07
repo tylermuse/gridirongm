@@ -268,7 +268,36 @@ function CloudSyncCard() {
 }
 
 function AccountCard() {
-  const { user, signOut } = useSubscription();
+  const { user, signOut, tier, isAdmin, isFoundingMember } = useSubscription();
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const isPremium = tier === 'premium';
+  const complimentary = (isFoundingMember || isAdmin) && !!user;
+  const tierLabel = complimentary
+    ? (isAdmin ? 'Admin · Premium' : 'Founding Member · Premium')
+    : isPremium ? 'Premium' : 'Free';
+
+  // Opens Stripe's hosted Customer Portal (cancel, update card, invoices).
+  // Mirrors the pricing page's "Manage subscription" so a subscriber can find
+  // it where they'd expect — in Settings — not only on /pricing.
+  async function handleManageSubscription() {
+    setPortalLoading(true);
+    setPortalError(null);
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setPortalError(data.error || 'Could not open the billing portal.');
+      }
+    } catch {
+      setPortalError('Could not open the billing portal.');
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
   const initialName = (user?.user_metadata?.display_name as string | undefined) ?? '';
   const [displayName, setDisplayName] = useState(initialName);
   const [savingName, setSavingName] = useState(false);
@@ -323,11 +352,51 @@ function AccountCard() {
               <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
                 {(trimmed || user.email || '?')[0]?.toUpperCase()}
               </div>
-              <div>
-                <div className="text-sm font-medium">{user.email}</div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">{user.email}</div>
+                <span className={`inline-block mt-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                  isPremium || complimentary
+                    ? 'bg-purple-100 text-purple-700 border-purple-300'
+                    : 'bg-[var(--surface-2)] text-[var(--text-sec)] border-[var(--border)]'
+                }`}>
+                  {tierLabel}
+                </span>
               </div>
             </div>
             <Button size="sm" variant="ghost" onClick={signOut}>Sign Out</Button>
+          </div>
+          <div className="border-t border-[var(--border)] pt-3">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-1">
+              Subscription
+            </label>
+            {complimentary ? (
+              <p className="text-[11px] text-[var(--text-sec)]">
+                Premium is included with your account — nothing to manage or cancel.
+              </p>
+            ) : isPremium ? (
+              <>
+                <p className="text-[11px] text-[var(--text-sec)] mb-2">
+                  Cancel, change your payment method, or download invoices. Cancellations take effect at the end of the
+                  current billing period.
+                </p>
+                <Button size="sm" variant="secondary" busy={portalLoading} onClick={handleManageSubscription}>
+                  {portalLoading ? 'Opening…' : 'Manage subscription'}
+                </Button>
+                {portalError && (
+                  <p className="text-[11px] text-red-600 mt-1">
+                    {portalError} Email{' '}
+                    <a href="mailto:support@bs-football.com" className="underline">support@bs-football.com</a> and we&apos;ll sort it out.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-[11px] text-[var(--text-sec)] mb-2">
+                  You&apos;re on the free plan.
+                </p>
+                <Link href="/pricing"><Button size="sm">Upgrade to Premium</Button></Link>
+              </>
+            )}
           </div>
           <div className="border-t border-[var(--border)] pt-3">
             <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-1">
