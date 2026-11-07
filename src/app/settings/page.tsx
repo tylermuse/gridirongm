@@ -488,22 +488,30 @@ export default function SettingsPage() {
   return (
     <GameShell>
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-black">League Settings</h2>
             <p className="text-sm text-[var(--text-sec)]">
-              Customize game mechanics. Changes take effect immediately.
+              Customize game mechanics. Changes apply when you save.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={handleReset} disabled={!isDirty && JSON.stringify(draft) === JSON.stringify(DEFAULT_LEAGUE_SETTINGS)}>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="ghost" className="whitespace-nowrap" onClick={handleReset} disabled={!isDirty && JSON.stringify(draft) === JSON.stringify(DEFAULT_LEAGUE_SETTINGS)}>
               Reset Defaults
             </Button>
-            <Button onClick={handleSave} disabled={!isDirty}>
+            <Button className="whitespace-nowrap" onClick={handleSave} disabled={!isDirty}>
               {saved ? '✓ Saved' : 'Save Changes'}
             </Button>
           </div>
         </div>
+
+        {/* The header Save scrolls away on a 7-screen page; keep it in reach. */}
+        {isDirty && (
+          <div className="fixed bottom-0 inset-x-0 z-[55] sm:hidden flex items-center justify-between gap-3 px-3 py-2 border-t border-[var(--border)] bg-[var(--surface)]">
+            <span className="text-xs font-semibold text-[var(--text-sec)]">Unsaved changes</span>
+            <Button size="sm" onClick={handleSave}>Save Changes</Button>
+          </div>
+        )}
 
         {/* Account */}
         <AccountCard />

@@ -280,6 +280,9 @@ function TeamPicker() {
       const data = await loadLeagueFromUrl(importUrl.trim());
       setImportedTeams(data);
       setActiveUrl(importUrl.trim());
+      // On phones the import panel sits below the team grid, so bring the
+      // freshly imported teams back into view.
+      requestAnimationFrame(() => document.getElementById('team-picker')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     } catch (err) {
       if (err instanceof BsfNativeSaveImportError && err.nativeSave !== undefined) {
         const routed = await routeNativeSave(err.nativeSave);
@@ -339,7 +342,7 @@ function TeamPicker() {
               </button>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-sm font-semibold text-[var(--text-sec)] mb-7">
+          <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-sm font-semibold text-[var(--text-sec)] mb-7">
             <span>Deep scouting &amp; the draft</span><span aria-hidden className="opacity-40">&middot;</span>
             <span>A real salary cap</span><span aria-hidden className="opacity-40">&middot;</span>
             <span>Trades &amp; free agency</span><span aria-hidden className="opacity-40">&middot;</span>
@@ -438,8 +441,9 @@ function TeamPicker() {
         </div>
       )}
 
-      {/* Import League File Section */}
-      <div className="mb-6 max-w-4xl w-full">
+      {/* Import League File Section — phones: below the team grid, so the first
+          thing after the hero is the choice a new GM actually has to make. */}
+      <div className="order-2 sm:order-none mt-4 sm:mt-0 mb-6 max-w-4xl w-full">
         <button
           onClick={() => setShowImport(!showImport)}
           className="flex items-center gap-2 text-sm text-[var(--text-sec)] hover:text-blue-600 transition-colors mx-auto"
@@ -477,6 +481,7 @@ function TeamPicker() {
                 </button>
               </div>
             )}
+            {error && <p className="sm:hidden mt-3 text-xs text-red-600">{error}</p>}
           </div>
         )}
       </div>
@@ -541,7 +546,7 @@ function TeamPicker() {
             const firstAbbr = ([...displayTeams].sort((a, b) => a.city.localeCompare(b.city))[0])?.abbreviation;
             if (firstAbbr) handlePick(firstAbbr, true);
           }}
-          className="w-full max-w-4xl mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)]
+          className="order-1 sm:order-none w-full max-w-4xl mt-3 sm:mt-0 sm:mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)]
                      hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left"
         >
           <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">
@@ -1060,6 +1065,11 @@ function Dashboard() {
   }
 
   const capPct = userTeam.totalPayroll / userTeam.salaryCap;
+  // A new league opens on an imported record with no stats behind it, so the
+  // record can't tell us whether the stat cards have anything to show.
+  const hasStats = players.some(p => p.stats.gamesPlayed > 0);
+  const userConfIdx = conferenceTeams.findIndex(t => t.id === userTeamId);
+  const standingsWindowStart = Math.max(0, Math.min(userConfIdx - 2, conferenceTeams.length - 5));
 
   function teamAbbr(id: string) {
     return teams.find(t => t.id === id)?.abbreviation ?? '???';
@@ -1099,13 +1109,13 @@ function Dashboard() {
 
   return (
     <GameShell>
-      <div className="max-w-6xl mx-auto space-y-4">
+      <div className="max-w-6xl mx-auto flex flex-col gap-4 sm:block sm:space-y-4">
         <SpectatorBanner />
         {isSpectator ? (
           // Neutral League Overview header for spectator leagues — the user
           // doesn't own a team, so the team-color banner reads as ownership
           // even when actions are gated. Keep it generic.
-          <div className="rounded-xl px-4 sm:px-5 py-4 border border-[var(--border)] bg-[var(--surface)]">
+          <div className="order-first sm:order-none rounded-xl px-4 sm:px-5 py-4 border border-[var(--border)] bg-[var(--surface)]">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">👁️</div>
               <div className="min-w-0">
@@ -1119,7 +1129,7 @@ function Dashboard() {
         ) : (
           /* Team header */
           <div
-            className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl px-4 sm:px-5 py-4"
+            className="order-first sm:order-none flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl px-4 sm:px-5 py-4"
             style={{ background: `linear-gradient(135deg, var(--team-primary) 0%, ${userTeam.secondaryColor} 100%)` }}
           >
             <div className="flex items-center gap-3 sm:block shrink-0">
@@ -1169,7 +1179,7 @@ function Dashboard() {
         <DiscordBanner />
 
         {/* Free-tier ad slot. Hidden for Premium / Founder / Admin users. */}
-        <AdSlot size="leaderboard" slotId="2166730387" />
+        <AdSlot size="leaderboard" slotId="2166730387" className="order-last sm:order-none" />
 
         {/* Approval & Objectives — hidden in spectator mode (no user team to evaluate) */}
         {!isSpectator && userTeam.approval && (
@@ -1236,11 +1246,13 @@ function Dashboard() {
                   );
                 }
 
+                const seasonObjectives = userTeam.approval.objectives.filter(o => o.season === season);
+                if (seasonObjectives.length === 0) return null;
                 return (
                   <div className="flex-1 min-w-0">
                     <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mb-1">Owner Objectives</div>
                     <div className="flex flex-col gap-0.5">
-                      {userTeam.approval.objectives.filter(o => o.season === season).map(obj => (
+                      {seasonObjectives.map(obj => (
                         <div key={obj.id} className="flex items-center gap-2 text-xs">
                           <span>{obj.status === 'completed' ? '✅' : obj.status === 'failed' ? '❌' : '⏳'}</span>
                           <span className={obj.status === 'failed' ? 'text-red-600 line-through' : obj.status === 'completed' ? 'text-green-600' : ''}>{obj.description}</span>
@@ -1281,7 +1293,7 @@ function Dashboard() {
             'All-Star Factory': '⭐',
           };
           return (
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className={`${achievements.length > 0 ? 'flex' : 'hidden sm:flex'} items-center gap-1.5 flex-wrap`}>
             {ALL_ACHIEVEMENTS.map(def => {
               const unlocked = achievements.find(a => a.id === def.id);
               const prog = !unlocked && def.progress ? def.progress(useGameStore.getState() as never) : null;
@@ -1289,10 +1301,10 @@ function Dashboard() {
               return (
                 <div
                   key={def.id}
-                  className={`flex flex-col items-center gap-0.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs border transition-all ${
+                  className={`flex-col items-center gap-0.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs border transition-all ${
                     unlocked
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-gray-50 opacity-40'
+                      ? 'flex bg-amber-50 border-amber-200'
+                      : 'hidden sm:flex bg-gray-50 opacity-40'
                   }`}
                   title={`${def.name}: ${def.description}${unlocked ? ` (Unlocked S${unlocked.unlockedSeason})` : prog ? ` (${prog.current}/${prog.target} ${prog.label})` : ''}`}
                 >
@@ -1327,25 +1339,25 @@ function Dashboard() {
           const oppTeam = nextGame ? teams.find(t => t.id === (nextGame.homeTeamId === userTeamId ? nextGame.awayTeamId : nextGame.homeTeamId)) : null;
           const nextGameRivalry = nextGame && oppTeam ? findRivalry(rivalries, userTeamId, oppTeam.id) : undefined;
           return (nextGame || injuredPlayers.length > 0) ? (
-            <div className={`grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
+            <div className={`-order-1 sm:order-none grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
               {nextGame && oppTeam && (
                 <div className={`rounded-xl bg-gradient-to-r overflow-hidden ${nextGameRivalry ? 'from-[var(--surface)] to-red-50 border border-red-300' : 'from-[var(--surface)] to-blue-50 border border-blue-200'}`}>
-                  <div className="p-5 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                  <div className="p-3 sm:p-5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                       <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} logoUrl={oppTeam.logoUrl} size="lg" />
-                      <div>
-                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider font-medium flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider font-medium flex flex-wrap items-center gap-x-2">
                           <span>{phase === 'playoffs' ? 'Playoffs' : `Week ${week}`} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</span>
                           {nextGameRivalry && (
                             <span className="text-red-600 font-bold normal-case tracking-normal" title={`Rivalry intensity ${nextGameRivalry.intensity}`}>⚔️ Rivalry Week</span>
                           )}
                         </div>
-                        <div className="text-lg font-black mt-0.5">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
+                        <div className="text-base sm:text-lg leading-tight font-black mt-0.5">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
                         <div className="text-sm text-[var(--text-sec)] font-medium">{formatRecord(oppTeam.record)}</div>
                       </div>
                     </div>
-                    <Link href={`/game/${nextGame.id}`}>
-                      <Button size="md" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 text-base">
+                    <Link href={`/game/${nextGame.id}`} className="shrink-0">
+                      <Button size="md" className="bg-blue-600 hover:bg-blue-700 text-white font-bold whitespace-nowrap px-3 sm:px-6 py-2 sm:py-2.5 text-sm sm:text-base">
                         Watch Live
                       </Button>
                     </Link>
@@ -1384,7 +1396,12 @@ function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Conference standings with GB */}
           <Card>
-            <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between w-full">
+                <CardTitle>{userTeam.conference} Standings</CardTitle>
+                <Link href="/standings" className="text-xs text-blue-600 hover:underline sm:hidden">Full →</Link>
+              </div>
+            </CardHeader>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs">
@@ -1395,10 +1412,14 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {conferenceTeams.slice(0, 10).map((t, i) => (
+                {conferenceTeams.map((t, i) => {
+                  const inTopTen = i < 10;
+                  const nearUser = i >= standingsWindowStart && i < standingsWindowStart + 5;
+                  if (!inTopTen && !nearUser) return null;
+                  return (
                   <tr
                     key={t.id}
-                    className={`border-t border-[var(--border)] ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''} cursor-pointer hover:bg-[var(--surface-2)]`}
+                    className={`border-t border-[var(--border)] ${nearUser ? '' : 'hidden sm:table-row'} ${inTopTen ? '' : 'sm:hidden'} ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''} cursor-pointer hover:bg-[var(--surface-2)]`}
                     onClick={() => setViewTeamId(t.id)}
                   >
                     <td className="py-1 text-left flex items-center gap-1.5">
@@ -1413,31 +1434,37 @@ function Dashboard() {
                     <td className="py-1 text-center">{t.record.losses}</td>
                     <td className="py-1 text-right text-[var(--text-sec)]">{getGB(t)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </Card>
 
           {/* Finances */}
           <Card>
-            <CardHeader><CardTitle>Finances</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between w-full">
+                <CardTitle>Finances</CardTitle>
+                <Link href="/finances" className="text-xs text-blue-600 hover:underline sm:hidden">Details →</Link>
+              </div>
+            </CardHeader>
             {(() => {
               const capSpace = Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10;
               const playerDeadCap = Math.round((userTeam.deadCap ?? []).filter(d => !d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
               return (
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Payroll</span><span className="font-bold">${playerPayroll}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Coaching Payroll</span><span className="font-bold">${coachingPayroll}M{coachingDeadCap > 0 ? ` + $${coachingDeadCap}M dead` : ''}</span></div>
+                  <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
+                  <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Player Payroll</span><span className="font-bold">${playerPayroll}M</span></div>
+                  <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Coaching Payroll</span><span className="font-bold">${coachingPayroll}M{coachingDeadCap > 0 ? ` + $${coachingDeadCap}M dead` : ''}</span></div>
                   {luxuryTax > 0 && (
                     <div className="flex justify-between"><span className="text-[var(--text-sec)]">Luxury Tax</span><span className="font-bold text-red-600">${luxuryTax}M</span></div>
                   )}
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total Expenses</span><span className="font-bold">${expenses}M</span></div>
+                  <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Total Expenses</span><span className="font-bold">${expenses}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Profit</span><span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
-                  <div className="border-t border-[var(--border)] my-1" />
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${userTeam.salaryCap}M</span></div>
+                  <div className="hidden sm:block border-t border-[var(--border)] my-1" />
+                  <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${userTeam.salaryCap}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${capSpace < 10 ? 'text-red-600' : 'text-green-600'}`}>${capSpace}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Dead Cap</span><span className="font-bold text-amber-600">${playerDeadCap}M</span></div>
+                  <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Player Dead Cap</span><span className="font-bold text-amber-600">${playerDeadCap}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Roster</span><span className="font-bold">{roster.length} / 53</span></div>
                 </div>
               );
@@ -1445,9 +1472,9 @@ function Dashboard() {
           </Card>
 
           {/* Team Stats */}
-          <Card>
+          <Card className={hasStats ? '' : 'hidden md:block'}>
             <CardHeader><CardTitle>Team Stats</CardTitle></CardHeader>
-            {gamesPlayed === 0 ? (
+            {!hasStats ? (
               <div className="text-sm text-[var(--text-sec)] text-center py-4">
                 Season hasn&apos;t started — sim some games!
               </div>
@@ -1502,9 +1529,9 @@ function Dashboard() {
         {/* Row 2: League Leaders, Team Leaders, News */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* League Leaders */}
-          <Card>
+          <Card className={hasStats ? '' : 'hidden md:block'}>
             <CardHeader><CardTitle>League Leaders</CardTitle></CardHeader>
-            {gamesPlayed === 0 ? (
+            {!hasStats ? (
               <div className="text-sm text-[var(--text-sec)] text-center py-4">
                 Season hasn&apos;t started — sim some games!
               </div>
@@ -1544,9 +1571,9 @@ function Dashboard() {
 
           {/* Team Leaders — user-team only; spectator skips */}
           {!isSpectator && (
-          <Card>
+          <Card className={hasStats ? '' : 'hidden md:block'}>
             <CardHeader><CardTitle>Team Leaders</CardTitle></CardHeader>
-            {gamesPlayed === 0 ? (
+            {!hasStats ? (
               <div className="text-sm text-[var(--text-sec)] text-center py-4">
                 Season hasn&apos;t started — sim some games!
               </div>
@@ -1686,10 +1713,10 @@ function DiscordBanner() {
   }
 
   return (
-    <div className="mt-6 relative bg-[#5865F2]/10 border border-[#5865F2]/20 rounded-xl p-4">
+    <div className="order-last sm:order-none sm:mt-6 relative bg-[#5865F2]/10 border border-[#5865F2]/20 rounded-xl p-4">
       <button
         onClick={handleDismiss}
-        className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors text-xs"
+        className="absolute top-1 right-1 sm:top-2 sm:right-2 w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center rounded-full text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors text-xs"
         aria-label="Dismiss"
       >
         ✕

@@ -592,15 +592,16 @@ export default function RosterPage() {
       <div className="max-w-7xl mx-auto">
         <SpectatorBanner />
         {/* Header bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 sm:mb-4">
+          <div className="w-full sm:w-auto">
             <TeamQuickNav currentPage="roster" />
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg sm:text-2xl font-black font-display uppercase tracking-tight leading-tight">{viewingTeam?.city} {viewingTeam?.name} Roster</h2>
+            <div className="flex items-center gap-3 mt-1 sm:mt-0">
+              {/* Phones: the team picker below already names the team. */}
+              <h2 className="sr-only sm:not-sr-only text-2xl font-black font-display uppercase tracking-tight leading-tight">{viewingTeam?.city} {viewingTeam?.name} Roster</h2>
               <select
                 value={activeTeamId}
                 onChange={e => setViewingTeamId(e.target.value === userTeamId ? null : e.target.value)}
-                className="h-8 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)]"
+                className="w-full sm:w-auto h-10 sm:h-8 px-2 text-sm sm:text-xs font-semibold sm:font-normal rounded border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)]"
               >
                 {teams
                   .sort((a, b) => a.city.localeCompare(b.city))
@@ -611,7 +612,7 @@ export default function RosterPage() {
                   ))}
               </select>
             </div>
-            <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1 flex-wrap">
+            <div className="flex items-center gap-x-3 gap-y-1 sm:gap-4 text-xs sm:text-sm text-[var(--text-sec)] mt-1.5 sm:mt-1 flex-wrap">
               <span className={roster.length > 53 ? 'text-red-600 font-bold' : ''}>{roster.length} players</span>
               {activeTeamId === userTeamId && roster.length > 53 && (leagueSettings?.rosterLimitEnabled !== false) && (
                 <button
@@ -643,7 +644,7 @@ export default function RosterPage() {
                   }}
                   className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 px-2 py-0.5 rounded border border-blue-300 bg-blue-50"
                 >
-                  🏟️ Rename / Relocate Team
+                  🏟️ <span className="hidden sm:inline">Rename / Relocate Team</span><span className="sm:hidden">Rename</span>
                 </button>
               )}
               <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>
@@ -670,7 +671,7 @@ export default function RosterPage() {
                   <button
                     type="button"
                     onClick={() => router.push(`/game/${userGameThisWeek.id}`)}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                    className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
                     title="Open the live broadcast for this week's game"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -687,22 +688,22 @@ export default function RosterPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex gap-1 w-full sm:w-auto bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1">
               {(['roster', 'depth', 'injuries', 'practice'] as const).map(mode => {
                 const psCount = (viewingTeam?.practiceSquad ?? []).length;
                 return (
                   <button
                     key={mode}
                     onClick={() => setViewMode(mode)}
-                    className={`px-3 py-1 text-xs rounded font-medium transition-colors capitalize ${viewMode === mode ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
+                    className={`flex-1 sm:flex-none whitespace-nowrap px-2 sm:px-3 py-2 sm:py-1 text-xs rounded font-medium transition-colors capitalize ${viewMode === mode ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
                   >
                     {mode === 'injuries'
                       ? `Injuries${injuredPlayers.length > 0 ? ` (${injuredPlayers.length})` : ''}`
                       : mode === 'depth'
-                      ? 'Depth Chart'
+                      ? <><span className="sm:hidden">Depth</span><span className="hidden sm:inline">Depth Chart</span></>
                       : mode === 'practice'
-                      ? `Practice Squad${psCount > 0 ? ` (${psCount})` : ''}`
+                      ? <><span className="sm:hidden">Practice{psCount > 0 ? ` (${psCount})` : ''}</span><span className="hidden sm:inline">Practice Squad{psCount > 0 ? ` (${psCount})` : ''}</span></>
                       : 'Roster'}
                   </button>
                 );
@@ -714,36 +715,58 @@ export default function RosterPage() {
         {/* ── ROSTER TABLE VIEW (BBGM-style) ── */}
         {viewMode === 'roster' && (
           <>
-            {/* Roster Composition */}
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 mb-4">
-              <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Roster Composition</div>
-              <div className="grid grid-cols-6 sm:grid-cols-11 gap-2 gap-y-3">
-                {POSITIONS.map(pos => {
-                  const count = roster.filter(p => p.position === pos).length;
-                  const limits = ROSTER_LIMITS[pos];
-                  const isBelowMin = count < limits.min;
-                  const isAtMin = count === limits.min;
-                  const isAboveMax = count > limits.max;
-                  return (
-                    <div key={pos} className="text-center">
-                      <div className={`text-sm font-black ${
-                        isBelowMin ? 'text-red-600' : isAtMin ? 'text-amber-600' : isAboveMax ? 'text-blue-600' : 'text-green-600'
-                      }`}>
-                        {count}
+            {/* Roster Composition — phones: one line of what's short, tap for the grid */}
+            {(() => {
+              const shortPositions = POSITIONS.filter(pos => roster.filter(p => p.position === pos).length < ROSTER_LIMITS[pos].min);
+              const grid = (
+                <div className="grid grid-cols-6 sm:grid-cols-11 gap-2 gap-y-3">
+                  {POSITIONS.map(pos => {
+                    const count = roster.filter(p => p.position === pos).length;
+                    const limits = ROSTER_LIMITS[pos];
+                    const isBelowMin = count < limits.min;
+                    const isAtMin = count === limits.min;
+                    const isAboveMax = count > limits.max;
+                    return (
+                      <div key={pos} className="text-center">
+                        <div className={`text-sm font-black ${
+                          isBelowMin ? 'text-red-600' : isAtMin ? 'text-amber-600' : isAboveMax ? 'text-blue-600' : 'text-green-600'
+                        }`}>
+                          {count}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-sec)]">{pos}</div>
+                        <div className="text-[10px] text-[var(--text-sec)]">{limits.min}-{limits.max}</div>
                       </div>
-                      <div className="text-[10px] text-[var(--text-sec)]">{pos}</div>
-                      <div className="text-[10px] text-[var(--text-sec)]">{limits.min}-{limits.max}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                    );
+                  })}
+                </div>
+              );
+              return (
+                <>
+                  <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 mb-4">
+                    <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Roster Composition</div>
+                    {grid}
+                  </div>
+                  <details className="sm:hidden group bg-[var(--surface)] border border-[var(--border)] rounded-lg mb-3">
+                    <summary className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                      <span className="font-bold text-[var(--text-sec)] shrink-0">Position depth</span>
+                      <span className={`font-semibold truncate ${shortPositions.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {shortPositions.length > 0
+                          ? `Short: ${shortPositions.join(', ')}`
+                          : 'All covered'}
+                        <span className="ml-1.5 inline-block text-[var(--text-sec)] transition-transform group-open:rotate-90" aria-hidden>›</span>
+                      </span>
+                    </summary>
+                    <div className="px-3 pb-3">{grid}</div>
+                  </details>
+                </>
+              );
+            })()}
 
             {/* Position filter */}
-            <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-4 flex-wrap w-fit">
+            <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-3 sm:mb-4 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar sm:w-fit">
               <button
                 onClick={() => setFilterPos('ALL')}
-                className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${filterPos === 'ALL' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
+                className={`shrink-0 px-2.5 py-1.5 sm:py-1 text-xs rounded font-medium transition-colors ${filterPos === 'ALL' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
               >
                 ALL
               </button>
@@ -751,7 +774,7 @@ export default function RosterPage() {
                 <button
                   key={pos}
                   onClick={() => setFilterPos(pos)}
-                  className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${filterPos === pos ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
+                  className={`shrink-0 px-2.5 py-1.5 sm:py-1 text-xs rounded font-medium transition-colors ${filterPos === pos ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
                 >
                   {pos}
                 </button>
