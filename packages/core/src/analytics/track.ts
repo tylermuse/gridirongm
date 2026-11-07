@@ -15,6 +15,8 @@
  */
 
 const DEVICE_ID_KEY = 'gg-device-id';
+/** ms timestamp written once, when the device id is minted. */
+export const DEVICE_CREATED_KEY = 'gg-device-created';
 const ENDPOINT = '/api/analytics/track';
 const FLUSH_INTERVAL_MS = 10_000;
 const MAX_BATCH = 25;
@@ -39,6 +41,9 @@ export function getDeviceId(): string | null {
     if (!id) {
       id = crypto.randomUUID();
       localStorage.setItem(DEVICE_ID_KEY, id);
+      // When this device was first seen. Lets experiments enroll only devices that are new since they shipped
+      // (e.g. the 3D sim default-on test); devices from before this key existed simply don't have it.
+      localStorage.setItem(DEVICE_CREATED_KEY, String(Date.now()));
     }
     return id;
   } catch { return null; }

@@ -41,8 +41,12 @@ export interface StartOpts {
   onShowPlay: (index: number) => void;
   /** Called after play `i`'s call (or silent beat) has finished. */
   onCallDone?: (index: number) => void;
-  /** Called once the last play's call has finished. */
+  /** Called once the last play's call has finished (for a teaser: at toIndex, or when today's allowance runs out). */
   onDone?: () => void;
+  /** Stop before this event index (exclusive) — the free teaser is one drive. Default: the end of the game. */
+  toIndex?: number;
+  /** Free-tier taste: the server allows it against a small daily allowance instead of requiring Premium. */
+  teaser?: boolean;
   /** Extra dwell (ms) to hold after each call — read live so the speed control
    *  still paces a broadcast (slower = longer gaps; a call is never cut off). */
   postClipDelayMs?: () => number;
@@ -87,13 +91,13 @@ const GATE_POLL_MS = 100;
 /** Consecutive failed calls before giving up on the broadcast. */
 const MAX_FAILED_CLIPS = 3;
 /** Retrying these can't help: stop the broadcast and say why. */
-const FATAL_CODES = new Set(['tts_quota', 'premium_required', 'auth_required', 'not_configured']);
+const FATAL_CODES = new Set(['tts_quota', 'premium_required', 'auth_required', 'not_configured', 'teaser_used']);
 
 class ClipError extends Error {
   constructor(message: string, public code: string | null, public retryable: boolean) { super(message); }
 }
 
-async function fetchClipOnce(lines: BroadcastLine[], signal: AbortSignal): Promise<string> {
+async function fetchClipOnce(lines: BroadcastLine[], signal: AbortSignal, teaser: boolean): Promise<string> {
   // Our own controller so a hung request can time out without ending the run.
   const ctl = new AbortController();
   const onAbort = () => ctl.abort();
@@ -103,7 +107,7 @@ async function fetchClipOnce(lines: BroadcastLine[], signal: AbortSignal): Promi
     const res = await fetch('/api/game-audio', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lines }),
+      body: JSON.stringify(teaser ? { lines, teaser: true } : { lines }),
       signal: ctl.signal,
     });
     if (!res.ok) {
@@ -119,12 +123,12 @@ async function fetchClipOnce(lines: BroadcastLine[], signal: AbortSignal): Promi
   }
 }
 
-async function fetchClip(lines: BroadcastLine[], signal: AbortSignal): Promise<string> {
+async function fetchClip(lines: BroadcastLine[], signal: AbortSignal, teaser: boolean): Promise<string> {
   try {
-    return await fetchClipOnce(lines, signal);
+    return await fetchClipOnce(lines, signal, teaser);
   } catch (e) {
     if (signal.aborted || (e instanceof ClipError && !e.retryable)) throw e;
-    return fetchClipOnce(lines, signal); // one retry: a single blip shouldn't lose the call
+    return fetchClipOnce(lines, signal, teaser); // one retry: a single blip shouldn't lose the call
   }
 }
 
@@ -199,7 +203,7 @@ export function useGameBroadcast(): GameBroadcast {
     const cache = clipCacheRef.current;
     const hit = cache.get(key);
     if (hit) return hit;
-    const p = fetchClip(lines, abortRef.current!.signal);
+    const p = fetchClip(lines, abortRef.current!.signal, !!optsRef.current?.teaser);
     p.catch(() => { cache.delete(key); }); // surfaced when awaited; a later play may retry
     cache.set(key, p);
     return p;
@@ -208,7 +212,7 @@ export function useGameBroadcast(): GameBroadcast {
   /** Prefetch the next called plays after `i` (only those that exist yet). */
   const prefetchAfter = useCallback((i: number) => {
     const opts = optsRef.current!;
-    const count = opts.count();
+    const count = Math.min(opts.count(), opts.toIndex ?? Infinity);
     let found = 0;
     for (let j = i + 1; j < count && found < PREFETCH && j < i + 8; j++) {
       const lines = opts.linesFor(j);
@@ -261,6 +265,11 @@ export function useGameBroadcast(): GameBroadcast {
     };
 
     for (let i = from; ; i++) {
+      // A teaser stops at the end of its drive, like a finished game.
+      if (opts.toIndex !== undefined && i >= opts.toIndex) {
+        if (runIdRef.current === myRun) { setStatus('done'); opts.onDone?.(); }
+        return;
+      }
       // Caught up: finished, or wait on the live engine / the user's play call.
       while (i >= opts.count()) {
         if (opts.isFinished?.() ?? true) {
@@ -291,6 +300,10 @@ export function useGameBroadcast(): GameBroadcast {
         } catch (e) {
           if (runIdRef.current !== myRun) return;
           const err = e as Error;
+          if (err instanceof ClipError && err.code === 'teaser_used') {
+            // Today's free taste is spent: end it like a finished drive, not an error.
+            setStatus('done'); opts.onDone?.(); return;
+          }
           if (err instanceof ClipError && !err.retryable) { fail(err.message, err.code); return; }
           if (++failedClips >= MAX_FAILED_CLIPS) {
             fail(err.message, err instanceof ClipError ? err.code : null);

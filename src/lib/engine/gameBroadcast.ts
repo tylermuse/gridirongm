@@ -381,3 +381,28 @@ export function broadcastClipLines(
 
   return finish();
 }
+
+/**
+ * End (exclusive event index) of the free broadcast teaser that starts at `from`: one drive. A drive runs until
+ * the other team has the ball, the next kickoff, or the half/game ends (the "that's the half" call is kept).
+ * Kickoffs are logged on the kicking team's possession, so a teaser that starts on one follows the receiving team.
+ * If that drive is very short (started right before a punt), the next drive is included too; never more than
+ * `maxPlays` events, so the free taste stays a taste.
+ */
+export function teaserEndIndex(events: PlayEvent[], from: number, maxPlays = 18): number {
+  const cap = Math.min(events.length, from + maxPlays);
+  const driveEnd = (start: number): number => {
+    const first = events[start];
+    if (!first) return cap;
+    const team = first.type === 'kickoff' ? (events[start + 1]?.possession ?? first.possession) : first.possession;
+    for (let i = start + 1; i < cap; i++) {
+      const ev = events[i];
+      if (ev.type === 'halftime' || ev.type === 'final') return i + 1;
+      if (ev.type === 'kickoff' || ev.possession !== team) return i;
+    }
+    return cap;
+  };
+  let end = driveEnd(from);
+  if (end - from < 4 && end < cap && events[end - 1]?.type !== 'halftime' && events[end - 1]?.type !== 'final') end = driveEnd(end);
+  return Math.max(end, Math.min(from + 1, cap));
+}

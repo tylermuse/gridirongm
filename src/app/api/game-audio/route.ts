@@ -7,8 +7,14 @@
  * clips generate-ahead so the voice stays in step with the game.
  *
  * Failures carry a `code` the client acts on: tts_quota, premium_required,
- * auth_required and not_configured end the broadcast; anything else is retried
- * and, if it persists, that one play goes unsaid.
+ * auth_required, not_configured and teaser_used end the broadcast; anything else
+ * is retried and, if it persists, that one play goes unsaid.
+ *
+ * Premium feature. Free signed-in users get a taste: `teaser: true` requests
+ * (one drive of the call, sent by the game page over the 3D sim) are allowed up to
+ * TEASER_LINES_PER_DAY freshly rendered lines per user per UTC day, reserved
+ * atomically with game_audio_teaser_take() (migration 20261106_sim3d_followup)
+ * before anything is sent to ElevenLabs. Cache hits cost nothing and don't count.
  */
 
 import { NextResponse } from 'next/server';
@@ -26,6 +32,8 @@ const VOICES = {
 } as const;
 
 const MODEL_ID = 'eleven_multilingual_v2';
+/** Free-tier broadcast teaser: freshly rendered lines per user per UTC day (one drive is ~10–40 lines). */
+const TEASER_LINES_PER_DAY = 50;
 const CACHE_BUCKET = 'game-audio';
 
 function supabaseAdmin() {
@@ -95,7 +103,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured', code: 'not_configured' }, { status: 500 });
     }
 
-    const { lines } = (await request.json()) as { lines?: Line[] };
+    const { lines, teaser } = (await request.json()) as { lines?: Line[]; teaser?: boolean };
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
       return NextResponse.json({ error: 'lines (non-empty array) required' }, { status: 400 });
     }
@@ -106,17 +114,22 @@ export async function POST(request: Request) {
     // Premium feature. Enforced only when Supabase is configured (prod / a
     // hydrated env); local dev without Supabase still works with just the
     // ELEVENLABS_API_KEY + flag so it stays testable on localhost.
+    // Set for a free user's teaser request: whose daily teaser allowance a cache miss is charged to.
+    let teaserUserId: string | null = null;
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
       const authClient = await createSupabaseServer();
       const { data: { user } } = await authClient.auth.getUser();
       if (!user) return NextResponse.json({ error: 'Not authenticated', code: 'auth_required' }, { status: 401 });
-      // Premium (incl. founders + admins, grandfathered by resolveTier). Free → 403.
+      // Premium (incl. founders + admins, grandfathered by resolveTier). Free → 403 unless it's the teaser.
       const { tier } = await readCredits(getServiceClient(), user.id, user.created_at);
       if (tier !== 'premium') {
-        return NextResponse.json(
-          { error: 'The live audio broadcast is a Premium feature.', code: 'premium_required' },
-          { status: 403 },
-        );
+        if (!teaser) {
+          return NextResponse.json(
+            { error: 'The live audio broadcast is a Premium feature.', code: 'premium_required' },
+            { status: 403 },
+          );
+        }
+        teaserUserId = user.id;
       }
     }
 
@@ -135,6 +148,22 @@ export async function POST(request: Request) {
             'X-Cache': 'HIT',
           },
         });
+      }
+    }
+
+    // Free teaser, cache miss: reserve the lines before paying for TTS. Fails closed (no table / RPC error = no teaser).
+    if (teaserUserId) {
+      const { data: ok, error } = await getServiceClient().rpc('game_audio_teaser_take', {
+        p_user: teaserUserId,
+        p_lines: lines.length,
+        p_cap: TEASER_LINES_PER_DAY,
+      });
+      if (error || ok !== true) {
+        if (error) console.error('game_audio_teaser_take failed:', error.message);
+        return NextResponse.json(
+          { error: "That's today's free taste of the broadcast. Premium gets the full call.", code: 'teaser_used' },
+          { status: 403 },
+        );
       }
     }
 

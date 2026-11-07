@@ -13,7 +13,7 @@ import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetr
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
-import { LiveSim3D, useSim3DMode, readSim3DPref } from '@/components/game/LiveSim3D';
+import { LiveSim3D, useSim3DMode, readSim3DPref, sim3dTestArm } from '@/components/game/LiveSim3D';
 import { clockSeconds } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
@@ -22,7 +22,7 @@ import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu'
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
-import { broadcastClipLines } from '@/lib/engine/gameBroadcast';
+import { broadcastClipLines, teaserEndIndex } from '@/lib/engine/gameBroadcast';
 import { UNLOCK_AUDIO } from '@/lib/engine/unlockAudio';
 import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
@@ -64,8 +64,39 @@ function broadcastErrorText(code: string | null): string {
   if (code === 'not_configured') return "The audio broadcast isn't set up on this server yet.";
   return 'The audio broadcast dropped out. The game keeps playing, and you can retry any time.';
 }
-/** 3D live sim free for everyone (launch window from 2026-10-23; decide with /admin/analytics → 3D Sim cohorts around 2026-11-06). */
+/**
+ * 3D live sim is free for everyone — a retention feature, not a paywall. Decided 2026-11-06 after the two-week
+ * launch experiment (/admin/analytics → 3D Live Sim card): 3D-on devices came back after 7+ days ~2× as often
+ * (20.7% vs 10.7%) with ~50% more sessions per device. Premium upsells live inside the sim (broadcast teaser,
+ * break card) instead of in front of it. Set to false only to make 3D Premium-only again (founders + admins keep it).
+ */
 const SIM3D_FREE_FOR_ALL = true;
+/** UTC day (YYYY-MM-DD) this browser last used the free broadcast teaser; the server enforces the real cap. */
+const TEASER_DAY_KEY = 'bsgm.broadcastTeaser.day';
+/** How many games this browser has watched with the 3D sim on; the quarter-break Premium cards skip the first one. */
+const SIM3D_GAMES_KEY = 'bsgm.sim3d.games';
+const utcDay = () => new Date().toISOString().slice(0, 10);
+/** Where the in-sim Premium card shows: the breaks between quarters, and the end of the free broadcast teaser. */
+type UpsellReason = 'q1' | 'half' | 'q3' | 'teaser_end';
+/** One benefit per break, so a free player watching a whole game in 3D sees the case for Premium once, in three parts. */
+const UPSELL_COPY: Record<UpsellReason, { title: string; body: string }> = {
+  q1: {
+    title: 'End of the first quarter — want the call?',
+    body: 'Premium puts Marcus & Tony on every play of every game: a live audio broadcast synced to the 3D sim.',
+  },
+  half: {
+    title: "Halftime. Here's what Premium adds",
+    body: 'A spoken halftime breakdown of both teams and second-half adjustments, plus a fully AI-written pregame show every week.',
+  },
+  q3: {
+    title: 'End of the third quarter',
+    body: 'Premium also means no ads, 3× the scout points and free-agent intel, and Team Spotlight episodes every month. Cancel anytime.',
+  },
+  teaser_end: {
+    title: 'That was Marcus & Tony on the call.',
+    body: 'Premium puts the live broadcast on every play of every game, plus the spoken halftime breakdown, AI commentary and no ads.',
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -1090,12 +1121,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // with the on-screen action. Narrates from the current play forward.
   // Live audio broadcast is a Premium feature (founders + admins grandfathered).
   // The dev override lets it be tested on localhost without a premium account.
-  const { tier: subTier, isAdmin: subIsAdmin, isFoundingMember } = useSubscription();
+  const { tier: subTier, isAdmin: subIsAdmin, isFoundingMember, user: subUser, loading: subLoading } = useSubscription();
   const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || subTier === 'premium' || subIsAdmin || isFoundingMember;
   const isPremium = subTier === 'premium' || subIsAdmin || isFoundingMember;
-  // 3D live sim access. Launch experiment from 2026-10-23: free for everyone for ~2 weeks while /admin/analytics
-  // compares session length + return visits for devices with 3D on vs off (admin_sim3d_cohorts). Flip
-  // SIM3D_FREE_FOR_ALL to false to make it Premium-only again (founders + admins keep it either way).
+  // 3D live sim access: free for everyone (see SIM3D_FREE_FOR_ALL). /admin/analytics keeps comparing 3D-on vs
+  // 3D-off devices (admin_sim3d_cohorts) and the default-on test arms (admin_sim3d_default_test).
   const sim3dAllowed = SIM3D_FREE_FOR_ALL || isPremium;
   const sim3dOn = sim3dPref && sim3dAllowed;
 
@@ -1166,19 +1196,37 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // dwell without restarting. Slower speed = longer gaps; the call is never cut.
   const speedRef = useRef(speed);
   speedRef.current = speed;
+  // Free broadcast teaser: a signed-in free user hears one drive of the Marcus & Tony call (over the 3D sim when it's
+  // on), once a day — the server caps it (TEASER_LINES_PER_DAY in /api/game-audio) — and then gets the Premium card.
+  const [teaserUsedToday, setTeaserUsedToday] = useState(false);
+  useEffect(() => {
+    // one-time sync from browser state on mount
+    try { setTeaserUsedToday(window.localStorage.getItem(TEASER_DAY_KEY) === utcDay()); } catch { /* storage blocked */ }
+  }, []);
+  const canTeaser = !canBroadcast && !subLoading && !!subUser && !teaserUsedToday;
+  const teaserRunningRef = useRef(false);
   const toggleBroadcast = useCallback(() => {
-    if (broadcastOn && broadcast.status !== 'error') { broadcast.stop(); return; }
+    if (broadcastOn && broadcast.status !== 'error') { teaserRunningRef.current = false; broadcast.stop(); return; }
     if (!homeTeam || !awayTeam || isFinished) return;
+    const teaser = !canBroadcast;
+    if (teaser && !canTeaser && !teaserRunningRef.current) return; // a teaser that errored can still be retried
     setIsPlaying(true);
     const fromIndex = Math.max(0, revealedCount - 1);
     const homeAbbr = homeTeam.abbreviation, awayAbbr = awayTeam.abbreviation;
     const homeName = homeTeam.city, awayName = awayTeam.city;
     const BROADCAST_DWELL: Record<Speed, number> = { '0.5x': 4000, '1x': 2000, '2x': 800, '5x': 200, 'max': 0 };
+    if (teaser) {
+      teaserRunningRef.current = true;
+      setTeaserUsedToday(true);
+      try { window.localStorage.setItem(TEASER_DAY_KEY, utcDay()); } catch { /* storage blocked */ }
+      trackEvent('broadcast_teaser_started', { game_id: id, sim3d: sim3dOn });
+    }
     broadcast.start({
       fromIndex,
       count: () => allEventsRef.current.length,
       linesFor: (i) => broadcastClipLines(allEventsRef.current, i, homeAbbr, awayAbbr, fromIndex, homeName, awayName),
       isFinished: () => !liveEngineRef.current || liveEngineRef.current.isFinished(),
+      ...(teaser ? { teaser: true, toIndex: teaserEndIndex(allEventsRef.current, fromIndex) } : {}),
       // The broadcast is the clock — it reveals each play as its call begins.
       onShowPlay: (i) => {
         if (i + 1 > revealedCountRef.current) setAnimationComplete(false);
@@ -1200,7 +1248,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       },
       willAnimate: () => sim3dOnRef.current,
     });
-  }, [broadcastOn, broadcast, homeTeam, awayTeam, revealedCount, isFinished]);
+  }, [broadcastOn, broadcast, homeTeam, awayTeam, revealedCount, isFinished, canBroadcast, canTeaser, id, sim3dOn]);
 
   // While the broadcast drives the reveal, mirror the game's play/pause onto
   // the audio so the Pause button stops the call too.
@@ -1222,15 +1270,61 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // While the 3D sim plays a snap its text is held back (no spoilers); it shows at the whistle, before the sim's result callout.
   const [sim3dDeadId, setSim3dDeadId] = useState<number | null>(null);
   sim3dDeadIdRef.current = sim3dDeadId;
-  // Launch experiment telemetry: one row per game-page visit saying whether 3D was on (device cohort for admin_sim3d_cohorts)
+  // 3D telemetry: one row per game-page visit saying whether 3D was on (device cohort for admin_sim3d_cohorts) and the default-on test arm
   const sim3dViewSentRef = useRef(false);
+  const sim3dGamesRef = useRef(0);
   useEffect(() => {
     if (sim3dViewSentRef.current || !game) return;
     sim3dViewSentRef.current = true;
     // read the saved choice directly: the hook's own read lands a render later than this first effect
-    trackEvent('sim3d_game_view', { game_id: id, on: sim3dAllowed && readSim3DPref(), allowed: sim3dAllowed, premium: isPremium });
+    // readSim3DPref() first: it assigns the default-on test arm for a qualifying new device, which sim3dTestArm() then reports
+    const on = sim3dAllowed && readSim3DPref();
+    trackEvent('sim3d_game_view', { game_id: id, on, allowed: sim3dAllowed, premium: isPremium, arm: sim3dTestArm() });
+    if (on) {
+      try {
+        const n = (parseInt(window.localStorage.getItem(SIM3D_GAMES_KEY) || '0', 10) || 0) + 1;
+        window.localStorage.setItem(SIM3D_GAMES_KEY, String(n));
+        sim3dGamesRef.current = n;
+      } catch { /* storage blocked */ }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per visit
   }, [game]);
+
+  // Premium card inside the 3D sim, for free players. Never a hard stop: the game keeps running and the card is a
+  // dismissible strip under the controls. It shows at the breaks between quarters (end of Q1, halftime, end of Q3),
+  // each pitching a different Premium benefit (UPSELL_COPY), and when the free broadcast teaser drive ends. Each break
+  // shows once per game; none show during a device's first 3D game, so the hook forms before the pitch.
+  const [upsell, setUpsell] = useState<null | UpsellReason>(null);
+  const upsellShownRef = useRef<Set<UpsellReason>>(new Set());
+  const showUpsell = useCallback((reason: UpsellReason) => {
+    if (upsellShownRef.current.has(reason)) return;
+    upsellShownRef.current.add(reason);
+    setUpsell(reason);
+    trackEvent('sim3d_upsell_shown', { game_id: id, reason, sim3d: sim3dOn, arm: sim3dTestArm() });
+  }, [id, sim3dOn]);
+  useEffect(() => {
+    if (!upsell) return;
+    const t = setTimeout(() => setUpsell(null), 25000);
+    return () => clearTimeout(t);
+  }, [upsell]);
+  // The teaser drive is over (or today's allowance ran out): hand the reveal back to the normal clock, then pitch.
+  useEffect(() => {
+    if (!teaserRunningRef.current || broadcast.status !== 'done') return;
+    teaserRunningRef.current = false;
+    broadcast.stop();
+    if (!isPremium) showUpsell('teaser_end');
+  }, [broadcast.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastRevealed = allEvents[revealedCount - 1];
+  const quarterBreak: UpsellReason | null =
+    lastRevealed?.type === 'halftime' ? 'half'
+    : lastRevealed?.type === 'quarter_end' && lastRevealed.quarter === 1 ? 'q1'
+    : lastRevealed?.type === 'quarter_end' && lastRevealed.quarter === 3 ? 'q3'
+    : null;
+  useEffect(() => {
+    if (!quarterBreak || subLoading || isPremium || !sim3dOn) return;
+    if (sim3dGamesRef.current < 2) return;
+    showUpsell(quarterBreak);
+  }, [quarterBreak, subLoading, isPremium, sim3dOn, showUpsell]);
   const [tabHidden, setTabHidden] = useState(false);
   useEffect(() => {
     const on = () => setTabHidden(document.visibilityState === 'hidden');
@@ -2387,7 +2481,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           )}
           {!isFinished && sim3dAllowed && (
             <button
-              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium }); setSim3dOn(!sim3dOn); }}
+              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium, arm: sim3dTestArm() }); setSim3dOn(!sim3dOn); }}
               className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 sim3dOn
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
@@ -2474,14 +2568,24 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               📻 Halftime Report
             </button>
           )}
-          {/* Audio Broadcast (Premium) */}
-          {canBroadcast && (
+          {/* Audio Broadcast — Premium; free signed-in players get one drive a day (the teaser), then a Premium link. */}
+          {!isFinished && !canBroadcast && !canTeaser && !broadcastOn && !subLoading && (
+            <Link
+              href="/pricing"
+              onClick={() => trackEvent('broadcast_premium_link_clicked', { game_id: id, signed_in: !!subUser })}
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]"
+              title="Marcus & Tony call every play live — a Premium feature"
+            >
+              🔊 Broadcast <span className="ml-1 rounded bg-amber-400 px-1 text-[10px] font-bold text-black">✨ Premium</span>
+            </Link>
+          )}
+          {(canBroadcast || canTeaser || broadcastOn) && (
             <button
               onClick={toggleBroadcast}
               className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 broadcastOn ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
-              title="Live audio play-by-play with Marcus Cole and Tony Blaze"
+              title={canBroadcast ? 'Live audio play-by-play with Marcus Cole and Tony Blaze' : 'Hear Marcus & Tony call one drive free (once a day)'}
             >
               {broadcastOn
                 ? (broadcast.status === 'buffering' ? '🔊 Buffering…'
@@ -2490,12 +2594,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   : broadcast.status === 'error' ? '🔊 Retry'
                   : broadcast.status === 'done' ? '🔊 Broadcast ✓'
                   : '🔊 On')
-                : '🔊 Broadcast'}
+                : canBroadcast ? '🔊 Broadcast' : '🔊 Broadcast · free drive'}
             </button>
           )}
           </div>
         </div>
-        {canBroadcast && broadcast.status === 'blocked' && (
+        {broadcastOn && broadcast.status === 'blocked' && (
           <button
             onClick={broadcast.resume}
             className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-all"
@@ -2503,8 +2607,30 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             ▶ Tap to start the audio broadcast
           </button>
         )}
-        {canBroadcast && broadcast.status === 'error' && (
+        {broadcastOn && broadcast.status === 'error' && (
           <div className="text-xs text-red-500 px-1">{broadcastErrorText(broadcast.errorCode)}</div>
+        )}
+        {upsell && !isPremium && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-400/60 bg-[var(--surface-2)] p-3" role="status">
+            <div className="flex-1 min-w-0 text-sm">
+              <div className="font-semibold text-[var(--text)]">{UPSELL_COPY[upsell].title}</div>
+              <div className="text-xs text-[var(--text-sec)]">{UPSELL_COPY[upsell].body}</div>
+            </div>
+            <Link
+              href="/pricing"
+              onClick={() => trackEvent('sim3d_upsell_clicked', { game_id: id, reason: upsell, arm: sim3dTestArm() })}
+              className="shrink-0 inline-flex items-center h-8 px-3 rounded-md text-xs font-bold bg-amber-400 text-black hover:bg-amber-300"
+            >
+              ✨ Go Premium
+            </Link>
+            <button
+              onClick={() => { trackEvent('sim3d_upsell_dismissed', { game_id: id, reason: upsell }); setUpsell(null); }}
+              className="shrink-0 h-8 w-8 rounded-md text-[var(--text-sec)] hover:text-[var(--text)]"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
 

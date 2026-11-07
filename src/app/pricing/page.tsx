@@ -15,7 +15,7 @@ const PREMIUM_FEATURES = [
 ];
 
 const FREE_FEATURES = [
-  '3D live sim — every play of your games in 3D (free for everyone during launch)',
+  '3D live sim — every play of your games in 3D',
   'Full season simulation',
   'Draft, free agency, trades',
   'All stats, standings, history',
