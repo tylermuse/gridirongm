@@ -9,7 +9,8 @@
  *
  * The on-screen feed text is written to be read, not heard, so calls are built
  * from the event's structured data: who has it, the down and distance, whether
- * it moved the chains, and the score after anything that changes it.
+ * it moved the chains, and the score after anything that changes it. Tony's read
+ * on the whole game (who's rolling, what the trailing team needs) is in gameRead.ts.
  *
  * DETERMINISTIC: no Math.random. Variety is keyed off event.id so the same
  * game always produces the same script — which is what makes the server-side
@@ -17,6 +18,10 @@
  */
 
 import type { PlayEvent } from './playByPlay';
+import {
+  applyPlay, breakRead, extractPlayers, gameSeed, isNonPlayRun, isScrimmage, isTouchdown, newGameState, newMemory,
+  nextFrom, PLAYER_RE, readForPlay, type GameState, type Memory,
+} from './gameRead';
 
 export interface BroadcastLine {
   speaker: 'marcus' | 'tony';
@@ -25,7 +30,8 @@ export interface BroadcastLine {
 
 const TONY_TD = [
   "Are you KIDDING me?! That's what I'm talking about!",
-  "SIX POINTS! He walked in there like he owned the place!",
+  "SIX POINTS! Put it on the board!",
+  "That's six! You love to see a drive finished off like that!",
   "Get it in the end zone! THAT is how you finish a drive!",
 ];
 const TONY_TURNOVER = [
@@ -40,6 +46,8 @@ const TONY_FUMBLE_KEPT = [
 const TONY_SACK = [
   "BURIED him! The pocket collapsed and he had nowhere to go!",
   "Get him DOWN! That's a drive-killer right there.",
+  "He never had a chance! That's a great rush off the edge!",
+  "Oh, that hurts! That puts them way behind the sticks!",
 ];
 const TONY_FG = [
   "Three points on the board. Take what they give you, I get it.",
@@ -53,10 +61,12 @@ const TONY_BIG_PLAY = [
 const TONY_FOURTH_CONVERT = [
   "Guts! You gotta love the guts on that call!",
   "They went for it and they GOT it! Huge!",
+  "That's a coach who trusts his guys! Big-time conversion!",
 ];
 const TONY_FOURTH_STOP = [
   "Stuffed! You roll the dice, sometimes you pay for it!",
   "What a stop! The defense answers the bell!",
+  "They left it all out there, and they came up empty!",
 ];
 const TONY_LEAD_CHANGE = [
   "And just like that, we have got a new leader!",
@@ -67,23 +77,6 @@ const TONY_LEAD_CHANGE = [
  *  plain ids would alternate in step with a run-pass-run-pass drive. */
 function pick(list: string[], seed: number): string {
   return list[(Math.abs(seed) * 2654435761 >>> 0) % list.length];
-}
-
-const POSITIONS = 'QB|RB|FB|HB|WR|TE|OL|OT|OG|C|DL|DE|DT|LB|CB|S|FS|SS|K|P';
-// "S. Barkley RB" (pre-computed sim) or "S. Barkley" (Live Coach engine). Read
-// literally that's "S Barkley RB gets 6", so we keep just the last name.
-const PLAYER_RE = new RegExp(
-  `\\b[A-Z]\\.\\s+((?:(?:St\\.|De|Van|Von|Mc)\\s+)?[A-ZÀ-Þ][A-Za-zÀ-ÿ'’\\-]+(?:\\s+(?:Jr\\.?|Sr\\.?|II|III|IV))?)(?:\\s+(${POSITIONS}))?(?![A-Za-z])`,
-  'g',
-);
-
-interface TaggedPlayer { last: string; pos: string | undefined; }
-
-function extractPlayers(desc: string): TaggedPlayer[] {
-  const out: TaggedPlayer[] = [];
-  // Live Coach writes "S. Barkley's pass to…": we add our own possessives.
-  for (const m of desc.matchAll(PLAYER_RE)) out.push({ last: m[1].replace(/['’]s$/, ''), pos: m[2] });
-  return out;
 }
 
 /** Strip player-tag noise, emoji and parentheticals from a description. */
@@ -137,15 +130,6 @@ function scoreAfter(ev: PlayEvent): { home: number; away: number } {
     away: ev.awayScore + (ev.possession === 'away' ? pts : 0),
   };
 }
-
-const isScrimmage = (ev: PlayEvent) =>
-  ev.type === 'run' || ev.type === 'pass_complete' || ev.type === 'pass_incomplete' ||
-  ev.type === 'sack' || ev.type === 'interception' || ev.type === 'fumble';
-
-/** Engine bookkeeping that arrives typed as a 'run' but isn't a carry. */
-const isNonPlayRun = (ev: PlayEvent) => /timeout|turnover on downs|takes a knee/i.test(ev.description);
-
-const isTouchdown = (ev: PlayEvent) => ev.type === 'touchdown' || /TOUCHDOWN/.test(ev.description);
 
 /** Who has it and what they need, said before the snap on the downs that matter. */
 function situationLead(ev: PlayEvent, prev: PlayEvent | undefined, s: Sides): string {
@@ -280,26 +264,52 @@ function leadChanged(ev: PlayEvent, prev: PlayEvent | undefined): boolean {
   return was !== 0 && now !== 0 && was !== now;
 }
 
-/** Color reaction for a notable play, or null for a routine one. */
-function tonyReaction(ev: PlayEvent, prev: PlayEvent | undefined, next: PlayEvent | undefined): string | null {
+/** The shout for a notable play, or null for a routine one. */
+function tonyReaction(ev: PlayEvent, prev: PlayEvent | undefined, next: PlayEvent | undefined, mem: Memory): string | null {
   const d = ev.description.toUpperCase();
-  if (isTouchdown(ev)) return pick(TONY_TD, ev.id);
-  if (ev.type === 'interception' || d.includes('INTERCEPT')) return pick(TONY_TURNOVER, ev.id);
+  const shout = (list: string[]) => nextFrom(list, list[0], mem);
+  if (isTouchdown(ev)) return shout(TONY_TD);
+  if (ev.type === 'interception' || d.includes('INTERCEPT')) return shout(TONY_TURNOVER);
   if (ev.type === 'fumble' || d.includes('FUMBLE')) {
     // The offense recovers some of these. Live Coach has no next event yet, so
     // it only hears the "gave it away" line when the feed says so outright.
     const kept = next ? next.possession === ev.possession : !d.includes('RECOVERED BY');
-    return pick(kept ? TONY_FUMBLE_KEPT : TONY_TURNOVER, ev.id);
+    return shout(kept ? TONY_FUMBLE_KEPT : TONY_TURNOVER);
   }
-  if (ev.type === 'sack' || d.includes('SACK')) return pick(TONY_SACK, ev.id);
+  if (ev.type === 'sack' || d.includes('SACK')) return shout(TONY_SACK);
   if ((ev.type === 'extra_point' || ev.type === 'field_goal_good') && ev.quarter >= 4 && leadChanged(ev, prev)) {
-    return pick(TONY_LEAD_CHANGE, ev.id);
+    return shout(TONY_LEAD_CHANGE);
   }
-  if (ev.type === 'field_goal_good' && ev.id % 2 === 0) return pick(TONY_FG, ev.id);
+  if (ev.type === 'field_goal_good' && ev.id % 2 === 0) return shout(TONY_FG);
   if (!isScrimmage(ev) || isNonPlayRun(ev)) return null;
-  if (ev.down === 4) return pick(ev.yardsGained >= ev.yardsToGo ? TONY_FOURTH_CONVERT : TONY_FOURTH_STOP, ev.id);
-  if (ev.yardsGained >= 25) return pick(TONY_BIG_PLAY, ev.id);
+  if (ev.down === 4) return shout(ev.yardsGained >= ev.yardsToGo ? TONY_FOURTH_CONVERT : TONY_FOURTH_STOP);
+  if (ev.yardsGained >= 25) return shout(TONY_BIG_PLAY);
   return null;
+}
+
+/** Plays worth Tony's read that the play-by-play doesn't otherwise have a beat for. */
+const hasCall = (ev: PlayEvent) =>
+  ev.type !== 'halftime' && ev.type !== 'final' && ev.type !== 'quarter_end' && ev.type !== 'two_minute_warning';
+
+/**
+ * Replays the game up to `index`: the running numbers, plus what Tony says on
+ * this play. Replaying from the top (rather than from where the listener joined)
+ * keeps a play's lines the same however the broadcast got there.
+ */
+function replayTo(events: PlayEvent[], index: number, names: Sides): { state: GameState; color: string | null } {
+  const state: GameState = newGameState();
+  const memory: Memory = newMemory(gameSeed(events));
+  let color: string | null = null;
+  for (let i = 0; i <= index; i++) {
+    const ev = events[i];
+    applyPlay(state, ev, events[i + 1]);
+    if (!hasCall(ev)) continue;
+    memory.plays++;
+    // A read about this play beats a generic shout, which beats nothing.
+    const said = readForPlay(state, ev, names, memory) ?? tonyReaction(ev, events[i - 1], events[i + 1], memory);
+    if (i === index) color = said;
+  }
+  return { state, color };
 }
 
 /**
@@ -346,26 +356,27 @@ export function broadcastClipLines(
     lines.push({ speaker: 'tony', text: `Let's GO!` });
   }
 
+  const { state, color } = replayTo(events, index, sides);
+  const summary = (final: boolean) => breakRead(state, ev.homeScore, ev.awayScore, ev.quarter, sides, final);
+
   if (ev.type === 'halftime') {
     lines.push({ speaker: 'marcus', text: `That's the half. ${scorePhrase(ev.homeScore, ev.awayScore, sides)}` });
-    lines.push({ speaker: 'tony', text: ev.homeScore === ev.awayScore
-      ? `Dead even! Somebody's gotta make adjustments in that locker room.`
-      : `Plenty of football left. Let's see who comes out swinging.` });
+    const read = summary(false);
+    if (read) lines.push({ speaker: 'tony', text: read });
   } else if (ev.type === 'final') {
-    const winner = ev.homeScore > ev.awayScore ? homeName : awayName;
-    const margin = Math.abs(ev.homeScore - ev.awayScore);
     lines.push({ speaker: 'marcus', text: `That's the ballgame. Final score: ${scorePhrase(ev.homeScore, ev.awayScore, sides)} Thanks for listening.` });
-    lines.push({ speaker: 'tony', text: margin === 0
-      ? `A tie! Nobody's happy, and I love it!`
-      : margin <= 7
-        ? `What a finish! ${winner} survives that one!`
-        : `${winner} takes care of business. We'll see you next time!` });
+    const read = summary(true);
+    if (read) lines.push({ speaker: 'tony', text: read });
   } else if (ev.description?.trim()
     // The half and final calls carry the score, so don't say it twice in a row.
     && !(ev.type === 'quarter_end' && (next?.type === 'halftime' || next?.type === 'final'))) {
     lines.push({ speaker: 'marcus', text: playByPlayLine(ev, prev, next, sides) });
-    const color = tonyReaction(ev, prev, next);
-    if (color) lines.push({ speaker: 'tony', text: color });
+    if (ev.type === 'quarter_end') {
+      const read = summary(false);
+      if (read) lines.push({ speaker: 'tony', text: read });
+    } else if (color) {
+      lines.push({ speaker: 'tony', text: color });
+    }
   }
 
   return finish();
