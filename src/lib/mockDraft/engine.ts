@@ -508,3 +508,115 @@ export function draftStartPlan(
     })),
   };
 }
+
+/* ─── Scout panel (public/mock/scout-2027.json) ─────────────── */
+
+/** Researched from public reporting (scripts/data/mock_scout_profiles_2027.json). */
+export interface ScoutProfile {
+  college: string | null;
+  classYear: string | null;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  nflComp: string | null;
+  stats2025: string | null;
+  honors: string | null;
+  notes: string | null;
+  sources: string[];
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface ScoutEntry {
+  /** FBGM ratings, 0-100, zeros dropped. */
+  ratings: Partial<Record<RatingKey, number>>;
+  skills: string[];
+  profile?: ScoutProfile;
+}
+
+export interface ScoutData {
+  asOf: string;
+  /** When the written profiles were compiled (a bare date). */
+  researchedAt: string | null;
+  prospects: Record<string, ScoutEntry>;
+}
+
+export type RatingKey =
+  | 'stre' | 'spd' | 'endu' | 'thv' | 'thp' | 'tha' | 'bsc' | 'elu' | 'rtr' | 'hnd'
+  | 'rbk' | 'pbk' | 'pcv' | 'tck' | 'prs' | 'rns' | 'kpw' | 'kac' | 'ppw' | 'pac';
+
+export const RATING_LABELS: Record<RatingKey, string> = {
+  stre: 'Strength',
+  spd: 'Speed',
+  endu: 'Endurance',
+  thv: 'Vision',
+  thp: 'Arm strength',
+  tha: 'Accuracy',
+  bsc: 'Ball security',
+  elu: 'Elusiveness',
+  rtr: 'Route running',
+  hnd: 'Hands',
+  rbk: 'Run blocking',
+  pbk: 'Pass blocking',
+  pcv: 'Coverage',
+  tck: 'Tackling',
+  prs: 'Pass rush',
+  rns: 'Run defense',
+  kpw: 'Kick power',
+  kac: 'Kick accuracy',
+  ppw: 'Punt power',
+  pac: 'Punt accuracy',
+};
+
+/** The ratings that matter for each position, most important first. */
+export const POSITION_RATINGS: Record<Position, RatingKey[]> = {
+  QB: ['tha', 'thp', 'thv', 'elu', 'spd'],
+  RB: ['spd', 'elu', 'bsc', 'stre', 'hnd'],
+  WR: ['rtr', 'hnd', 'spd', 'elu', 'stre'],
+  TE: ['hnd', 'rtr', 'rbk', 'stre', 'spd'],
+  OL: ['pbk', 'rbk', 'stre', 'endu'],
+  DL: ['prs', 'rns', 'stre', 'spd', 'tck'],
+  LB: ['tck', 'rns', 'pcv', 'prs', 'spd'],
+  CB: ['pcv', 'spd', 'tck', 'hnd', 'elu'],
+  S: ['pcv', 'tck', 'spd', 'rns', 'hnd'],
+  K: ['kpw', 'kac'],
+  P: ['ppw', 'pac'],
+};
+
+/** FBGM skill tags, spelled out. */
+export const SKILL_LABELS: Record<string, string> = {
+  Pa: 'Accurate passer',
+  Pd: 'Deep passer',
+  Ps: 'Smart passer',
+  A: 'Athlete',
+  X: 'Explosive runner',
+  H: 'Sure hands',
+  Bp: 'Pass blocker',
+  Br: 'Run blocker',
+  PR: 'Pass rusher',
+  RS: 'Run stopper',
+  L: 'Lockdown coverage',
+};
+
+/** Starters ranked this high or better (of 32) make the prospect a luxury pick. */
+export const STRONG_RANK = 8;
+
+/**
+ * How a prospect fits the team on the clock, in one line. Judged on the
+ * team's starters rather than its headcount: the data file caps every count
+ * just under the roster max, so most teams look "full" everywhere.
+ */
+export function scoutFit(
+  data: MockDraftData,
+  team: MockTeam,
+  prospect: MockProspect,
+  liveCounts: Record<Position, number> = team.countByPosition,
+): { fit: 'need' | 'depth' | 'luxury'; text: string } {
+  const need = teamDraftNeeds(data, team, liveCounts).find((n) => n.pos === prospect.pos);
+  if (need) return { fit: 'need', text: `Fills a ${team.abbrev} need. ${needLabel(need, data.teams.length)}.` };
+  const rank = starterRank(data, team, prospect.pos);
+  const ranked = rank !== undefined ? `${team.abbrev}'s ${prospect.pos} starters rank ${ordinal(rank)} of ${data.teams.length}` : '';
+  if (rank !== undefined && rank <= STRONG_RANK) {
+    return { fit: 'luxury', text: `A luxury pick: ${ranked}.` };
+  }
+  return { fit: 'depth', text: ranked ? `Not a pressing need: ${ranked}.` : `Not a pressing ${team.abbrev} need.` };
+}
