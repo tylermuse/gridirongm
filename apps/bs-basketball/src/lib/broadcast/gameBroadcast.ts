@@ -10,17 +10,21 @@
  *
  * Basketball beats replace football's drives and downs: lead changes, ties,
  * unanswered runs, heat-checks (the live viewer's moment chips), buzzer
- * beaters and end-of-quarter scores, with halftime at the end of Q2.
+ * beaters and end-of-quarter scores, with halftime at the end of Q2. Tony's
+ * read on the whole game (who's hot, what the trailing team needs) lives in
+ * gameRead.ts.
  *
- * DETERMINISTIC: no Math.random. Variety is keyed off the event index, so the
- * same game always produces the same lines — which is what makes the server
- * audio cache hit on a re-watch (same lines → same md5 → same mp3).
+ * DETERMINISTIC: no Math.random. Variety comes from rotating through wordings
+ * in play order, so the same game always produces the same lines — which is
+ * what makes the server audio cache hit on a re-watch (same lines → same md5 →
+ * same mp3).
  * Pure + client-safe: no React, no Node APIs.
  */
 
 import type { LiveEvent } from '../live/playByPlay';
 import type { EventBeat } from '../live/beats';
 import type { Moment } from '../live/moments';
+import { applyEvent, gameSeed, newGameState, newMemory, nextFrom, periodRead, readForEvent, type GameState, type Memory } from './gameRead';
 
 export type BroadcastSpeaker = 'marcus' | 'tony';
 export interface BroadcastLine { speaker: BroadcastSpeaker; text: string }
@@ -36,50 +40,53 @@ export interface BroadcastContext {
 const TONY_THREE = [
   "From DOWNTOWN! He didn't even hesitate!",
   "Splash! You leave him open, that's what happens!",
-  "Bang! That's a dagger if I've ever seen one!",
+  "Bang! Nothing but the bottom of the net!",
+  "That's a big-time shot! Look at the confidence!",
+  "Wet! You could see it the second it left his hand!",
 ];
 const TONY_DUNK = [
   "Oh, he THREW it down! Somebody check on the rim!",
-  "Get that weak stuff outta here — he flushed it!",
+  "He flushed it! That's a grown man's dunk!",
+  "Oh my goodness! You do NOT want to be under that!",
 ];
 const TONY_BLOCK = [
   "REJECTED! Not in his house!",
   "Get that outta here! He sent it to the third row!",
   "Oh, that's a grown-man block right there!",
+  "He got all of that! You'd better look before you go up!",
 ];
 const TONY_STEAL = [
   "Pick-pocket! He read that the whole way!",
   "Those are free points! You can't be careless with it!",
+  "Quick hands! That's how you change a game without scoring!",
+  "He was waiting on that pass! You can't throw that lazy ball!",
 ];
 const TONY_AND1 = [
   "AND ONE! He's strong with it!",
   "Through the contact! That's a three-point play!",
+  "They hit him, and it didn't matter! Put him on the line!",
 ];
 const TONY_RUN = [
-  "This is a run! Somebody call a timeout!",
-  "They're rolling now — the building's shaking!",
+  "Somebody call a timeout!",
+  "They're rolling now, and the building's shaking!",
+  "That's a momentum swing you can feel from up here!",
 ];
 const TONY_LEAD = [
   "And just like that, we've got a new leader!",
   "Lead's flipped! This one's a fistfight!",
 ];
-const TONY_HEAT = [
-  "He's HEATING up! Somebody put a hand in his face!",
-  "Get him the ball! He's feeling it!",
+const tonyHeat = (name: string) => [
+  `${name} is HEATING up! Somebody put a hand in his face!`,
+  `Get ${name} the ball! He's feeling it!`,
 ];
-const TONY_FIRE = [
-  "He is ON FIRE! The rim looks like an ocean to him!",
-  "You can't guard that! Nobody can!",
+const tonyFire = (name: string) => [
+  `${name} is ON FIRE! The rim looks like an ocean to him!`,
+  `You can't guard ${name} right now! Nobody can!`,
 ];
 const TONY_BUZZER = [
   "At the BUZZER! Are you kidding me?!",
   "Beat the horn! What a way to end it!",
 ];
-
-/** Deterministic pick keyed off the event index (no RNG). */
-function pick(list: string[], seed: number): string {
-  return list[(seed * 2654435761 >>> 0) % list.length];
-}
 
 function clockSecs(clock: string): number {
   const [m, s] = clock.split(':').map(Number);
@@ -134,6 +141,77 @@ function scoreLine(e: LiveEvent, ctx: BroadcastContext): string {
   return `${lead} ${hi}-${lo}.`;
 }
 
+/** Plays between generic shouts, so Tony's analysis isn't drowned out by "Splash!". */
+const MIN_CALLS_BETWEEN_SHOUTS = 4;
+
+/** Runs get called once each at these sizes, not on every bucket. */
+const RUN_TIERS = [8, 14, 20];
+
+interface Mic { lastTony: number; runTier: number }
+
+/** What Tony says on this called play, if anything. */
+function colorFor(
+  e: LiveEvent, beat: EventBeat | undefined, moment: Moment | undefined,
+  state: GameState, memory: Memory, mic: Mic, ctx: BroadcastContext,
+): string | null {
+  const chip = moment?.chip?.text ?? '';
+  const name = /^[A-Z]\. (\S+)/.exec(e.text)?.[1] ?? 'He';
+  const late = moment?.crunch || (e.quarter >= 4 && clockSecs(e.clock) <= 300);
+
+  if (/BUZZER/.test(chip)) return nextFrom(TONY_BUZZER, 'buzzer', memory);
+  if (/ON FIRE/.test(chip)) return nextFrom(tonyFire(name), 'fire', memory);
+
+  // The scoring side's run, once per tier. A bucket that isn't part of one resets it.
+  if (e.scoring) {
+    const runPts = Number(/(\d+)-0/.exec(beat?.runText ?? '')?.[1] ?? 0);
+    if (!runPts) mic.runTier = 0;
+    const tier = RUN_TIERS.filter(t => runPts >= t).at(-1) ?? 0;
+    if (tier > mic.runTier) {
+      mic.runTier = tier;
+      const team = e.side === 'home' ? ctx.homeName : ctx.awayName;
+      return `${team} is on ${runPts === 8 || runPts === 11 || runPts === 18 ? 'an' : 'a'} ${runPts}-0 run! ${nextFrom(TONY_RUN, 'run', memory)}`;
+    }
+  }
+  if (beat?.leadChange && late) return nextFrom(TONY_LEAD, 'lead', memory);
+
+  const read = readForEvent(state, e, ctx, memory);
+  if (read) return read;
+
+  if (memory.called - mic.lastTony < MIN_CALLS_BETWEEN_SHOUTS) return null;
+  const dunk = e.kind === 'make2' && /throws it down|flushes|dunk/i.test(e.text);
+  if (e.and1) return nextFrom(TONY_AND1, 'and1', memory);
+  if (/heating up/.test(chip)) return nextFrom(tonyHeat(name), 'heat', memory);
+  if (e.kind === 'block') return nextFrom(TONY_BLOCK, 'block', memory);
+  if (e.kind === 'steal') return nextFrom(TONY_STEAL, 'steal', memory);
+  if (e.kind === 'make3') return nextFrom(TONY_THREE, 'three', memory);
+  if (dunk) return nextFrom(TONY_DUNK, 'dunk', memory);
+  return null;
+}
+
+/**
+ * Replays the game up to `index`: the running numbers, plus what Tony says on
+ * this event. Replaying from the top (rather than from where the listener
+ * joined) keeps a play's lines the same however the broadcast got there.
+ */
+function replayTo(
+  events: LiveEvent[], beats: EventBeat[], moments: Moment[], index: number, ctx: BroadcastContext,
+): { state: GameState; color: string | null } {
+  const state = newGameState();
+  const memory = newMemory(gameSeed(events));
+  const mic: Mic = { lastTony: -100, runTier: 0 };
+  let color: string | null = null;
+  for (let i = 0; i <= index; i++) {
+    const e = events[i];
+    applyEvent(state, e);
+    if (e.kind === 'period' || !isCalled(e, moments[i])) continue;
+    memory.called++;
+    const said = colorFor(e, beats[i], moments[i], state, memory, mic, ctx);
+    if (said) mic.lastTony = memory.called;
+    if (i === index) color = said;
+  }
+  return { state, color };
+}
+
 /** The lines for the event at `index` ([] when it isn't called). */
 export function broadcastClipLines(
   events: LiveEvent[],
@@ -161,19 +239,22 @@ export function broadcastClipLines(
   }
 
   if (e.kind === 'period') {
+    const { state } = replayTo(events, beats, moments, index, ctx);
     if (/overtime!?$/i.test(e.text) && !/^End/i.test(e.text)) {
       lines.push({ speaker: 'marcus', text: `Tied at the end of regulation — we are going to overtime!` });
       lines.push({ speaker: 'tony', text: `FREE BASKETBALL! I love it!` });
     } else if (/^Final/i.test(e.text)) {
-      const winner = e.home > e.away ? ctx.homeName : ctx.awayName;
-      const margin = Math.abs(e.home - e.away);
       lines.push({ speaker: 'marcus', text: `And that's the ballgame. Final from here: ${ctx.awayName} ${e.away}, ${ctx.homeName} ${e.home}. Thanks for listening.` });
-      lines.push({ speaker: 'tony', text: margin <= 5 ? `What a finish! ${winner} survives that one!` : `${winner} takes care of business. We'll see you next time!` });
+      const wrap = periodRead(state, e, ctx, true);
+      if (wrap) lines.push({ speaker: 'tony', text: wrap });
     } else if (e.quarter === 2) {
       lines.push({ speaker: 'marcus', text: `That's the half. ${ctx.awayName} ${e.away}, ${ctx.homeName} ${e.home}.` });
-      lines.push({ speaker: 'tony', text: e.home === e.away ? `Dead even! Somebody's gotta make adjustments in that locker room.` : `Plenty of basketball left. Let's see who comes out swinging.` });
+      const read = periodRead(state, e, ctx, false);
+      if (read) lines.push({ speaker: 'tony', text: read });
     } else {
       lines.push({ speaker: 'marcus', text: `That'll end the ${periodName(e.quarter)}. ${ctx.awayName} ${e.away}, ${ctx.homeName} ${e.home}.` });
+      const read = periodRead(state, e, ctx, false);
+      if (read) lines.push({ speaker: 'tony', text: read });
     }
     return lines.map(l => ({ ...l, text: sayNames(l.text, ctx) }));
   }
@@ -189,20 +270,7 @@ export function broadcastClipLines(
   if (e.kind === 'ft' && !e.scoring && moment?.crunch) call += ' Big misses at the line.';
   lines.push({ speaker: 'marcus', text: call });
 
-  // Tony reacts to the moments a crowd would.
-  const chip = moment?.chip?.text ?? '';
-  const dunk = e.kind === 'make2' && /throws it down|flushes|dunk/i.test(e.text);
-  let color: string | null = null;
-  if (/BUZZER/.test(chip)) color = pick(TONY_BUZZER, index);
-  else if (/ON FIRE/.test(chip)) color = pick(TONY_FIRE, index);
-  else if (beat?.runText) color = `${beat.runText.replace(/^[A-Z]{2,4}/, m => (m === ctx.homeAbbr ? ctx.homeName : m === ctx.awayAbbr ? ctx.awayName : m))}! ${pick(TONY_RUN, index)}`;
-  else if (beat?.leadChange && late) color = pick(TONY_LEAD, index);
-  else if (e.and1) color = pick(TONY_AND1, index);
-  else if (/heating up/.test(chip)) color = pick(TONY_HEAT, index);
-  else if (e.kind === 'block' && index % 2 === 0) color = pick(TONY_BLOCK, index);
-  else if (e.kind === 'steal' && index % 3 === 0) color = pick(TONY_STEAL, index);
-  else if (e.kind === 'make3' && index % 3 === 0) color = pick(TONY_THREE, index);
-  else if (dunk && index % 2 === 0) color = pick(TONY_DUNK, index);
+  const { color } = replayTo(events, beats, moments, index, ctx);
   if (color) lines.push({ speaker: 'tony', text: color });
 
   return lines.map(l => ({ ...l, text: sayNames(l.text, ctx) }));
