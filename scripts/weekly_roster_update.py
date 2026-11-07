@@ -367,6 +367,7 @@ def main():
     fn = write_changelog(week, teams, today, moves, unret, cuts, ninj)
     subprocess.run([sys.executable,"scripts/build_midseason_start.py"],check=True)
     subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variants (Current + Week 1 start)
+    subprocess.run([sys.executable,"scripts/build_mock_draft.py"],check=True)  # /mock-draft data: 2027 class, draft order, pick owners, team needs
     append_rating_changes(fn)
     print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
 
