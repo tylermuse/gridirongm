@@ -566,6 +566,22 @@ export function Booth() {
     };
   }, [callout, hideCallout]);
 
+  // Phones: the launcher floats over the right-hand side of every table, so
+  // tuck it away while scrolling down and bring it back on the way up.
+  const [tucked, setTucked] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (window.innerWidth >= 640 || y < 80) setTucked(false);
+      else if (y > last + 6) setTucked(true);
+      else if (y < last - 6) setTucked(false);
+      if (Math.abs(y - last) > 6) last = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const showCallout = callout?.key === momentKey && showDot && !open && !onLiveGame;
   const calloutIn = callout?.stage === 'in';
 
@@ -586,7 +602,7 @@ export function Booth() {
   return (
     <>
       {!open && !onLiveGame && (
-        <div className="fixed right-4 bottom-20 sm:bottom-5 sm:right-5 z-30 flex flex-col items-end gap-2">
+        <div className={`fixed right-4 bottom-20 sm:bottom-5 sm:right-5 z-30 flex flex-col items-end gap-2 transition-all duration-200 ${tucked && !showCallout ? 'translate-y-28 opacity-0 pointer-events-none sm:translate-y-0 sm:opacity-100 sm:pointer-events-auto' : ''}`}>
           {showCallout && (
             <div
               ref={calloutRef}
