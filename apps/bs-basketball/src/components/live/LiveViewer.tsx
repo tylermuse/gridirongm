@@ -10,7 +10,7 @@ import { useGameBroadcast } from '@/lib/broadcast/useGameBroadcast';
 import { useSegmentAudio, type SegmentAudio } from '@/lib/broadcast/useSegmentAudio';
 import { broadcastClipLines, silentBeatMs } from '@/lib/broadcast/gameBroadcast';
 import { buildPregameFacts, generateTemplatedPregame, pregameAudioLines, priorScoringAverages, type PregameShow } from '@/lib/broadcast/pregameShow';
-import { generateHalftimeNotes } from '@/lib/broadcast/halftimeNotes';
+import { generateHalftimeNotes, type HalftimeLine } from '@/lib/broadcast/halftimeNotes';
 import { synthesizePlayByPlay, type LiveEvent, type LiveEventKind, type LiveShot } from '@/lib/live/playByPlay';
 import { eventsFromPlayLog, hasPlayLog } from '@/lib/live/fromPlayLog';
 import { computeEventBeats } from '@/lib/live/beats';
@@ -600,6 +600,7 @@ export function LiveViewer({
       {halftimeOpen && (
         <HalftimeCard
           home={home} away={away} score={score} lines={lines} players={players}
+          game={game} otherGames={otherGames} teamById={teamById} notes={halftimeNotes()}
           isPremium={canListen} audio={halftimeAudio} onListen={() => halftimeAudio.toggle(halftimeNotes())}
           onResume={() => { halftimeAudio.stop(); setHalftimeOpen(false); }}
         />
@@ -842,56 +843,203 @@ function ApproxBoxScore({ game, home, away, players, progress }: { game: GameRes
 // Halftime
 // ===========================================================================
 
-function HalftimeCard({ home, away, score, lines, players, isPremium, audio, onListen, onResume }: {
+function HalftimeCard({ home, away, score, lines, players, game, otherGames, teamById, notes, isPremium, audio, onListen, onResume }: {
   home: BasketballTeam; away: BasketballTeam; score: { home: number; away: number }; lines: Map<string, LiveLine>; players: Players;
+  game: GameResult; otherGames: GameResult[]; teamById: Map<string, BasketballTeam>; notes: HalftimeLine[];
   isPremium: boolean; audio: SegmentAudio; onListen: () => void; onResume: () => void;
 }) {
+  const [allNotes, setAllNotes] = useState(false);
   const teamLine = (team: BasketballTeam) => team.playerIds.reduce((s, id) => {
     const l = lines.get(id); if (!l) return s;
-    return { fgm: s.fgm + l.fgm, fga: s.fga + l.fga, tpm: s.tpm + l.tpm, tpa: s.tpa + l.tpa, reb: s.reb + l.reb, to: s.to + l.to };
-  }, { fgm: 0, fga: 0, tpm: 0, tpa: 0, reb: 0, to: 0 });
-  const leader = (team: BasketballTeam) => {
-    let best: { p: BasketballPlayer; l: LiveLine } | null = null;
-    for (const id of team.playerIds) { const l = lines.get(id); const p = players[id]; if (l && p && (!best || l.pts > best.l.pts)) best = { p, l }; }
-    return best;
-  };
+    return { fgm: s.fgm + l.fgm, fga: s.fga + l.fga, tpm: s.tpm + l.tpm, tpa: s.tpa + l.tpa, ftm: s.ftm + l.ftm, fta: s.fta + l.fta, reb: s.reb + l.reb, ast: s.ast + l.ast, to: s.to + l.to, stl: s.stl + l.stl, blk: s.blk + l.blk };
+  }, { fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, to: 0, stl: 0, blk: 0 });
+  const a = teamLine(away), h = teamLine(home);
   const margin = score.home - score.away;
-  const lead = margin === 0 ? 'All square at the break.' : `${margin > 0 ? home.abbreviation : away.abbreviation} leads by ${Math.abs(margin)}.`;
-  const pct = (m: number, a: number) => (a ? `${Math.round((m / a) * 100)}%` : '—');
+  const leadTeam = margin > 0 ? home : margin < 0 ? away : null;
+  const lead = leadTeam ? `${leadTeam.abbreviation} leads by ${Math.abs(margin)}` : 'All square at the break';
+  const pct = (m: number, att: number) => (att ? Math.round((m / att) * 100) : 0);
+
+  // First-half quarter splits (both quarters are complete at the break).
+  const qs = ((game.sportData as { quarterScores?: { home: number; away: number }[] } | undefined)?.quarterScores ?? []).slice(0, 2);
+
+  // Leaders across both teams, like the box score's category leaders.
+  const everyone = [...away.playerIds, ...home.playerIds].flatMap(id => {
+    const l = lines.get(id); const p = players[id] as BasketballPlayer | undefined;
+    return l && p ? [{ id, l, p, team: home.playerIds.includes(id) ? home : away }] : [];
+  });
+  const leaders = ([['Points', 'pts'], ['Rebounds', 'reb'], ['Assists', 'ast']] as const).flatMap(([label, key]) => {
+    const x = [...everyone].sort((p, q) => q.l[key] - p.l[key] || q.l.pts - p.l.pts)[0];
+    return x && x.l[key] > 0 ? [{ label, x, value: x.l[key] }] : [];
+  });
+
+  // Team comparison: the better side of each row is bold in its colour.
+  const rows: { label: string; av: string; hv: string; better: 'away' | 'home' | null }[] = [
+    { label: 'FG', av: `${a.fgm}-${a.fga} · ${pct(a.fgm, a.fga)}%`, hv: `${h.fgm}-${h.fga} · ${pct(h.fgm, h.fga)}%`, better: cmp(pct(a.fgm, a.fga), pct(h.fgm, h.fga)) },
+    { label: '3PT', av: `${a.tpm}-${a.tpa}`, hv: `${h.tpm}-${h.tpa}`, better: cmp(a.tpm, h.tpm) },
+    { label: 'FT', av: `${a.ftm}-${a.fta}`, hv: `${h.ftm}-${h.fta}`, better: cmp(a.ftm, h.ftm) },
+    { label: 'Rebounds', av: `${a.reb}`, hv: `${h.reb}`, better: cmp(a.reb, h.reb) },
+    { label: 'Assists', av: `${a.ast}`, hv: `${h.ast}`, better: cmp(a.ast, h.ast) },
+    { label: 'Turnovers', av: `${a.to}`, hv: `${h.to}`, better: cmp(h.to, a.to) },   // fewer is better: arguments swapped
+  ];
+
+  // Other games at the half, from their real quarter splits.
+  const atHalf = otherGames.map(g => {
+    const q = (g.sportData as { quarterScores?: { home: number; away: number }[] } | undefined)?.quarterScores ?? [];
+    const gh = teamById.get(g.homeTeamId), ga = teamById.get(g.awayTeamId);
+    if (q.length < 2 || !gh || !ga) return null;
+    return { id: g.id, home: gh, away: ga, hs: q[0].home + q[1].home, as: q[0].away + q[1].away };
+  }).filter((x): x is NonNullable<typeof x> => !!x);
+
+  const shownNotes = allNotes ? notes : notes.slice(0, 6);
+  const sideStyle = (team: BasketballTeam, on: boolean) => (on ? { color: team.primaryColor, fontWeight: 800 } : undefined);
+
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 p-4" onClick={onResume}>
-      <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xl" onClick={e => e.stopPropagation()}>
-        <div className="text-[10px] font-black uppercase tracking-widest text-[var(--accent)]">Halftime</div>
-        <div className="flex items-center justify-between mt-2">
-          <div className="text-2xl font-black tabular-nums"><span style={{ color: away.primaryColor }}>{away.abbreviation}</span> {score.away}</div>
-          <div className="text-sm text-[var(--text-sec)]">{lead}</div>
-          <div className="text-2xl font-black tabular-nums">{score.home} <span style={{ color: home.primaryColor }}>{home.abbreviation}</span></div>
+    <div className="absolute inset-0 z-20 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={onResume}>
+      <div
+        role="dialog" aria-label="Halftime report"
+        className="w-full sm:max-w-2xl max-h-[92svh] sm:max-h-[88vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header: the score stays in view while the report scrolls */}
+        <div className="shrink-0 border-b border-[var(--border)] px-4 sm:px-5 pt-3 pb-3">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-black uppercase tracking-widest text-[var(--accent)]">Halftime report</div>
+            <button onClick={onResume} aria-label="Close and start the 2nd half" className="text-[var(--text-sec)] hover:text-[var(--foreground)] text-lg leading-none">✕</button>
+          </div>
+          <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <ScoreBlock team={away} pts={score.away} dim={!!leadTeam && leadTeam.id !== away.id} />
+            <div className="text-center">
+              <div className="text-xs font-semibold text-[var(--text-sec)] whitespace-nowrap">{lead}</div>
+              {qs.length === 2 && (
+                <table className="mt-1 mx-auto text-[11px] tabular-nums text-[var(--text-sec)]">
+                  <thead><tr><th /><th className="px-1.5 font-semibold">Q1</th><th className="px-1.5 font-semibold">Q2</th></tr></thead>
+                  <tbody>
+                    <tr><td className="pr-1 text-left font-semibold">{away.abbreviation}</td><td>{qs[0].away}</td><td>{qs[1].away}</td></tr>
+                    <tr><td className="pr-1 text-left font-semibold">{home.abbreviation}</td><td>{qs[0].home}</td><td>{qs[1].home}</td></tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <ScoreBlock team={home} pts={score.home} dim={!!leadTeam && leadTeam.id !== home.id} right />
+          </div>
+          {isPremium && (
+            <div className="mt-3">
+              <SegmentAudioButton
+                isPremium={isPremium} audio={audio} onListen={onListen}
+                labels={{ idle: '🔊 Listen — Marcus & Tony break down the half', loading: '🔊 Marcus & Tony are recording it…', playing: '⏸ Stop breakdown' }}
+                upsell=""
+              />
+            </div>
+          )}
         </div>
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          {[away, home].map(team => {
-            const t = teamLine(team);
-            const l = leader(team);
-            return (
-              <div key={team.id} className="rounded-xl bg-[var(--surface-2)] p-3 text-xs space-y-1">
-                <div className="font-bold" style={{ color: team.primaryColor }}>{team.city}</div>
-                {l && <div><span className="font-bold">{l.p.firstName[0]}. {l.p.lastName}</span> — {l.l.pts} pts, {l.l.reb} reb, {l.l.ast} ast</div>}
-                <div className="text-[var(--text-sec)]">FG {pct(t.fgm, t.fga)} · 3P {t.tpm}/{t.tpa}</div>
-                <div className="text-[var(--text-sec)]">{t.reb} reb · {t.to} TO</div>
+
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-4 space-y-5">
+          {/* Team stats, side by side */}
+          <section>
+            <div className="grid grid-cols-[1fr_auto_1fr] text-[10px] font-black uppercase tracking-wider text-[var(--text-sec)] pb-1">
+              <span style={{ color: away.primaryColor }}>{away.abbreviation}</span><span>Team stats</span><span className="text-right" style={{ color: home.primaryColor }}>{home.abbreviation}</span>
+            </div>
+            <div className="rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
+              {rows.map(r => (
+                <div key={r.label} className="grid grid-cols-[1fr_auto_1fr] items-center px-3 py-1.5 text-sm tabular-nums">
+                  <span style={sideStyle(away, r.better === 'away')}>{r.av}</span>
+                  <span className="text-[11px] text-[var(--text-sec)] text-center px-2">{r.label}</span>
+                  <span className="text-right" style={sideStyle(home, r.better === 'home')}>{r.hv}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Leaders */}
+          {leaders.length > 0 && (
+            <section>
+              <div className="text-[10px] font-black uppercase tracking-wider text-[var(--text-sec)] pb-1">First-half leaders</div>
+              <div className="grid grid-cols-3 gap-2">
+                {leaders.map(({ label, x, value }) => (
+                  <div key={label} className="rounded-xl bg-[var(--surface-2)] px-2.5 sm:px-3 py-2 min-w-0" title={`${x.p.firstName} ${x.p.lastName}: ${x.l.pts} pts · ${x.l.reb} reb · ${x.l.ast} ast · ${x.l.fgm}-${x.l.fga} FG`}>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)]">{label}</div>
+                    <div className="text-2xl font-black tabular-nums leading-tight">{value}</div>
+                    <div className="text-xs font-bold truncate">{x.p.firstName[0]}. {x.p.lastName}</div>
+                    <div className="text-[11px] font-semibold" style={{ color: x.team.primaryColor }}>{x.team.abbreviation}<span className="hidden sm:inline text-[var(--text-sec)] font-normal tabular-nums"> · {x.l.fgm}-{x.l.fga} FG</span></div>
+                  </div>
+                ))}
               </div>
-            );
-          })}
+            </section>
+          )}
+
+          {/* The booth's read, as text for everyone; Premium hears it */}
+          {notes.length > 0 && (
+            <section>
+              <div className="text-[10px] font-black uppercase tracking-wider text-[var(--text-sec)] pb-2">In the booth</div>
+              <div className="space-y-2.5">
+                {shownNotes.map((n, i) => {
+                  const host = n.speaker === 'marcus' ? PREGAME_HOSTS.stats : PREGAME_HOSTS.hottake;
+                  return (
+                    <div key={i} className="flex gap-2.5">
+                      <span className="text-lg leading-none mt-0.5 shrink-0" aria-hidden>{host.avatar}</span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold" style={{ color: host.color }}>{host.name}</div>
+                        <div className="text-sm">{n.text}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {notes.length > 6 && (
+                <button onClick={() => setAllNotes(v => !v)} className="mt-2 text-xs font-bold" style={{ color: 'var(--accent)' }}>
+                  {allNotes ? 'Show less' : `More from the booth (${notes.length - 6}) ▾`}
+                </button>
+              )}
+              {!isPremium && (
+                <Link href="/pricing" className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-3 py-2 hover:bg-purple-500/20 transition-colors">
+                  <span className="text-xs">🔊 Hear Marcus &amp; Tony break it down out loud</span>
+                  <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Premium →</span>
+                </Link>
+              )}
+            </section>
+          )}
+
+          {/* Around the league at the half */}
+          {atHalf.length > 0 && (
+            <section>
+              <div className="text-[10px] font-black uppercase tracking-wider text-[var(--text-sec)] pb-1">Around the league at the half</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {atHalf.map(g => (
+                  <div key={g.id} className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs tabular-nums">
+                    {([[g.away, g.as], [g.home, g.hs]] as const).map(([t, v]) => (
+                      <div key={t.id} className="flex items-center justify-between"><span className="font-semibold">{t.abbreviation}</span><span className="font-bold">{v}</span></div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
-        <div className="mt-4">
-          <SegmentAudioButton
-            isPremium={isPremium} audio={audio} onListen={onListen}
-            labels={{ idle: '🔊 Listen — Marcus & Tony break down the half', loading: '🔊 Marcus & Tony are recording it…', playing: '⏸ Stop breakdown' }}
-            upsell="to hear Marcus & Tony break down both teams and the second-half adjustments — plus the live audio broadcast."
-          />
+
+        {/* Footer: always reachable */}
+        <div className="shrink-0 border-t border-[var(--border)] px-4 sm:px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button onClick={onResume} className="w-full rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>Start the 2nd half ▶</button>
         </div>
-        <button onClick={onResume} className="mt-2 w-full rounded-lg py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>Start the 2nd half ▶</button>
       </div>
     </div>
   );
+}
+
+function ScoreBlock({ team, pts, dim, right = false }: { team: BasketballTeam; pts: number; dim: boolean; right?: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 min-w-0 ${right ? 'flex-row-reverse text-right' : ''}`}>
+      <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="md" />
+      <div className="min-w-0">
+        <div className="text-3xl font-black tabular-nums leading-none" style={{ opacity: dim ? 0.6 : 1 }}>{pts}</div>
+        <div className="text-xs font-bold truncate" style={{ color: team.primaryColor }}>{team.abbreviation}</div>
+      </div>
+    </div>
+  );
+}
+
+function cmp(av: number, hv: number): 'away' | 'home' | null {
+  return av > hv ? 'away' : hv > av ? 'home' : null;
 }
 
 // ===========================================================================

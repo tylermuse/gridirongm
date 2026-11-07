@@ -23,8 +23,11 @@ const b64 = s => { const bin = atob(s); const u = new Uint8Array(bin.length); fo
 const gltf = await new Promise((res, rej) => new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', res, rej));
 const lib = await loadClipLibrary('./');
 const name = q.get('clip') || 'jump_shot'; const times = (q.get('t') || '0,0.5,1,1.5').split(',').map(Number);
-const clip = lib.clips[name]; const meta = lib.meta[name];
-document.getElementById('l').textContent = `${name} dur=${meta.dur} frames=${meta.frames} jump=${meta.jump} travel=${meta.travel} handPeak=${meta.handPeak} hipsMax=${meta.hipsMax} reach=${meta.reach}`;
+// &base=1 previews the rig's own built-in animation (idle/walk/run in player-fp27.js) instead of the mocap library
+const base = q.get('base') === '1';
+const clip = base ? gltf.animations.find(a => a.name === name) : lib.clips[name];
+const meta = base ? { dur: clip.duration, frames: '-', jump: '-', travel: '-', handPeak: '-', hipsMax: '-', reach: '-' } : lib.meta[name];
+document.getElementById('l').textContent = `${base ? '[base] ' : ''}${name} dur=${meta.dur} frames=${meta.frames} jump=${meta.jump} travel=${meta.travel} handPeak=${meta.handPeak} hipsMax=${meta.hipsMax} reach=${meta.reach}`;
 times.forEach((t, i) => {
   const m = skeletonClone(gltf.scene); m.traverse(o => { if (o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; if (/helmet|Mat3|mask|trim|frosted/i.test(o.name) || /Mat3|mask|trim|frosted/i.test(o.material.name)) o.visible = false; } });
   const useRoot = q.get('root') === '1'; const [px, pz] = useRoot ? pathAt(lib, name, t) : [0, 0];
