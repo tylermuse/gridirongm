@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2e'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2g'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -597,18 +597,33 @@ function choreograph(p) {
     move(inb, t + .3, t + upT + 1.0, ...H(4));
     t += upT;
   } else if (last === 'drb' || last === 'blk') {
-    // outlet from the rebounder (he's under the far basket) to the point guard, then push
-    const reb = (GS.rebounder && actors.includes(GS.rebounder) && off.includes(GS.rebounder)) ? GS.rebounder : off[4]; const [px, pz] = W(-16, -24);
-    move(handler, 0, .9, px, pz); hold(reb, 0, .9, 'hold'); faceTo(reb, 0, 'ball');
-    t = pass(reb, handler, .9, .55, 'over'); hold(handler, t, 99);
-    const upT = isTrans ? 2.4 : 3.8; act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .05, t + upT, ...(isTrans ? W(-5, 14) : H(0)), { lin: isTrans });
-    [1, 2, 3].forEach(i => move(off[i], .1 + i * .12, t + upT - .4 + i * .2, ...(isTrans ? W([-22, 22, -10][i - 1], [40, 40, 14][i - 1]) : H(i)), { lin: isTrans }));
-    move(reb, t + .2, t + upT + 1.2, ...H(4));
-    t += upT;
+    // Off the glass (as on tape): a guard or wing who grabs it turns and pushes it himself; a big makes a quick outlet.
+    const reb = (GS.rebounder && actors.includes(GS.rebounder) && off.includes(GS.rebounder)) ? GS.rebounder : off[4];
+    const rebI = off.indexOf(reb); const wantsBall = (isTrans && p.assister != null) ? off[p.assister] : handler0;   // on the break the assist comes from whoever the log says
+    const pushes = rebI >= 0 && rebI <= 2 && (!isTrans || p.assister == null || wantsBall === reb);
+    const upT = isTrans ? 2.4 : 3.6;
+    if (pushes) {
+      handler = reb; hold(reb, 0, 99); t = .45; faceTo(reb, 0, 'rim');
+      act(handler, t, t + upT + .2, 'dribble'); move(handler, t, t + upT, ...(isTrans ? W(-5, 14) : W(-8, 10)), { lin: isTrans });
+      off.forEach((a, i) => { if (a === reb) return; const lane = isTrans ? [[-5, 20], [-22, 40], [22, 40], [-10, 14], [8, 24]][i] : HOME[i]; move(a, .1 + i * .1, t + upT - .3 + i * .15, ...W(...lane), { lin: isTrans }); });
+      t += upT;
+      if (!isTrans && wantsBall !== handler) { const tp = pass(handler, wantsBall, t, .4); hold(wantsBall, tp, 99); move(wantsBall, t - .6, tp, ...H(0)); move(handler, tp + .1, tp + 1.0, ...H(rebI)); handler = wantsBall; act(handler, tp, tp + 1.6, 'dribble'); t = tp + .2; }
+    } else {
+      handler = wantsBall; const [px, pz] = W(-16, -24);
+      move(handler, 0, .7, px, pz); hold(reb, 0, .6, 'hold'); faceTo(reb, 0, 'ball');
+      t = pass(reb, handler, .6, .5, 'over'); hold(handler, t, 99);
+      act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .05, t + upT, ...(isTrans ? W(-5, 14) : H(0)), { lin: isTrans });
+      off.forEach((a, i) => { if (a === handler || a === reb) return; move(a, .1 + i * .12, t + upT - .4 + i * .2, ...(isTrans ? W([-22, 22, -10, 8][Math.min(i, 3)], [40, 40, 14, 24][Math.min(i, 3)]) : H(i)), { lin: isTrans }); });
+      move(reb, t + .2, t + upT + 1.2, ...H(off.indexOf(reb) >= 0 ? off.indexOf(reb) : 4));
+      t += upT;
+    }
   } else if (last === 'stl') {
-    // the thief has it and goes
+    // the thief has it and goes — up the sideline he's on, with the man he robbed chasing on his hip (as on tape)
     const thief = (GS.thief && actors.includes(GS.thief) && off.includes(GS.thief)) ? GS.thief : off[0]; handler = thief; hold(thief, 0, 99); act(thief, 0, upT0(), 'dribble');
-    const upT = upT0(); move(thief, 0, upT, ...(isTrans ? W(-4, 16) : H(0)), { lin: isTrans });
+    const upT = upT0(); const sideX = (thief.x * ATK) >= 0 ? 1 : -1;
+    if (isTrans) { move(thief, 0, upT * .6, ...W(sideX * 17, -2), { lin: true }); move(thief, upT * .6, upT, ...W(sideX * 9, 18), { lin: true }); } else move(thief, 0, upT, ...H(0));
+    const victim = (GS.victim && actors.includes(GS.victim) && def.includes(GS.victim)) ? GS.victim : null;
+    if (victim) { if (isTrans) { move(victim, .15, upT * .6 + .1, ...W(sideX * 13, -4), { lin: true }); move(victim, upT * .6 + .1, upT + .1, ...W(sideX * 6, 15), { lin: true }); } else move(victim, .15, upT + .1, ...W(sideX * 4, 9), { lin: true }); faceTo(victim, 0, 'ball'); }
     off.forEach((a, i) => { if (a === thief) return; move(a, .1 + i * .1, upT + .3 + i * .15, ...(isTrans ? W([-22, 22, -10, 8][Math.min(i, 3)], [40, 40, 14, 24][Math.min(i, 3)]) : H(i)), { lin: isTrans }); });
     t += upT;
   } else if (last === 'orb') {
@@ -660,7 +675,7 @@ function choreograph(p) {
   if (p.to != null) {
     // ---- turnover ----
     if (p.stl != null) {
-      const thief = def[p.stl]; GS.thief = thief; const victim = off[p.to];
+      const thief = def[p.stl]; GS.thief = thief; const victim = off[p.to]; GS.victim = victim;
       if (victim === handler) { // pokes the dribble away
         move(handler, Ta, Ta + 1.1, ...W(-9, 22)); act(handler, Ta - .4, Ta + 1.2, 'dribble'); hold(handler, ballAt, Ta + 1.05);
         move(thief, Ta + .2, Ta + 1.0, ...W(-10, 19)); act(thief, Ta + .75, Ta + 1.4, 'poke');
@@ -719,15 +734,29 @@ function choreograph(p) {
     // bodies around the rim settle
     off.forEach((o, i) => { if (o !== a) move(o, .2, 1.4, ...W([-6, 6, -4, 5][Math.min(i, 3)], [33, 33, 40, 40][Math.min(i, 3)])); }); def.forEach((d, i) => move(d, .2, 1.3, ...W([-3, 3, -6, 6, 0][i], [38, 38, 34, 34, 30][i])));
   } else if (pt === 'spot' || (pt === 'trans' && p.st === 'three' && assister)) {
-    // swing to the shooter at his spot; defender late on the closeout
-    const sh = finisher; const sw = assister && assister !== handler ? assister : null;
+    const sh = finisher; const sw = assister && assister !== handler ? assister : null; const side = zone[0] >= 0 ? 1 : -1;
+    const kick = sh !== handler && ['lc', 'rc', 'lw', 'rw'].includes(p.zone) && rnd() < .55;
     act(handler, Ta - .3, Ta + 1.0, 'dribble'); toSpot(sh, Ta, Ta + 1.0);
-    let tp = Ta + 1.0;
-    if (sw && sw !== sh) { const [sx, sz] = W(14 * (zone[0] >= 0 ? 1 : -1), 22); move(sw, Ta, Ta + .8, sx, sz); tp = pass(handler, sw, Ta + .9, .4); hold(sw, tp, tp + .35, 'hold'); tp = pass(sw, sh, tp + .35, .45); }
-    else tp = pass(handler, sh, tp, .5);
-    hold(sh, tp, tp + .15, 'hold'); shotT = jumper(sh, tp + .12, 'spot');
-    guardSpot(p.shooter, Ta + .3, tp + .55 + (p.contested ? 0 : .35), p.contested ? 3.2 : 6); contestAct(def[p.shooter], tp + .25, tp + 1.3, p.contested, tp + .55); defenderClose = def[p.shooter];
-    off.forEach((o, i) => { if (o !== sh && o !== handler && o !== sw) move(o, Ta + .2, Ta + 1.4, ...(i >= 3 ? W(i === 4 ? 6 : -7, 36) : H(i))); });
+    let tp = Ta + 1.0; let drv = null;
+    if (kick) {
+      // drive-and-kick (as on tape): the passer attacks the baseline on the shooter's side, the shooter's man steps in to help,
+      // the kick-out beats him back and the closeout arrives with the release
+      drv = sw || handler; const [wx, wz] = W(side * 16, 24);
+      if (drv !== handler) { move(drv, Ta, Ta + .7, wx, wz); tp = pass(handler, drv, Ta + .8, .42); hold(drv, tp, 99); } else { move(drv, Ta, Ta + .6, wx, wz); tp = Ta + .7; }
+      const t0 = tp + .15; act(drv, t0 - .2, t0 + 1.4, 'dribble'); move(drv, t0, t0 + 1.0, ...W(side * 9, 34), { lin: true });      // hard drive to the edge of the paint
+      const dd = def[off.indexOf(drv)]; move(dd, t0 + .05, t0 + 1.05, ...W(side * 6, 33), { shuffle: true });                 // on-ball trails on the hip
+      const hd = def[p.shooter]; move(hd, t0 + .25, t0 + .95, ...W(side * 6, 37), { shuffle: true });                        // shooter's man helps at the rim
+      const tk = t0 + 1.05; tp = pass(drv, sh, tk, .38); move(drv, tk + .3, tk + 1.3, ...W(side * 13, 29));                   // kick-out, then relocate
+      hold(sh, tp, tp + .12, 'hold'); shotT = jumper(sh, tp + .1, 'spot');
+      guardSpot(p.shooter, tk + .05, tp + .5 + (p.contested ? 0 : .35), p.contested ? 3 : 6); contestAct(hd, tp + .25, tp + 1.3, p.contested, tp + .55); defenderClose = hd;
+    } else {
+      // swing to the shooter at his spot; defender late on the closeout
+      if (sw && sw !== sh) { const [sx, sz] = W(14 * side, 22); move(sw, Ta, Ta + .8, sx, sz); tp = pass(handler, sw, Ta + .9, .4); hold(sw, tp, tp + .35, 'hold'); tp = pass(sw, sh, tp + .35, .45); }
+      else tp = pass(handler, sh, tp, .5);
+      hold(sh, tp, tp + .15, 'hold'); shotT = jumper(sh, tp + .12, 'spot');
+      guardSpot(p.shooter, Ta + .3, tp + .55 + (p.contested ? 0 : .35), p.contested ? 3.2 : 6); contestAct(def[p.shooter], tp + .25, tp + 1.3, p.contested, tp + .55); defenderClose = def[p.shooter];
+    }
+    off.forEach((o, i) => { if (o !== sh && o !== handler && o !== sw && o !== drv) move(o, Ta + .2, Ta + 1.4, ...(i >= 3 ? W(i === 4 ? -side * 6 : -side * 7, 36) : H(i))); });
     t = tp + .6;
   } else if (pt === 'pnr') {
     const scr = (finisher && bigs.includes(p.shooter)) ? finisher : off[4]; const useLeft = zone[0] >= 0 ? 1 : -1;
@@ -840,8 +869,14 @@ function choreograph(p) {
     const lane = [def[4], def[3], off[4], off[3], def[2]]; /* defense takes the low spots on both sides, offense the next ones up */ lane.forEach((a, i) => { const [x, z] = W(...spotsL[i]); move(a, t0 - .9, t0 + .4 + i * .08, x, z); act(a, t0 + .3, t0 + 99, 'laneWait'); });
     const others = [...off, ...def].filter(a => !lane.includes(a) && a !== shooterA); others.forEach((a, i) => move(a, t0 - .9, t0 + .6, ...W(i % 2 ? -18 : 18, 22 - i * 2)));
     const walk = move(shooterA, t0 - .9, t0 + .2, lx, lz); walk.t1 = Math.max(walk.t1, walk.t0 + Math.hypot(walk.x - walk.sx, walk.z - walk.sz) / 11);   // a finisher landing under the rim walks back, he doesn't teleport
-    faceTo(shooterA, t0 - .9, 'rim'); const atLine = walk.t1 + .3; ballPlan.push({ t0: ballAt, t1: atLine, rest: [lx, .4, lz], hidden: true }); hold(shooterA, atLine, 99, 'hold');
-    let tt = Math.max(t0 + .6, atLine + .4); const madeList = makes || Array.from({ length: fta }, (_, i) => i < ftm);
+    faceTo(shooterA, t0 - .9, 'rim'); const atLine = walk.t1 + .3;
+    // the lead official stands under the basket and feeds the shooter; the shooter takes his dribbles before each attempt
+    const ref = REFS[1] || null; const [ox, oz] = W(2.5, 45.5); let feedAt = atLine + .4;
+    const restT = Math.max(ballAt, t0 - .3);   // after the ball has dropped through / come off the rim, it goes dead until the official has it
+    if (ref) { ref.moves = []; ref.acts = []; move(ref, t0 - .9, t0 + .5, ox, oz); faceTo(ref, t0 - .9, 'ball'); ballPlan.push({ t0: restT, t1: atLine - .2, rest: [ox, .4, oz], hidden: true }); hold(ref, atLine - .2, feedAt, 'hold'); feedAt = pass(ref, shooterA, feedAt, .55, 'bounce'); }
+    else { ballPlan.push({ t0: restT, t1: atLine, rest: [lx, .4, lz], hidden: true }); feedAt = atLine; }
+    hold(shooterA, feedAt, feedAt + 1.3, 'dribble'); hold(shooterA, feedAt + 1.3, 99, 'hold');   // a couple of dribbles, then set
+    let tt = feedAt + 1.6; const madeList = makes || Array.from({ length: fta }, (_, i) => i < ftm);
     for (let i = 0; i < fta; i++) {
       const tStart = tt; const fm = META('free_throw'); const rel = fm ? tStart + (fm.release ?? fm.handPeak) : tStart + 1.42;
       if (fm) act(shooterA, tStart, tStart + Math.min(fm.dur, fm.handPeak + 1.0), 'ft', { clip: 'free_throw', t0: tStart }); else act(shooterA, tStart, tStart + 2.0, 'ft', { jump: tStart + 1.15 });
@@ -852,7 +887,10 @@ function choreograph(p) {
       if (madeFt) { ballPlan.push({ t0: rel + Tf, t1: rel + Tf + 1.4, net: { at: rel + Tf, x: rimV.x, z: rimV.z } }); ev(rel + Tf, () => { sndSwish(); GS.score[GS.off] += 1; renderBug(); for (const n of netMats) if (Math.abs(n.net.position.z - rimV.z) < 1) n.t = T; crowd(.2, .6); }); }
       else { ballPlan.push({ t0: rel + Tf, t1: rel + Tf + .9, rimOut: { from: target, T: .9, to: V3(rimV.x + 2 * ATK, 5, rimV.z - ATK * 3) } }); ev(rel + Tf, () => { sndRim(); sndPlay('groan', .2); }); }
       const last = i === fta - 1;
-      if (!last) { const back = rel + Tf + (madeFt ? 1.0 : .9); ballPlan.push({ t0: rel + Tf + (madeFt ? 1.2 : .8), t1: back + .2, rest: [lx, .4, lz], hidden: true }); hold(shooterA, back + .2, 99, 'hold'); tt = back + .3; }
+      if (!last) {   // the ball comes back through the official: he collects it, feeds the shooter again, the shooter dribbles and resets
+        const back = rel + Tf + (madeFt ? 1.0 : .9);
+        if (ref) { ballPlan.push({ t0: rel + Tf + (madeFt ? 1.2 : .8), t1: back + .3, rest: [ox, .4, oz], hidden: true }); hold(ref, back + .3, back + .9, 'hold'); const fa = pass(ref, shooterA, back + .9, .55, 'bounce'); hold(shooterA, fa, fa + 1.2, 'dribble'); hold(shooterA, fa + 1.2, 99, 'hold'); tt = fa + 1.5; }
+        else { ballPlan.push({ t0: rel + Tf + (madeFt ? 1.2 : .8), t1: back + .2, rest: [lx, .4, lz], hidden: true }); hold(shooterA, back + .2, 99, 'hold'); tt = back + .3; } }
       else { tt = rel + Tf + (madeFt ? 1.1 : .9); if (!madeFt) { const reb = def[4]; move(reb, rel + .2, rel + Tf + .8, rimV.x + 2 * ATK, rimV.z - ATK * 3.5, { lin: true }); act(reb, rel + Tf + .5, rel + Tf + 1.2, 'catch'); hold(reb, rel + Tf + .9, 99, 'hold'); GS.rebounder = reb; } }
     }
     ev(tt - .1, () => { GS.score[0] = p.h; GS.score[1] = p.a; renderBug(); GS.lastEnd = madeList[fta - 1] ? 'ft' : 'drb'; });
@@ -1120,7 +1158,7 @@ function substitute(sideIdx, five) { // five: player specs in slot order; replac
   five.forEach((p, i) => { const cur = arr[i]; if (cur && cur.id === p.id) return; if (cur) { scene.remove(cur.root); actors.splice(actors.indexOf(cur), 1); }
     const a = makePlayer(t, p.num ?? (i + 1) * 11, { heightFt: p.heightFt, skin: p.skin, name: p.name, id: p.id, ratings: p.ratings }); a.slot = i; a.teamIdx = sideIdx;
     const live = cur && ['stl', 'drb', 'blk', 'orb'].includes(GS.lastEnd);   // ball never went dead: no walk-on from the bench, he's simply there
-    if (live) { a.x = cur.x; a.z = cur.z; a.face = cur.face; if (GS.thief === cur) GS.thief = a; if (GS.rebounder === cur) GS.rebounder = a; } else { a.x = (sideIdx === 0 ? -1 : 1) * 29; a.z = -6 + i * 3; }
+    if (live) { a.x = cur.x; a.z = cur.z; a.face = cur.face; if (GS.thief === cur) GS.thief = a; if (GS.victim === cur) GS.victim = a; if (GS.rebounder === cur) GS.rebounder = a; } else { a.x = (sideIdx === 0 ? -1 : 1) * 29; a.z = -6 + i * 3; }
     a.planX = a.x; a.planZ = a.z; place(a); arr[i] = a; });
   if (O) setOffense(GS.off);
 }
@@ -1201,12 +1239,12 @@ function runPossession(p) {
   // continuity: putback only makes sense right after our own offensive board
   if (p.pt === 'putback' && GS.lastEnd !== 'orb') p.pt = 'drive';
   shotClockT = 24; renderBug(`${team(p.off).abbr} BALL`);
+  // referees: trail + lead (before the choreography, which may give the lead official a job at the free-throw line)
+  REFS.forEach((r, i) => { r.moves = []; r.acts = []; move(r, 0, 2.2, ...W(i ? 26 : -26, i ? 39 : 2)); faceTo(r, 0, 'ball'); });
   const total = choreograph(p);
   if (p.pt === 'putback') { const reb = (GS.rebounder && actors.includes(GS.rebounder)) ? GS.rebounder : O[4]; ballPlan.unshift({ t0: -1, t1: 0, held: reb, mode: 'hold' }); }
   ballPlan.sort((x, y) => x.t0 - y.t0);
   { const live = ballPlan.find(g => g.shot || g.dunkIn || g.loose || g.flyTo); fillLife(live ? live.t0 - .2 : total - 1); }
-  // referees: trail + lead
-  REFS.forEach((r, i) => { r.moves = []; r.acts = []; move(r, 0, Math.min(2.5, total * .4), ...W(i ? 26 : -26, i ? 39 : 2)); faceTo(r, 0, 'ball'); });
   // camera cuts: rim finishes get the baseline angle
   if (CAM.auto) { const rimAct = [...O, ...D].flatMap(a => a.acts).find(c => c.kind === 'dunk' || c.kind === 'layup'); if (rimAct) ev(rimAct.jump - .55, () => cutTo(p.dunk ? 'under' : 'baseline', rimAct.jump + 1.35)); }
   ev(.01, () => { if (CAM.cut && T > CAM.cutUntil) CAM.cut = null; });

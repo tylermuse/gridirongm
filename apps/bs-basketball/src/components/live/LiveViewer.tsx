@@ -251,7 +251,13 @@ export function LiveViewer({
     [game?.id, real],
   );
   const halftimeIdx = useMemo(() => events.findIndex(e => e.kind === 'period' && e.quarter === 2), [events]);
-  const startBroadcast = useCallback((fromIndex: number) => {
+  // Read live by the broadcast so its Court Cam hold tracks what's on screen now.
+  const sim3dActiveRef = useRef(sim3dActive);
+  sim3dActiveRef.current = sim3dActive;
+  const sim3dEnabledRef = useRef(sim3dEnabled);
+  sim3dEnabledRef.current = sim3dEnabled;
+  /** `open`: start with the show open (false when picking back up after a skip). */
+  const startBroadcast = useCallback((fromIndex: number, open = true) => {
     if (!home || !away || fromIndex >= events.length) return;
     const ctx = { homeAbbr: home.abbreviation, awayAbbr: away.abbreviation, homeName: home.city, awayName: away.city };
     setPaused(false);
@@ -259,7 +265,7 @@ export function LiveViewer({
     broadcast.start({
       count: events.length,
       fromIndex,
-      linesFor: i => broadcastClipLines(events, beats, moments, i, fromIndex, ctx),
+      linesFor: i => broadcastClipLines(events, beats, moments, i, open ? fromIndex : -1, ctx),
       onShowPlay: i => setCursor(c => Math.max(c, i + 1)),
       onCallDone: i => {
         // Halftime break opens after Marcus has called the half (not over it).
@@ -269,11 +275,20 @@ export function LiveViewer({
         }
       },
       postClipDelayMs: () => BROADCAST_DWELL[speedRef.current] ?? 0,
-      silentBeatMs: i => silentBeatMs(events[i], speedRef.current === 'max' ? 5 : speedRef.current),
+      silentBeatMs: i => {
+        // the rest of a possession the Court Cam already animated flashes through
+        const e = events[i];
+        if (sim3dEnabledRef.current && e?.possIdx != null && e.possIdx === animatedPossRef.current) return 140;
+        return silentBeatMs(e, speedRef.current === 'max' ? 5 : speedRef.current);
+      },
+      // With Court Cam on, the possession plays out first and the call follows,
+      // so the voice never gives away a shot that's still in the air.
+      gate: () => !sim3dActiveRef.current,
+      willAnimate: i => sim3dEnabledRef.current && events[i]?.possIdx != null && events[i].possIdx !== events[i - 1]?.possIdx,
     });
   }, [home, away, events, beats, moments, real, halftimeIdx, broadcast]);
   const toggleBroadcast = () => {
-    if (broadcastOn) broadcast.stop(); else startBroadcast(cursor);
+    if (broadcastOn && broadcast.status !== 'error') broadcast.stop(); else startBroadcast(cursor);
   };
   // Mirror the viewer's holds (pause, halftime, pregame) onto the broadcast.
   const held = paused || halftimeOpen || pregameOpen;
@@ -376,7 +391,7 @@ export function LiveViewer({
     setHalftimeOpen(false);
     halftimeAudio.stop();
     // A running broadcast picks up from the new spot; skipping to the end stops it.
-    if (broadcastDriving) { if (target < events.length) startBroadcast(target); else broadcast.stop(); }
+    if (broadcastDriving) { if (target < events.length) startBroadcast(target, false); else broadcast.stop(); }
   }
   const halftimeNotes = () => generateHalftimeNotes({ home, away, score, lines, players, seasonPpg });
 
@@ -534,7 +549,7 @@ export function LiveViewer({
                 ? (broadcast.status === 'buffering' ? '🔊 Buffering…'
                   : broadcast.status === 'blocked' ? '🔊 Tap to start'
                   : broadcast.status === 'paused' ? '🔊 Paused'
-                  : broadcast.status === 'error' ? '🔊 Error'
+                  : broadcast.status === 'error' ? '🔊 Retry'
                   : broadcast.status === 'done' ? '🔊 Broadcast ✓'
                   : '🔊 On air')
                 : '🔊 Broadcast'}
@@ -565,7 +580,9 @@ export function LiveViewer({
               ? <>The live audio broadcast is a Premium feature. <Link href="/pricing" className="font-bold text-[var(--accent)]">Go Premium →</Link></>
               : broadcast.errorCode === 'not_configured'
                 ? 'The audio broadcast isn\'t set up on this server yet.'
-                : `Broadcast error: ${broadcast.error ?? 'audio unavailable'}`}
+                : broadcast.errorCode === 'tts_quota'
+                  ? 'The studio voices are over capacity right now. The game keeps playing without audio.'
+                  : 'The audio broadcast dropped out. The game keeps playing, and you can retry any time.'}
           </span>
           <button onClick={broadcast.stop} className="font-bold text-[var(--text-sec)]">✕</button>
         </div>

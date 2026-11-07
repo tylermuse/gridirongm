@@ -22,6 +22,8 @@ import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu'
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
+import { broadcastClipLines } from '@/lib/engine/gameBroadcast';
+import { UNLOCK_AUDIO } from '@/lib/engine/unlockAudio';
 import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { trackEvent } from '@bs/core/analytics/track';
@@ -55,10 +57,15 @@ function mergePlayerStats(
 // below + server-side in /api/game-audio). This env flag is only a local-dev
 // override so it can be tested on localhost without a premium account.
 const GAME_AUDIO_DEV_OVERRIDE = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
+/** What to tell the player when a broadcast stops. The game itself keeps playing. */
+function broadcastErrorText(code: string | null): string {
+  if (code === 'tts_quota') return 'The studio voices are over capacity right now. The game keeps playing without audio.';
+  if (code === 'premium_required' || code === 'auth_required') return 'The live audio broadcast is a Premium feature.';
+  if (code === 'not_configured') return "The audio broadcast isn't set up on this server yet.";
+  return 'The audio broadcast dropped out. The game keeps playing, and you can retry any time.';
+}
 /** 3D live sim free for everyone (launch window from 2026-10-23; decide with /admin/analytics → 3D Sim cohorts around 2026-11-06). */
 const SIM3D_FREE_FOR_ALL = true;
-/** A 50ms silent MP3: played inside the tap to unlock audio on phones. */
-const HALFTIME_UNLOCK_AUDIO = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwwAAAAAAAAAAAAEluZm8AAAAPAAAABAAAAlgAenp6enp6enp6enp6enp6enp6enp6enp6pqampqampqampqampqampqampqampqamptPT09PT09PT09PT09PT09PT09PT09PT09P/////////////////////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQCcQAAAAAAAAJY+/rsqgAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -1008,9 +1015,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Skipped when the crossing lands on a finished game (End Game / max speed
   // jump straight past the half) — the report would just sit on top of the
   // final score. The Halftime Report button still opens it on demand.
+  // During a broadcast it opens from onCallDone instead, once Marcus has called
+  // the half, so the report doesn't cut him off.
   const prevHalftimeReachedRef = useRef(halftimeReached);
+  const broadcastDrivingRef = useRef(false);
+  const halftimeAutoOpenedRef = useRef(false);
   useEffect(() => {
-    if (halftimeReached && !prevHalftimeReachedRef.current && !isFinished) {
+    if (halftimeReached && !prevHalftimeReachedRef.current && !isFinished && !broadcastDrivingRef.current) {
+      halftimeAutoOpenedRef.current = true;
       resumeAfterHalftimeRef.current = true;
       setShowHalftimeReport(true);
       setIsPlaying(false);
@@ -1035,7 +1047,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       audio.play().then(() => setHtAudio('playing')).catch(() => setHtAudio('error'));
       return;
     }
-    audio.src = HALFTIME_UNLOCK_AUDIO;
+    audio.src = UNLOCK_AUDIO;
     audio.play().catch(() => { /* unlock only */ });
     const ev = allEvents[halftimeEventIdx];
     if (!ev || !homeTeam || !awayTeam) return;
@@ -1073,7 +1085,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     resumeAfterHalftimeRef.current = false;
   };
 
-  // Audio broadcast (Phase 2, flag-gated). Per-play, audio-driven: the spoken
+  // Audio broadcast (Premium). Per-play, audio-driven: the spoken
   // call reveals each play and gates the advance, so the voice stays in sync
   // with the on-screen action. Narrates from the current play forward.
   // Live audio broadcast is a Premium feature (founders + admins grandfathered).
@@ -1134,39 +1146,82 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     });
   }, []);
   const broadcast = useGameBroadcast();
+  const { stop: stopBroadcast, seek: seekBroadcast, notify: notifyBroadcast } = broadcast;
   const broadcastOn = broadcast.status !== 'idle';
+  // Driving = the audio is the clock. A run that errored or finished hands the
+  // reveal back to the page's own timers, so it can never leave the game frozen.
+  const broadcastDriving = broadcastOn && broadcast.status !== 'error' && broadcast.status !== 'done';
+  broadcastDrivingRef.current = broadcastDriving;
+  // Read live by the broadcast: a Live Coach game grows its event list as it goes.
+  const allEventsRef = useRef(allEvents);
+  allEventsRef.current = allEvents;
+  const revealedCountRef = useRef(revealedCount);
+  revealedCountRef.current = revealedCount;
+  const sim3dActiveRef = useRef(sim3dActive);
+  sim3dActiveRef.current = sim3dActive;
+  const sim3dDeadIdRef = useRef<number | null>(null);
+  const sim3dOnRef = useRef(sim3dOn);
+  sim3dOnRef.current = sim3dOn;
   // Live speed ref so the broadcast can read the current speed for inter-call
   // dwell without restarting. Slower speed = longer gaps; the call is never cut.
   const speedRef = useRef(speed);
   speedRef.current = speed;
   const toggleBroadcast = useCallback(() => {
-    if (broadcastOn) { broadcast.stop(); return; }
-    if (!homeTeam || !awayTeam) return;
+    if (broadcastOn && broadcast.status !== 'error') { broadcast.stop(); return; }
+    if (!homeTeam || !awayTeam || isFinished) return;
     setIsPlaying(true);
     const fromIndex = Math.max(0, revealedCount - 1);
+    const homeAbbr = homeTeam.abbreviation, awayAbbr = awayTeam.abbreviation;
+    const homeName = homeTeam.city, awayName = awayTeam.city;
     const BROADCAST_DWELL: Record<Speed, number> = { '0.5x': 4000, '1x': 2000, '2x': 800, '5x': 200, 'max': 0 };
     broadcast.start({
-      events: allEvents,
       fromIndex,
-      homeAbbr: homeTeam.abbreviation,
-      awayAbbr: awayTeam.abbreviation,
-      homeName: homeTeam.city,
-      awayName: awayTeam.city,
+      count: () => allEventsRef.current.length,
+      linesFor: (i) => broadcastClipLines(allEventsRef.current, i, homeAbbr, awayAbbr, fromIndex, homeName, awayName),
+      isFinished: () => !liveEngineRef.current || liveEngineRef.current.isFinished(),
       // The broadcast is the clock — it reveals each play as its call begins.
-      onShowPlay: (i) => setRevealedCount(prev => Math.max(prev, i + 1)),
+      onShowPlay: (i) => {
+        if (i + 1 > revealedCountRef.current) setAnimationComplete(false);
+        setRevealedCount(prev => Math.max(prev, i + 1));
+      },
+      onCallDone: (i) => {
+        if (allEventsRef.current[i]?.type !== 'halftime' || halftimeAutoOpenedRef.current) return;
+        halftimeAutoOpenedRef.current = true;
+        resumeAfterHalftimeRef.current = true;
+        setShowHalftimeReport(true);
+        setIsPlaying(false);
+      },
       postClipDelayMs: () => BROADCAST_DWELL[speedRef.current] ?? 0,
+      // With the 3D sim on, the call waits for the whistle (no spoiling a play
+      // still running) and the next play waits for the sim to finish this one.
+      gate: (stage, i) => {
+        if (!sim3dActiveRef.current) return true;
+        return stage === 'call' && sim3dDeadIdRef.current === allEventsRef.current[i]?.id;
+      },
+      willAnimate: () => sim3dOnRef.current,
     });
-  }, [broadcastOn, broadcast, homeTeam, awayTeam, allEvents, revealedCount]);
+  }, [broadcastOn, broadcast, homeTeam, awayTeam, revealedCount, isFinished]);
 
   // While the broadcast drives the reveal, mirror the game's play/pause onto
   // the audio so the Pause button stops the call too.
   useEffect(() => {
-    if (!broadcastOn) return;
+    if (!broadcastDriving) return;
     if (isPlaying) broadcast.resume(); else broadcast.pause();
-  }, [isPlaying, broadcastOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPlaying, broadcastDriving]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The play-call menu holds the game paused. However it's dismissed (Skip Qtr,
+  // Auto-sim, Live Coach off), the broadcast has to pick back up, not sit waiting
+  // for someone to press Play.
+  const wasLiveCoachPausedRef = useRef(liveCoachPaused);
+  useEffect(() => {
+    if (wasLiveCoachPausedRef.current && !liveCoachPaused && broadcastDriving) setIsPlaying(true);
+    wasLiveCoachPausedRef.current = liveCoachPaused;
+  }, [liveCoachPaused, broadcastDriving]);
+  // A Live Coach play just landed: the broadcast may be waiting to call it.
+  useEffect(() => { notifyBroadcast(); }, [totalEvents, notifyBroadcast]);
   // While the 3D sim is still running a play, its line isn't news yet: keep it out of the feed and the bug until the snap is over
   // While the 3D sim plays a snap its text is held back (no spoilers); it shows at the whistle, before the sim's result callout.
   const [sim3dDeadId, setSim3dDeadId] = useState<number | null>(null);
+  sim3dDeadIdRef.current = sim3dDeadId;
   // Launch experiment telemetry: one row per game-page visit saying whether 3D was on (device cohort for admin_sim3d_cohorts)
   const sim3dViewSentRef = useRef(false);
   useEffect(() => {
@@ -1226,7 +1281,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // ── Live Coach: when engine is active, auto-run AI plays as needed ──
   // Fires when we run out of events to reveal AND the engine is still going.
   useEffect(() => {
-    if (broadcastOn) return; // broadcast drives the reveal; don't auto-run plays
+    // The broadcast drives the reveal: the next play is only needed once it has
+    // caught up, after the current call and its dwell.
+    if (broadcastDriving && broadcast.status !== 'waiting') return;
     if (pregameOpen) return; // nothing plays behind the Pregame Show
     if (sim3dActive) return; // the 3D sim is still showing the last play
     if (liveEngineRef.current === null) return;
@@ -1281,12 +1338,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       const bigExtra = isBigMoment
         ? (speed === '0.5x' ? 8000 : speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
         : 0;
-      const delay = Math.max(300, animMs + pauseMs + bigExtra);
+      // A broadcast already paced this with the call and its dwell.
+      const delay = broadcastDriving ? 0 : Math.max(300, animMs + pauseMs + bigExtra);
 
-      // Reveal the event immediately (so animation starts)
-      setRevealedCount(prev => prev + 1);
-      setIsPlaying(true);
-      setAnimationComplete(false);
+      // Reveal the event immediately (so animation starts) — unless a broadcast
+      // is driving, which reveals it once its call is ready to go.
+      if (!broadcastDriving) {
+        setRevealedCount(prev => prev + 1);
+        setIsPlaying(true);
+        setAnimationComplete(false);
+      }
 
       // After delay, clear the guard and bump tick to re-trigger this effect
       setTimeout(() => {
@@ -1294,7 +1355,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents, sim3dActive, tabHidden]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastDriving, broadcast.status, pregameOpen, animationComplete, allEvents, sim3dActive, tabHidden]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -1318,7 +1379,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     clearNextPlayTimer();
     // When the broadcast is driving, the audio gates the advance — skip the
     // speed-timer path entirely so the two don't race.
-    if (broadcastOn) return;
+    if (broadcastDriving) return;
     if (pregameOpen) return; // hold until Kick Off
     // a background tab never fires the 2D field's animation frames: don't wait on them there, or the CPU's drive freezes
     if ((!animationComplete && !tabHidden) || !isPlaying || isFinished || speed === 'max') return;
@@ -1359,7 +1420,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen, sim3dActive, tabHidden, sim3dOn]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastDriving, pregameOpen, sim3dActive, tabHidden, sim3dOn]);
 
   // ── Live game clock: tick the scorebug clock down between play reveals ──
   // 2026-09-20/21 spec (gojostyttt, 4 votes on #football-feature-vote). Each
@@ -1387,7 +1448,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const startSecs = parseClock(currentEvent.timeStr);
     setClockSecs(startSecs);
     // Only tick while actively watching the pre-computed stream.
-    if (!isPlaying || isFinished || speed === 'max' || broadcastOn) return;
+    if (!isPlaying || isFinished || speed === 'max') return;
     // Floor at the next event's clock within the same quarter (or 0:00 at a
     // quarter boundary) so the ticking clock never passes the next real snap.
     const nextEv = allEvents[revealedCount];
@@ -1409,10 +1470,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setClockSecs(prev => (prev == null || prev <= floorSecs ? prev : prev - 1));
     }, tickMs);
     return () => clearInterval(iv);
-  }, [revealedCount, isPlaying, isFinished, speed, liveCoachPaused, broadcastOn, currentEvent, allEvents]);
+  }, [revealedCount, isPlaying, isFinished, speed, liveCoachPaused, currentEvent, allEvents]);
 
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
+    stopBroadcast();
     // If the live engine is active, run it to completion first
     if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
       lcTelemetryRef.current.endedBy = 'end_game';
@@ -1439,7 +1501,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
     setAnimationComplete(true);
     setIsPlaying(false);
-  }, [totalEvents, clearNextPlayTimer, liveEnginePivotIdx]);
+  }, [totalEvents, clearNextPlayTimer, liveEnginePivotIdx, stopBroadcast]);
 
   // Skip to the start of the next quarter. Community ask (idontknow01754) for a
   // fast-forward-by-quarter control. Reuses the existing reveal path — it just
@@ -1471,6 +1533,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           setRevealedCount((liveEnginePivotIdx ?? 0) + updated.length);
           return updated;
         });
+        // A running broadcast picks up from the new spot.
+        if (broadcastDrivingRef.current) seekBroadcast(allEvents.length + collected.length - 1);
       }
       setLiveCoachPaused(false);
       setAnimationComplete(true);
@@ -1484,16 +1548,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const nextIdx = allEvents.findIndex(ev => ev.quarter > curQuarter);
     setRevealedCount(nextIdx === -1 ? totalEvents : nextIdx + 1);
     setAnimationComplete(true);
-  }, [isFinished, clearNextPlayTimer, revealedCount, allEvents, totalEvents, liveEnginePivotIdx]);
+    // A running broadcast picks up from the new spot; skipping to the end stops it.
+    if (broadcastDrivingRef.current) { if (nextIdx === -1) stopBroadcast(); else seekBroadcast(nextIdx); }
+  }, [isFinished, clearNextPlayTimer, revealedCount, allEvents, totalEvents, liveEnginePivotIdx, seekBroadcast, stopBroadcast]);
 
   useEffect(() => {
     if (speed === 'max' && isPlaying && !isFinished && !pregameOpen) {
       clearNextPlayTimer();
+      stopBroadcast();
       setRevealedCount(totalEvents);
       setAnimationComplete(true);
       setIsPlaying(false);
     }
-  }, [speed, isPlaying, isFinished, totalEvents, clearNextPlayTimer, pregameOpen]);
+  }, [speed, isPlaying, isFinished, totalEvents, clearNextPlayTimer, pregameOpen, stopBroadcast]);
 
   // Add play-type icon to event descriptions that don't already have one
   // (Live Coach events already have icons; this covers CPU/pre-computed events)
@@ -2090,7 +2157,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             enabled={sim3dOn && !pregameOpen}
             event={currentEvent}
             nextEvent={engineSnapshot ? null : (allEvents[revealedCount] ?? null)}
-            disabled={speed === 'max' || broadcastOn}
+            disabled={speed === 'max'}
             homeTeam={homeTeam}
             awayTeam={awayTeam}
             homePlayers={homePlayers}
@@ -2167,7 +2234,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         lastEv.isScoring || lastEv.type === 'field_goal_good' ||
                         lastEv.type === 'field_goal_miss'
                       );
-                      if (isBig) {
+                      if (isBig && !broadcastDriving) {
                         pendingAutoPlayRef.current = true;
                         const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
                         setTimeout(() => {
@@ -2407,19 +2474,20 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               📻 Halftime Report
             </button>
           )}
-          {/* Audio Broadcast — Phase 1 spike, hidden unless the flag is on. */}
+          {/* Audio Broadcast (Premium) */}
           {canBroadcast && (
             <button
               onClick={toggleBroadcast}
               className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 broadcastOn ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
-              title="Audio play-by-play broadcast (beta — the call drives the play reveal)"
+              title="Live audio play-by-play with Marcus Cole and Tony Blaze"
             >
               {broadcastOn
                 ? (broadcast.status === 'buffering' ? '🔊 Buffering…'
                   : broadcast.status === 'blocked' ? '🔊 Tap to Start'
-                  : broadcast.status === 'error' ? '🔊 Error'
+                  : broadcast.status === 'paused' ? '🔊 Paused'
+                  : broadcast.status === 'error' ? '🔊 Retry'
                   : broadcast.status === 'done' ? '🔊 Broadcast ✓'
                   : '🔊 On')
                 : '🔊 Broadcast'}
@@ -2435,8 +2503,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             ▶ Tap to start the audio broadcast
           </button>
         )}
-        {canBroadcast && broadcast.status === 'error' && broadcast.error && (
-          <div className="text-xs text-red-500 px-1">Broadcast error: {broadcast.error}</div>
+        {canBroadcast && broadcast.status === 'error' && (
+          <div className="text-xs text-red-500 px-1">{broadcastErrorText(broadcast.errorCode)}</div>
         )}
 
 
@@ -2962,7 +3030,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         lastEv.isScoring || lastEv.type === 'field_goal_good' ||
                         lastEv.type === 'field_goal_miss'
                       );
-                      if (isBig) {
+                      if (isBig && !broadcastDriving) {
                         pendingAutoPlayRef.current = true;
                         const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
                         setTimeout(() => {
