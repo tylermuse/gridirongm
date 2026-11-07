@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2i'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2j'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -598,6 +598,8 @@ function choreograph(p) {
     if (HAS('catch')) act(to, t0 + dur - .45, t0 + dur + .35, 'catch', { clip: 'catch', t0: t0 + dur - .45 }); else act(to, t0 + dur - .25, t0 + dur + .2, 'catch');
     ev(t0, () => sndNoise(.06, 700, .9, .12)); ballAt = t0 + dur; return t0 + dur; };
   const defOf = i => def[i];
+  /** Who takes the ball out: the nearest offensive player other than the point guard (slots 1–4). */
+  const inbounderSlot = (x, z) => [4, 3, 1, 2].reduce((b, i) => Math.hypot(off[i].x - x, off[i].z - z) < Math.hypot(off[b].x - x, off[b].z - z) ? i : b, 4);
 
   // ---- 1. Where things start: bring the ball up (continuity with the last possession) ----
   const last = GS.lastEnd;
@@ -606,20 +608,25 @@ function choreograph(p) {
     // the rebounder has it under the rim already (ballPlan is seeded by the caller)
     handler = shooter || off[4]; t = 0;
   } else if (last === 'tip' || last === 'dead') {
-    // sideline inbound at half court
-    const inb = off[4]; const [ix, iz] = W(-27.5, -2); const [px, pz] = W(-18, -10);
-    move(inb, 0, 1.2, ix, iz); move(handler, 0, 1.2, px, pz); hold(inb, 0, 1.5, 'hold');
-    t = pass(inb, handler, 1.5, .45); hold(handler, t, 99); act(handler, t, t + 2.2, 'dribble'); faceTo(inb, 0, 'ball');
-    for (const i of [1, 2, 3]) move(off[i], 0, 2.2 + i * .2, ...H(i)); move(inb, t + .2, t + 2.4, ...H(4));
+    // sideline inbound at half court: whoever is nearest takes it out, and the pass waits until he's out of bounds
+    const [ix, iz] = W(-27.5, -2); const [px, pz] = W(-18, -10);
+    const inbI = inbounderSlot(ix, iz); const inb = off[inbI];
+    const mi = move(inb, 0, 1.2, ix, iz), mh = move(handler, 0, 1.2, px, pz);
+    const tIn = Math.max(1.5, mi.t1 + .35, mh.t1 - .3); hold(inb, 0, tIn, 'hold');
+    t = pass(inb, handler, tIn, .45); hold(handler, t, 99); act(handler, t, t + 2.2, 'dribble'); faceTo(inb, 0, 'ball');
+    for (const i of [1, 2, 3, 4]) if (i !== inbI) move(off[i], 0, 2.2 + i * .2, ...H(i)); move(inb, t + .2, t + 2.4, ...H(inbI));
     t += .3; move(handler, t, t + 1.6, ...H(0)); t += 1.6;
   } else if (last === 'make' || last === 'ft' || last === 'to') {
-    // inbound from under the basket just scored on (behind the offense now)
-    const inb = off[4]; const [ix, iz] = W(3, -49); const [px, pz] = W(-12, -38);
-    move(inb, 0, 1.0, ix, iz); move(handler, 0, 1.0, px, pz); hold(inb, 0, 1.3, 'hold'); faceTo(inb, 0, 'ball');
-    t = pass(inb, handler, 1.3, .4); hold(handler, t, 99);
+    // inbound from under the basket just scored on (behind the offense now). Whoever is nearest takes it out, and the
+    // pass waits until he's actually behind the baseline (move() stretches a long walk to a real running speed).
+    const [ix, iz] = W(3, -49); const [px, pz] = W(-12, -38);
+    const inbI = inbounderSlot(ix, iz); const inb = off[inbI];
+    const mi = move(inb, 0, 1.0, ix, iz), mh = move(handler, 0, 1.0, px, pz);
+    const tIn = Math.max(1.3, mi.t1 + .3, mh.t1 - .3); hold(inb, 0, tIn, 'hold'); faceTo(inb, 0, 'ball');
+    t = pass(inb, handler, tIn, .4); hold(handler, t, 99);
     const upT = isTrans ? 2.6 : 4.6; act(handler, t, t + upT + .2, 'dribble'); move(handler, t + .1, t + upT, ...(isTrans ? W(-6, 14) : H(0)), { lin: isTrans });
-    [1, 2, 3].forEach(i => move(off[i], .2 + i * .15, t + upT - .3 + i * .2, ...(isTrans ? W([-22, 22, -10][i - 1], [40, 40, 14][i - 1]) : H(i)), { lin: isTrans }));
-    move(inb, t + .3, t + upT + 1.0, ...H(4));
+    [1, 2, 3, 4].forEach(i => { if (i !== inbI) move(off[i], .2 + i * .15, t + upT - .3 + i * .2, ...(isTrans ? W([-22, 22, -10, 8][i - 1], [40, 40, 14, 24][i - 1]) : H(i)), { lin: isTrans }); });
+    move(inb, t + .3, t + upT + 1.0, ...H(inbI));
     t += upT;
   } else if (last === 'drb' || last === 'blk') {
     // Off the glass (as on tape): a guard or wing who grabs it turns and pushes it himself; a big makes a quick outlet.
