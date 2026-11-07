@@ -267,7 +267,8 @@ export default function ReSignPage() {
                 </Button>
                 <Button
                   size="sm"
-                  variant="danger"
+                  variant="ghost"
+                  className="!text-red-600 border border-red-200"
                   onClick={() => {
                     if (!confirm(`Let all ${activeEntries.length} players walk? They'll become free agents.`)) return;
                     const ids = activeEntries.map(e => e.playerId);
@@ -334,7 +335,7 @@ export default function ReSignPage() {
                   <span className="mr-1">🧑‍🏫</span>
                   {expiringCoaches.length} coach{expiringCoaches.length === 1 ? '' : 'es'} with expiring contracts
                 </div>
-                <div className="text-[11px] text-[var(--text-sec)] mt-0.5">
+                <div className="hidden sm:block text-[11px] text-[var(--text-sec)] mt-0.5">
                   Coach extensions live on a separate screen now. They&apos;re available throughout the offseason.
                 </div>
               </div>
