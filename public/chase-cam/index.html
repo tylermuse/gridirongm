@@ -168,7 +168,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17n'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17o'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -888,7 +888,7 @@ function choreograph(res){
   ballPlan = [{t0:-1, t1:snap, held:O.ol[2], off:[0,.25,.45]}];
   const qbRecv = snap+.28;
   ballPlan.push({t0:snap, t1:qbRecv, flight:{x0:0,y0:.4,z0:z0-.3, x1:0,y1:1.2,z1:z0-4.7, h:.2}});
-  let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, tHole=0, tackleAtFn=null, play_oob=false;
+  let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, holdOn=null, tHole=0, tackleAtFn=null, play_oob=false;
   const climbed = new Set();   /* backers picked up by a climbing blocker on a run: they don't join the pursuit until they shed */
 
   const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = (res.kind==='complete' || res.kind==='incomplete') && res.style==='screen';   /* an incomplete screen is still thrown to the back in the flat */
@@ -1397,7 +1397,7 @@ function choreograph(res){
       ev(tCatch-.25, ()=>{ cover.down=playT; cover.fallDir=1; cover.behav=null; cover.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side:-side}; });
       ev(tCatch+.35, ()=>sndThump(.7,.4));
       ev(tCatch+1.3, ()=>{ D.all.forEach(d=>{ if(d!==cover) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
-      tEnd = tCatch+1.4; carrier=null; endPos=[kx,kz];
+      tEnd = tCatch+1.4; carrier=null; endPos=[kx,kz]; holdOn=rec;
     } else if(res.kind==='incomplete' && bracket){
       /* the corner trails on the inside hip a step behind; the safety reads the QB from the deep middle, comes over the top and
          arrives with the ball. The hit knocks the receiver down and the ball pops loose to the turf. */
@@ -1417,7 +1417,7 @@ function choreograph(res){
       const kx = catchX + sg*R(.8,2.2), kz = cz + R(.6,2.2);
       ballPlan.push({t0:tCatch, t1:tCatch+.6, flight:{x0:catchX,y0:2.0,z0:cz, x1:kx,y1:.16,z1:kz, h:1.0}}, {t0:tCatch+.6, t1:1e9, rest:[kx,kz]});
       ev(tCatch+1.1, ()=>{ D.all.forEach(d=>{ if(d!==sf) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
-      tEnd = tCatch + 1.3; carrier = null; endPos = [kx, kz]; res.bracket = true;
+      tEnd = tCatch + 1.3; carrier = null; endPos = [kx, kz]; holdOn = rec; res.bracket = true;
     } else if(res.kind==='incomplete'){
       flightSeg.flight.x1 = catchX + R(-.8,.8); flightSeg.flight.z1 = cz + R(.4,1.2); flightSeg.flight.y1 = 2.1;
       cover.behav = P([snap, cover.x, cover.z], [tCatch-.6, catchX + side*1.4, cz-1.2], [tCatch, catchX + side*.6, cz+.6]);   /* blanketed: the DB arrives with the ball and plays through the hands */
@@ -1433,7 +1433,7 @@ function choreograph(res){
           cover.mocapAct={clip:'mx_defender_swat', t0:tCatch-.3, start:0, end:1.0, yScale:(window.__swatY ?? .85)}; }); }
       else { cover.catchT = tCatch; cover.jumpT = tCatch; ev(tCatch+.12, ()=>{ cover.swat=playT; }); }
       ev(tCatch+.7, ()=>{ rec.dejected=playT; });
-      tEnd = tCatch+1.0; carrier=null; endPos=[restX,restZ];
+      tEnd = tCatch+1.0; carrier=null; endPos=[restX,restZ]; holdOn=rec;
     } else { // interception
       /* tipped at the line: the middle backer catches the pop-up (iT/iX/pz), otherwise the man in coverage jumps the route */
       const picker = tip? tip.g : deep? (rec===O.wrR ? D.sR : D.sL) : cover;
@@ -1611,7 +1611,7 @@ function choreograph(res){
   }
   // everyone else pursues after the ball carrier changes hands (runs)
   if(isRun && carrier){ ev(snap+.9, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d) && !climbed.has(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
-  play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal};
+  play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, holdOn, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal};
   if(tackler && carrier){ play.tackler = tackler; play.tackleAt = tackleAtFn; }
   cameraTarget = null;
 }
@@ -2057,26 +2057,31 @@ function frame(now){
   // camera: chase from behind the offense, follow the ball
   /* after the whistle the shot stays on the man, not the ball (a spiked or lobbed ball must not drag the camera into the stands) */
   const focus = (running && play && (play.whistled || play.td) && playT >= play.tEnd - .05 && play.carrier) ? play.carrier : null;
-  const bx = focus? focus.x : ball.position.x, bz = clamp(focus? focus.z : ball.position.z, -58, 58);
-  const targetZ = running? bz : (G.fieldPos-50);
+  /* incompletion: from the whistle through the post-play beat the shot stays on the target and the spot where the ball died. The LOS
+     doesn't move on an incompletion, so the old "back to the line" target framed empty turf while everyone was still downfield (QA 11/8) */
+  const incHold = !!(play && play.res.kind==='incomplete' && play.endPos && (running? playT >= play.whistleT : G.busy));
+  const hT = incHold? play.holdOn : null, hx = incHold? (hT? (hT.x+play.endPos[0])/2 : play.endPos[0]) : 0, hz = incHold? (hT? (hT.z+play.endPos[1])/2 : play.endPos[1]) : 0;
+  const bx = focus? focus.x : incHold? hx : ball.position.x, bz = clamp(focus? focus.z : incHold? hz : ball.position.z, -58, 58);
+  const targetZ = (running || incHold)? bz : (G.fieldPos-50);
   const cp = window.__camProfile; // optional render-only camera (e.g. lower broadcast angle)
   // Establish the formation, then follow the destination of a pass or a live runner.
   // Snap/handoff flights do not trigger a pass zoom. Preserve the full-width overview in the pocket.
   const seg=running?ballPlan.find(s=>playT>=s.t0 && playT<s.t1):null;
   const passAir=!!(seg?.flight && O.qb?.throwT0!=null && playT>=O.qb.throwT0+.5*(O.qb.throwScale||1));
   const runner=seg?.held && seg.held!==O.qb && !O.ol.includes(seg.held) ? seg.held : null;
-  const zoomGoal=focus||runner?1:passAir?smooth01((playT-seg.t0-.12)/.8):0;
+  const zoomGoal=focus||runner||incHold?1:passAir?smooth01((playT-seg.t0-.12)/.8):0;
   camZoom += (zoomGoal-camZoom)*(1-Math.exp(-dtReal*2.7));
-  const longK=cp?.overview?camZoom:(cp&&running?clamp((bz-(G.fieldPos-50)-10)/12,0,1):0);
+  const longK=cp?.overview?camZoom:(cp&&(running||incHold)?clamp((bz-(G.fieldPos-50)-10)/12,0,1):0);
   let cH=cp?THREE.MathUtils.lerp(cp.h,cp.hLong??cp.h,longK):0;
   let cB=cp?THREE.MathUtils.lerp(cp.overview?overviewBack(cp):cp.back,cp.backLong??cp.back,longK):0;
   let cA=cp?THREE.MathUtils.lerp(cp.ahead,cp.aheadLong??cp.ahead,longK):0;
-  if(cp && focus){cH=THREE.MathUtils.lerp(cH,3.8,camZoom);cB=THREE.MathUtils.lerp(cB,10.5,camZoom);cA=1.5;}
+  if(cp && (focus||incHold)){cH=THREE.MathUtils.lerp(cH,3.8,camZoom);cB=THREE.MathUtils.lerp(cB,10.5,camZoom);cA=1.5;}
   const NW = window.__narrow||0; if(cp && NW){ cH *= 1 + (window.__narrowH ?? .9)*NW; cB *= 1 + (window.__narrowB ?? .35)*NW; }
   const trackK=cp?.overview?longK:1;
   const trackZ=THREE.MathUtils.lerp(G.fieldPos-50,targetZ,trackK);
   const wantPos=cp?new THREE.Vector3(bx*(cp.xf+longK*(.9-cp.xf))*trackK,cH,trackZ-cB):new THREE.Vector3(bx*.55,(running?7.6:7.2)*(1+.35*NW),targetZ-13.5*(1+.2*NW));
   const wantLook=cp?new THREE.Vector3(bx*(cp.lxf+longK*(.9-cp.lxf))*trackK,cp.ly,trackZ+cA):new THREE.Vector3(bx*.75,0,targetZ+7);
+  if(incHold){ wantLook.x = bx; wantPos.x = bx*.6; }   /* centre the target: the chase framing (camera at half the ball's x) left a sideline route at the edge of the frame */
   if(cp && ((running && play && play.res.kind==='fg') || (!running && G.formKind==='fg'))){ // field goal: a fixed low angle behind and beside the kicker; the look follows the ball up to the uprights
     const zk=G.fieldPos-50-6.8, seg=running? ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1) : null, inAir = !!(seg && seg.flight && seg.flight.h > 3), landed = !!(seg && seg.rest);
     wantPos.set(-6.5, 3.4, zk-7.5);

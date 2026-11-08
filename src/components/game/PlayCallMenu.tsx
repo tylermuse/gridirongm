@@ -57,8 +57,13 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
   { type: 'screen', label: 'Screen', icon: '🛡️', color: 'bg-teal-600 hover:bg-teal-700' },
 ];
 
+/** Longest field goal the menu offers (LOS + 17). The NFL record is 66; past ~62 the make rate is a few percent at best. */
+const MAX_FG_YARDS = 62;
+
 export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTwoPointCall, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
   const [goingForIt, setGoingForIt] = useState(false);
+  const fgYards = 100 - state.fieldPos + 17;
+  const fgInRange = fgYards <= MAX_FG_YARDS;
 
   function downLabel(down: number, yardsToGo: number): string {
     const ordinals = ['1st', '2nd', '3rd', '4th'];
@@ -149,13 +154,16 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTw
             </div>
           ) : isFourthDown && !goingForIt ? (
             <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  onClick={() => onPlayCall('field_goal')}
-                  className="flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-green-600 hover:bg-green-700 transition-colors"
-                >
-                  <span>🥅</span> <span>Field Goal</span>
-                </button>
+              <div className={`grid gap-1.5 ${fgInRange ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {/* out of range (e.g. 4th down at your own 38 = a 79-yarder): no FG button, just Punt / Go For It */}
+                {fgInRange && (
+                  <button
+                    onClick={() => onPlayCall('field_goal')}
+                    className="flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-green-600 hover:bg-green-700 transition-colors"
+                  >
+                    <span>🥅</span> <span>Field Goal ({fgYards} yds)</span>
+                  </button>
+                )}
                 <button
                   onClick={() => onPlayCall('punt')}
                   className="flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-gray-600 hover:bg-gray-700 transition-colors"
@@ -189,16 +197,16 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTw
                   onClick={() => setGoingForIt(false)}
                   className="w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-[var(--text-sec)] hover:bg-[var(--surface-2)] transition-colors"
                 >
-                  ← Back to Punt / FG
+                  ← Back to {fgInRange ? 'Punt / FG' : 'Punt'}
                 </button>
               )}
-              {/* FG option on any down when in range (fieldPos >= 55 = ~62 yard attempt) */}
-              {!isFourthDown && state.fieldPos >= 55 && (
+              {/* FG option on any down when in range */}
+              {!isFourthDown && fgInRange && (
                 <button
                   onClick={() => onPlayCall('field_goal')}
                   className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-white font-bold text-xs bg-green-600 hover:bg-green-700 transition-colors"
                 >
-                  <span>🥅</span> <span>Kick Field Goal ({100 - state.fieldPos + 17} yds)</span>
+                  <span>🥅</span> <span>Kick Field Goal ({fgYards} yds)</span>
                 </button>
               )}
               {(() => {
