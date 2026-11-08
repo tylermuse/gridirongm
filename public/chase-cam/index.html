@@ -107,6 +107,8 @@ select{font:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px 
         <button data-force="fg_miss">FG miss</button><button data-force="scramble">QB scramble</button><button data-force="screen">Screen</button>
         <button data-force="punt">Punt</button>
         <button data-force="int">Interception</button>
+        <button data-force="batted">Batted at the line</button>
+        <button data-force="tipint">Tipped pick</button>
       </div>
       <div class="sub">Outcome odds mirror the live-coach engine (sack, INT and completion rates by pass depth).</div>
     </div>
@@ -162,7 +164,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17k'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17l'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -185,13 +187,15 @@ function planWho(m){
   }
   if(w.def && r.kind==='sack') out.push({side:'d',key:'dl',i:0,man:w.def});
   if(w.def && r.fumble) out.push({side:'d',key:'lb',i:0,man:w.def});   /* the middle backer is the one who falls on it */
-  if(w.def && r.kind==='int' && r.recKey && r.recKey!=='rb'){
+  if(w.def && r.kind==='int' && r.batted) out.push({side:'d',key:'lb',i:0,man:w.def});   /* tipped at the line: the middle backer comes down with it */
+  else if(w.def && r.kind==='int' && r.recKey && r.recKey!=='rb'){
     const k = r.depth==='deep'? (r.recKey==='wrR'? ['s',0] : ['s',1]) : ({wrL:['cb',1], wrR:['cb',0], te:['lb',0], slot:['s',1]})[r.recKey];
     if(k) out.push({side:'d',key:k[0],i:k[1],man:w.def});
   }
   return out;
 }   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
+window.__qa = { ball: () => ball.position.toArray(), playT: () => playT, hand: (a, side='Right') => { a.model.updateMatrixWorld(true); return a.bones[side+'Hand'].getWorldPosition(new THREE.Vector3()).toArray(); } };   /* QA: sample the ball and a man's hands mid-play (e.g. the batted ball meets the tackle's hands) */
 window.__onField = () => ({ o: (O.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), d: (D.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), car: play && play.carrier ? [play.carrier.teamId, play.carrier.num, play.carrier.skinTone] : null, tk: play && play.tackler ? [play.tackler.teamId, play.tackler.num] : null, kind: play && play.res ? play.res.kind : null, running, bug: {q:G.quarter, clock:G.clock, down:G.down, toGo:G.toGo, fp:G.fieldPos, off:G.off, score:G.score} });   /* QA: who the sim put on the field */
 window.__setTeams = (h,a) => { EMB_TEAMS[0]=h; EMB_TEAMS[1]=a; if(!G.busy) setupFormation(); };   /* QA: what bsgm:setup does */
 
@@ -858,6 +862,15 @@ function planTackle(keys, fixedIdx, cands, depth=0, maxZ=52){
   return { a:best.a, tEnd, path:best.path, chase, lt, t0:best.t0, x0:best.x0, z0:best.z0, ix:best.ix, iz:best.iz, end:[keys[keys.length-1][1], keys[keys.length-1][2]] };
 }
 // a beaten defender chases: always aims at a spot just behind/beside the carrier, so he never runs out in front
+/* where a man locked up in a 'line' fight stands at time t (also used to plan ahead: a batted ball is aimed at the hands of the
+   tackle who will be in the lane when it gets there). b.slide: he works laterally off the block into the throwing lane. */
+function lineAt(b, t, tEndCap=99){ const pr=b.pr, tt=Math.min(t, tEndCap);
+  const e=Math.max(0, Math.min(tt-pr.start, pr.dur)); const j=tt*1.0; const late=Math.max(0, tt-pr.start-pr.dur);   // after the first push: keep collapsing, work the edges
+  const px = pr.bx + .4*Math.sin(j*4.2+pr.seed) + .14*Math.sin(j*9.1+pr.seed*3) + b.dx + (pr.dv<0? Math.sign(pr.bx||1)*Math.min(1.4, late*.9) : 0)
+           + (b.slide? b.slide.dx*smooth01((tt-b.slide.t0)/b.slide.dur) : 0),
+        pz = pr.bz + pr.dv*e + (pr.dv<0? -Math.min(1.6, late*.55) : 0) + .26*Math.sin(j*5.3+pr.seed*2) + (pr.dv>0? late*.35 : 0);
+  return [px + (b.side>0? .18:-.18)*Math.sin(j*6.4+pr.seed), pz + b.side*(.43 + .07*Math.sin(j*7.5+pr.seed))];
+}
 function chaseB(tgt, start, tArr, a){ const lat = Math.sign((a.x-tgt.x)*(tgt.vz||1) - (a.z-tgt.z)*(tgt.vx||0)) || 1;
   return {type:'chase', tgt, start, tArr, lat};
 }
@@ -1121,6 +1134,8 @@ function choreograph(res){
     carrier = O.qb; tackler = sacker; tackleT = tEnd = tSack; endPos=[.6,z0+Y];
   } else { // passes: complete / incomplete / int
     const deep = res.depth==='deep';
+    /* batted at the line (reference: DAL @ IND on FOX, Tyler 11/8): the play-by-play said it was batted down / tipped at the line */
+    const bat = !deep && !scn && (res.kind==='incomplete' || res.kind==='int') && !!(window.__bat ?? res.batted);
     /* overthrown deep ball (reference: Prescott flushed left at GB, SNF 3rd & 7): the receiver lays out for it, the DB dives with him, the ball skips past both */
     const layout = deep && res.kind==='incomplete' && (res.layout ?? (window.__layout ?? Math.random() < .6));
     const dropZ = z0-(deep?7.6: scn? 5.6 : 6.4), tSet = snap+(deep?1.25: scn? .8 : 1.0); let tThrow = snap+(deep?1.85: scn? 1.3 : 1.35);
@@ -1133,13 +1148,13 @@ function choreograph(res){
     else if(scn){ // screen: the back slips out behind the rush and takes a soft throw 2 yd behind the line, blockers out in front
       rec = O.rb; const side = Math.random()<.5? -1 : 1; Yc = -2.4; catchX = side*9.5; res.screenSide = side; }
     else { const pick = Math.random();
-      rec = O[res.recKey] && res.recKey!=='rb'? O[res.recKey] : pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
+      rec = O[res.recKey] && res.recKey!=='rb'? O[res.recKey] : bat? (pick<.55? O.slot : O.te) : pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
       catchX = rec===O.slot? -4.5 : rec===O.te? 5 : rec===O.wrR? 22.5 : -22.5; }
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc;
     /* Roll-out (reference: Prescott at GB, SNF): the pocket closes from the back side, he climbs, escapes toward the receiver's sideline
        and throws on the run — instead of the planted drop-back throw on every pass */
     /* a deep roll-out used to exist only as the overthrown lay-out, so every roll-out deep shot fell incomplete (Tyler 10/27): deep completions now roll out at about the same rate, so the roll-out doesn't telegraph the result */
-    const roll = (!deep || layout || res.kind==='complete') && !scn && res.kind!=='int' && (res.rollout ?? (window.__roll ?? Math.random() < (layout? .5 : deep? .35 : .22))), rSide = Math.sign(catchX) || 1;
+    const roll = (!deep || layout || res.kind==='complete') && !scn && !bat && res.kind!=='int' && (res.rollout ?? (window.__roll ?? Math.random() < (layout? .5 : deep? .35 : .22))), rSide = Math.sign(catchX) || 1;
     const hx = roll? rSide*4.4 : 0, hz = roll? dropZ+.9 : dropZ+.2;
     const flight = Math.max(.45, Math.min(1.7, Math.hypot(catchX-hx, cz-hz)/(deep?21:19)));
     { // the QB holds the ball until the receiver can actually get there at a real sprint (deep shots are thrown late, not fast)
@@ -1209,7 +1224,53 @@ function choreograph(res){
     else if(capCatch && (window.__rollCatch ?? false)){ rec.mocapAct = {clip:'football_jumpcatch', t0:tCatch-.65, start:0, end:2.7, yScale:.72}; flightSeg.flight.y1 = 2.75; }   /* off: 1.2 m leap then a forward roll */
     else if(capCatch){ rec.mocapAct = {clip:'mx_catch_onehand', t0:tCatch-.55, start:1.0, end:1.9, yScale:.8, moveRoot:true}; flightSeg.flight.y1 = 2.1; }   /* only the leap: he comes down on his feet with it and the DB wraps him up */   /* Mixamo high catch: 0.5 m leap, ball at the top (1.55 s), comes down with it and goes to the turf */
 
-    if(rollCatch){
+    let tip = null;
+    if(bat){
+      /* The tackle in the throwing lane reads the QB's eyes, slides into the lane and gets both hands up as the ball comes out; it
+         hits his hands and pops straight up. The hook backer, who had bailed into his drop, breaks back on it and leaps — it goes
+         off his fingertips into the turf (incomplete), or he comes down with it (a tipped pick). Planned ahead from where the
+         line fight puts the tackle at the moment the ball arrives, so the ball meets his hands. */
+      const laneX = z => hx + (catchX-hx)*(z-hz)/((cz-hz)||1), tGuess = tThrow + .28;
+      const pick = [D.dl[1], D.dl[2]].filter(d=>d.behav?.type==='line').map(d=>{ const p = lineAt(d.behav, tGuess); return {d, off: laneX(p[1]) - p[0]}; })
+        .sort((a,b)=>Math.abs(a.off)-Math.abs(b.off))[0];
+      if(pick){
+        rec.catchT = null; rec.jumpT = null;
+        const batter = pick.d; batter.behav.slide = {dx: clamp(pick.off, -1.5, 1.5), t0: tThrow-.6, dur: .5};
+        const p0 = lineAt(batter.behav, tGuess), bx = p0[0], bz = p0[1]-.4, by = 2.5;   /* hands up and out in front of his facemask */
+        const tBat = tThrow + clamp(Math.hypot(bx-hx-.35, bz-hz)/19, .18, .4);
+        flightSeg.t1 = tBat; Object.assign(flightSeg.flight, {x1:bx, y1:by, z1:bz, h:.2});
+        batter.catchT = tBat; batter.jumpT = tBat + .02;   /* hands track the ball out of the QB's hand; he leaves his feet with it */
+        ev(tBat, ()=>{ batter.swat = playT; sndThump(.3,.25); sndRoar(.3,.2,.6,1.8,'cheer'); });
+        /* the backer who goes for it: the pick is the middle backer (the page puts the named defender on him); otherwise whoever is nearest */
+        const isInt = res.kind==='int', lbAt = a => a.behav?.type==='path'? pathAt(a.behav.k, tBat) : [a.x, a.z];
+        const g = isInt? D.lb[1] : D.lb.map(a=>({a, p:lbAt(a)})).sort((u,v)=>Math.hypot(u.p[0]-bx,u.p[1]-bz-3.5)-Math.hypot(v.p[0]-bx,v.p[1]-bz-3.5))[0].a;
+        const gp = lbAt(g), T = R(1.15, 1.4), h = 1.225*T*T;   /* a real pop-up: apex height and hang time agree (g/8·T²) */
+        const uK = isInt? 1 : .77;   /* when the ball comes down through his reach: at his hands for the pick, on the way down past his fingertips for the miss */
+        const gx = gp[0]-bx, gz = gp[1]-bz, gd = Math.hypot(gx,gz)||1, dir = [gx/gd, Math.max(.35, gz/gd)], dl = Math.hypot(dir[0],dir[1]);
+        const reach = clamp(gd - 4.4*(uK*T - .1), 2.0, 5.5);   /* he has to stop his drop and turn back: about 4.4 yd/s on average */
+        const lx = clamp(bx + dir[0]/dl*reach/uK, bx-4, bx+4), lz = bz + clamp(dir[1]/dl*reach/uK, 1.6, 5.5), tLand = tBat + T;
+        const pop = {t0:tBat, t1:tLand, flight:{x0:bx,y0:by,z0:bz, x1:lx, y1: isInt? 2.0 : .16, z1:lz, h}}; ballPlan.push(pop);
+        window.__tip = tip = {batter, g, tBat, tLand, lx, lz, gp, preKeys: g.behav?.type==='path'? [...g.behav.k.filter(k=>k[0] < tBat+.1).map(k=>[...k]), [tBat+.1, ...pathAt(g.behav.k, tBat+.1)]] : [[snap, g.x, g.z], [tBat+.1, g.x, g.z]]};
+        if(!isInt){
+          const tK = tBat + uK*T, kx = bx + (lx-bx)*uK, kz = bz + (lz-bz)*uK;
+          ev(tBat+.06, ()=>{ const ux = g.x-kx, uz = g.z-kz, ud = Math.hypot(ux,uz)||1, sx = -uz/ud, sz = ux/ud;   /* a step to the side of the ball, facing it */
+            const tx = kx + ux/ud*.35 + sx*.45, tz = kz + uz/ud*.35 + sz*.45;
+            g.engage = null; g.faceLock = null; g.behav = P([playT, g.x, g.z], [tK, tx, tz], [tK+.7, tx - ux/ud*.6, tz - uz/ud*.6]);
+            g.jumpT = tK + .02; g.catchT = tK + .04; });
+          ev(tK+.05, ()=>{ g.faceLock = {angle: Math.atan2(lx-g.x, lz-g.z), until: tK+1.2}; });
+          ev(tLand+.4, ()=>{ g.dejected = playT; });   /* he had it in his hands */
+          ev(tLand+.1, ()=>{ sndThump(.25,.25); sndRoar(.35,.3,.8,2,'groan'); });
+          const kx2 = lx + R(-1.2,1.2), kz2 = lz + R(.8,2.2);
+          ballPlan.push({t0:tLand, t1:tLand+.5, flight:{x0:lx,y0:.16,z0:lz, x1:kx2,y1:.16,z1:kz2, h:.5}});   /* one hop and it dies */
+          ballPlan.push({t0:tLand+.5, t1:1e9, rest:[kx2,kz2]});
+          rec.behav = P(...routeKeys, [tCatch+.9, catchX+(catchX<0?-1:1)*.5, cz+2.4]);
+          ev(tLand+.3, ()=>{ D.all.forEach(d=>{ if(d!==g) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
+          tEnd = tLand + 1.0; carrier = null; endPos = [kx2, kz2]; res.batted = true;
+        }
+      }
+    }
+    if(tip && res.kind==='incomplete'){ /* batted down: planned above */ }
+    else if(rollCatch){
       // jump catch and roll: the receiver's path ends a stride short of the spot and the capture carries him through it; he is down by contact where he lands
       const r0=routeKeys[0]; const ux=catchX-r0[1], uz=(cz-2.3)-r0[2], L=Math.hypot(ux,uz)||1;   /* straight to a point a stride short of the spot; the capture's own run carries him through it */
       if(upended){ rec.behav = P([r0[0],r0[1],r0[2]],[tCatch-.6, catchX-.3, cz],[tCatch+4, catchX-.3+ux/L*.01, cz+uz/L*.01]); rec.faceLock={angle:Math.atan2(ux,uz), until:tCatch+4}; }   /* this capture leaps from a standstill: the route ends under the ball */
@@ -1312,26 +1373,33 @@ function choreograph(res){
       ev(tCatch+.7, ()=>{ rec.dejected=playT; });
       tEnd = tCatch+1.0; carrier=null; endPos=[restX,restZ];
     } else { // interception
-      const picker = deep? (rec===O.wrR ? D.sR : D.sL) : cover; picker.catchT = tCatch; picker.jumpT = tCatch;
-      const pz = cz + (deep? .6 : .9);
-      picker.behav = P([snap, picker.x, picker.z], [tCatch-.4, catchX+(catchX<0?1.2:-1.2), pz+1.4], [tCatch, catchX, pz]);
+      /* tipped at the line: the middle backer catches the pop-up (iT/iX/pz), otherwise the man in coverage jumps the route */
+      const picker = tip? tip.g : deep? (rec===O.wrR ? D.sR : D.sL) : cover;
+      const iT = tip? tip.tLand : tCatch, iX = tip? tip.lx : catchX;
+      const pz = tip? tip.lz + .35 : cz + (deep? .6 : .9);
+      picker.catchT = iT; picker.jumpT = iT;
+      if(tip){ picker.engage = null; ev(iT-.5, ()=>{ picker.faceLock = {angle: Math.PI, until: iT+.3}; }); }   /* square to the ball as it comes down */
+      picker.behav = P([snap, picker.x, picker.z], [iT-.4, iX+(iX<0?1.2:-1.2), pz+1.4], [iT, iX, pz]);
       rec.behav = P(...routeKeys);
-      flightSeg.flight.z1 = pz; flightSeg.flight.y1 = 2.2;
-      const ret = res.ret ?? Math.round(R(0,22));
+      if(!tip){ flightSeg.flight.z1 = pz; flightSeg.flight.y1 = 2.2; }
+      const ret = res.ret ?? Math.round(tip? R(0,14) : R(0,22));
       const pick6 = pz - ret <= -49.5;   /* the return reaches the goal line: it's a touchdown the other way, not 1st-and-goal at the 1 */
-      const zEnd = pick6? -53 : Math.max(-49, pz - ret), endX = Math.max(-25, Math.min(25, catchX + R(-6,6)));
-      tEnd = tCatch + .25 + Math.max(.4, Math.abs(pz-zEnd)/7.4);
-      const pKeys = [[snap, picker.x, picker.z], [tCatch-.4, catchX+(catchX<0?1.2:-1.2), pz+1.4], [tCatch, catchX, pz], [tCatch+.25, catchX, pz+.2], [tEnd, endX, zEnd]];
-      let plan=null; if(!pick6){ plan = planTackle(pKeys, 3, [{a:rec, t:tCatch+.2, x:catchX+(catchX<0?-.8:.8), z:cz-.6}, {a:O.qb, t:tCatch+.2, x:.5, z:dropZ+.6}, {a:O.te, t:tCatch+.2, x:4, z:z0+7}]); tEnd = plan.tEnd; }
+      const zEnd = pick6? -53 : Math.max(-49, pz - ret), endX = Math.max(-25, Math.min(25, iX + R(-6,6)));
+      tEnd = iT + .25 + Math.max(.4, Math.abs(pz-zEnd)/7.4);
+      const pKeys = tip? [...tip.preKeys, [iT, iX, pz], [iT+.25, iX, pz+.2], [tEnd, endX, zEnd]]
+                       : [[snap, picker.x, picker.z], [tCatch-.4, catchX+(catchX<0?1.2:-1.2), pz+1.4], [tCatch, catchX, pz], [tCatch+.25, catchX, pz+.2], [tEnd, endX, zEnd]];
+      const cands = tip? [{a:O.qb, t:iT+.2, x:.5, z:dropZ+.6}, {a:O.ol[2], t:iT+.2, x:0, z:z0-1.4}, {a:O.rb, t:iT+.2, x:6, z:z0-1}, {a:rec, t:iT+.2, x:catchX*.7, z:cz}]
+                       : [{a:rec, t:tCatch+.2, x:catchX+(catchX<0?-.8:.8), z:cz-.6}, {a:O.qb, t:tCatch+.2, x:.5, z:dropZ+.6}, {a:O.te, t:tCatch+.2, x:4, z:z0+7}];
+      let plan=null; if(!pick6){ plan = planTackle(pKeys, pKeys.length-2, cands); tEnd = plan.tEnd; }
       picker.behav = P(...pKeys);
-      ballPlan.push({t0:tCatch, t1:1e9, held:picker});
+      ballPlan.push({t0:iT, t1:1e9, held:picker});
       carrier = picker; tackler = plan? plan.a : null; tackleT = tEnd; endPos=[endX,zEnd]; res.intEndZ = zEnd; if(pick6){ td = true; res.pick6 = true; }
-      ev(Math.min(tCatch+.15, tEnd-.7), ()=>{ if(tackler) tackler.behav = plan.chase? chaseB(picker, playT, tEnd-.42, tackler) : P([playT, tackler.x, tackler.z], ...plan.path.slice(2).filter(k=>k[0]>playT+.05));
-        O.all.forEach((o,i)=>{ o.engage=null; o.faceLock=null; if(o!==tackler) o.behav = F(picker, tCatch+.3+(i%4)*.1, (O.ol.includes(o)? 5.2 : 6.2)+(i%3)*.3, [R(-1.5,1.5),0], 1.4); });
-        D.dl.forEach((d,i)=>{ d.engage=null; d.faceLock=null; d.behav = F(picker, tCatch+.4+i*.1, 5.4, [(i-1.5)*2.2, -2.5], 1.2); }); });
+      ev(Math.min(iT+.15, tEnd-.7), ()=>{ if(tackler) tackler.behav = plan.chase? chaseB(picker, playT, tEnd-.42, tackler) : P([playT, tackler.x, tackler.z], ...plan.path.slice(2).filter(k=>k[0]>playT+.05));
+        O.all.forEach((o,i)=>{ o.engage=null; o.faceLock=null; if(o!==tackler) o.behav = F(picker, iT+.3+(i%4)*.1, (O.ol.includes(o)? 5.2 : 6.2)+(i%3)*.3, [R(-1.5,1.5),0], 1.4); });
+        D.dl.forEach((d,i)=>{ d.engage=null; d.faceLock=null; d.behav = F(picker, iT+.4+i*.1, 5.4, [(i-1.5)*2.2, -2.5], 1.2); }); });
       /* Escort (reference: DAL pick return at GB on SNF): the nearest DBs/backers turn into blockers — they run with him a couple of
          yards in front and to the side, and each one squares up the first chaser that gets close; the pair lock up and stagger off the lane */
-      if(ret >= 6 && (window.__escort ?? true)) ev(tCatch+.35, ()=>{ if(picker.down!=null) return;
+      if(ret >= 6 && (window.__escort ?? true)) ev(iT+.35, ()=>{ if(picker.down!=null) return;
         const esc = [...D.lb, D.cbL, D.cbR, D.sL, D.sR].filter(d=>d!==picker && d.down==null).sort((a,b)=>Math.hypot(a.x-picker.x,a.z-picker.z)-Math.hypot(b.x-picker.x,b.z-picker.z)).slice(0,3);
         const taken = new Set([tackler]);
         esc.forEach((d,i)=>{ const side = i===1? 1 : i===2? -1 : (picker.x>0? -1 : 1);
@@ -1735,11 +1803,7 @@ function stepActor(a, t, dt){
       const dx=b.tgt.x-a.x, dz=b.tgt.z-a.z, d=Math.hypot(dx,dz)||1; const rem=Math.max(.04, b.t1-t);
       const v=Math.min(t>b.t1? MAX_SPRINT*1.15 : MAX_SPRINT*1.12, Math.max(0, d-.45)/rem); const st=Math.min(Math.max(0,d-.45), v*dt);
       nx=a.x+dx/d*st; nz=a.z+dz/d*st; }
-    else if(b.type==='line'){ const pr=b.pr, tt=Math.min(t, play?.tEnd ?? 99);
-      const e=Math.max(0, Math.min(tt-pr.start, pr.dur)); const j=tt*1.0; const late=Math.max(0, tt-pr.start-pr.dur);   // after the first push: keep collapsing, work the edges
-      const px = pr.bx + .4*Math.sin(j*4.2+pr.seed) + .14*Math.sin(j*9.1+pr.seed*3) + b.dx + (pr.dv<0? Math.sign(pr.bx||1)*Math.min(1.4, late*.9) : 0),
-            pz = pr.bz + pr.dv*e + (pr.dv<0? -Math.min(1.6, late*.55) : 0) + .26*Math.sin(j*5.3+pr.seed*2) + (pr.dv>0? late*.35 : 0);
-      const tx = px + (b.side>0? .18:-.18)*Math.sin(j*6.4+pr.seed), tz = pz + b.side*(.43 + .07*Math.sin(j*7.5+pr.seed));
+    else if(b.type==='line'){ const pr=b.pr, [tx,tz] = lineAt(b, t, play?.tEnd ?? 99);
       const u = clamp((t-pr.start)/.32, 0, 1);   // fire off the ball into contact
       nx = b.x0 + (tx-b.x0)*u; nz = b.z0 + (tz-b.z0)*u; }
   }
@@ -2011,9 +2075,9 @@ function rollCall(call){
   const sack = deep? .10 : .05, int = deep? .06 : .025, comp = deep? .45 : .70;
   const r=Math.random();
   if(r<sack) return {kind:'sack', yards:-Math.round(R(3,8)), depth:call};
-  if(r<sack+int) return {kind:'int', depth:call};
+  if(r<sack+int) return {kind:'int', depth:call, ...(!deep && Math.random()<.12? {batted:true} : {})};   /* some short picks are tipped at the line */
   if(Math.random()<comp) return {kind:'complete', depth:call, yards: deep? Math.max(14,Math.round(15+gauss(8,6))) : Math.max(2,Math.round(7+gauss(2,3)))};
-  return {kind:'incomplete', depth:call};
+  return {kind:'incomplete', depth:call, ...(!deep && Math.random()<.15? {batted:true} : {})};   /* about one short incompletion in seven is batted down at the line */
 }
 const FORCED = {
   scramble:()=>{ const r=Math.random(); return {kind:'run', style:'scramble', yards: r<.15? Math.round(R(-2,1)) : r<.75? Math.round(R(2,9)) : r<.93? Math.round(R(10,18)) : Math.round(R(19,35))}; },   /* a real scramble: sometimes bottled up, usually a chunk, now and then it breaks */ scrambleshort:()=>({kind:'run', yards:2, style:'scramble'}), screen:()=>{ const r=Math.random(); return {kind:'complete', depth:'short', style:'screen', yards: r<.25? Math.round(R(-3,2)) : r<.8? Math.round(R(3,10)) : Math.round(R(11,30))}; }, screenstuff:()=>({kind:'complete', depth:'short', yards:1, style:'screen'}),
@@ -2033,6 +2097,8 @@ const FORCED = {
   intret:()=>({kind:'int', depth:'short', ret:35}),
   rollout:()=>({kind:'complete', depth:'short', yards:9, rollout:true}),
   layout:()=>({kind:'incomplete', depth:'deep', layout:true, rollout:true}),
+  batted:()=>({kind:'incomplete', depth:'short', batted:true}),
+  tipint:()=>({kind:'int', depth:'short', batted:true}),
 };
 
 // ---------- Flow ----------
@@ -2177,12 +2243,12 @@ function finishPlay(){
     text='Pick six!'; cls='big'; G.score[1-G.off]+=EMBED?6:7; log(`${team(1-G.off).id}: interception returned for a TOUCHDOWN (XP good)`);
     G.fieldPos=25; G.down=1; G.toGo=10; newDrive=true;   /* the team that threw it gets the kickoff */
   } else if(r.kind==='int'){
-    text='Intercepted!'; cls='big';
+    text= r.batted? 'Tipped and picked!' : 'Intercepted!'; cls='big';
     const newFP = Math.max(1, Math.min(99, Math.round(50 - r.intEndZ)));
     log(`${t.id}: pass intercepted, returned to the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
     G.off = 1-G.off; G.fieldPos=newFP; G.down=1; G.toGo=Math.min(10,100-newFP); newDrive=true;
   } else if(r.kind==='incomplete'){
-    text='Incomplete'; log(`${t.id}: ${r.depth} pass incomplete`); advance(0);
+    text = r.batted? 'Batted down' : 'Incomplete'; log(`${t.id}: ${r.batted? 'pass batted down at the line' : r.depth+' pass incomplete'}`); advance(0);
   } else {
     let y = r.yards; if(play.td) y = 100-G.fieldPos;
     if(play.td){ text='Touchdown!'; cls='good'; G.score[G.off]+=EMBED?6:7; log(`${t.id}: ${r.kind==='run'?'run':'pass'} ${y} yds, TOUCHDOWN (XP good)`);   /* in-game the try is its own play */
