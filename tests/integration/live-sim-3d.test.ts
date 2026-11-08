@@ -193,6 +193,37 @@ describe('fumble after a run', () => {
   });
 });
 
+describe('strip-sacks and fumbles after the catch', () => {
+  const p = (id: string, firstName: string, lastName: string, position: string, jerseyNumber: number) => ({ id, firstName, lastName, position, jerseyNumber });
+  const home = [p('q', 'Dak', 'Prescott', 'QB', 4), p('w', 'George', 'Pickens', 'WR', 3)];
+  const away = [p('d', 'Micah', 'Parsons', 'DL', 11), p('t', 'Osa', 'Odighizuwa', 'DL', 97), p('c', 'Trevon', 'Diggs', 'CB', 7)];
+  const base = { id: 7, quarter: 1, timeStr: '12:00', possession: 'home', fieldPos: 40, down: 2, yardsToGo: 8, homeScore: 0, awayScore: 0, isScoring: false };
+  type E = Parameters<typeof toSimPlay>[0];
+  it('a sack followed by a lost fumble is one strip-sack: the sacker sacks, the man named last recovers', () => {
+    const sack = { ...base, type: 'sack', description: '💥 Sack! M. Parsons brings down D. Prescott for a 7-yard loss!', yardsGained: -7 } as unknown as E;
+    const fum = { ...base, id: 8, fieldPos: 33, type: 'fumble', description: "Fumble! Strip-sack — M. Parsons knocks it out of D. Prescott's hands and O. Odighizuwa recovers!", yardsGained: 0 } as unknown as E;
+    const m = toSimPlay(sack, { home, away }, fum)!;
+    expect(m.res).toMatchObject({ kind: 'sack', yards: -7, fumble: true });
+    expect(m.who?.def?.n).toBe(11);   // the sacker
+    expect(m.who?.rec?.n).toBe(97);   // the recoverer
+  });
+  it('a catch followed by a lost fumble is one play, the recoverer wearing his number', () => {
+    const cat = { ...base, type: 'pass_complete', description: 'D. Prescott completes to G. Pickens for 9 yards.', yardsGained: 9 } as unknown as E;
+    const fum = { ...base, id: 8, fieldPos: 49, type: 'fumble', description: 'Fumble! G. Pickens has it punched out after the catch — recovered by T. Diggs!', yardsGained: 0 } as unknown as E;
+    const m = toSimPlay(cat, { home, away }, fum)!;
+    expect(m.res).toMatchObject({ kind: 'complete', yards: 9, fumble: true });
+    expect(m.who?.ball?.n).toBe(3);
+    expect(m.who?.rec?.n).toBe(7);
+  });
+  it('an incompletion or a touchdown is never pictured as a fumble', () => {
+    const fum = { ...base, id: 8, type: 'fumble', description: 'Fumble! recovered by T. Diggs!', yardsGained: 0 } as unknown as E;
+    const inc = { ...base, type: 'pass_incomplete', description: "D. Prescott's pass to G. Pickens falls incomplete.", yardsGained: 0 } as unknown as E;
+    const td = { ...base, type: 'pass_complete', isScoring: true, description: 'D. Prescott hits G. Pickens for a 60-yard TOUCHDOWN!', yardsGained: 60 } as unknown as E;
+    expect(toSimPlay(inc, { home, away }, fum)!.res.fumble).toBeUndefined();
+    expect(toSimPlay(td, { home, away }, fum)!.res.fumble).toBeUndefined();
+  });
+});
+
 describe('screens keep their style', () => {
   const base = { id: 9, quarter: 2, timeStr: '5:00', possession: 'home', fieldPos: 97, down: 1, yardsToGo: 3, homeScore: 0, awayScore: 0 };
   it('a screen that scores at the goal line, and an incomplete screen, are still screens', () => {
