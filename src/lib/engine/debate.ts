@@ -1735,6 +1735,52 @@ export function generateTeamSpotlight(
  * add-on — this returns text the game page renders in a modal.
  */
 
+/* Grading a half's worth of production, so the booth never calls a
+ * 2-pick, 5-yards-an-attempt quarterback "the engine" of anything. */
+const SMALL_NUM = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const numWord = (n: number) => (n >= 0 && n <= 10 ? SMALL_NUM[n] : String(n));
+const plural = (n: number, one: string, many = `${one}s`) => `${numWord(n)} ${n === 1 ? one : many}`;
+const andList = (base: string, extras: string[]) =>
+  extras.length === 0 ? base
+    : extras.length === 1 ? `${base} and ${extras[0]}`
+    : `${base}, ${extras.slice(0, -1).join(', ')} and ${extras[extras.length - 1]}`;
+
+/** 'cold' = a half the booth should call rough; 'hot' = one worth crediting. */
+export function passVerdict(s: Partial<PlayerStats>): 'hot' | 'ok' | 'cold' {
+  const att = s.passAttempts ?? 0;
+  if (att < 5) return 'ok';
+  const ypa = (s.passYards ?? 0) / att;
+  const pct = (s.passCompletions ?? 0) / att;
+  const td = s.passTDs ?? 0, int = s.interceptions ?? 0;
+  if ((int >= 2 && int > td) || (int > td && ypa < 6.5) || (td === 0 && (ypa < 5 || pct < 0.5))) return 'cold';
+  if (int === 0 && (td >= 2 || (td >= 1 && ypa >= 7) || ypa >= 8.5)) return 'hot';
+  return 'ok';
+}
+const rushIsGood = (s: Partial<PlayerStats>) => {
+  const y = s.rushYards ?? 0, c = s.rushAttempts ?? 0;
+  return y >= 50 || (s.rushTDs ?? 0) > 0 || (c >= 4 && y >= 30 && y / c >= 5.5);
+};
+const recIsGood = (s: Partial<PlayerStats>) => (s.receivingYards ?? 0) >= 50 || (s.receivingTDs ?? 0) > 0;
+
+/** Spoken-style stat lines: "11 of 22 for 117 yards and two picks". */
+export function passProse(s: Partial<PlayerStats>): string {
+  const td = s.passTDs ?? 0, int = s.interceptions ?? 0;
+  const extras: string[] = [];
+  if (td > 0) extras.push(td === 1 ? 'a touchdown' : plural(td, 'touchdown'));
+  if (int > 0) extras.push(int === 1 ? 'a pick' : plural(int, 'pick'));
+  return andList(`${s.passCompletions ?? 0} of ${s.passAttempts ?? 0} for ${s.passYards ?? 0} yards`, extras);
+}
+function rushProse(s: Partial<PlayerStats>): string {
+  const td = s.rushTDs ?? 0;
+  return andList(`${s.rushYards ?? 0} yards on ${plural(s.rushAttempts ?? 0, 'carry', 'carries')}`,
+    td > 0 ? [td === 1 ? 'a touchdown' : plural(td, 'touchdown')] : []);
+}
+function recProse(s: Partial<PlayerStats>): string {
+  const td = s.receivingTDs ?? 0;
+  return andList(`${plural(s.receptions ?? 0, 'catch', 'catches')} for ${s.receivingYards ?? 0} yards`,
+    td > 0 ? [td === 1 ? 'a touchdown' : plural(td, 'touchdown')] : []);
+}
+
 export interface HalftimeLeader {
   playerId: string;
   name: string;
@@ -1828,13 +1874,55 @@ export function generateHalftimeBreakdown(args: {
   const trailCity = homeScore === awayScore ? null : homeScore > awayScore ? awayTeam.city : homeTeam.city;
 
   // A short two-beat take: Cole frames the numbers, Blaze reacts to the game state.
+  // Cole only credits a performance that earned it: a quarterback with a rough
+  // half (picks, no completions downfield) is the story for the wrong reason.
+  const cityOf = (pid: string) => byId.get(pid)?.teamId === homeTeam.id ? homeTeam.city : awayTeam.city;
+  const teamPasser = (teamId: string) => entries
+    .filter(([pid, s]) => byId.get(pid)?.teamId === teamId && (s.passAttempts ?? 0) > 0)
+    .sort((a, b) => (b[1].passAttempts ?? 0) - (a[1].passAttempts ?? 0))[0];
+  const coldQB = [teamPasser(homeTeam.id), teamPasser(awayTeam.id)]
+    .filter((e): e is [string, Partial<PlayerStats>] => !!e && passVerdict(e[1]) === 'cold')
+    .sort((a, b) => (b[1].interceptions ?? 0) - (a[1].interceptions ?? 0))[0];
+  type Standout = { pid: string; prose: string; score: number };
+  const standouts: Standout[] = [];
+  if (topPass && passVerdict(topPass[1]) === 'hot') {
+    const s = topPass[1];
+    standouts.push({ pid: topPass[0], prose: passProse(s), score: (s.passYards ?? 0) * 0.6 + (s.passTDs ?? 0) * 25 });
+  }
+  if (topRush && rushIsGood(topRush[1])) {
+    const s = topRush[1];
+    standouts.push({ pid: topRush[0], prose: rushProse(s), score: (s.rushYards ?? 0) + (s.rushTDs ?? 0) * 25 });
+  }
+  if (topRec && recIsGood(topRec[1])) {
+    const s = topRec[1];
+    standouts.push({ pid: topRec[0], prose: recProse(s), score: (s.receivingYards ?? 0) + (s.receivingTDs ?? 0) * 25 });
+  }
+  const engine = standouts.sort((a, b) => b.score - a.score)[0];
   const star = leaders[0];
-  const starCity = star ? (star.teamAbbr === homeTeam.abbreviation ? homeTeam.city : awayTeam.city) : '';
   const exchanges: DebateExchange[] = [];
-  if (star) {
+  if (coldQB) {
+    const [qid, qs] = coldQB;
+    const qCity = cityOf(qid);
+    const follow = !engine
+      ? `${qCity} can't get anything going through the air.`
+      : cityOf(engine.pid) === qCity
+        ? `${nameFor(engine.pid)}, with ${engine.prose}, is about all ${qCity} has going.`
+        : `Meanwhile ${nameFor(engine.pid)} has ${engine.prose} for ${cityOf(engine.pid)}.`;
     exchanges.push({
       speakerId: 'stats',
-      text: `Through two quarters the story is ${star.name} — ${star.statLine.toLowerCase()}. That's the engine of the ${starCity} offense right now.`,
+      text: `Through two quarters the story is ${nameFor(qid)}'s rough half — ${passProse(qs)}. ${follow}`,
+    });
+  } else if (engine) {
+    exchanges.push({
+      speakerId: 'stats',
+      text: `Through two quarters the story is ${nameFor(engine.pid)} — ${engine.prose}. That's the engine of the ${cityOf(engine.pid)} offense right now.`,
+    });
+  } else if (star) {
+    const s = stats[star.playerId] ?? {};
+    const prose = star.category === 'Passing' ? passProse(s) : star.category === 'Rushing' ? rushProse(s) : recProse(s);
+    exchanges.push({
+      speakerId: 'stats',
+      text: `Nobody's taken over this one yet. ${star.name} leads the way for ${cityOf(star.playerId)} with ${prose}, but it's been a grind on both sides.`,
     });
   } else {
     exchanges.push({
@@ -1984,9 +2072,8 @@ export function generateHalftimeAudioBreakdown(args: {
   M(`We're at the half. ${awayCity} ${awayScore}, ${homeCity} ${homeScore}. Tony, let's break down both sides.`);
 
   // Leading team's engine
-  if (leadA.passer) {
-    const s = leadA.passer[1];
-    M(`${tied ? homeCity : leadCity} has leaned on ${last(leadA.passer[0])} — ${s.passCompletions ?? 0} of ${s.passAttempts ?? 0}, ${s.passYards ?? 0} yards and ${s.passTDs ?? 0} touchdowns through the air.`);
+  if (leadA.passer && passVerdict(leadA.passer[1]) !== 'cold') {
+    M(`${tied ? homeCity : leadCity} has leaned on ${last(leadA.passer[0])} — ${passProse(leadA.passer[1])} through the air.`);
   } else if (leadA.rusher) {
     M(`${tied ? homeCity : leadCity} is running it down their throat — ${last(leadA.rusher[0])} already has ${leadA.rusher[1].rushYards ?? 0} yards on the ground.`);
   } else {
@@ -1999,7 +2086,9 @@ export function generateHalftimeAudioBreakdown(args: {
   }
 
   // Trailing team's bright spot + what's wrong
-  const bright = trailA.passer ?? trailA.rusher ?? trailA.receiver;
+  // A quarterback with a rough half isn't anybody's bright spot.
+  const bright = (trailA.passer && passVerdict(trailA.passer[1]) !== 'cold' ? trailA.passer : undefined)
+    ?? trailA.rusher ?? trailA.receiver;
   if (!tied && bright) {
     M(`For ${trailCity}, the bright spot has been ${last(bright[0])} — but they're chasing the game now.`);
   } else if (!tied) {
