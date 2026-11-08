@@ -17,7 +17,6 @@ import {
   type ScoutData,
 } from '@/lib/mockDraft/engine';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 
 /* ─── Data: fetched once, on the first Scout click ──────────── */
 
@@ -81,22 +80,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export function ScoutPanel({
+/**
+ * The scouting report, opened inline under the prospect's row on the board
+ * (like the game's draft room), not as a modal.
+ */
+export function ScoutDetails({
   data,
   prospect,
   team,
   counts,
-  onDraft,
-  onClose,
 }: {
   data: MockDraftData;
   prospect: MockProspect;
   /** The team on the clock, for the fit line. */
   team: MockTeam;
   counts: Record<Position, number>;
-  /** Present when the user can draft him right now. */
-  onDraft?: () => void;
-  onClose: () => void;
 }) {
   const { data: scout, failed } = useScoutData(data.asOf);
   const entry = scout?.prospects[String(prospect.pid)];
@@ -105,53 +103,19 @@ export function ScoutPanel({
   const tier = prospectTier(prospect.pot);
   const ratingKeys = POSITION_RATINGS[prospect.pos].filter((key) => entry?.ratings[key] !== undefined);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Scouting report: ${prospect.firstName} ${prospect.lastName}`}
-        className="w-full sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-[var(--surface)] p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-semibold text-[var(--text-sec)]">
-              Board #{prospect.rank} · {tier}
-            </div>
-            <h2 className="text-xl font-bold text-[var(--text)]">
-              {prospect.firstName} {prospect.lastName}
-            </h2>
-            <div className="text-sm text-[var(--text-sec)]">
-              {prospect.pos} · {profile?.college ?? prospect.college}
-              {profile?.classYear ? ` · ${profile.classYear}` : ''} · {heightLabel(prospect.hgt)}, {prospect.weight} lb · Age{' '}
-              {prospect.age}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close scouting report"
-            className="shrink-0 rounded-lg px-2 py-1 text-lg leading-none text-[var(--text-sec)] hover:bg-[var(--surface-2)]"
-          >
-            ×
-          </button>
+    <div className="px-3 pb-4 pt-1" aria-label={`Scouting report: ${prospect.firstName} ${prospect.lastName}`}>
+      <div>
+        <div className="text-xs text-[var(--text-sec)]">
+          Board #{prospect.rank} · {tier} · {prospect.pos} · {profile?.college ?? prospect.college}
+          {profile?.classYear ? ` · ${profile.classYear}` : ''} · {heightLabel(prospect.hgt)}, {prospect.weight} lb · Age{' '}
+          {prospect.age}
         </div>
 
         <p className={`mt-3 rounded-lg border px-3 py-2 text-sm ${FIT_STYLE[fit.fit]}`}>{fit.text}</p>
 
         {!scout && !failed && <p className="mt-4 text-sm text-[var(--text-sec)]">Loading the scouting report…</p>}
-        {failed && <p className="mt-4 text-sm text-[var(--text-sec)]">Couldn&apos;t load the scouting report. Close and try again.</p>}
+        {failed && <p className="mt-4 text-sm text-[var(--text-sec)]">Couldn&apos;t load the scouting report. Collapse it and try again.</p>}
 
         {scout && (
           <>
@@ -261,17 +225,6 @@ export function ScoutPanel({
               )}
             </p>
           </>
-        )}
-
-        {onDraft && (
-          <div className="mt-5 flex justify-end gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Close
-            </Button>
-            <Button onClick={onDraft}>
-              Draft {prospect.lastName}
-            </Button>
-          </div>
         )}
       </div>
     </div>

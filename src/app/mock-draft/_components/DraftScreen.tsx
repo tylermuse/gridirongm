@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { gradeColor } from '@/lib/engine/draftGrades';
 import { ROSTER_LIMITS, type Position } from '@/types';
 import {
@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { ScoutPanel } from './ScoutPanel';
+import { ScoutDetails } from './ScoutDetails';
 import type { Speed } from './SetupScreen';
 
 const BOARD_PAGE_SIZE = 60;
@@ -133,45 +133,70 @@ function PickTicker({
 const BoardRow = memo(function BoardRow({
   prospect,
   teamColor,
+  expanded,
+  onToggle,
   onDraft,
-  onScout,
+  children,
 }: {
   prospect: MockProspect;
   teamColor: string;
+  expanded: boolean;
+  onToggle: (pid: number) => void;
   onDraft: (pid: number) => void;
-  onScout: (prospect: MockProspect) => void;
+  /** The scouting report, shown under the row while it's expanded. */
+  children?: ReactNode;
 }) {
   return (
-    <li className="flex items-center gap-3 px-3 py-2 border-b border-[var(--border)] last:border-b-0">
-      <span className="w-7 shrink-0 text-xs font-semibold tabular-nums text-[var(--text-sec)]">{prospect.rank}</span>
-      {/* No id: PlayerAvatar would give a real prospect with no headshot a made-up face. */}
-      <PlayerAvatar
-        player={{
-          firstName: prospect.firstName,
-          lastName: prospect.lastName,
-          position: prospect.pos,
-          photoUrl: prospect.imgURL || undefined,
-        }}
-        size="sm"
-        teamColor={teamColor}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-[var(--text)] truncate">
-          {prospect.firstName} {prospect.lastName}
+    <li className={`border-b border-[var(--border)] last:border-b-0 ${expanded ? 'bg-[var(--surface-2)]' : ''}`}>
+      {/* Clicking the row opens the report underneath, like the game's draft board. */}
+      <div
+        className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${expanded ? '' : 'hover:bg-[var(--surface-2)]'}`}
+        onClick={() => onToggle(prospect.pid)}
+      >
+        <svg
+          className={`w-3 h-3 shrink-0 text-[var(--text-sec)] transition-transform ${expanded ? 'rotate-90' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="w-7 shrink-0 text-xs font-semibold tabular-nums text-[var(--text-sec)]">{prospect.rank}</span>
+        {/* No id: PlayerAvatar would give a real prospect with no headshot a made-up face. */}
+        <PlayerAvatar
+          player={{
+            firstName: prospect.firstName,
+            lastName: prospect.lastName,
+            position: prospect.pos,
+            photoUrl: prospect.imgURL || undefined,
+          }}
+          size="sm"
+          teamColor={teamColor}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-[var(--text)] truncate">
+            {prospect.firstName} {prospect.lastName}
+          </div>
+          <div className="text-xs text-[var(--text-sec)] truncate">
+            {prospect.college} · {heightLabel(prospect.hgt)}, {prospect.weight} lb
+          </div>
         </div>
-        <div className="text-xs text-[var(--text-sec)] truncate">
-          {prospect.college} · {heightLabel(prospect.hgt)}, {prospect.weight} lb
-        </div>
+        <Badge variant="blue" className="shrink-0">
+          {prospect.pos}
+        </Badge>
+        {/* The buttons sit outside the row's click target, so Draft doesn't also toggle the report. */}
+        <span className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button size="sm" variant="secondary" aria-expanded={expanded} onClick={() => onToggle(prospect.pid)}>
+            {expanded ? 'Hide' : 'Scout'}
+          </Button>
+          <Button size="sm" onClick={() => onDraft(prospect.pid)}>
+            Draft
+          </Button>
+        </span>
       </div>
-      <Badge variant="blue" className="shrink-0">
-        {prospect.pos}
-      </Badge>
-      <Button size="sm" variant="secondary" onClick={() => onScout(prospect)} className="shrink-0">
-        Scout
-      </Button>
-      <Button size="sm" onClick={() => onDraft(prospect.pid)} className="shrink-0">
-        Draft
-      </Button>
+      {expanded && children}
     </li>
   );
 });
@@ -227,7 +252,8 @@ function AvailableBoard({
   counts: Record<Position, number>;
   onDraft: (pid: number) => void;
 }) {
-  const [scouting, setScouting] = useState<MockProspect | null>(null);
+  const [expandedPid, setExpandedPid] = useState<number | null>(null);
+  const toggle = useCallback((pid: number) => setExpandedPid((current) => (current === pid ? null : pid)), []);
   const [position, setPosition] = useState<Position | null>(null);
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(BOARD_PAGE_SIZE);
@@ -279,7 +305,16 @@ function AvailableBoard({
       ) : (
         <ul className="lg:max-h-[calc(100vh-22rem)] overflow-y-auto">
           {filtered.slice(0, limit).map((p) => (
-            <BoardRow key={p.pid} prospect={p} teamColor={team.colors[0]} onDraft={onDraft} onScout={setScouting} />
+            <BoardRow
+              key={p.pid}
+              prospect={p}
+              teamColor={team.colors[0]}
+              expanded={expandedPid === p.pid}
+              onToggle={toggle}
+              onDraft={onDraft}
+            >
+              {expandedPid === p.pid && <ScoutDetails data={data} prospect={p} team={team} counts={counts} />}
+            </BoardRow>
           ))}
           {filtered.length > limit && (
             <li className="p-3 text-center">
@@ -289,19 +324,6 @@ function AvailableBoard({
             </li>
           )}
         </ul>
-      )}
-      {scouting && (
-        <ScoutPanel
-          data={data}
-          prospect={scouting}
-          team={team}
-          counts={counts}
-          onDraft={() => {
-            setScouting(null);
-            onDraft(scouting.pid);
-          }}
-          onClose={() => setScouting(null)}
-        />
       )}
     </div>
   );
