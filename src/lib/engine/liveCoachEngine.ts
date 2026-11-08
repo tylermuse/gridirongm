@@ -16,7 +16,7 @@ import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
 import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickWeighted } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
-import { playerAvailable, fieldGoalMakeProbability } from './simulate';
+import { playerAvailable, fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
 
 export interface LiveEngineState {
@@ -451,6 +451,18 @@ export function createLiveCoachEngine(
 
   // ── Play execution ──
 
+  /** A lost fumble at the current spot: logged as its own 'fumble' event right
+   *  after the play (the same shape the watch-live engine uses, which is what
+   *  the 3D sim and the booth key on), then the defense takes over there. */
+  function loseFumble(events: PlayEvent[], desc: string, carrier: Player | null, forcer: Player | null) {
+    events.push(makeEvent('fumble', desc, 0, false));
+    bump(carrier, { fumbles: 1 });
+    bump(forcer, { forcedFumbles: 1 });
+    if (state.overtime) state.otPlayRunThisPossession = true;
+    switchPossession(clamp(100 - state.fieldPos, 1, 99));
+    advancePlayClock(6, 0);
+  }
+
   function runRunPlay(events: PlayEvent[], rusherOverride?: 'rb' | 'qb', callPrefix = '') {
     const ok = offKey();
     const dk = defKey();
@@ -489,13 +501,24 @@ export function createLiveCoachEngine(
     bump(rusher, { rushAttempts: 1, rushYards: finalYards, rushTDs: isTD ? 1 : 0 });
     // A runner who isn't scoring got tackled — credit a front-seven/secondary
     // defender (mirrors the full sim's team tackle on every non-TD carry).
-    if (!isTD) bump(pickTackler(dk), { tackles: 1 });
+    const tackler = isTD ? null : pickTackler(dk);
+    if (tackler) bump(tackler, { tackles: 1 });
 
     if (isTD) {
       handleTouchdown(events, state.possession === userSide);
     } else {
       state.fieldPos = clamp(newPos, 1, 99);
       state.yardsToGo -= finalYards;
+      // Lost fumble on the carry — same ball-security odds as the watch-live engine.
+      const carrying = rating(rusher, 'carrying', isQb ? 50 : 70);
+      const fumbleChance = isQb
+        ? clamp(0.018 - (carrying / 100) * 0.006, 0.005, 0.025)
+        : clamp(0.015 - (carrying / 100) * 0.008, 0.003, 0.02);
+      if (Math.random() < fumbleChance) {
+        const rec = pickTackler(dk) ?? tackler;
+        loseFumble(events, `Fumble! ${name} has it punched out — recovered by ${nameOrFallback(rec, 'the defense')}!`, rusher, tackler);
+        return;
+      }
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
         return;
@@ -527,6 +550,16 @@ export function createLiveCoachEngine(
       bump(sacker, { sacks: 1 });
       state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
       state.yardsToGo -= sackYards;
+      // Strip-sack (~6% of sacks at NFL rates).
+      if (Math.random() < stripSackLossChance(ok.qb)) {
+        const rec = pickSacker(dk.dls.filter(p => p !== sacker), dk.lbs.filter(p => p !== sacker)) ?? sacker;
+        const sName = nameOrFallback(sacker, 'the rusher');
+        loseFumble(events, rec && sacker && rec.id === sacker.id
+          ? `Fumble! Strip-sack — ${sName} knocks it out of ${qbName}'s hands and it's recovered by ${sName} himself!`
+          : `Fumble! Strip-sack — ${sName} knocks it out of ${qbName}'s hands, recovered by ${nameOrFallback(rec, 'the defense')}!`,
+          ok.qb, sacker);
+        return;
+      }
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
         return;
@@ -586,13 +619,20 @@ export function createLiveCoachEngine(
       bump(ok.qb, { passAttempts: 1, passCompletions: 1, passYards: finalYards, passTDs: isTD ? 1 : 0 });
       bump(target, { targets: 1, receptions: 1, receivingYards: finalYards, receivingTDs: isTD ? 1 : 0 });
       // Receiver brought down short of the end zone — credit the tackle.
-      if (!isTD) bump(pickTackler(dk), { tackles: 1 });
+      const tackler = isTD ? null : pickTackler(dk);
+      if (tackler) bump(tackler, { tackles: 1 });
 
       if (isTD) {
         handleTouchdown(events, state.possession === userSide);
       } else {
         state.fieldPos = clamp(newPos, 1, 99);
         state.yardsToGo -= finalYards;
+        // Fumble after the catch (~1 in 200 completions at NFL rates).
+        if (Math.random() < catchFumbleLossChance(target)) {
+          const rec = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? tackler;
+          loseFumble(events, `Fumble! ${recName} has it punched out after the catch — recovered by ${nameOrFallback(rec, 'the defense')}!`, target, tackler);
+          return;
+        }
         if (advanceDown() === 'turnover_on_downs') {
           handleTurnoverOnDowns(events);
           return;

@@ -1,6 +1,6 @@
 import type { Player, PlayerStats, GameResult, Team } from '@/types';
 import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
-import { fieldGoalMakeProbability } from './simulate';
+import { fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
 
 // ---------------------------------------------------------------------------
@@ -435,6 +435,31 @@ function descFumble(rb: Player | null, lb: Player | null): string {
     `Fumble! ${rbName} loses the ball — recovered by ${lbName}!`,
     `${lbName} strips ${rbName} — turnover on the field!`,
     `Ball is out! ${rbName} fumbles and ${lbName} pounces on it!`,
+  ]);
+}
+
+/** Strip-sack: logged as its own 'fumble' event right after the sack. */
+function descStripSack(qb: Player | null, sacker: Player | null, recoverer: Player | null): string {
+  const qbName = playerTag(qb, 'the quarterback');
+  const sName = playerTag(sacker, 'the rusher');
+  const rName = playerTag(recoverer, 'the defense');
+  const self = !!sacker && !!recoverer && sacker.id === recoverer.id;
+  return pick(self ? [
+    `Fumble! Strip-sack — ${sName} knocks it out of ${qbName}'s hands and recovers it himself!`,
+    `Ball is out! ${sName} strips ${qbName} and falls on it — turnover!`,
+  ] : [
+    `Fumble! Strip-sack — ${sName} knocks it out of ${qbName}'s hands and ${rName} recovers!`,
+    `Ball is out! ${sName} strips ${qbName} — ${rName} pounces on it!`,
+  ]);
+}
+
+/** Fumble after the catch: logged as its own 'fumble' event right after the completion. */
+function descCatchFumble(receiver: Player | null, recoverer: Player | null): string {
+  const recName = playerTag(receiver, 'the receiver');
+  const rName = playerTag(recoverer, 'the defense');
+  return pick([
+    `Fumble! ${recName} has it punched out after the catch — recovered by ${rName}!`,
+    `Ball is out! ${recName} coughs it up after the catch and ${rName} falls on it!`,
   ]);
 }
 
@@ -1472,6 +1497,17 @@ export function simulatePlayByPlay(
         state.yardsToGo -= sackYards;
         advanceClock(8);
 
+        // Strip-sack (~6% of sacks at NFL rates): the ball comes out and the
+        // defense recovers. Logged as a follow-up 'fumble' like a run fumble.
+        if (Math.random() < stripSackLossChance(ok.qb)) {
+          const recoverer = pickSacker(dk.dls.filter(p => p !== sacker), dk.lbs.filter(p => p !== sacker)) ?? sacker;
+          addEvent('fumble', descStripSack(ok.qb, sacker, recoverer), 0, false);
+          if (ok.qb) creditRusher(ob, ok.qb.id, { fumbles: 1 });
+          shiftMomentum(-20);
+          switchPossession(clamp(100 - state.fieldPos, 1, 99));
+          return true;
+        }
+
       } else if (roll < sackChance + intChance) {
         // INTERCEPTION — pick interceptor from CB/S/LB pool; CBs still far
         // more likely but safeties and rare LB picks show up.
@@ -1543,6 +1579,16 @@ export function simulatePlayByPlay(
         state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
         state.yardsToGo -= yardsGained;
         advanceClock(Math.floor(Math.random() * 10) + 25);
+
+        // Fumble after the catch (~1 in 200 completions at NFL rates).
+        if (Math.random() < catchFumbleLossChance(receiver)) {
+          const recoverer = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.lb1;
+          addEvent('fumble', descCatchFumble(receiver, recoverer), 0, false);
+          if (receiver) creditRusher(ob, receiver.id, { fumbles: 1 });
+          shiftMomentum(-20);
+          switchPossession(clamp(100 - state.fieldPos, 1, 99));
+          return true;
+        }
 
       } else {
         // INCOMPLETE

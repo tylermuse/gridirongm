@@ -20,7 +20,8 @@ export interface SimPlayResult {
   good?: boolean;
   /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front */
   style?: 'scramble' | 'screen';
-  /** the run ends in a lost fumble (the engine logs it as the next event): stripped at the tackle, the defense falls on it */
+  /** the play ends in a lost fumble (the engine logs it as the next event): a run or a catch stripped at the tackle, or a
+   *  strip-sack — the ball squirts loose and the defense falls on it */
   fumble?: boolean;
   /** kickoff: the receiving team's yard line where the return ended / a touchback / a return touchdown */
   ret?: number;
@@ -168,9 +169,9 @@ export function toSimPlay(
 ): SimPlayMessage | null {
   const res = toSimResult(e);
   if (!res) return null;
-  // The engine logs a lost fumble as its own event right after the run ("Fumble! X loses the ball — recovered by Y"):
-  // picture both as one play — the run ends with the strip and the defense on the ball.
-  const fumbleNext = !!next && next.type === 'fumble' && res.kind === 'run' && !e.isScoring;
+  // The engine logs a lost fumble as its own event right after the run / sack / catch ("Fumble! X loses the ball — recovered
+  // by Y"): picture both as one play — it ends with the strip and the defense on the ball.
+  const fumbleNext = !!next && next.type === 'fumble' && (res.kind === 'run' || res.kind === 'sack' || res.kind === 'complete') && !e.isScoring;
   if (fumbleNext) res.fumble = true;
   const pts = pointsScored(e);
   return {
@@ -188,7 +189,7 @@ export function toSimPlay(
     },
     res,
     ...(rosters ? { who: withRecoverer(whoMadeThePlay(e, e.possession === 'home' ? rosters.home : rosters.away, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins),
-      fumbleNext ? next : null, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins) } : {}),
+      fumbleNext ? next : null, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins, res.kind) } : {}),
   };
 }
 
@@ -321,7 +322,9 @@ function simKit(
  *  pick, the defender who makes it — found by name in the play-by-play line
  *  ("J. Hurts completes to D. Smith for 11 yards."), so the 3D player making
  *  the play wears his number and skin. */
-export interface SimWho { ball?: SimMan & { pos: string }; def?: SimMan & { pos: string } }
+export interface SimWho { ball?: SimMan & { pos: string }; def?: SimMan & { pos: string };
+  /** strip-sack / fumble after the catch: the defender who falls on the ball (def stays the sacker) */
+  rec?: SimMan & { pos: string } }
 export interface SimNamedPlayer extends SimPlayerLike { firstName: string; lastName: string }
 
 function namesIn(desc: string, roster: SimNamedPlayer[]): { p: SimNamedPlayer; at: number }[] {
@@ -358,11 +361,14 @@ export function whoMadeThePlay(
   return who.ball || who.def ? who : undefined;
 }
 
-/** The defender who falls on a fumble (named in the fumble line) goes in who.def. */
-function withRecoverer(who: SimWho | undefined, fumble: PlayEvent | null | undefined, defense: SimNamedPlayer[], photoSkins?: Record<string, string>): SimWho | undefined {
+/** The defender who falls on a fumble (named last in the fumble line — a strip-sack names the sacker first): on a run he
+ *  goes in who.def; on a strip-sack or a fumble after the catch in who.rec (who.def stays the sacker). */
+function withRecoverer(who: SimWho | undefined, fumble: PlayEvent | null | undefined, defense: SimNamedPlayer[], photoSkins?: Record<string, string>, kind?: SimPlayResult['kind']): SimWho | undefined {
   if (!fumble) return who;
-  const rec = namesIn(fumble.description, defense)[0]?.p;
+  const named = namesIn(fumble.description, defense);
+  const rec = (kind === 'run' ? named[0] : named[named.length - 1])?.p;
   const n = Number(rec?.jerseyNumber);
   if (!rec || !Number.isInteger(n)) return who;
-  return { ...(who ?? {}), def: { n, s: skinToneFor(rec, photoSkins), pos: rec.position } };
+  const man = { n, s: skinToneFor(rec, photoSkins), pos: rec.position };
+  return kind === 'run' ? { ...(who ?? {}), def: man } : { ...(who ?? {}), rec: man };
 }

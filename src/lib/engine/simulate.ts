@@ -11,6 +11,27 @@ export function playerAvailable(p: Player): boolean {
   return !p.injury || p.injury.weeksLeft <= 0 || !!p.playingThroughInjury;
 }
 
+// ---------------------------------------------------------------------------
+// Lost-fumble odds outside the run game (shared by all three engines)
+// ---------------------------------------------------------------------------
+// NFL baselines (2019–24): ~12% of sacks knock the ball loose and the defense
+// recovers about half → ~6% of sacks are lost strip-sack fumbles; about 1 in
+// 200 completions ends with the receiver losing the ball. Together with run
+// fumbles that keeps lost fumbles near the NFL's ~0.5 per team per game.
+// Ball security (carrying) moves each rate about ±25%.
+
+/** Chance a sack ends in a lost fumble (strip-sack recovered by the defense). */
+export function stripSackLossChance(qb: Player | null | undefined): number {
+  const carrying = qb?.ratings.carrying ?? 60;
+  return clamp(0.08 - (carrying / 100) * 0.035, 0.04, 0.08);
+}
+
+/** Chance a (non-scoring) completion ends with the receiver losing a fumble. */
+export function catchFumbleLossChance(receiver: Player | null | undefined): number {
+  const carrying = receiver?.ratings.carrying ?? 60;
+  return clamp(0.0075 - (carrying / 100) * 0.004, 0.003, 0.0075);
+}
+
 /** OVR drop applied to a player who is playing through an active injury.
  *  Scales by how many weeks remain on the injury timeline. */
 export function injuryOvrPenalty(p: Player): number {
@@ -461,7 +482,9 @@ function simulatePlay(
             return posWeight * ratingFactor;
           }))
         : allDefenders[0];
-      return { type: 'sack', yards: sackYards, touchdown: false, turnover: false, passer: qb, sacker };
+      // Strip-sack: the ball comes loose and the defense falls on it.
+      const stripped = Math.random() < stripSackLossChance(qb);
+      return { type: 'sack', yards: sackYards, touchdown: false, turnover: stripped, passer: qb, sacker };
     }
 
     // ── Pick receiver with position-based target shares ──
@@ -584,8 +607,10 @@ function simulatePlay(
           }))
         : null;
 
+      // Fumble after the catch — the tackler punches it out.
+      const fumbled = !td && Math.random() < catchFumbleLossChance(target);
       return {
-        type: 'pass', yards, touchdown: td, turnover: false,
+        type: 'pass', yards, touchdown: td, turnover: fumbled,
         passer: qb, receiver: target, tackler: tackler ?? undefined,
       };
     } else {
@@ -782,7 +807,11 @@ function simulateDrive(
     }
 
     if (play.turnover) {
-      return { points: 0, plays, finalFieldPosition: fieldPosition };
+      // A strip-sack or a fumble after the catch changes hands where the ball
+      // came out, after the sack loss / the catch-and-run.
+      const at = play.type === 'sack' || play.type === 'pass'
+        ? clamp(fieldPosition + play.yards, 1, 99) : fieldPosition;
+      return { points: 0, plays, finalFieldPosition: at };
     }
 
     if (play.type === 'sack') {
@@ -1180,6 +1209,7 @@ export function simulateGame(
           s.receptions = (s.receptions ?? 0) + 1;
           s.receivingYards = (s.receivingYards ?? 0) + play.yards;
           if (play.touchdown) s.receivingTDs = (s.receivingTDs ?? 0) + 1;
+          if (play.turnover) s.fumbles = (s.fumbles ?? 0) + 1;
         } else if (play.receiver && rosterIds.has(play.receiver.id)) {
           const s = ensure(playerStats, play.receiver.id);
           s.targets = (s.targets ?? 0) + 1;
@@ -1188,6 +1218,10 @@ export function simulateGame(
           // ~65% of tackles are credited as solo (rest are assisted / team tackles)
           const s = ensure(playerStats, play.tackler.id);
           s.tackles = (s.tackles ?? 0) + 1;
+        }
+        if (play.turnover && play.tackler && rosterIds.has(play.tackler.id)) {
+          const s = ensure(playerStats, play.tackler.id);
+          s.forcedFumbles = (s.forcedFumbles ?? 0) + 1;
         }
         // Pass deflection on incomplete pass
         if (play.passDefender && rosterIds.has(play.passDefender.id)) {
@@ -1216,6 +1250,11 @@ export function simulateGame(
           s.sacks = (s.sacks ?? 0) + 1;
           s.tackles = (s.tackles ?? 0) + 1;
           s.tacklesForLoss = (s.tacklesForLoss ?? 0) + 1;
+          if (play.turnover) s.forcedFumbles = (s.forcedFumbles ?? 0) + 1;
+        }
+        if (play.turnover && play.passer && rosterIds.has(play.passer.id)) {
+          const s = ensure(playerStats, play.passer.id);
+          s.fumbles = (s.fumbles ?? 0) + 1;
         }
         // Charge sacksAllowed to one of the 5 starting OL (weighted by inverse blocking)
         // and passBlocks to the starting 5 OL on the passer's team
