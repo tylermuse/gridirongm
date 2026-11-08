@@ -620,3 +620,17 @@ export function scoutFit(
   }
   return { fit: 'depth', text: ranked ? `Not a pressing need: ${ranked}.` : `Not a pressing ${team.abbrev} need.` };
 }
+
+/**
+ * A finished mock from its share query, for handing to the game. Unlike
+ * parseShareQuery it doesn't require the data fingerprint to match: the weekly
+ * refresh (or a roster fix) changes it, and a mock someone just finished
+ * should still carry their picks into the game. The replay runs on the current
+ * data, so it's null only if their picks can't be made any more.
+ */
+export function replayForGame(data: MockDraftData, params: URLSearchParams): ReplayResult | null {
+  const current = new URLSearchParams(params);
+  current.set('d', dataFingerprint(data));
+  const share = parseShareQuery(data, current);
+  return share.kind === 'ok' ? share.replay : null;
+}

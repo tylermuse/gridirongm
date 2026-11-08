@@ -6,6 +6,10 @@ import {
   houseMock,
   needLabel,
   parseTeamPreselect,
+  replayDraft,
+  replayForGame,
+  encodeShareQuery,
+  parseShareQuery,
   starterRank,
   teamDraftNeeds,
   teamSlug,
@@ -76,6 +80,22 @@ describe('mock draft team pages', () => {
 
   it('carries a logo URL for every team', () => {
     for (const team of data.teams) expect(team.imgURL).toMatch(/^https:\/\//);
+  });
+
+  it('hands a finished mock to the game even after the data fingerprint changes', () => {
+    const nyj = findTeamBySlug(data, 'jets')!;
+    const settings = { seed: 5, rounds: 1 as const, userTids: [nyj.tid] };
+    const picks: number[] = [];
+    let replay = replayDraft(data, settings, picks);
+    while (replay.onClock) { picks.push(replay.available[0].pid); replay = replayDraft(data, settings, picks); }
+    const query = encodeShareQuery(data, settings, picks).replace(/d=[0-9a-z]+/, 'd=oldfingerprint');
+    // A share link from before a weekly refresh is stale for viewing...
+    expect(parseShareQuery(data, new URLSearchParams(query)).kind).toBe('stale');
+    // ...but still carries the user's picks into the game.
+    const forGame = replayForGame(data, new URLSearchParams(query))!;
+    expect(forGame.picks.filter((p) => p.isUser).map((p) => p.prospect.pid)).toEqual(picks);
+    // Picks that can't be made any more (a prospect who left the class) give nothing.
+    expect(replayForGame(data, new URLSearchParams(query.replace(/p=[^&]+/, 'p=zzzzz')))).toBeNull();
   });
 
   it('runs one complete, deterministic house mock', () => {

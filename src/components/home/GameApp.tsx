@@ -13,7 +13,7 @@ import { computeShowStatLine } from '@/lib/spotlight/teamStats';
 import { useAiCommentary } from '@/components/providers/useAiCommentary';
 
 import { useGameStore, computeLuxuryTax, whenSaveLoadSettles, retrySaveLoad, flushToStorage, type MockDraftStartPlan, type MockDraftStartStage } from '@/lib/engine/store';
-import { draftStartPlan, parseShareQuery, type MockDraftData } from '@/lib/mockDraft/engine';
+import { draftStartPlan, replayForGame, type MockDraftData } from '@/lib/mockDraft/engine';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
 import { setItem as idbSetItem } from '@bs/core/storage';
 import { pullCloudSave, getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
@@ -69,19 +69,38 @@ function TeamPicker() {
   // file the mock used; an older mock (stale order) just doesn't offer it.
   const mockParam = searchParams.get('mock');
   const [mockPlan, setMockPlan] = useState<MockDraftStartPlan | null>(null);
+  const [mockUnavailable, setMockUnavailable] = useState(false);
   const [mockProgress, setMockProgress] = useState<string | null>(null);
+  // Kept so a click on the mock team before the plan has loaded waits for it
+  // instead of quietly starting a normal league.
+  const mockPlanPromise = useRef<Promise<MockDraftStartPlan | null> | null>(null);
   useEffect(() => {
     if (!mockParam) return;
     let cancelled = false;
-    fetch('/mock/nfl-2027.json')
+    const promise = fetch('/mock/nfl-2027.json')
       .then((res) => (res.ok ? (res.json() as Promise<MockDraftData>) : Promise.reject(new Error(`HTTP ${res.status}`))))
       .then((data) => {
-        const share = parseShareQuery(data, new URLSearchParams(mockParam));
-        if (!cancelled && share.kind === 'ok') setMockPlan(draftStartPlan(data, share.replay));
+        const replay = replayForGame(data, new URLSearchParams(mockParam));
+        return replay ? draftStartPlan(data, replay) : null;
       })
-      .catch(() => { /* no offer; the normal picker still works */ });
+      .catch(() => null);
+    mockPlanPromise.current = promise;
+    promise.then((plan) => {
+      if (cancelled) return;
+      setMockPlan(plan);
+      setMockUnavailable(!plan);
+    });
     return () => { cancelled = true; };
   }, [mockParam]);
+
+  /** A team tile click. The mock's team starts at the draft with the mock's picks, same as the card above. */
+  async function pickTeam(abbr: string) {
+    if (mockParam && abbr === preselectedTeam && mockPlanPromise.current) {
+      const plan = await mockPlanPromise.current;
+      if (plan) return handlePick(abbr, false, plan);
+    }
+    return handlePick(abbr);
+  }
 
   // Auto-load roster from ?roster= query param (e.g. from /rosters page)
   useEffect(() => {
@@ -574,6 +593,12 @@ function TeamPicker() {
           </div>
         )}
 
+        {mockParam && mockUnavailable && (
+          <p className="w-full max-w-4xl mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900">
+            We couldn&apos;t carry this mock into the game (the draft board has changed since), so picking a team
+            starts a normal league. Run the mock again to start at the draft with your picks.
+          </p>
+        )}
         {mockPlan && preselectedTeam && activeUrl && (() => {
           const mockTeam = importedTeams?.teams.find(t => t.abbreviation === preselectedTeam);
           if (!mockTeam) return null;
@@ -631,7 +656,7 @@ function TeamPicker() {
             .sort((a, b) => Number(b.abbreviation === preselectedTeam) - Number(a.abbreviation === preselectedTeam) || a.city.localeCompare(b.city)).map(team => (
             <button
               key={team.abbreviation}
-              onClick={() => handlePick(team.abbreviation)}
+              onClick={() => pickTeam(team.abbreviation)}
               className={`group flex items-center gap-3 p-3 rounded-xl border bg-[var(--surface)]
                          hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left
                          ${team.abbreviation === preselectedTeam ? 'border-blue-500 ring-2 ring-blue-500' : 'border-[var(--border)]'}`}
@@ -641,7 +666,9 @@ function TeamPicker() {
                 <div className="text-sm font-bold truncate">{team.city}</div>
                 <div className="text-xs text-[var(--text-sec)] truncate">{team.name}</div>
                 {team.abbreviation === preselectedTeam && (
-                  <div className="text-xs font-semibold text-blue-600 truncate">Your mock draft team</div>
+                  <div className="text-xs font-semibold text-blue-600 truncate">
+                    {mockPlan ? `Starts at the ${mockPlan.draftYear} draft` : 'Your mock draft team'}
+                  </div>
                 )}
               </div>
             </button>
