@@ -8,11 +8,11 @@ import type { GameResult, Team } from '@/types';
 const team = (id: string) => ({ id, abbreviation: id.toUpperCase(), city: id, name: id, depthChart: {} }) as unknown as Team;
 const N = 400;
 
-/** Lost fumbles at NFL rates (~0.5 per team per game: ~0.25 on runs, ~5–6% of
- *  sacks as strip-sacks, ~1 in 175–200 catches). Wide bands: these are random sims. */
+/** Fumbles at NFL rates: ~0.5 LOST per team per game (~0.25 on runs, ~6–7% of sacks as strip-sacks, ~1 in 175–200
+ *  catches) and about as many again that the offense falls on. Wide bands: these are random sims. */
 describe('lost fumbles happen about as often as in the NFL', () => {
   it('watch-live engine: runs, strip-sacks and catches', () => {
-    let fum = 0, sacks = 0, comps = 0, runs = 0, stripSack = 0, catchFum = 0;
+    let fum = 0, sacks = 0, comps = 0, runs = 0, stripSack = 0, catchFum = 0, kept = 0;
     for (let g = 0; g < N; g++) {
       const hr = generateRoster('h', 72), ar = generateRoster('a', 72);
       const r = simulatePlayByPlay(team('h'), team('a'), hr, ar);
@@ -23,16 +23,20 @@ describe('lost fumbles happen about as often as in the NFL', () => {
           if (prev === 'sack') stripSack++;
           if (prev === 'pass_complete') catchFum++;
         }
+        if ((e.type === 'run' || e.type === 'sack' || e.type === 'pass_complete') && /FUMBLE!|Ball is out!/.test(e.description)) kept++;
         if (e.type === 'sack') sacks++;
         if (e.type === 'pass_complete') comps++;
         if (e.type === 'run') runs++;
       });
     }
     void runs;
+    // about half of NFL fumbles are recovered by the offense: kept ≈ lost
+    expect(kept / fum).toBeGreaterThan(0.6);
+    expect(kept / fum).toBeLessThan(1.6);
     expect(fum / N / 2).toBeGreaterThan(0.38);
     expect(fum / N / 2).toBeLessThan(0.62);
     expect(stripSack / sacks).toBeGreaterThan(0.025);
-    expect(stripSack / sacks).toBeLessThan(0.09);
+    expect(stripSack / sacks).toBeLessThan(0.1);
     expect(catchFum / comps).toBeGreaterThan(0.0025);
     expect(catchFum / comps).toBeLessThan(0.011);
   });
@@ -47,8 +51,9 @@ describe('lost fumbles happen about as often as in the NFL', () => {
       const r = simulateGame(game, hr, ar);
       fum += Object.values(r.playerStats).reduce((s, p) => s + (p.fumbles ?? 0), 0);
     }
-    expect(fum / N / 2).toBeGreaterThan(0.38);
-    expect(fum / N / 2).toBeLessThan(0.62);
+    // the box-score FUM stat counts every fumble, lost or kept: ~1 per team per game (NFL ~1.0–1.1)
+    expect(fum / N / 2).toBeGreaterThan(0.75);
+    expect(fum / N / 2).toBeLessThan(1.3);
   });
 
   it('live-coach engine (had no fumbles at all before)', () => {

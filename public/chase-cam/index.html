@@ -116,6 +116,9 @@ select{font:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px 
         <button data-force="fumble">Run fumble</button>
         <button data-force="stripsack">Strip-sack</button>
         <button data-force="catchfumble">Fumble after catch</button>
+        <button data-force="fumblekept">Run fumble, offense recovers</button>
+        <button data-force="stripkept">Strip-sack, offense recovers</button>
+        <button data-force="catchkept">Catch fumble, offense recovers</button>
       </div>
       <div class="sub">Outcome odds mirror the live-coach engine (sack, INT and completion rates by pass depth).</div>
     </div>
@@ -194,7 +197,11 @@ function planWho(m){
   }
   if(w.def && r.kind==='sack'){ if(w.def.pos==='LB') r.blitz = true; out.push(r.blitz? {side:'d',key:'lb',i:0,man:w.def} : {side:'d',key:'dl',i:0,man:w.def}); }   /* a backer credited with the sack came on the blitz */
   if(w.def && r.fumble && r.kind==='run') out.push({side:'d',key:'lb',i:0,man:w.def});   /* the middle backer is the one who falls on it */
-  if(w.rec && r.fumble && r.kind==='sack') out.push({side:'d',key:'dl',i:1,man:w.rec});   /* strip-sack: the tackle next to the sacking end falls on it */
+  if(w.rec && r.fumble && r.kind==='sack' && !r.kept) out.push({side:'d',key:'dl',i:1,man:w.rec});   /* strip-sack: the tackle next to the sacking end falls on it */
+  if(w.rec && r.fumble && r.kept){   /* the offense falls on its own fumble: the carrier himself, or the teammate the play-by-play names */
+    if((b && w.rec.n===b.n) || (r.kind==='sack' && w.rec.pos==='QB')) r.selfKeep = true;
+    else { const k = w.rec.pos==='OL'? ['ol',1] : w.rec.pos==='RB' && r.kind!=='run'? ['rb',0] : w.rec.pos==='TE' && r.recKey!=='te'? ['te',0] : null;
+      if(k){ out.push({side:'o',key:k[0],i:k[1],man:w.rec}); r.keepKey = k[0]+k[1]; } } }
   if(w.def && r.kind==='int' && r.batted) out.push({side:'d',key:'lb',i:0,man:w.def});   /* tipped at the line: the middle backer comes down with it */
   else if(w.def && r.kind==='int' && r.recKey && r.recKey!=='rb'){
     const k = r.depth==='deep'? (r.recKey==='wrR'? ['s',0] : ['s',1]) : ({wrL:['cb',1], wrR:['cb',0], te:['lb',0], slot:['s',1]})[r.recKey];
@@ -1564,7 +1571,17 @@ function choreograph(res){
       /* after a catch near the sideline the ball is punched back infield (one that squirts out of bounds stays the offense's) */
       let a1 = catchFum && Math.abs(carrier.x) > 10? Math.atan2(-Math.sign(carrier.x), R(-.2,.9)) : carrier.face + (Math.random()<.5?-1:1)*R(.35,1.5);
       let d1=R(1.5,2.6), d2=R(.8,1.6), d3=R(.3,.8), selfRec=false;
-      if(catchFum && tackler){ /* nobody else close: the man who punched it out smothers it himself, right beside him */
+      /* about half of NFL fumbles go back to the offense (Tyler): the carrier falls right back on it, or a teammate close by
+         (the man the play-by-play names, when the page could put him on a body) beats the defense to it */
+      const kept = !!res.kept, bigO = O.ol, bigD = D.dl;
+      let selfKeep = kept && !!res.selfKeep, keepRc = null;
+      if(kept && !selfKeep){ const guess=[bx0+Math.sin(a1)*3.2, bz0+Math.cos(a1)*3.2];
+        const named = ({ol1:O.ol[1], rb0:O.rb, te0:O.te})[res.keepKey];
+        const pool = catchFum? [O.wrL, O.wrR, O.slot, O.te, O.rb] : [...O.ol, O.rb, O.te];
+        keepRc = named && fresh(named)? named : pool.filter(fresh).sort(byDist(guess))[0];
+        if(!keepRc || Math.hypot(keepRc.x-guess[0], keepRc.z-guess[1]) > 6.5){ selfKeep = true; keepRc = null; } }
+      if(selfKeep){ d1=R(.5,.9); d2=R(.2,.4); d3=R(.1,.2); a1 = carrier.face + R(-.9,.9); }   /* it pops a yard out in front and he smothers it */
+      if(catchFum && tackler && !kept){ /* nobody else close: the man who punched it out smothers it himself, right beside him */
         const guess=[bx0+Math.sin(a1)*3.2, bz0+Math.cos(a1)*3.2], cand=[...D.lb, D.sL, D.sR, D.cbL, D.cbR].filter(fresh).sort(byDist(guess))[0];
         if(!cand || Math.hypot(cand.x-guess[0], cand.z-guess[1]) > 6){ selfRec = true; d1=R(.6,1.0); d2=R(.25,.45); d3=R(.1,.2); a1 = Math.atan2(tackler.x-carrier.x, tackler.z-carrier.z) + R(-.5,.5); } }
       const a2 = a1 + R(-.9,.9), a3 = a2 + R(-.6,.6);
@@ -1579,30 +1596,33 @@ function choreograph(res){
       /* who falls on it: on a run the middle backer; on a strip-sack the tackle beside the sacking end comes off his block (the
          page puts the man the play-by-play names on him); after a catch, whichever defender is closest to where it ends up */
       const nearest = pool => pool.filter(fresh).sort(byDist(p3))[0];
-      const rc = selfRec? tackler
+      const rc = selfKeep? carrier : keepRc? keepRc : selfRec? tackler
         : res.kind==='sack'? (fresh(D.dl[1])? D.dl[1] : nearest([...D.dl, ...D.lb]))
         : catchFum? (nearest([...D.lb, D.sL, D.sR, D.cbL, D.cbR]) ?? nearest(D.all))
         : (D.lb[1]!==tackler? D.lb[1] : D.lb[0]);
       /* the ball is on the turf ~1.0 s after it comes out; the recoverer gets there when he can (~6.5 yd/s), never in a blink */
-      const tLand = selfRec? t0 + 1.1 : Math.max(t0 + 1.1, playT + .15 + Math.hypot(rc.x-p3[0], rc.z-p3[1]) / 6.5 + .42), tDive = tLand - .42;   /* the dive (football_tackle from .58) puts his chest down ~.4 s after it starts */
+      const tLand = (selfRec || selfKeep)? t0 + 1.1 : Math.max(t0 + 1.1, playT + .15 + Math.hypot(rc.x-p3[0], rc.z-p3[1]) / 6.5 + .42), tDive = tLand - .42;   /* the dive (football_tackle from .58) puts his chest down ~.4 s after it starts */
       const dive = (a, t, back, side, ang)=>{ const ux=Math.sin(ang), uz=Math.cos(ang);
         a.engage=null; a.wrap=null; a.faceLock=null; a.truck=null; a.whiff=true;
         a.behav = P([playT, a.x, a.z], [Math.max(playT+.15, t), p3[0]-ux*back, p3[1]-uz*back]);
         ev(t, ()=>{ if(a.down!=null) return; a.face=Math.atan2(p3[0]-a.x, p3[1]-a.z); a.down=playT; a.fallDir=1; a.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side}; sndThump(.45,.3); }); };
       const angOf = a => Math.atan2(p3[0]-a.x, p3[1]-a.z);
-      if(!selfRec) dive(rc, tDive, 1.25, 1, angOf(rc));
+      if(!selfRec && !selfKeep) dive(rc, tDive, 1.25, 1, angOf(rc));
       ev(tLand+.05, ()=>{ ballPlan.forEach(sg=>{ if(sg.t1>1e8) sg.t1 = playT; }); ballPlan.push({t0:playT, t1:1e9, held:rc, off:[0,.22,.3]}); });   /* he's on it */
       /* make it obvious whose ball it is (Tyler: it looked like the offense fell on it): only DEFENDERS pile on, after the man
          who recovers; the offense's nearest men pull up short of the pile and hang their heads; the defenders who get there
          celebrate, pointing the other way — the defense's "our ball" signal */
       const reach = (a, t) => Math.hypot(a.x-p3[0], a.z-p3[1]) <= Math.max(0, t-playT)*7.6;   /* no one teleports onto the pile */
-      const pileD = D.all.filter(a=>a!==tackler && a!==rc && a.down==null && !D.dl.includes(a)).sort(byDist(p3));
+      /* the recovering side piles on and signals; the other side pulls up and hangs its head (a kept fumble flips who's who) */
+      const mine = kept? O : D, theirs = kept? D : O, mineBig = kept? bigO : bigD, theirsBig = kept? bigD : bigO;
+      const pileD = mine.all.filter(a=>a!==tackler && a!==carrier && a!==rc && a.down==null && !mineBig.includes(a)).sort(byDist(p3));
       const divers = pileD.filter(a=>reach(a, tDive+.3)).slice(0,2);
       divers.forEach((a,i)=>dive(a, tDive+.3+i*.24, 1.45, i? -1 : 1, angOf(a)+(i? .5 : -.5)));
       pileD.filter(a=>!divers.includes(a) && reach(a, tLand+.9)).slice(0,4).forEach((a,i)=>{ const ang=angOf(a), r=R(2.2,3.4); a.engage=null; a.wrap=null; a.faceLock=null;
         a.behav = P([playT, a.x, a.z], [tLand+.4+i*.15, p3[0]-Math.sin(ang)*r, p3[1]-Math.cos(ang)*r]);
         ev(tLand+.55+i*.18, ()=>{ if(a.down==null){ a.celebrate=playT; a.celebStyle= i%2? 'hop' : 'point'; } }); });
-      O.all.filter(a=>a!==carrier && a.down==null && !O.ol.includes(a) && reach(a, tLand+1.1)).sort(byDist(p3)).slice(0,3).forEach((a,i)=>{
+      /* their linemen standing over a backfield pile (a strip-sack) back off it too, so they can't read as the man on the ball */
+      theirs.all.filter(a=>a!==carrier && a!==tackler && a!==rc && a.down==null && (!theirsBig.includes(a) || Math.hypot(a.x-p3[0], a.z-p3[1]) < 3.5) && reach(a, tLand+1.1)).sort(byDist(p3)).slice(0,4).forEach((a,i)=>{
         const ang=angOf(a), r=R(3.0,4.2); a.engage=null; a.wrap=null; a.faceLock=null;
         a.behav = P([playT, a.x, a.z], [tLand+.5+i*.2, p3[0]-Math.sin(ang)*r, p3[1]-Math.cos(ang)*r]);
         ev(tLand+.9+i*.2, ()=>{ if(a.down==null) a.dejected=playT; }); });
@@ -2179,9 +2199,9 @@ function rollCall(call){
   const deep = call==='deep';
   const sack = deep? .10 : .05, int = deep? .06 : .025, comp = deep? .45 : .70;
   const r=Math.random();
-  if(r<sack) return {kind:'sack', yards:-Math.round(R(3,8)), depth:call, ...(Math.random()<.3? {blitz:true} : {}), ...(Math.random()<.06? {fumble:true} : {})};   /* ~6% of NFL sacks are lost strip-sacks */   /* about a third of sacks come from a blitzing backer */
+  if(r<sack) return {kind:'sack', yards:-Math.round(R(3,8)), depth:call, ...(Math.random()<.3? {blitz:true} : {}), ...(Math.random()<.12? {fumble:true, ...(Math.random()<.5? {kept:true} : {})} : {})};   /* ~12% of NFL sacks knock the ball loose; the offense falls on about half */   /* about a third of sacks come from a blitzing backer */
   if(r<sack+int) return {kind:'int', depth:call, ...(!deep && Math.random()<.12? {batted:true} : {})};   /* some short picks are tipped at the line */
-  if(Math.random()<comp) return {kind:'complete', depth:call, yards: deep? Math.max(14,Math.round(15+gauss(8,6))) : Math.max(2,Math.round(7+gauss(2,3))), ...(Math.random()<.006? {fumble:true} : {})};   /* about 1 catch in 175 is fumbled away */
+  if(Math.random()<comp) return {kind:'complete', depth:call, yards: deep? Math.max(14,Math.round(15+gauss(8,6))) : Math.max(2,Math.round(7+gauss(2,3))), ...(Math.random()<.012? {fumble:true, ...(Math.random()<.5? {kept:true} : {})} : {})};   /* about 1 catch in 85 is fumbled; half are lost */
   return {kind:'incomplete', depth:call, ...(!deep && Math.random()<.15? {batted:true} : {})};   /* about one short incompletion in seven is batted down at the line */
 }
 const FORCED = {
@@ -2210,6 +2230,9 @@ const FORCED = {
   tipint:()=>({kind:'int', depth:'short', batted:true}),
   stripsack:()=>({kind:'sack', yards:-Math.round(R(5,9)), depth:'short', fumble:true}),
   catchfumble:()=>({kind:'complete', depth:'short', yards:Math.round(R(7,13)), fumble:true}),
+  fumblekept:()=>({kind:'run', yards:Math.round(R(2,6)), fumble:true, kept:true}),
+  stripkept:()=>({kind:'sack', yards:-Math.round(R(5,9)), depth:'short', fumble:true, kept:true}),
+  catchkept:()=>({kind:'complete', depth:'short', yards:Math.round(R(7,13)), fumble:true, kept:true}),
 };
 
 // ---------- Flow ----------
@@ -2344,7 +2367,7 @@ function finishPlay(){
     const newFP = Math.max(1, Math.min(99, Math.round(50 - r.puntEndZ)));
     text='Punt'; log(`${t.id}: punt, returned to the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
     G.off=1-G.off; G.fieldPos=newFP; G.down=1; G.toGo=Math.min(10,100-newFP); newDrive=true;
-  } else if(r.fumble && play.fumbled){
+  } else if(r.fumble && play.fumbled && !r.kept){
     const rn = play.fumbleRec && play.fumbleRec.num!=null? `#${play.fumbleRec.num} ` : '';
     text= `${r.kind==='sack'? 'Strip-sack!' : 'Fumble!'} ${rn}recovers · ${team(1-G.off).id} ball`; cls='big';
     const at = Math.round(G.fieldPos + ((r.fumbleZ ?? (G.fieldPos-50)) - (G.fieldPos-50)));   /* spot of the recovery, offense yards */
@@ -2368,7 +2391,8 @@ function finishPlay(){
     else {
       const what = r.kind==='sack'? 'Sacked' : r.kind==='run'? (y<=0?'Stuffed':'Run') : (r.depth==='deep'?'Deep catch':'Catch');
       text = `${what} ${y>=0?'+':'−'}${Math.abs(y)}`; if(r.kind==='sack') cls='big';
-      log(`${t.id}: ${what.toLowerCase()} for ${y} yd${Math.abs(y)===1?'':'s'}`);
+      if(r.kept && play.fumbled){ const rn = play.fumbleRec && play.fumbleRec.num!=null? `#${play.fumbleRec.num} ` : ''; text = `Fumble! ${rn}recovers · ${t.id} keeps it`; cls='big'; }   /* the offense fell on its own fumble: no turnover */
+      log(`${t.id}: ${what.toLowerCase()} for ${y} yd${Math.abs(y)===1?'':'s'}${r.kept && play.fumbled? ' — fumbled, recovered by the offense' : ''}`);
       const first = advance(y); if(first && !newDrive){ text += ' · First down'; cls = cls||'good'; }
     }
   }

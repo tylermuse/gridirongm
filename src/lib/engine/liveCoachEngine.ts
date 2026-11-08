@@ -191,6 +191,16 @@ function nameOrFallback(p: Player | null, fallback: string): string {
   return `${p.firstName[0]}. ${p.lastName}`;
 }
 
+/** A fumble the OFFENSE recovers (about half of NFL fumbles): told in the play's own line, no change of possession.
+ *  Same wording as the watch-live engine — the 3D sim reads the last offensive name after "FUMBLE!" as the recoverer. */
+function keptFumbleTail(carrier: Player | null, pool: Player[]): string {
+  const mates = pool.filter(p => p && p !== carrier);
+  const rec = mates.length === 0 || Math.random() < 0.4 ? carrier : mates[Math.floor(Math.random() * mates.length)];
+  const c = nameOrFallback(carrier, 'the ball carrier');
+  if (!rec || rec === carrier) return ` FUMBLE! ${c} puts it on the ground — but falls right back on it. Offense keeps it.`;
+  return ` FUMBLE! ${c} coughs it up — but ${nameOrFallback(rec, 'a teammate')} falls on it. Offense keeps it.`;
+}
+
 // ── Engine factory ──
 
 export function createLiveCoachEngine(
@@ -514,10 +524,15 @@ export function createLiveCoachEngine(
       const fumbleChance = isQb
         ? clamp(0.018 - (carrying / 100) * 0.006, 0.005, 0.025)
         : clamp(0.015 - (carrying / 100) * 0.008, 0.003, 0.02);
+      const keptFumble = Math.random() < fumbleChance;   // about as many again that the offense falls on
       if (Math.random() < fumbleChance) {
         const rec = pickTackler(dk) ?? tackler;
         loseFumble(events, `Fumble! ${name} has it punched out — recovered by ${nameOrFallback(rec, 'the defense')}!`, rusher, tackler);
         return;
+      }
+      if (keptFumble) {
+        events[events.length - 1].description += keptFumbleTail(rusher, ok.tes);
+        bump(rusher, { fumbles: 1 });
       }
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
@@ -559,6 +574,10 @@ export function createLiveCoachEngine(
           : `Fumble! Strip-sack — ${sName} knocks it out of ${qbName}'s hands, recovered by ${nameOrFallback(rec, 'the defense')}!`,
           ok.qb, sacker);
         return;
+      }
+      if (Math.random() < stripSackLossChance(ok.qb)) {   // the ball comes out but the offense falls on it
+        events[events.length - 1].description += keptFumbleTail(ok.qb, ok.rbs);
+        bump(ok.qb, { fumbles: 1 });
       }
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
@@ -627,11 +646,15 @@ export function createLiveCoachEngine(
       } else {
         state.fieldPos = clamp(newPos, 1, 99);
         state.yardsToGo -= finalYards;
-        // Fumble after the catch (~1 in 200 completions at NFL rates).
+        // Fumble after the catch (~1 in 175 completions lost at NFL rates; about as many the offense falls on).
         if (Math.random() < catchFumbleLossChance(target)) {
           const rec = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? tackler;
           loseFumble(events, `Fumble! ${recName} has it punched out after the catch — recovered by ${nameOrFallback(rec, 'the defense')}!`, target, tackler);
           return;
+        }
+        if (Math.random() < catchFumbleLossChance(target)) {
+          events[events.length - 1].description += keptFumbleTail(target, [...ok.wrs, ...ok.tes]);
+          bump(target, { fumbles: 1 });
         }
         if (advanceDown() === 'turnover_on_downs') {
           handleTurnoverOnDowns(events);
