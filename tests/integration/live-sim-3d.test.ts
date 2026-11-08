@@ -32,6 +32,15 @@ describe('liveSim3d.toSimResult', () => {
     // the live engine's own 20+ wording on an uncalled (CPU) play still reads as deep
     expect(toSimResult(ev({ type: 'pass_complete', description: 'J. Hurts fires deep to D. Smith — 23 yards!', yardsGained: 23 }))).toEqual({ kind: 'complete', depth: 'deep', yards: 23 });
   });
+  it('a ball the play-by-play says was batted / tipped at the line is pictured at the line (11/8: it showed a DB breakup downfield)', () => {
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: "J. Hurts intended for D. Smith but it's batted down." }))).toEqual({ kind: 'incomplete', depth: 'short', batted: true });
+    // the word "downfield" elsewhere doesn't make a batted ball a deep shot
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: "🚀 Deep Shot — J. Hurts intended for D. Smith downfield but it's batted down." }))).toEqual({ kind: 'incomplete', depth: 'short', batted: true });
+    expect(toSimResult(ev({ type: 'interception', description: '🚨 Tipped at the line! Z. Franklin comes down with the pick!' }))).toEqual({ kind: 'int', depth: 'short', batted: true });
+    // an ordinary miss or pick is unchanged
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: 'Incomplete — J. Hurts misses D. Smith downfield.' }))).toEqual({ kind: 'incomplete', depth: 'deep' });
+    expect(toSimResult(ev({ type: 'interception', description: '🚨 Intercepted! Z. Franklin picks off J. Hurts!' }))).toEqual({ kind: 'int', depth: 'short' });
+  });
   it('reads the live engine kickoff results (return spot, touchback, return TD)', () => {
     expect(toSimResult(ev({ type: 'kickoff', description: 'Kickoff returned to the 28 by D. Hill.' }))).toEqual({ kind: 'kickoff', ret: 28 });
     expect(toSimResult(ev({ type: 'kickoff', description: 'Kickoff sails into the end zone — touchback. Ball at the 35.' }))).toEqual({ kind: 'kickoff', touchback: true });

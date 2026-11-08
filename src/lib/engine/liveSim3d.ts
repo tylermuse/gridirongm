@@ -31,6 +31,9 @@ export interface SimPlayResult {
   endAt?: number;
   touchback?: boolean;
   td?: boolean;
+  /** incomplete / int: the play-by-play says the ball was batted down or tipped at the line. A lineman gets a hand on it,
+   *  it pops up, and a backer leaps for it (catches it on a tipped pick). Always a short throw. */
+  batted?: boolean;
 }
 
 export interface SimPlayMessage {
@@ -75,6 +78,8 @@ function passDepth(desc: string, y: number): 'short' | 'deep' {
 }
 const SCRAMBLE_RE = /scramble/i;
 const SCREEN_RE = /screen/i;
+/** playByPlay.ts: "intended for X but it's batted down" / "Tipped at the line! X comes down with the pick!" */
+const BATTED_RE = /batted|tipped at the line|knocked down at the line/i;
 const TWO_POINT_RE = /^2-PT|two-point/i;
 const KNEEL_RE = /takes a knee|kneels|victory formation/i;
 const FAKE_RE = /FAKE PUNT|ONSIDE/i;
@@ -101,6 +106,7 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
     case 'pass_complete':
       return { kind: 'complete', depth: SCREEN_RE.test(e.description) ? 'short' : passDepth(e.description, y), yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'pass_incomplete':
+      if (BATTED_RE.test(e.description) && !SCREEN_RE.test(e.description)) return { kind: 'incomplete', depth: 'short', batted: true };
       return { kind: 'incomplete', depth: SCREEN_RE.test(e.description) ? 'short' : DEEP_CALL_RE.test(e.description) || (!SHORT_CALL_RE.test(e.description) && /deep|bomb|downfield|long/i.test(e.description)) ? 'deep' : 'short', ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'touchdown':
       return RUSH_TD_RE.test(e.description)
@@ -111,6 +117,7 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
     case 'sack':
       return { kind: 'sack', yards: y };
     case 'interception':
+      if (BATTED_RE.test(e.description)) return { kind: 'int', depth: 'short', batted: true };
       return { kind: 'int', depth: /deep|downfield|long/i.test(e.description) ? 'deep' : 'short' };
     case 'field_goal_good':
       return { kind: 'fg', good: true };
