@@ -111,6 +111,8 @@ select{font:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px 
         <button data-force="tipint">Tipped pick</button>
         <button data-force="blitz">LB blitz sack</button>
         <button data-force="comeback">Comeback</button>
+        <button data-force="bracket">Safety over the top</button>
+        <button data-force="fgpost">FG goalpost cam</button>
       </div>
       <div class="sub">Outcome odds mirror the live-coach engine (sack, INT and completion rates by pass depth).</div>
     </div>
@@ -166,7 +168,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17m'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17n'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -976,13 +978,14 @@ function choreograph(res){
     lineD.forEach((a,i)=>{ a.faceLock={angle:Math.PI, until:99}; a.behav = P([snap,a.x,a.z],[snap+.4,a.x+(i%2?.3:-.3),a.z-.7],[snap+2.4,a.x,a.z-1.0]); });
     if(res.kind==='fg'){
       const K=O.rb, H=O.qb, tKick = snap+1.35, spot=[.35, z0-6.8];
+      if(res.postCam==null) res.postCam = !res.xp && Math.random() < (window.__postCam ?? .5);   /* about half the field goals are shot from the goalpost cam */
       ballPlan = [{t0:-1, t1:snap, held:O.ol[2], off:[0,.25,.45]},
         {t0:snap, t1:snap+.5, flight:{x0:0,y0:.4,z0:z0-.3, x1:spot[0],y1:.5,z1:spot[1]-.2, h:.25}},
         {t0:snap+.5, t1:tKick, hold:spot}];
       H.catchT = snap+.5; H.faceLock={angle:Math.PI/2, until:99}; H.hold=true;
       // kicker: two-step approach timed to meet the ball as the holder sets it, then watch it
       K.behav = P([0,K.x,K.z],[tKick+1.2,K.x,K.z]); K.faceLock={angle:0, until:99};   /* the captured approach carries him from his mark to the ball */
-      K.kickT = tKick; K.mocapAct = {clip:'football_kick', t0:tKick-1.05, start:0, end:2.1}; ev(tKick, ()=>sndThump(.8,.9));
+      K.kickT = tKick; res.fgKickT = tKick; K.mocapAct = {clip:'football_kick', t0:tKick-1.05, start:0, end:2.1}; ev(tKick, ()=>sndThump(.8,.9));
       H.mocapAct = {clip:'football_holder', t0:snap+.5, start:1.9, end:4.2};   /* measured: the capture holds the ball on the turf from 1.0 to 2.7 s and the hand comes up at 2.8 (the kick). Entering at 1.9 when the ball is spotted puts the kick at 2.75 = tKick, so the hand never lifts before contact */
       // the ball: through the uprights (y≈5.5 at the posts) or wide of them
       const zPost=60.5, zLand=74, good=!!res.good, xEnd = good? R(-1.6,1.6) : (Math.random()<.5?-1:1)*(3.08+R(1.0,2.6));
@@ -1155,6 +1158,8 @@ function choreograph(res){
     const bat = !deep && !scn && (res.kind==='incomplete' || res.kind==='int') && !!(window.__bat ?? res.batted);
     /* overthrown deep ball (reference: Prescott flushed left at GB, SNF 3rd & 7): the receiver lays out for it, the DB dives with him, the ball skips past both */
     const layout = deep && res.kind==='incomplete' && (res.layout ?? (window.__layout ?? Math.random() < .6));
+    /* bracketed deep shot (reference: DAL @ IND on FOX, #88's fade at the pylon, Tyler 11/8): the safety rolls over the top and jars it loose */
+    const bracket = deep && res.kind==='incomplete' && !layout && !!(res.bracket ?? window.__bracket ?? Math.random() < .7);
     const dropZ = z0-(deep?7.6: scn? 5.6 : 6.4), tSet = snap+(deep?1.25: scn? .8 : 1.0); let tThrow = snap+(deep?1.85: scn? 1.3 : 1.35);
     O.rb.behav = P([snap,1.6,z0-6.6],[snap+.55,2.6,z0-5.2],[snap+.95,3.4,z0-5],[snap+1.9,9.5,z0-2.5],[snap+3.6,17,z0+5.5]);   // check, then release to the flat
     let rec, catchX, Yc, routeKeys;
@@ -1393,6 +1398,26 @@ function choreograph(res){
       ev(tCatch+.35, ()=>sndThump(.7,.4));
       ev(tCatch+1.3, ()=>{ D.all.forEach(d=>{ if(d!==cover) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
       tEnd = tCatch+1.4; carrier=null; endPos=[kx,kz];
+    } else if(res.kind==='incomplete' && bracket){
+      /* the corner trails on the inside hip a step behind; the safety reads the QB from the deep middle, comes over the top and
+         arrives with the ball. The hit knocks the receiver down and the ball pops loose to the turf. */
+      const sf = rec===O.wrR? D.sR : D.sL, sg = Math.sign(catchX)||1;
+      Object.assign(flightSeg.flight, {x1:catchX, z1:cz, y1:2.0});
+      rec.catchT = tCatch; rec.jumpT = tCatch;
+      rec.behav = P(...routeKeys, [tCatch+.6, catchX + sg*1.2, cz+1.4]);
+      cover.catchT = null; cover.jumpT = null;
+      cover.behav = P([snap, cover.x, cover.z], [snap+.8, cover.x, cover.z+2.5], [tCatch, catchX - sg*1.0, cz-1.3], [tCatch+.8, catchX - sg*.3, cz+.4]);
+      sf.catchT = null; sf.jumpT = null; sf.engage = null;
+      sf.behav = P([snap, sf.x, sf.z], [snap+.7, sf.x*.9, sf.z+.8], [tCatch+.02, catchX - sg*.55, cz+.75]);
+      ev(tCatch-.6, ()=>{ sf.faceLock = {angle: Math.atan2(catchX-sf.x, cz-sf.z), until: tCatch+.5}; });
+      ev(tCatch+.04, ()=>{ const dx=rec.x-sf.x, dz=rec.z-sf.z, d=Math.hypot(dx,dz)||1;
+        rec.catchT = null; rec.down = playT; rec.fallDir = -1; rec.knock = {vx:dx/d*2.8, vz:dz/d*2.8, t0:playT};
+        sf.behav = {type:'coast', vx:(sf.vx||0)*.6, vz:(sf.vz||0)*.6, t0:playT}; sndThump(1.0,.45); sndRoar(.4,.3,.9,2,'cheer'); });
+      sf.celebAt = tCatch + 1.0; sf.celebStyle = 'point';
+      const kx = catchX + sg*R(.8,2.2), kz = cz + R(.6,2.2);
+      ballPlan.push({t0:tCatch, t1:tCatch+.6, flight:{x0:catchX,y0:2.0,z0:cz, x1:kx,y1:.16,z1:kz, h:1.0}}, {t0:tCatch+.6, t1:1e9, rest:[kx,kz]});
+      ev(tCatch+1.1, ()=>{ D.all.forEach(d=>{ if(d!==sf) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
+      tEnd = tCatch + 1.3; carrier = null; endPos = [kx, kz]; res.bracket = true;
     } else if(res.kind==='incomplete'){
       flightSeg.flight.x1 = catchX + R(-.8,.8); flightSeg.flight.z1 = cz + R(.4,1.2); flightSeg.flight.y1 = 2.1;
       cover.behav = P([snap, cover.x, cover.z], [tCatch-.6, catchX + side*1.4, cz-1.2], [tCatch, catchX + side*.6, cz+.6]);   /* blanketed: the DB arrives with the ball and plays through the hands */
@@ -2057,6 +2082,18 @@ function frame(now){
     wantPos.set(-6.5, 3.4, zk-7.5);
     if(inAir || landed) wantLook.set(ball.position.x*.6, clamp(ball.position.y*.5+1, 1, 5.5), clamp(ball.position.z, zk+8, 61)); else wantLook.set(.3, 1.0, zk+8);
   }
+  let fovWant = camera.userData.baseFov ?? camera.fov;
+  if(cp && running && play && play.res.kind==='fg' && play.res.postCam){
+    /* Goalpost cam (reference: FOX, DAL @ IND, Tyler 11/8): cut at the snap to a camera high behind the uprights looking back up the
+       field at the kick unit; as the ball comes in it tilts down to the crossbar and the ball sails under the lens */
+    const zk = G.fieldPos-50-6.8, kicked = playT >= (play.res.fgKickT ?? 99), u = kicked? smooth01(clamp((ball.position.z - zk)/(60.5 - zk), 0, 1)) : 0;
+    wantPos.set(0, 15.5, 63.2);
+    wantLook.set(.2, THREE.MathUtils.lerp(.4, 2.6, u), THREE.MathUtils.lerp(zk + 2.5, 58.5, u));
+    /* a long lens: the kick unit fills the frame from 30-60 yd away, then it opens up to the crossbar as the ball arrives */
+    const dist = Math.hypot(63.2 - (zk + 2.5), 15.5), zoomFov = clamp(2*THREE.MathUtils.radToDeg(Math.atan(10/dist)), 10, fovWant);
+    if(playT < (play.res.refT ?? 99)) fovWant = THREE.MathUtils.lerp(zoomFov, fovWant, u);
+    if(!play.res.postCut){ play.res.postCut = true; camPos.copy(wantPos); camLook.copy(wantLook); } }
+  if(Math.abs(camera.fov - fovWant) > .01){ camera.fov = fovWant; camera.updateProjectionMatrix(); }
   /* the result shot cuts to the officials under the uprights on EVERY camera: High (cp = null) skipped the whole kick block above, so it never showed the signal */
   if(running && play && play.res.kind==='fg' && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±3.9) fit the frame: at 6.2 m a square phone frame only spans ±2.8 m, so neither signal was on screen */
       const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(6.2, 5.4/hw); wantPos.set(0, 1.6 + (back-6.2)*.12, 62.4-back); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } }   /* broadcast cut to the officials under the uprights for the signal */
@@ -2085,7 +2122,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
-function resize(){ const w=stage.clientWidth, h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; window.__narrow = clamp((1.78 - w/h)/.8, 0, 1); camera.fov = 48 + window.__narrow*(window.__narrowFov ?? 10);   /* narrow frames (the phone embed is square): a little more lens, and the camera climbs and backs off (in the camera update) so the play still fits side to side without filling the frame with stands */ camera.updateProjectionMatrix(); const pr=renderer.getPixelRatio(); POST.composer.setSize(w*pr,h*pr); POST.bloom.setSize(w*pr,h*pr); }
+function resize(){ const w=stage.clientWidth, h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; window.__narrow = clamp((1.78 - w/h)/.8, 0, 1); camera.fov = 48 + window.__narrow*(window.__narrowFov ?? 10); camera.userData.baseFov = camera.fov;   /* narrow frames (the phone embed is square): a little more lens, and the camera climbs and backs off (in the camera update) so the play still fits side to side without filling the frame with stands */ camera.updateProjectionMatrix(); const pr=renderer.getPixelRatio(); POST.composer.setSize(w*pr,h*pr); POST.bloom.setSize(w*pr,h*pr); }
 // ---------- post-processing: MSAA render target -> soft bloom (boards, lights, highlights) -> vignette/grade -> tone map + sRGB ----------
 const POST = { on: new URLSearchParams(location.search).get('fx')!=='0' };   /* ?fx=0 skips the post chain (bloom/grade) for weak GPUs */
 { const size=renderer.getSize(new THREE.Vector2()).multiplyScalar(renderer.getPixelRatio());
@@ -2135,6 +2172,8 @@ const FORCED = {
   rollout:()=>({kind:'complete', depth:'short', yards:9, rollout:true}),
   layout:()=>({kind:'incomplete', depth:'deep', layout:true, rollout:true}),
   batted:()=>({kind:'incomplete', depth:'short', batted:true}),
+  bracket:()=>({kind:'incomplete', depth:'deep', layout:false, bracket:true}),
+  fgpost:()=>({kind:'fg', good:true, postCam:true}),
   blitz:()=>({kind:'sack', yards:-Math.round(R(5,9)), depth:'short', blitz:true}),
   comeback:()=>({kind:'complete', depth:'short', yards:Math.round(R(7,12)), recKey: Math.random()<.5? 'wrL' : 'wrR', comeback:true}),
   tipint:()=>({kind:'int', depth:'short', batted:true}),
