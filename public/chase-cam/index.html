@@ -1592,11 +1592,20 @@ function choreograph(res){
       const angOf = a => Math.atan2(p3[0]-a.x, p3[1]-a.z);
       if(!selfRec) dive(rc, tDive, 1.25, 1, angOf(rc));
       ev(tLand+.05, ()=>{ ballPlan.forEach(sg=>{ if(sg.t1>1e8) sg.t1 = playT; }); ballPlan.push({t0:playT, t1:1e9, held:rc, off:[0,.22,.3]}); });   /* he's on it */
-      const near = [...O.all, ...D.all].filter(a=>a!==carrier && a!==tackler && a!==rc && a.down==null && !O.ol.includes(a) && !D.dl.includes(a))
-        .sort(byDist(p3));
-      near.slice(0,2).forEach((a,i)=>dive(a, tDive+.28+i*.24, 1.45, i? -1 : 1, angOf(a)+(i? .5 : -.5)));
-      near.slice(2,7).forEach((a,i)=>{ const ang=angOf(a), r=R(2.2,3.6); a.engage=null; a.wrap=null; a.faceLock=null;   /* the rest converge and pull up around the pile */
-        a.behav = P([playT, a.x, a.z], [tLand+.4+i*.15, p3[0]-Math.sin(ang)*r, p3[1]-Math.cos(ang)*r]); });
+      /* make it obvious whose ball it is (Tyler: it looked like the offense fell on it): only DEFENDERS pile on, after the man
+         who recovers; the offense's nearest men pull up short of the pile and hang their heads; the defenders who get there
+         celebrate, pointing the other way — the defense's "our ball" signal */
+      const reach = (a, t) => Math.hypot(a.x-p3[0], a.z-p3[1]) <= Math.max(0, t-playT)*7.6;   /* no one teleports onto the pile */
+      const pileD = D.all.filter(a=>a!==tackler && a!==rc && a.down==null && !D.dl.includes(a)).sort(byDist(p3));
+      const divers = pileD.filter(a=>reach(a, tDive+.3)).slice(0,2);
+      divers.forEach((a,i)=>dive(a, tDive+.3+i*.24, 1.45, i? -1 : 1, angOf(a)+(i? .5 : -.5)));
+      pileD.filter(a=>!divers.includes(a) && reach(a, tLand+.9)).slice(0,4).forEach((a,i)=>{ const ang=angOf(a), r=R(2.2,3.4); a.engage=null; a.wrap=null; a.faceLock=null;
+        a.behav = P([playT, a.x, a.z], [tLand+.4+i*.15, p3[0]-Math.sin(ang)*r, p3[1]-Math.cos(ang)*r]);
+        ev(tLand+.55+i*.18, ()=>{ if(a.down==null){ a.celebrate=playT; a.celebStyle= i%2? 'hop' : 'point'; } }); });
+      O.all.filter(a=>a!==carrier && a.down==null && !O.ol.includes(a) && reach(a, tLand+1.1)).sort(byDist(p3)).slice(0,3).forEach((a,i)=>{
+        const ang=angOf(a), r=R(3.0,4.2); a.engage=null; a.wrap=null; a.faceLock=null;
+        a.behav = P([playT, a.x, a.z], [tLand+.5+i*.2, p3[0]-Math.sin(ang)*r, p3[1]-Math.cos(ang)*r]);
+        ev(tLand+.9+i*.2, ()=>{ if(a.down==null) a.dejected=playT; }); });
       res.fumbleZ = p3[1]; play.fumbleRec = rc;
       play.tEnd = Math.max(play.tEnd, tLand+1.7); play.whistleT = Math.max(play.whistleT ?? 0, tLand+1.7); };
   }
@@ -2336,7 +2345,8 @@ function finishPlay(){
     text='Punt'; log(`${t.id}: punt, returned to the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
     G.off=1-G.off; G.fieldPos=newFP; G.down=1; G.toGo=Math.min(10,100-newFP); newDrive=true;
   } else if(r.fumble && play.fumbled){
-    text= r.kind==='sack'? 'Strip-sack! Recovered' : 'Fumble! Recovered'; cls='big';
+    const rn = play.fumbleRec && play.fumbleRec.num!=null? `#${play.fumbleRec.num} ` : '';
+    text= `${r.kind==='sack'? 'Strip-sack!' : 'Fumble!'} ${rn}recovers · ${team(1-G.off).id} ball`; cls='big';
     const at = Math.round(G.fieldPos + ((r.fumbleZ ?? (G.fieldPos-50)) - (G.fieldPos-50)));   /* spot of the recovery, offense yards */
     const newFP = Math.max(1, Math.min(99, 100 - at));
     log(`${t.id}: ${r.kind==='sack'? 'strip-sack, fumble' : r.kind==='complete'? 'fumble after the catch,' : 'fumble,'} recovered by ${team(1-G.off).id} at the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
