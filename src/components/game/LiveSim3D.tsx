@@ -33,7 +33,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b17o';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b17p';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -126,13 +126,14 @@ export function LiveSim3D({
   state,
   onActiveChange,
   onPlayDead,
+  onPlayResult,
 }: {
   enabled: boolean;
   event: PlayEvent | null;
   /** the event after this one, when the page already has it (a lost fumble is logged right after its run) */
   nextEvent?: PlayEvent | null;
   /** Current situation (spot, down, score, clock) for the pre-snap formation between plays — e.g. the two-point try at the 3 while the user picks a play */
-  state: SimStateMessage['pre'] & { possession: 'home' | 'away'; form?: 'xp' | 'kickoff' } | null;
+  state: SimStateMessage['pre'] & { possession: 'home' | 'away'; form?: 'xp' | 'kickoff' | 'punt' | 'fg' } | null;
   /** e.g. speed === 'max' or the user skipped to the end: never hold the game */
   disabled?: boolean;
   homeTeam: TeamLike | null;
@@ -145,6 +146,8 @@ export function LiveSim3D({
   onActiveChange: (active: boolean) => void;
   /** the play is dead in 3D (whistle): the page can show its play-by-play line now, before the result callout */
   onPlayDead?: (eventId: number) => void;
+  /** the result banner is up in 3D: the page shows the play-by-play line and feed entry now, not before */
+  onPlayResult?: (eventId: number) => void;
 }) {
   // A background tab stops requestAnimationFrame, so the sim can't finish a play and the page sat waiting on it — the CPU's
   // drive froze until you came back. While the tab is hidden the sim steps aside (the game advances as without 3D) and
@@ -185,12 +188,13 @@ export function LiveSim3D({
       if (!m || typeof m !== 'object') return;
       if (m.type === 'bsgm:ready') { setReady(true); setFailed(null); }
       else if (m.type === 'bsgm:dead') { if (m.id != null && m.id === activeIdRef.current) onPlayDead?.(m.id); }
+      else if (m.type === 'bsgm:result') { if (m.id != null && m.id === activeIdRef.current) onPlayResult?.(m.id); }
       else if (m.type === 'bsgm:done') { if (m.id === activeIdRef.current) { activeIdRef.current = null; setActiveBoth(false); } }
       else if (m.type === 'bsgm:error') { setFailed(m.message || 'failed to load'); setActiveBoth(false); }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [enabled, setActiveBoth, onPlayDead]);
+  }, [enabled, setActiveBoth, onPlayDead, onPlayResult]);
 
   // Until the sim says ready, ask it every second: its ready message can land before this
   // listener exists (dev double-mount, a cached iframe), and a lost ready meant the sim ran the

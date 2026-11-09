@@ -63,23 +63,27 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A live game commits itself the moment it ends (End Game included), and the game page has its own final
+  // score + "Continue →" to the playoffs — redirecting from there skipped the final whistle (QA 11/8)
+  const onGamePage = !!pathname?.startsWith('/game/');
+
   // Auto-redirect to playoffs when phase transitions (post-hydration only)
   useEffect(() => {
     if (stablePhaseRef.current === null) return; // still hydrating
-    if (stablePhaseRef.current !== 'playoffs' && phase === 'playoffs') {
+    if (stablePhaseRef.current !== 'playoffs' && phase === 'playoffs' && !onGamePage) {
       router.push('/playoffs');
     }
     stablePhaseRef.current = phase;
-  }, [phase, router]);
+  }, [phase, router, onGamePage]);
 
   // Auto-redirect to playoffs page when Championship completes
   useEffect(() => {
     if (stableSBRef.current === null) return; // still hydrating
-    if (!stableSBRef.current && superBowlDone) {
+    if (!stableSBRef.current && superBowlDone && !onGamePage) {
       router.push('/playoffs');
     }
     stableSBRef.current = superBowlDone;
-  }, [superBowlDone, router]);
+  }, [superBowlDone, router, onGamePage]);
   const nextPlayoffGame = playoffBracket
     ?.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
     .sort((a, b) => a.round - b.round)[0];
@@ -203,7 +207,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
         if (nextPlayoffGame) {
           const opp = nextPlayoffGame.homeTeamId === userTeamId ? nextPlayoffGame.awayTeamId : nextPlayoffGame.homeTeamId;
           const oppTeam = teams.find(t => t.id === opp);
-          if (oppTeam) bannerText += ` · Next: vs ${oppTeam.abbreviation}`;
+          if (oppTeam) bannerText += ` · Next: ${nextPlayoffGame.homeTeamId === userTeamId ? 'vs' : '@'} ${oppTeam.abbreviation}`;
         } else if (superBowlDone) {
           bannerText += ' · Season Complete';
         }

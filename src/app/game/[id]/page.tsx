@@ -1280,6 +1280,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // While the 3D sim is still running a play, its line isn't news yet: keep it out of the feed and the bug until the snap is over
   // While the 3D sim plays a snap its text is held back (no spoilers); it shows at the whistle, before the sim's result callout.
   const [sim3dDeadId, setSim3dDeadId] = useState<number | null>(null);
+  const [sim3dResultId, setSim3dResultId] = useState<number | null>(null);
   sim3dDeadIdRef.current = sim3dDeadId;
   // 3D telemetry: one row per game-page visit saying whether 3D was on (device cohort for admin_sim3d_cohorts) and the default-on test arm
   const sim3dViewSentRef = useRef(false);
@@ -1343,7 +1344,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     return () => document.removeEventListener('visibilitychange', on);
   }, []);
   const simLastId = revealedEvents[revealedEvents.length - 1]?.id ?? null;
-  const simHoldId = sim3dOn && sim3dActive && simLastId !== sim3dDeadId ? simLastId : null;
+  // the play's text and feed line wait for its result banner in 3D (they used to come at the whistle, ~1 s before the banner, while players were still moving)
+  const simHoldId = sim3dOn && sim3dActive && simLastId !== sim3dResultId ? simLastId : null;
   const displayEvents = useMemo(() => [...revealedEvents].reverse().filter(e => e.id !== simHoldId), [revealedEvents, simHoldId]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
   // Current on-field skill lineup w/ energy + auto-subs, from the revealed event.
@@ -2092,6 +2094,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     || (!!nextEvForSim && nextEvForSim.type === 'extra_point' && !/^2-PT|two-point/i.test(nextEvForSim.description));
   // Same after the PAT / a field goal: the kickoff is next, so the kicking team lines up at its 35 (onside kicks too)
   const kickoffPending = !xpPending && (!!engineSnapshot?.awaitingKickoffChoice || (!!nextEvForSim && nextEvForSim.type === 'kickoff'));
+  // The CPU's 4th-down kick is the next play: once the last play is over, the idle 3D sim lines up the punt / kick unit instead of the shotgun offense
+  const kickNext = !xpPending && !kickoffPending && !!afterPlay && !!nextEvForSim
+    ? (nextEvForSim.type === 'punt' ? 'punt' as const : nextEvForSim.type === 'field_goal_good' || nextEvForSim.type === 'field_goal_miss' ? 'fg' as const : null) : null;
   const kickTeam: 'home' | 'away' = engineSnapshot?.awaitingKickoffChoice ? engineSnapshot.possession : (nextEvForSim?.possession ?? livePoss);
   const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? liveEngineState?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
   const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? liveEngineState?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
@@ -2274,9 +2279,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             clock={{ secs: clockSeconds(tickingTime), quarter: liveQuarter }}
             state={{ possession: kickoffPending ? kickTeam : livePoss, fieldPos: xpPending ? 85 : kickoffPending ? 35 : liveFieldPos, down: xpPending || kickoffPending ? 1 : liveDown, toGo: xpPending ? 15 : kickoffPending ? 10 : liveYtg, quarter: liveQuarter,
               clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore,
-              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : {}) }}
+              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : kickNext ? { form: kickNext } : {}) }}
             onActiveChange={setSim3dActive}
             onPlayDead={setSim3dDeadId}
+            onPlayResult={setSim3dResultId}
           />
 
           {/* Post-play outcome chip */}

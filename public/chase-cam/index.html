@@ -174,7 +174,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17o'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17p'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -223,7 +223,7 @@ window.CAMS = { broadcast:{xf:.5,h:4.6,back:11,lxf:.7,ly:1.1,ahead:9,hLong:9,bac
                high:null };
 const CAMS = window.CAMS; window.__camProfile = window.__camProfile || CAMS.low;
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
-renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.useLegacyLights = true;   /* r160: colour management converts authored sRGB hex colours itself; legacy light intensities keep the tuned look */
+renderer.outputColorSpace = THREE.SRGBColorSpace;   /* r160: colour management converts authored sRGB hex colours itself. Physically based light units (the default; useLegacyLights is deprecated): light intensities below are the tuned legacy values × LEGACY_K */
 const canvasTex = (c)=>{ const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; };
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -240,23 +240,26 @@ paintSky('#5d93cc','#dfe8f0');
 function clampSky(y){ return Math.pow(Math.max(0,Math.min(1,(y+.05)/.7)), .6); }
 const camera = new THREE.PerspectiveCamera(48, 16/9, 0.1, 400);
 
-const LIGHT = window.__light || {hemi:.5, sun:1.05};
-const hemi = new THREE.HemisphereLight('#d6e3f2', '#2f4726', LIGHT.hemi); scene.add(hemi);
-const sun = new THREE.DirectionalLight('#fff1d6', LIGHT.sun);
+const LIGHT = window.__light || {hemi:.5, sun:1.05};   /* tuned under the old legacy light units */
+const LEGACY_K = Math.PI;   /* legacy mode scaled hemisphere / directional light by π internally: same look in physical units */
+const hemi = new THREE.HemisphereLight('#d6e3f2', '#2f4726', LIGHT.hemi * LEGACY_K); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff1d6', LIGHT.sun * LEGACY_K);
 // day / night: night is a floodlit stadium — cool white light from high above, dark sky, the boards and floodlights carry the glow
 let lightMode='day', sunOff=[-25,60,-30];
 window.setLighting = setLighting;
 function setLighting(mode){ lightMode=mode; const night = mode==='night';
-  paintSky(night?'#070b16':'#5d93cc', night?'#1a2436':'#dfe8f0');
-  scene.background.set(night?'#0a0f1a':'#9cc3e6'); scene.fog.color.set(night?'#141b28':'#c7d6e4');
-  hemi.color.set(night?'#8f9db8':'#d6e3f2'); hemi.groundColor.set(night?'#1c2418':'#2f4726'); hemi.intensity = night? .55 : LIGHT.hemi;
-  sun.color.set(night?'#e9f0ff':'#fff1d6'); sun.intensity = night? 1.25 : LIGHT.sun; sunOff = night? [-10,78,-14] : [-25,60,-30];
-  renderer.toneMappingExposure = night? 1.0 : .96;
+  /* Night (QA 11/8: it looked the same as day — its lights were set BRIGHTER than day's and the stands barely changed colour): a black sky,
+     the stands and concrete falling off into the dark, and the field under a hard, cool floodlight key, so the lit field pops against the bowl */
+  paintSky(night?'#04060d':'#5d93cc', night?'#121a29':'#dfe8f0');
+  scene.background.set(night?'#05080f':'#9cc3e6'); scene.fog.color.set(night?'#0b101a':'#c7d6e4');
+  hemi.color.set(night?'#7f8fb0':'#d6e3f2'); hemi.groundColor.set(night?'#121a10':'#2f4726');
+  sun.color.set(night?'#eef3ff':'#fff1d6'); sunOff = night? [-10,78,-14] : [-25,60,-30];
+  renderer.toneMappingExposure = night? 1.05 : .96;
   (window.__floods||[]).forEach(f=>{ f.material.color.set(night?'#ffffff':'#fff6d8'); });
-  [crowd.seats,crowd.torsos,crowd.heads].forEach(m=>m.material.color.set(night?'#b9bcc4':'#c4c4c4'));   /* the stands catch the floodlights' spill — a night crowd is lit, just cooler and flatter than daylight */
-  concreteMeshes.forEach(m=>m.material.color.set(night?'#9aa0ad':'#ffffff'));
-  structMats.forEach(m=>m.color.copy(m.userData.day).multiplyScalar(night?.8:1));
-  hemi.intensity = night? 1.1 : LIGHT.hemi; sun.intensity = night? 1.45 : LIGHT.sun;   /* night hemi carries the stands (the floods' bounce); the 'sun' is the floodlight key on the field */
+  [crowd.seats,crowd.torsos,crowd.heads].forEach(m=>m.material.color.set(night?'#6c707b':'#c4c4c4'));   /* the stands catch only the floodlights' spill */
+  concreteMeshes.forEach(m=>m.material.color.set(night?'#555b68':'#ffffff'));
+  structMats.forEach(m=>m.color.copy(m.userData.day).multiplyScalar(night?.5:1));
+  hemi.intensity = (night? .42 : LIGHT.hemi) * LEGACY_K; sun.intensity = (night? 1.5 : LIGHT.sun) * LEGACY_K;   /* night: a dim, cool fill for the bowl; the 'sun' is the floodlight key on the field */
   document.querySelectorAll('[data-light]').forEach(b=>b.classList.toggle('on', b.dataset.light===mode)); }
 sun.position.set(-30, 60, -20); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = .02; sun.shadow.radius = 2;
@@ -1040,7 +1043,7 @@ function choreograph(res){
       PP.faceLock={angle:0, until:99}; PP.behav = P([snap,PP.x,PP.z],[snap+.4,PP.x-.6,PP.z-.8],[tPunt+.6,PP.x-1.2,PP.z-1.4]);
       /* the engine's spots (receiving team's yard line N sits at z = 50-N): he fields it where the play-by-play says and is brought down there */
       const xr = clamp(ret.x + R(-4,4), -14, 14), zr = res.catchAt!=null ? 50 - clamp(res.catchAt,1,99) : ret.z - R(0,3), hang = 4.0, tCatch = tPunt+hang;
-      ballPlan.push({t0:tPunt, t1:tCatch, flight:{x0:kx,y0:.38,z0:kz, x1:xr,y1:1.45,z1:zr, h:15}});
+      ballPlan.push({t0:tPunt, t1:tCatch, flight:{x0:kx,y0:.38,z0:kz, x1:xr,y1:1.45,z1:zr, h:15}}); res.puntCatch = tCatch; res.puntLand = [xr, zr]; res.puntFrom = kz;
       ret.catchT = tCatch; ret.faceLock={angle:Math.PI, until:tCatch+.1}; ret.mocapAct = {clip:'football_puntcatch', t0:tCatch-1.6, start:0, end:2.3};
       const retY = res.catchAt!=null ? Math.max(0, (res.endAt ?? res.catchAt) - res.catchAt) : (res.ret ?? Math.round(R(2,10))), zEnd = zr - retY, endX = clamp(xr + R(-2.5,2.5), -22, 22);
       tEnd = tCatch + .35 + retY/6.6;
@@ -1671,10 +1674,11 @@ function choreograph(res){
 let last = performance.now(); let preT = 0;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 let camZoom=0;
+const PUNT_BACK = 9;
 function overviewBack(cp){return Math.max(cp.back,28.5/(Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect));}
 function snapCamera(){ camZoom=0; const z0=G.fieldPos-50; const cp=window.__camProfile;
   if(G.formKind==='fg'){ camPos.set(-6.5, 3.4, z0-6.8-7.5); camLook.set(.3, 1.0, z0+1.2); }
-  else if(cp){ camPos.set(0, cp.h, z0-(cp.overview?overviewBack(cp):cp.back)); camLook.set(0, cp.ly, z0+cp.ahead); }
+  else if(cp){ const pb = G.formKind==='punt'? PUNT_BACK : 0; camPos.set(0, cp.h+(pb?1.5:0), z0-(cp.overview?overviewBack(cp):cp.back)-pb); camLook.set(0, cp.ly, z0+cp.ahead); }
   else { camPos.set(0, 7.2, z0-13); camLook.set(0, 0, z0+8); }
   camera.position.copy(camPos); camera.lookAt(camLook); }
 
@@ -2126,6 +2130,7 @@ function frame(now){
   let cH=cp?THREE.MathUtils.lerp(cp.h,cp.hLong??cp.h,longK):0;
   let cB=cp?THREE.MathUtils.lerp(cp.overview?overviewBack(cp):cp.back,cp.backLong??cp.back,longK):0;
   let cA=cp?THREE.MathUtils.lerp(cp.ahead,cp.aheadLong??cp.ahead,longK):0;
+  if(cp && G.formKind==='punt' && !(running && play && play.res.puntT!=null && playT >= play.res.puntT)){ cB += PUNT_BACK; cH += 1.5; }   /* punt unit set: back far enough to have the punter, 14 yd deep, in the shot */
   if(cp && (focus||incHold)){cH=THREE.MathUtils.lerp(cH,3.8,camZoom);cB=THREE.MathUtils.lerp(cB,10.5,camZoom);cA=1.5;}
   const NW = window.__narrow||0; if(cp && NW){ cH *= 1 + (window.__narrowH ?? .9)*NW; cB *= 1 + (window.__narrowB ?? .35)*NW; }
   const trackK=cp?.overview?longK:1;
@@ -2160,6 +2165,17 @@ function frame(now){
       if(koIdle || playT < tK+.35){ wantPos.set(-3.2, 2.5, z0k-14.5); wantLook.set(0, 2.2, z0k+42); }
       else if(playT < tC+.2){ const u = smooth01((playT-tK-.35)/1.6); wantPos.set(THREE.MathUtils.lerp(-3.2, land[0]*.3, u), THREE.MathUtils.lerp(2.5, 15, u), THREE.MathUtils.lerp(z0k-14.5, land[1]-30, u)); wantLook.set(land[0]*.6, 1.2, THREE.MathUtils.lerp(z0k+42, land[1]-3, u)); }
       else { const c = (play.carrier||{x:land[0], z:land[1]}); wantPos.set(c.x*.4, 11, c.z-19); wantLook.set(c.x*.8, 1.0, c.z+1.5); } } }
+  { const r = running && play && play.res.kind==='punt' ? play.res : null;
+    if(r && r.puntT!=null && playT >= r.puntT){ /* punt, shot like the kickoff once it's away (QA 11/8: the low chase angle never looked up, so the
+         4-second hang was above the frame): rise into the high wide shot as the ball hangs, then high and in front of the returner */
+      const tC = r.puntCatch ?? 99, land = r.puntLand || [0, G.fieldPos-50+40];
+      const kz = r.puntFrom ?? (G.fieldPos-50-14), mid = (kz + land[1])/2;
+      if(playT < tC+.2){ const bp = ball.position;   /* cut at the kick to a high sideline angle that has the whole arc in profile, aimed between
+           the ball and the middle of its flight (a camera behind the play sat under the arc, and a smooth move lagged the climbing ball out of frame) */
+        wantPos.set(-30, 14, mid - 6); wantLook.set(bp.x*.5 + land[0]*.25, bp.y*.5 + 1, bp.z*.5 + mid*.5);
+        if(!r.puntCut){ r.puntCut = true; camPos.copy(wantPos); camLook.copy(wantLook); } }
+      else { const c = play.carrier || {x:land[0], z:land[1]}; wantPos.set(c.x*.4, 11, c.z-19); wantLook.set(c.x*.8, 1.0, c.z+1.5);   /* then high and in front of the returner */
+        if(!r.puntCut2){ r.puntCut2 = true; camPos.copy(wantPos); camLook.copy(wantLook); } } } }
   if(window.__camOverride){ const o=window.__camOverride; wantPos.set(o[0],o[1],o[2]+G.fieldPos-50); wantLook.set(o[3],o[4],o[5]+G.fieldPos-50); }
   if(window.__camFollow){ const f=window.__camFollow, a=f.actor(); const sx=Math.cos(a.face), sz=-Math.sin(a.face), fx=Math.sin(a.face), fz=Math.cos(a.face); wantPos.set(a.x+sx*f.side+fx*f.fwd, f.h, a.z+sz*f.side+fz*f.fwd); wantLook.set(a.x, f.ly, a.z); camPos.copy(wantPos); camLook.copy(wantLook); }
   const inFlight = running && !!(ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1)||{}).flight;
@@ -2245,17 +2261,22 @@ const $ = id=>document.getElementById(id);
 function ord(n){ return ['1st','2nd','3rd','4th'][n-1]||n+'th'; }
 function spotText(){ const t=team(G.off), o=team(1-G.off); const fp=G.fieldPos; return fp===50? 'MID 50' : fp<50? `${t.id} ${fp}` : `${o.id} ${100-fp}`; }
 function renderBug(){
-  const a=team(0), b=team(1);
+  /* away team first, as on the page's scoreboard (the NFL convention): team 1 is the away side, team 0 the home side (QA 11/8: the two bugs disagreed) */
+  const L=1, Rt=0, a=team(L), b=team(Rt);
   $('abA').textContent=a.id; $('abB').textContent=b.id; $('swA').style.background=a.jersey; $('swB').style.background=b.jersey;
-  $('scA').textContent=G.score[0]; $('scB').textContent=G.score[1];
-  $('tmA').classList.toggle('has', G.off===0); $('tmB').classList.toggle('has', G.off===1);
+  $('scA').textContent=G.score[L]; $('scB').textContent=G.score[Rt];
+  $('tmA').classList.toggle('has', G.off===L); $('tmB').classList.toggle('has', G.off===Rt);
   const m=Math.floor(G.clock/60), s=String(G.clock%60).padStart(2,'0');
   $('qtr').textContent = `${ord(G.quarter)} · ${m}:${s}`;
   const goal = G.fieldPos + G.toGo >= 100;
   $('dd').textContent = G.pat? 'PAT' : `${ord(G.down)} & ${goal?'Goal':G.toGo}`; $('spot').textContent = spotText();
   paintBoards();
 }
-function banner(text, cls){ const el=$('banner'); el.textContent=text; el.className='banner'+(cls?' '+cls:''); el.hidden=false; }
+const BANNER_MS = 2200;   /* the result reads for a fixed beat, then clears: it used to sit over the next snap's pre-snap (QA 11/8), or get cut after ~.7 s by the page's re-form */
+let bannerTimer=0, bannerAt=-1e9;
+/* every banner is a play's result: the page shows the play text with it (__onResult) */
+function banner(text, cls){ const el=$('banner'); el.textContent=text; el.className='banner'+(cls?' '+cls:''); el.hidden=false; if(window.__onResult) window.__onResult();
+  bannerAt=performance.now(); clearTimeout(bannerTimer); bannerTimer=setTimeout(()=>{ el.hidden=true; }, BANNER_MS); }
 function log(text){ const li=document.createElement('li'); li.textContent=text; $('log').prepend(li); }
 function setBusy(b){ G.busy=b; if(!b && window.__onIdle) setTimeout(window.__onIdle, 0); document.querySelectorAll('button[data-call],button[data-force]').forEach(x=>x.disabled=b); $('hint').textContent = b? 'Live' : EMBED? 'Pre-snap · '+SIM_BUILD : 'Pre-snap'; }   /* build tag so a stale cached sim is obvious */
 
@@ -2453,7 +2474,7 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
 //      {type:'bsgm:clock', clock, quarter}   (any time: the 3D scorebug clock mirrors the page's)
 //      {type:'bsgm:state', possession, pre:{...}}   (idle only: pre-snap formation + scorebug for the current situation)
 //      {type:'bsgm:skip'}
-// out: {type:'bsgm:ready'} once the model is loaded; {type:'bsgm:dead', id} at the whistle (the page shows the play text); {type:'bsgm:done', id} when the play (and its post-play beat) is over; {type:'bsgm:error'}
+// out: {type:'bsgm:ready'} once the model is loaded; {type:'bsgm:dead', id} at the whistle (the broadcast makes its call); {type:'bsgm:result', id} with the result banner (the page shows the play text); {type:'bsgm:done', id} when the play (and its post-play beat) is over; {type:'bsgm:error'}
 function embedStart(){
   const post = m => { try{ window.parent.postMessage(m, '*'); }catch(e){} };
   let pending=null, current=null; window.__embedQueue = ()=>pending;
@@ -2466,13 +2487,14 @@ function embedStart(){
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }
     else if(m.type==='bsgm:clock'){ if(m.clock!=null) G.clock = m.clock; if(m.quarter) G.quarter = m.quarter; renderBug(); }   /* the page's game clock, as its scorebug shows it (it runs during the play too): the 3D bug mirrors it */
-    else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); G.pat = m.form==='xp'; $('banner').hidden=true; renderBug(); setupFormation(G.pat? 'fg' : m.form==='kickoff'? 'kickoff' : null); snapCamera(); } }   /* form 'xp' / 'kickoff': the try after a TD (kick unit at the 15) or the kickoff after a score (kicking team at its 35), not the offense at the old spot */   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
+    else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); G.pat = m.form==='xp'; if(performance.now()-bannerAt > BANNER_MS) $('banner').hidden=true; renderBug(); setupFormation(G.pat? 'fg' : (m.form==='kickoff' || m.form==='punt' || m.form==='fg')? m.form : null); snapCamera(); } }   /* 'punt' / 'fg': the CPU's 4th-down kick is next — the punt or kick unit lines up, not the shotgun offense (QA 11/8) */   /* form 'xp' / 'kickoff': the try after a TD (kick unit at the 15) or the kickoff after a score (kicking team at its 35), not the offense at the old spot */   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
     else if(m.type==='bsgm:hello'){ post({type:'bsgm:ready'}); }   /* the page asks again after a (re)mount: a ready sent before its listener was up is lost */
     else if(m.type==='bsgm:skip'){ pending=null; if(G.busy){ G.speed = 12; } }   /* fast-forward to the end; the done message still fires, the page has already hidden us */
     else if(m.type==='bsgm:view'){ if(m.cam && (m.cam in CAMS)){ window.__camProfile = CAMS[m.cam]; if(!running) snapCamera(); } if(m.lighting==='day' || m.lighting==='night') setLighting(m.lighting); }   /* camera angle + day/night from the game's controls */
     else if(m.type==='bsgm:crowd'){ if(m.level!=null) sndCrowd(m.level, 1); } });
   // the play is over when the sim re-sets the formation (setBusy(false) after the post-play beat)
-  window.__onDead = ()=>{ if(current!=null) post({type:'bsgm:dead', id:current}); };   /* whistle: the page reveals the play text, before the result callout */
+  window.__onDead = ()=>{ if(current!=null) post({type:'bsgm:dead', id:current}); };
+  window.__onResult = ()=>{ if(current!=null) post({type:'bsgm:result', id:current}); };   /* the result banner is up: the page reveals the play text and feed line now, not at the whistle (QA 11/8: it spoiled the play while the runner was still going) */   /* whistle: the page reveals the play text, before the result callout */
   const _setBusy = setBusy; window.__onIdle = ()=>{ if(current!=null){ const id=current; current=null; G.speed = 1.5; post({type:'bsgm:done', id}); } runNext(); };
   post({type:'bsgm:ready'});
 }
