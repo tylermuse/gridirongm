@@ -14,6 +14,7 @@ import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCo
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { LiveSim3D, useSim3DMode, readSim3DPref, sim3dTestArm } from '@/components/game/LiveSim3D';
+import { nextSnapSituation } from '@/lib/engine/scorebugSituation';
 import { clockSeconds } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
@@ -2076,10 +2077,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const tickingTime = (!engineSnapshot && clockSecs != null && !isFinished)
     ? `${Math.floor(clockSecs / 60)}:${String(clockSecs % 60).padStart(2, '0')}`
     : liveTime;
-  const livePoss = engineSnapshot?.possession ?? currentEvent?.possession ?? 'home';
-  const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
-  const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
-  const liveYtg = engineSnapshot?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
+  // Once the play on screen is over (2D animation and 3D sim both done) the header, drive ribbon and 3D formation show
+  // the NEXT snap's situation, the same one the 3D scorebug moved to (see nextSnapSituation)
+  const afterPlay = engineSnapshot || isFinished || !currentEvent || !animationComplete || sim3dActive ? null
+    : nextSnapSituation(allEvents[revealedCount], liveEngineRef.current?.getState());
+  const livePoss = engineSnapshot?.possession ?? afterPlay?.possession ?? currentEvent?.possession ?? 'home';
+  const liveFieldPos = engineSnapshot?.fieldPos ?? afterPlay?.fieldPos ?? currentEvent?.fieldPos ?? 25;
+  const liveDown = engineSnapshot?.down ?? afterPlay?.down ?? currentEvent?.down ?? 1;
+  const liveYtg = engineSnapshot?.yardsToGo ?? afterPlay?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
   // Between a touchdown and its try the spot is still the pre-TD snap (e.g. 1st & 10 at the 23): the 3D sim lined the offense up there.
   // While the user picks XP / go-for-2, or the CPU's XP is the next event, it should show the kick unit at the 15 instead.
   const nextEvForSim = engineSnapshot ? null : (allEvents[revealedCount] ?? null);
@@ -2368,6 +2373,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   }
                   setLiveCoachOn(false);
                   setLiveCoachPaused(false);
+                  // The Live Coach pause also paused playback: resume it, or the game sat frozen with ▶ Play below the fold (QA 11/8)
+                  setIsPlaying(true);
                 }}
                 onToggleOff={() => {
                   lcTelemetryRef.current.endedBy = 'off';
@@ -3196,6 +3203,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   }
                   setLiveCoachOn(false);
                   setLiveCoachPaused(false);
+                  // The Live Coach pause also paused playback: resume it, or the game sat frozen with ▶ Play below the fold (QA 11/8)
+                  setIsPlaying(true);
                 }}
                 onToggleOff={() => {
                   lcTelemetryRef.current.endedBy = 'off';
