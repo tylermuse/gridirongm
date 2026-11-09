@@ -23,6 +23,8 @@ export interface SimPlayResult {
   /** the play ends in a lost fumble (the engine logs it as the next event): a run or a catch stripped at the tackle, or a
    *  strip-sack — the ball squirts loose and the defense falls on it */
   fumble?: boolean;
+  /** with fumble: the OFFENSE fell on it (told in the play's own line, "… FUMBLE! … falls on it. Offense keeps it.") — no turnover */
+  kept?: boolean;
   /** kickoff: the receiving team's yard line where the return ended / a touchback / a return touchdown */
   ret?: number;
   /** extra point (kind 'fg'): worth 1, called an extra point, no change of possession */
@@ -81,6 +83,8 @@ const SCRAMBLE_RE = /scramble/i;
 const SCREEN_RE = /screen/i;
 /** playByPlay.ts: "intended for X but it's batted down" / "Tipped at the line! X comes down with the pick!" */
 const BATTED_RE = /batted|tipped at the line|knocked down at the line/i;
+/** A fumble the offense recovered is told in the play's own line (the engines log a LOST fumble as its own 'fumble' event). */
+const KEPT_FUMBLE_RE = /FUMBLE!|Ball is out!/;
 const TWO_POINT_RE = /^2-PT|two-point/i;
 const KNEEL_RE = /takes a knee|kneels|victory formation/i;
 const FAKE_RE = /FAKE PUNT|ONSIDE/i;
@@ -173,6 +177,11 @@ export function toSimPlay(
   // by Y"): picture both as one play — it ends with the strip and the defense on the ball.
   const fumbleNext = !!next && next.type === 'fumble' && (res.kind === 'run' || res.kind === 'sack' || res.kind === 'complete') && !e.isScoring;
   if (fumbleNext) res.fumble = true;
+  // …or the ball came out and the offense fell on it: same picture, but the offense recovers and keeps the ball.
+  const keptAt = !fumbleNext && !e.isScoring && (res.kind === 'run' || res.kind === 'sack' || res.kind === 'complete') ? e.description.search(KEPT_FUMBLE_RE) : -1;
+  if (keptAt >= 0) { res.fumble = true; res.kept = true; }
+  const offense = rosters ? (e.possession === 'home' ? rosters.home : rosters.away) : [];
+  const keptRec = keptAt >= 0 ? namesIn(e.description.slice(keptAt), offense).pop()?.p : undefined;
   const pts = pointsScored(e);
   return {
     type: 'bsgm:play',
@@ -188,8 +197,9 @@ export function toSimPlay(
       awayScore: e.awayScore - (e.possession === 'away' ? pts : 0),
     },
     res,
-    ...(rosters ? { who: withRecoverer(whoMadeThePlay(e, e.possession === 'home' ? rosters.home : rosters.away, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins),
-      fumbleNext ? next : null, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins, res.kind) } : {}),
+    ...(rosters ? { who: withKeptRecoverer(withRecoverer(whoMadeThePlay(keptAt >= 0 ? { ...e, description: e.description.slice(0, keptAt) } : e,
+      offense, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins),
+      fumbleNext ? next : null, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins, res.kind), keptRec, rosters.photoSkins) } : {}),
   };
 }
 
@@ -323,7 +333,8 @@ function simKit(
  *  ("J. Hurts completes to D. Smith for 11 yards."), so the 3D player making
  *  the play wears his number and skin. */
 export interface SimWho { ball?: SimMan & { pos: string }; def?: SimMan & { pos: string };
-  /** strip-sack / fumble after the catch: the defender who falls on the ball (def stays the sacker) */
+  /** who falls on a fumble other than on a run: the defender on a strip-sack / catch fumble (def stays the sacker), or the
+   *  offensive player on a fumble the offense keeps */
   rec?: SimMan & { pos: string } }
 export interface SimNamedPlayer extends SimPlayerLike { firstName: string; lastName: string }
 
@@ -359,6 +370,13 @@ export function whoMadeThePlay(
     if (ball) who.ball = man(ball.p);
   }
   return who.ball || who.def ? who : undefined;
+}
+
+/** The offensive player who fell on his own team's fumble goes in who.rec. */
+function withKeptRecoverer(who: SimWho | undefined, rec: SimNamedPlayer | undefined, photoSkins?: Record<string, string>): SimWho | undefined {
+  const n = Number(rec?.jerseyNumber);
+  if (!rec || !Number.isInteger(n)) return who;
+  return { ...(who ?? {}), rec: { n, s: skinToneFor(rec, photoSkins), pos: rec.position } };
 }
 
 /** The defender who falls on a fumble (named last in the fumble line — a strip-sack names the sacker first): on a run he

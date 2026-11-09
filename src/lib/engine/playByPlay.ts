@@ -463,6 +463,28 @@ function descCatchFumble(receiver: Player | null, recoverer: Player | null): str
   ]);
 }
 
+/** A fumble the OFFENSE recovers (about half of NFL fumbles): appended to the play's own line — no 'fumble' event, no
+ *  change of possession, the drive goes on. The recoverer is the last offensive player named after "FUMBLE!" / "Ball is out!". */
+function keptFumbleTail(carrier: Player | null, recoverer: Player | null): string {
+  const c = playerTag(carrier, 'the ball carrier');
+  if (!recoverer || recoverer === carrier) {
+    return pick([
+      ` FUMBLE! ${c} puts it on the ground — but falls right back on it. Offense keeps it.`,
+      ` FUMBLE! The ball squirts loose, but ${c} recovers his own fumble.`,
+    ]);
+  }
+  const r = playerTag(recoverer, 'a teammate');
+  return pick([
+    ` FUMBLE! ${c} coughs it up — but ${r} falls on it. Offense keeps it.`,
+    ` Ball is out! ${r} dives on it — the offense keeps the ball.`,
+  ]);
+}
+/** Who on the offense falls on a fumble it keeps: often the carrier himself, otherwise a man from `pool`. */
+function keptRecoverer(carrier: Player | null, pool: Player[]): Player | null {
+  const mates = pool.filter(p => p !== carrier);
+  return mates.length === 0 || Math.random() < 0.4 ? carrier : pick(mates);
+}
+
 function descPunt(yards: number): string {
   return pick([
     `Punt — ${yards} yards net.`,
@@ -1347,15 +1369,20 @@ export function simulatePlayByPlay(
         return true;
       }
 
-      const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession));
+      // Lost fumble, or one the offense falls on (about as common in the NFL) — decided before the line is written.
+      const fumbleChance = clamp(0.018 - (qbCarrying / 100) * 0.006, 0.005, 0.025);
+      const lostFumble = Math.random() < fumbleChance;
+      const keptFumble = !lostFumble && Math.random() < fumbleChance;
+      const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession))
+        + (keptFumble ? keptFumbleTail(ok.qb, keptRecoverer(ok.qb, ok.ols)) : '');
       addEvent('run', desc, yardsGained, false);
+      if (keptFumble && ok.qb) creditRusher(ob, ok.qb.id, { fumbles: 1 });
 
       state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
       state.yardsToGo -= yardsGained;
       advanceClock(Math.floor(Math.random() * 8) + 30);
 
-      const fumbleChance = clamp(0.018 - (qbCarrying / 100) * 0.006, 0.005, 0.025);
-      if (Math.random() < fumbleChance) {
+      if (lostFumble) {
         const desc2 = descFumble(ok.qb, dk.lb1);
         addEvent('fumble', desc2, 0, false);
         shiftMomentum(-20);
@@ -1396,16 +1423,21 @@ export function simulatePlayByPlay(
         return true;
       }
 
-      const desc = descRun(rusher, yardsGained, fieldPosLabel(state.fieldPos, state.possession));
+      // Skill-based fumble rate (Bug 3 fix). About half of NFL fumbles are recovered by the offense: same odds again for one
+      // it keeps (the play stands, the drive goes on).
+      const fumbleChance = clamp(0.015 - (rbCarrying / 100) * 0.008, 0.003, 0.02);
+      const lostFumble = Math.random() < fumbleChance;
+      const keptFumble = !lostFumble && Math.random() < fumbleChance;
+      const desc = descRun(rusher, yardsGained, fieldPosLabel(state.fieldPos, state.possession))
+        + (keptFumble ? keptFumbleTail(rusher, keptRecoverer(rusher, ok.ols)) : '');
       addEvent('run', desc, yardsGained, false);
+      if (keptFumble && rusher) creditRusher(ob, rusher.id, { fumbles: 1 });
 
       state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
       state.yardsToGo -= yardsGained;
       advanceClock(Math.floor(Math.random() * 8) + 30);
 
-      // Skill-based fumble rate (Bug 3 fix)
-      const fumbleChance = clamp(0.015 - (rbCarrying / 100) * 0.008, 0.003, 0.02);
-      if (Math.random() < fumbleChance) {
+      if (lostFumble) {
         const desc2 = descFumble(rusher, dk.lb1);
         addEvent('fumble', desc2, 0, false);
         if (rusher) creditRusher(ob, rusher.id, { fumbles: 1 });
@@ -1489,17 +1521,20 @@ export function simulatePlayByPlay(
         db.sacks += 1;
         if (sacker) db.perSacker[sacker.id] = (db.perSacker[sacker.id] ?? 0) + 1;
 
-        const desc = descSack(ok.qb, sacker, sackYards);
+        // Strip-sack (~6% of sacks at NFL rates): the ball comes out and the defense recovers — logged as a follow-up
+        // 'fumble' like a run fumble. As often again the offense falls on it: told in the sack line, the drive goes on.
+        const stripLost = Math.random() < stripSackLossChance(ok.qb);
+        const stripKept = !stripLost && Math.random() < stripSackLossChance(ok.qb);
+        const desc = descSack(ok.qb, sacker, sackYards) + (stripKept ? keptFumbleTail(ok.qb, keptRecoverer(ok.qb, ok.ols)) : '');
         addEvent('sack', desc, sackYards, false);
+        if (stripKept && ok.qb) creditRusher(ob, ok.qb.id, { fumbles: 1 });
         shiftMomentum(-8); // momentum shifts to defense
 
         state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
         state.yardsToGo -= sackYards;
         advanceClock(8);
 
-        // Strip-sack (~6% of sacks at NFL rates): the ball comes out and the
-        // defense recovers. Logged as a follow-up 'fumble' like a run fumble.
-        if (Math.random() < stripSackLossChance(ok.qb)) {
+        if (stripLost) {
           const recoverer = pickSacker(dk.dls.filter(p => p !== sacker), dk.lbs.filter(p => p !== sacker)) ?? sacker;
           addEvent('fumble', descStripSack(ok.qb, sacker, recoverer), 0, false);
           if (ok.qb) creditRusher(ob, ok.qb.id, { fumbles: 1 });
@@ -1572,16 +1607,20 @@ export function simulatePlayByPlay(
           return true;
         }
 
-        const desc = descPassComplete(ok.qb, receiver, yardsGained, isLong);
+        // Fumble after the catch (~1 in 175 completions lost at NFL rates; about as many the offense falls on).
+        const catchLost = Math.random() < catchFumbleLossChance(receiver);
+        const catchKept = !catchLost && Math.random() < catchFumbleLossChance(receiver);
+        const desc = descPassComplete(ok.qb, receiver, yardsGained, isLong)
+          + (catchKept ? keptFumbleTail(receiver, keptRecoverer(receiver, [...ok.wrs, ...ok.tes])) : '');
         addEvent('pass_complete', desc, yardsGained, false);
+        if (catchKept && receiver) creditRusher(ob, receiver.id, { fumbles: 1 });
         if (isLong) shiftMomentum(12); // big play momentum
 
         state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
         state.yardsToGo -= yardsGained;
         advanceClock(Math.floor(Math.random() * 10) + 25);
 
-        // Fumble after the catch (~1 in 200 completions at NFL rates).
-        if (Math.random() < catchFumbleLossChance(receiver)) {
+        if (catchLost) {
           const recoverer = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.lb1;
           addEvent('fumble', descCatchFumble(receiver, recoverer), 0, false);
           if (receiver) creditRusher(ob, receiver.id, { fumbles: 1 });

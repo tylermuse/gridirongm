@@ -288,6 +288,8 @@ type PlayResult = {
   yards: number;
   touchdown: boolean;
   turnover: boolean;
+  /** the ball came out but the offense fell on it: a fumble in the box score, no change of possession */
+  fumbleKept?: boolean;
   passer?: Player;
   rusher?: Player;
   receiver?: Player;
@@ -387,6 +389,8 @@ function simulatePlay(
     if (Math.random() < 0.15) yards = -(1 + Math.floor(Math.random() * 3));
 
     const fumbleChance = clamp(0.018 - (qb.ratings.carrying / 100) * 0.006 + rivalryIntensity / 5000, 0.005, 0.03);
+    // About half of NFL fumbles are recovered by the offense: same odds again for one it keeps.
+    const qbKept = Math.random() < fumbleChance;
     if (Math.random() < fumbleChance) {
       const tackler = allDefenders.length > 0
         ? weightedPick(allDefenders, allDefenders.map(d => {
@@ -416,7 +420,7 @@ function simulatePlay(
         }))
       : null;
     return {
-      type: 'rush', yards, touchdown: td, turnover: false,
+      type: 'rush', yards, touchdown: td, turnover: false, fumbleKept: !td && qbKept,
       rusher: qb, tackler: tackler ?? undefined,
     };
   }
@@ -484,7 +488,8 @@ function simulatePlay(
         : allDefenders[0];
       // Strip-sack: the ball comes loose and the defense falls on it.
       const stripped = Math.random() < stripSackLossChance(qb);
-      return { type: 'sack', yards: sackYards, touchdown: false, turnover: stripped, passer: qb, sacker };
+      const kept = !stripped && Math.random() < stripSackLossChance(qb);   // the ball comes out but the offense falls on it
+      return { type: 'sack', yards: sackYards, touchdown: false, turnover: stripped, fumbleKept: kept, passer: qb, sacker };
     }
 
     // ── Pick receiver with position-based target shares ──
@@ -609,8 +614,9 @@ function simulatePlay(
 
       // Fumble after the catch — the tackler punches it out.
       const fumbled = !td && Math.random() < catchFumbleLossChance(target);
+      const kept = !td && !fumbled && Math.random() < catchFumbleLossChance(target);
       return {
-        type: 'pass', yards, touchdown: td, turnover: fumbled,
+        type: 'pass', yards, touchdown: td, turnover: fumbled, fumbleKept: kept,
         passer: qb, receiver: target, tackler: tackler ?? undefined,
       };
     } else {
@@ -675,6 +681,7 @@ function simulatePlay(
 
     // Fumble check — rivalry games are more physical
     const fumbleChance = clamp(0.015 - (rusher.ratings.carrying / 100) * 0.008 + rivalryIntensity / 5000, 0.003, 0.025);
+    const rbKept = Math.random() < fumbleChance;   // ...and one the offense falls on
     if (Math.random() < fumbleChance) {
       const tackler = allDefenders.length > 0
         ? weightedPick(allDefenders, allDefenders.map(d => {
@@ -720,7 +727,7 @@ function simulatePlay(
       : null;
 
     return {
-      type: 'rush', yards: Math.max(-10, yards), touchdown: td, turnover: false,
+      type: 'rush', yards: Math.max(-10, yards), touchdown: td, turnover: false, fumbleKept: !td && rbKept,
       rusher, tackler: tackler ?? undefined,
       tackleForLoss: isNegative || yards < 0,
     };
@@ -1209,7 +1216,7 @@ export function simulateGame(
           s.receptions = (s.receptions ?? 0) + 1;
           s.receivingYards = (s.receivingYards ?? 0) + play.yards;
           if (play.touchdown) s.receivingTDs = (s.receivingTDs ?? 0) + 1;
-          if (play.turnover) s.fumbles = (s.fumbles ?? 0) + 1;
+          if (play.turnover || play.fumbleKept) s.fumbles = (s.fumbles ?? 0) + 1;
         } else if (play.receiver && rosterIds.has(play.receiver.id)) {
           const s = ensure(playerStats, play.receiver.id);
           s.targets = (s.targets ?? 0) + 1;
@@ -1235,7 +1242,7 @@ export function simulateGame(
           s.rushAttempts = (s.rushAttempts ?? 0) + 1;
           s.rushYards = (s.rushYards ?? 0) + play.yards;
           if (play.touchdown) s.rushTDs = (s.rushTDs ?? 0) + 1;
-          if (play.turnover) s.fumbles = (s.fumbles ?? 0) + 1;
+          if (play.turnover || play.fumbleKept) s.fumbles = (s.fumbles ?? 0) + 1;
         }
         if (play.tackler && rosterIds.has(play.tackler.id) && Math.random() > 0.20) {
           const s = ensure(playerStats, play.tackler.id);
@@ -1252,7 +1259,7 @@ export function simulateGame(
           s.tacklesForLoss = (s.tacklesForLoss ?? 0) + 1;
           if (play.turnover) s.forcedFumbles = (s.forcedFumbles ?? 0) + 1;
         }
-        if (play.turnover && play.passer && rosterIds.has(play.passer.id)) {
+        if ((play.turnover || play.fumbleKept) && play.passer && rosterIds.has(play.passer.id)) {
           const s = ensure(playerStats, play.passer.id);
           s.fumbles = (s.fumbles ?? 0) + 1;
         }

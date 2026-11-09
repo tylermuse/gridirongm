@@ -224,6 +224,38 @@ describe('strip-sacks and fumbles after the catch', () => {
   });
 });
 
+describe('fumbles the offense keeps', () => {
+  const p = (id: string, firstName: string, lastName: string, position: string, jerseyNumber: number) => ({ id, firstName, lastName, position, jerseyNumber });
+  const home = [p('q', 'Dak', 'Prescott', 'QB', 4), p('r', 'Javonte', 'Williams', 'RB', 33), p('o', 'Tyler', 'Smith', 'OL', 73), p('w', 'George', 'Pickens', 'WR', 3)];
+  const away = [p('d', 'Micah', 'Parsons', 'DL', 11)];
+  const base = { id: 7, quarter: 1, timeStr: '12:00', possession: 'home', fieldPos: 40, down: 2, yardsToGo: 8, homeScore: 0, awayScore: 0, isScoring: false };
+  type E = Parameters<typeof toSimPlay>[0];
+  it('a run whose line says the offense fell on it is a fumble the offense keeps, the lineman named as the recoverer', () => {
+    const run = { ...base, type: 'run', yardsGained: 4, description: 'J. Williams RB runs for 4 yards. FUMBLE! J. Williams RB coughs it up — but T. Smith OL falls on it. Offense keeps it.' } as unknown as E;
+    const next = { ...base, id: 8, type: 'run', description: 'J. Williams runs for 2.', yardsGained: 2 } as unknown as E;
+    const m = toSimPlay(run, { home, away }, next)!;
+    expect(m.res).toMatchObject({ kind: 'run', yards: 4, fumble: true, kept: true });
+    expect(m.who?.ball?.n).toBe(33);   // still the runner, not the lineman named after the fumble
+    expect(m.who?.rec?.n).toBe(73);
+  });
+  it('a sack where the QB falls on his own fumble, and a catch the receiver recovers himself', () => {
+    const sack = { ...base, type: 'sack', yardsGained: -7, description: '💥 Sack! M. Parsons brings down D. Prescott for a 7-yard loss! FUMBLE! D. Prescott puts it on the ground — but falls right back on it. Offense keeps it.' } as unknown as E;
+    const ms = toSimPlay(sack, { home, away }, null)!;
+    expect(ms.res).toMatchObject({ kind: 'sack', fumble: true, kept: true });
+    expect(ms.who?.def?.n).toBe(11);
+    expect(ms.who?.rec?.n).toBe(4);
+    const cat = { ...base, type: 'pass_complete', yardsGained: 9, description: 'D. Prescott completes to G. Pickens for 9 yards. FUMBLE! The ball squirts loose, but G. Pickens recovers his own fumble.' } as unknown as E;
+    const mc = toSimPlay(cat, { home, away }, null)!;
+    expect(mc.res).toMatchObject({ kind: 'complete', fumble: true, kept: true });
+    expect(mc.who?.ball?.n).toBe(3);
+    expect(mc.who?.rec?.n).toBe(3);
+  });
+  it('an ordinary play is not a fumble', () => {
+    const run = { ...base, type: 'run', yardsGained: 4, description: 'J. Williams runs for 4 yards.' } as unknown as E;
+    expect(toSimPlay(run, { home, away }, null)!.res.fumble).toBeUndefined();
+  });
+});
+
 describe('screens keep their style', () => {
   const base = { id: 9, quarter: 2, timeStr: '5:00', possession: 'home', fieldPos: 97, down: 1, yardsToGo: 3, homeScore: 0, awayScore: 0 };
   it('a screen that scores at the goal line, and an incomplete screen, are still screens', () => {
