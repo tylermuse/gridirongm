@@ -443,7 +443,8 @@ function sortRosterByDepthChart(
 
 function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | undefined {
   const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
-  const overallPick = totalPicks - state.draftOrder.length + 1;
+  // Clamp to >=1: historical-era saves can carry a draftOrder longer than draftPickOrder (stale totalPicks), which made this go <=0 and surface a phantom "pick #0". (football-draft-pick-zero)
+  const overallPick = Math.max(1, totalPicks - state.draftOrder.length + 1);
   const round = Math.ceil(overallPick / state.teams.length);
 
   // Validate any returned pid actually resolves to a real player in state.players.
@@ -5409,7 +5410,8 @@ export const useGameStore = create<GameStore>()(
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
         const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
-        const overallPick = totalPicks - state.draftOrder.length + 1;
+        // Clamp to >=1: historical-era saves can carry a draftOrder longer than draftPickOrder (stale totalPicks), which made this go <=0 and surface a phantom "pick #0". (football-draft-pick-zero)
+        const overallPick = Math.max(1, totalPicks - state.draftOrder.length + 1);
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
 
@@ -5588,7 +5590,8 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          const overallPick = totalPicks - draftOrder.length + 1;
+          // Clamp to >=1: guard the same phantom "pick #0" on this draft path for historical-era saves. (football-draft-pick-zero)
+          const overallPick = Math.max(1, totalPicks - draftOrder.length + 1);
           const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
           const round = Math.ceil(overallPick / state.teams.length);
           // Rookie salary scale based on draft position (league-style exponential decay)
@@ -5688,7 +5691,8 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          const overallPick = totalPicks - draftOrder.length + 1;
+          // Clamp to >=1: guard the same phantom "pick #0" on this draft path for historical-era saves. (football-draft-pick-zero)
+          const overallPick = Math.max(1, totalPicks - draftOrder.length + 1);
           const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
           const round = Math.ceil(overallPick / state.teams.length);
           // Rookie salary scale based on draft position (league-style exponential decay)
