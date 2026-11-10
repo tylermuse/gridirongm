@@ -8,7 +8,9 @@ Pulls current ESPN data and updates the 2026 roster in place:
   - reconciles each team's roster (signings / cuts / IR / practice squad / un-retirements)
     against ESPN active rosters (active + IR + practice squad kept on the team)
   - sets per-player injuries from the ESPN injury report (Out / Doubtful / IR)
-  - refreshes the BS-only `bsCoaches` block (real head coach per team, ESPN core API);
+  - refreshes the BS-only `bsCoaches` block: real head coach per team (ESPN core API),
+    real coordinators + position coaches (Wikipedia staff navboxes, scripts/nfl_coach_staff.py)
+    and publicly reported HC contracts (scripts/data/nfl2026_coach_contracts.json);
     `--coaches-only` rewrites just that block and the vanilla variant
   - refreshes the rosters-page card: title date, lastUpdated, cacheBust, and a
     "records through Week N" note with the division leaders
@@ -20,13 +22,24 @@ rating moves to the changelog.
 Idempotent-ish: re-running against the same ESPN state yields the same result.
 """
 import json, re, sys, subprocess, datetime, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from collections import defaultdict, Counter
 
 ROSTER = "public/rosters/FBGM_NFL_Roster_2026_Updated.json"
 PAGE   = "src/app/rosters/page.tsx"
 # Trades ESPN's team-roster feed hasn't reflected yet. normalized "first last" -> tid.
 # Forced every run so an ESPN lag can't flip the player back; harmless once ESPN catches up.
-MANUAL_OVERRIDES = {"joey porter jr": 8}  # Joey Porter Jr. -> Cowboys (Oct 2026)
+MANUAL_OVERRIDES = {
+    "joey porter jr": 8,     # Joey Porter Jr. -> Cowboys (Oct 2026)
+    # Trade deadline, Nov 10 2026
+    "ryan neuzil": 2,        # C, Falcons -> Ravens
+    "andrew vorhees": 1,     # G, Ravens -> Falcons
+    "josh downs": 15,        # WR, Colts -> Chiefs
+    "daiyan henley": 9,      # LB, Chargers -> Broncos
+    "kirk cousins": 20,      # QB, Raiders -> Vikings
+    "amani hooker": 3,       # S, Titans -> Bills
+    "keenan allen": 27,      # WR, Colts -> 49ers
+}
 def _rawkey(p):
     import re as _re
     return _re.sub(r'[^a-z0-9 ]','',((p.get('firstName') or '')+' '+(p.get('lastName') or '')).lower()).strip()
@@ -38,6 +51,48 @@ def apply_overrides(d):
             p['tid']=MANUAL_OVERRIDES[k]; n+=1
     return n
 TID_ABBR = {0:'ari',1:'atl',2:'bal',3:'buf',4:'car',5:'chi',6:'cin',7:'cle',8:'dal',9:'den',10:'det',11:'gb',12:'hou',13:'ind',14:'jax',15:'kc',16:'lv',17:'lac',18:'lar',19:'mia',20:'min',21:'ne',22:'no',23:'nyg',24:'nyj',25:'phi',26:'pit',27:'sf',28:'sea',29:'tb',30:'ten',31:'wsh'}
+
+# In-season draft-pick trades (season, round, original team, from -> to), forced every run.
+# A pick is moved only while the sending team still holds it; anything else is reported, not guessed.
+PICK_TRADES = [
+    # Sep 27  J.J. McCarthy -> NYG
+    (2027,5,'nyg','nyg','min'),
+    # Oct 1   Joey Porter Jr. -> DAL
+    (2027,6,'dal','dal','pit'), (2028,2,'dal','dal','pit'),
+    # Oct 7   Cam Jurgens -> BAL
+    (2027,7,'phi','phi','bal'), (2027,5,'bal','bal','phi'), (2028,2,'bal','bal','phi'),
+    # Oct 11  Marvin Harrison Jr. -> HOU
+    (2027,6,'ari','ari','hou'), (2027,2,'hou','hou','ari'), (2027,7,'hou','hou','ari'),
+    # Oct 27  DeForest Buckner -> SF; Quenton Nelson -> SEA
+    (2027,4,'sf','sf','ind'), (2027,3,'sea','sea','ind'), (2028,5,'sea','sea','ind'),
+    # Oct 29  Jeffery Simmons -> CHI
+    (2028,5,'ten','ten','chi'), (2027,1,'chi','chi','ten'), (2027,4,'chi','chi','ten'), (2028,1,'chi','chi','ten'),
+    # Nov 6   Jacoby Brissett -> BAL
+    (2027,5,'ari','ari','bal'), (2027,4,'bal','bal','ari'), (2028,7,'bal','bal','ari'),
+    # Nov 9   Jessie Bates -> JAX; Davon Godchaux -> JAX; Jordan Davis -> JAX; Andre Cisco -> DET
+    (2027,2,'jax','jax','atl'), (2028,5,'jax','jax','atl'), (2028,6,'jax','jax','no'),
+    (2027,1,'jax','jax','phi'), (2029,2,'jax','jax','phi'), (2028,6,'det','det','nyj'),
+    # Nov 10 (deadline)
+    (2028,6,'bal','bal','atl'),                                   # Neuzil/Vorhees
+    (2027,7,'ind','ind','kc'), (2027,4,'kc','kc','ind'), (2027,5,'kc','kc','ind'),  # Josh Downs -> KC
+    (2027,4,'den','den','lac'), (2028,5,'den','den','lac'),       # Daiyan Henley -> DEN
+    (2027,3,'min','min','lv'),                                    # Kirk Cousins -> MIN
+    (2027,5,'ten','ten','buf'), (2027,2,'buf','buf','ten'),       # Amani Hooker -> BUF
+    (2027,6,'sf','sf','ind'),                                     # Keenan Allen -> SF
+]
+def apply_pick_trades(d):
+    tid = {v: k for k, v in TID_ABBR.items()}
+    moved, skipped = 0, []
+    for season, rnd, orig, frm, to in PICK_TRADES:
+        pk = [p for p in d.get('draftPicks', []) if p.get('season') == season and p.get('round') == rnd and p.get('originalTid') == tid[orig]]
+        if not pk: skipped.append(f"{season} R{rnd} {orig.upper()}: not in file"); continue
+        p = pk[0]
+        if p['tid'] == tid[to]: continue
+        if p['tid'] != tid[frm]:
+            skipped.append(f"{season} R{rnd} {orig.upper()}: held by {TID_ABBR.get(p['tid'],'?').upper()}, expected {frm.upper()}"); continue
+        p['tid'] = tid[to]; moved += 1
+    for s_ in skipped: print(f"pick trade skipped: {s_}", file=sys.stderr)
+    return moved
 TEAM_NAME = {0:'Cardinals',1:'Falcons',2:'Ravens',3:'Bills',4:'Panthers',5:'Bears',6:'Bengals',7:'Browns',8:'Cowboys',9:'Broncos',10:'Lions',11:'Packers',12:'Texans',13:'Colts',14:'Jaguars',15:'Chiefs',16:'Raiders',17:'Chargers',18:'Rams',19:'Dolphins',20:'Vikings',21:'Patriots',22:'Saints',23:'Giants',24:'Jets',25:'Eagles',26:'Steelers',27:'49ers',28:'Seahawks',29:'Buccaneers',30:'Titans',31:'Commanders'}
 
 import time
@@ -111,8 +166,8 @@ def fetch_espn():
     return week, teams, injured, ok
 
 # ---------- real head coaches (BS-only `bsCoaches` block) ----------
-# ESPN's core API lists the current head coach per team. Only head coaches are
-# published; coordinators / position coaches stay auto-generated in the app.
+# ESPN's core API lists the current head coach per team (HC only); the rest of
+# the staff comes from Wikipedia via nfl_coach_staff.py.
 # `experience` = seasons as an NFL head coach including this one.
 SEASON = 2026
 COACH_SEASON = 2026
@@ -139,12 +194,50 @@ def fetch_coaches():
         out[ab] = entry
     return out
 
+COACH_CONTRACTS = "scripts/data/nfl2026_coach_contracts.json"
+def _norm(n): return re.sub(r'[^a-z]', '', (n or '').lower())
+
+def apply_contracts(coaches, season=COACH_SEASON):
+    """Add the publicly reported HC contract (years left incl. this season, $M/yr) where one exists.
+    Only applied while the researched coach is still the HC, so a firing can't hand his deal to the replacement."""
+    try:
+        book = json.load(open(COACH_CONTRACTS))['teams']
+    except Exception:
+        return 0
+    n = 0
+    for ab, e in coaches.items():
+        c = book.get(ab)
+        if not c or _norm(c.get('coach')) != _norm(e.get('name')): continue
+        k = {}
+        if c.get('throughSeason'): k['years'] = max(1, c['throughSeason'] - season + 1)
+        if c.get('salaryM'): k['salary'] = c['salaryM']
+        if k: e['contract'] = k; n += 1
+    return n
+
+def apply_staff(coaches, old=None):
+    """Attach real coordinators + position coaches (Wikipedia staff navboxes) to each team's entry.
+    A team Wikipedia can't serve this week keeps last week's staff."""
+    try:
+        from nfl_coach_staff import fetch_staffs
+        staffs = fetch_staffs(coaches)
+    except Exception as ex:
+        print(f"staff: fetch failed ({ex}); keeping existing staffs", file=sys.stderr); staffs = {}
+    n = 0
+    for ab, e in coaches.items():
+        st = staffs.get(ab) or ((old or {}).get(ab) or {}).get('staff')
+        if st: e['staff'] = st; n += len(st)
+    return n
+
 def apply_coaches(d):
-    """Replace d['bsCoaches'] with the live ESPN head coaches; keep the old block if ESPN fails."""
+    """Replace d['bsCoaches'] with the live ESPN head coaches (+ real staff and reported HC contracts);
+    keep the old block if ESPN fails."""
     coaches = fetch_coaches()
     if len(coaches) < 30:
         print(f"coaches: only {len(coaches)}/32 fetched from ESPN; keeping existing bsCoaches ({len(d.get('bsCoaches') or {})})", file=sys.stderr)
         return len(d.get('bsCoaches') or {})
+    nstaff = apply_staff(coaches, d.get('bsCoaches'))
+    ncon = apply_contracts(coaches)
+    print(f"coaches: {len(coaches)} HCs, {nstaff} staff coaches, {ncon} reported HC contracts", file=sys.stderr)
     d['bsCoaches'] = coaches
     return len(coaches)
 
@@ -359,6 +452,7 @@ def main():
     n0=len(d['players'])
     moves,unret,cuts,jset = reconcile(d, teams, ok)
     nov = apply_overrides(d)
+    npk = apply_pick_trades(d)
     ninj = apply_injuries(d, injured, week, today)
     ncoach = apply_coaches(d)
     assert len(d['players'])==n0
@@ -369,7 +463,7 @@ def main():
     subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variants (Current + Week 1 start)
     subprocess.run([sys.executable,"scripts/build_mock_draft.py"],check=True)  # /mock-draft data: 2027 class, draft order, pick owners, team needs
     append_rating_changes(fn)
-    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
+    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"pickTrades":npk,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":
     main()
