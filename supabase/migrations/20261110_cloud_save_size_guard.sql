@@ -49,7 +49,8 @@ begin
   end;
 
   if body_bytes > max_bytes then
-    -- SQLSTATE 54000 (program_limit_exceeded) is returned by PostgREST as HTTP 413.
+    -- Reaches the client as an HTTP 500 carrying this message and code 54000
+    -- (checked against production with a 33 MB test upload on 2026-11-10).
     raise exception 'Cloud save is too large to sync (% MB, limit % MB)',
       round(body_bytes / 1048576.0), max_bytes / 1048576
       using errcode = '54000';
