@@ -4,7 +4,13 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { InteractionsSection, type InteractionReport } from './InteractionsSection';
-import { DailyBars } from './DailyBars';
+import { OverviewSection } from './OverviewSection';
+import { RevenueSection } from './RevenueSection';
+import { GrowthSection } from './GrowthSection';
+import { EngagementSection, type ActiveUsersRolling } from './EngagementSection';
+import { Collapsible, SectionHeading, type Period } from './ui';
+import type { SubscriberGrowth } from './subscriberGrowth';
+import type { AccountsReport, AcquisitionReport, RevenueReport } from './businessMetrics';
 
 // Every number fed by the summary RPC is null when that query failed (e.g. a
 // statement timeout). The cards render "—" for null; they must never show 0 as
@@ -31,6 +37,12 @@ interface AnalyticsData {
   /** null until migration 20261106_sim3d_followup is applied (or the query failed) */
   sim3dFollowup?: Sim3dFollowup | null;
   interactions: InteractionReport | null;
+  // The four business reports (api/admin/analytics/business.ts). Each is its whole
+  // history, independent of `period`, and null when its own query failed.
+  subscriberGrowth?: SubscriberGrowth | null;
+  revenue?: RevenueReport | null;
+  accounts?: AccountsReport | null;
+  acquisition?: AcquisitionReport | null;
   rollups?: RollupHealth;
   timingsMs?: Record<string, number>;
   cacheAgeMs?: Record<string, number>;
@@ -60,19 +72,6 @@ interface Sim3dCohorts { since: string; cohorts: { on?: Sim3dCohort; off?: Sim3d
 interface Sim3dConversion { freeDevices: number; converted: number; pctConverted: number }
 interface Sim3dArm { devices: number; pctHad3dOn: number; pctSwitchedOff: number; sessionsPerDevice: number; pctMultiDay: number; pctReturned7d: number; pctConverted: number }
 interface Sim3dFollowup { since: string; conversion: { on?: Sim3dConversion; off?: Sim3dConversion }; defaultTest: { on?: Sim3dArm; off?: Sim3dArm } }
-
-interface ActiveUsersRolling {
-  dau: number;
-  wau: number;
-  mau: number;
-  engagedDau: number;
-  engagedWau: number;
-  engagedMau: number;
-  returningMau: number;
-  dailyActive: { day: string; all: number; engaged: number }[];
-}
-
-type Period = '7d' | '30d' | '90d';
 
 interface FeedbackItem {
   id: string;
@@ -163,6 +162,12 @@ export default function AdminAnalyticsPage() {
             </Link>
             <h1 className="text-lg font-bold text-gray-900">Analytics</h1>
           </div>
+          <div className="flex items-center gap-3">
+            {data?.generatedAt && (
+              <span className="hidden sm:inline text-xs text-gray-400" title="Reports are cached for 5 minutes">
+                Updated {new Date(data.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
           <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
             {(['7d', '30d', '90d'] as const).map(p => (
               <button
@@ -176,11 +181,12 @@ export default function AdminAnalyticsPage() {
               </button>
             ))}
           </div>
+          </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        {loading ? (
+        {loading && !data ? (
           <div className="text-center py-20 text-gray-400">Loading analytics...</div>
         ) : error ? (
           <div className="text-center py-20">
@@ -190,8 +196,8 @@ export default function AdminAnalyticsPage() {
         ) : !data ? (
           <div className="text-center py-20 text-gray-400">No data available yet. Events will appear once users start visiting.</div>
         ) : (
-          <div className="space-y-8">
-            {/* A query that fails (e.g. a statement timeout) shows here instead of as silent zeros */}
+          <div className={`space-y-10 transition-opacity ${loading ? 'opacity-50' : ''}`}>
+            {/* What needs a look: failed queries, a stalled rollup pipeline, billing that disagrees with itself. Silent when all is well. */}
             {data.warnings && data.warnings.length > 0 && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                 <div className="font-semibold mb-1">Some numbers didn&rsquo;t load</div>
@@ -200,177 +206,136 @@ export default function AdminAnalyticsPage() {
                 </ul>
               </div>
             )}
+            <RollupHealthPanel h={data.rollups} timings={data.timingsMs} cacheAge={data.cacheAgeMs} now={now} show="problems" />
+            <BillingAlerts g={data.subscriberGrowth ?? null} />
 
-            {/* Is the rollup pipeline (20261025) applied, backfilled and still fed? Loud when not, one quiet line when it is. */}
-            <RollupHealthPanel h={data.rollups} timings={data.timingsMs} cacheAge={data.cacheAgeMs} now={now} />
-
-            {/* All-time — these do NOT move with the period selector. */}
-            <div>
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">All time</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                <MetricCard label="Registered Accounts" value={data.totalUsers} sub="all time" />
-                <MetricCard
-                  label="Can Convert"
-                  value={data.convertibleUsers}
-                  sub={`${fmt(data.grandfatheredUsers)} Founders get Premium free`}
-                />
-                <MetricCard
-                  label="Conversion Rate"
-                  value={data.conversionRate === null ? null : `${(data.conversionRate * 100).toFixed(1)}%`}
-                  sub={`${data.totalSubscriptions} subs / ${fmt(data.convertibleUsers)} who can buy`}
-                />
-              </div>
-            </div>
-
-            {/* Rolling DAU/WAU/MAU — fixed windows, ignore the period selector. */}
-            {data.activeUsersRolling ? (
-              <ActiveUsersSection title="BS Football" a={data.activeUsersRolling} />
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide">BS Football · Active users · rolling</h2>
-                <p className="text-sm text-amber-700 mt-2">Didn&rsquo;t load — see the warning above.</p>
-              </div>
-            )}
-            {data.hoopsActiveUsersRolling && data.hoopsActiveUsersRolling.mau > 0 && (
-              <ActiveUsersSection title="BS Hoops" a={data.hoopsActiveUsersRolling} />
-            )}
-
-            {/* Windowed — these all respect the period selector. */}
-            <div>
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Last {period}</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                <MetricCard label="New Accounts" value={data.newUsers} sub={`in the last ${period}`} />
-                <MetricCard label="Active Users" value={data.activeUsers} sub="logged-in only" />
-                <MetricCard
-                  label="Unique Devices"
-                  value={data.uniqueDevices}
-                  sub="visited a page · incl. crawlers · upper bound"
-                />
-                <MetricCard label="Sessions" value={data.sessions} />
-                <MetricCard label="Page Views" value={data.pageViews} />
-                <MetricCard
-                  label="Views / Session"
-                  value={data.sessions !== null && data.pageViews !== null && data.sessions > 0 ? (data.pageViews / data.sessions).toFixed(1) : null}
-                  sub="engagement depth"
-                />
-              </div>
-            </div>
-
-            {/* 3D live sim: free for everyone (decided 2026-11-06); cohorts, conversion, and the default-on test */}
-            {data.sim3dCohorts && <Sim3dSection c={data.sim3dCohorts} f={data.sim3dFollowup ?? null} period={period} />}
-
-            {/* Automatic click / hover / change capture — what people use, ignore, and fight with */}
-            <InteractionsSection
-              r={data.interactions}
+            {/* 1. The five numbers that say how the business is doing, each against the period before. */}
+            <OverviewSection
+              growth={data.subscriberGrowth ?? null}
+              revenue={data.revenue ?? null}
+              accounts={data.accounts ?? null}
+              engagedMau={{
+                football: data.activeUsersRolling?.engagedMau ?? null,
+                hoops: data.hoopsActiveUsersRolling?.engagedMau ?? null,
+              }}
               period={period}
-              error={data.warnings?.find(w => w.startsWith('Feature usage'))}
+              now={now}
             />
 
-            {/* Signups chart + Top pages side by side */}
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Signups over time */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h2 className="text-sm font-bold text-gray-900 mb-4">New Accounts ({period})</h2>
-                {data.signupsByDay ? (
-                  <SignupsChart data={data.signupsByDay} period={period} now={now} />
-                ) : (
-                  <div className="text-sm text-amber-700 py-4 text-center">Didn&rsquo;t load</div>
-                )}
-              </div>
+            {/* 2. Money: who pays, who left, what landed. */}
+            <RevenueSection
+              growth={data.subscriberGrowth ?? null}
+              revenue={data.revenue ?? null}
+              conversion={{
+                rate: data.conversionRate,
+                subscribers: data.totalSubscriptions,
+                convertible: data.convertibleUsers,
+                founders: data.grandfatheredUsers,
+              }}
+              period={period}
+              now={now}
+            />
 
-              {/* Top pages */}
+            {/* 3. Top of the funnel and where it comes from. */}
+            <GrowthSection
+              visitors={data.uniqueDevices}
+              accounts={data.accounts ?? null}
+              fallbackSignupsByDay={data.signupsByDay}
+              growth={data.subscriberGrowth ?? null}
+              acquisition={data.acquisition ?? null}
+              period={period}
+              now={now}
+            />
+
+            {/* 4. Do people come back. */}
+            <EngagementSection
+              football={data.activeUsersRolling}
+              hoops={data.hoopsActiveUsersRolling}
+              windowed={{ activeUsers: data.activeUsers, sessions: data.sessions, pageViews: data.pageViews }}
+              topPages={data.topPages}
+              period={period}
+            />
+
+            {/* 5. What players say, in their words. */}
+            <div>
+              <SectionHeading title="Player feedback" />
               <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h2 className="text-sm font-bold text-gray-900 mb-4">Top Pages ({period})</h2>
-                {!data.topPages ? (
-                  <div className="text-sm text-amber-700 py-4 text-center">Didn&rsquo;t load</div>
-                ) : data.topPages.length === 0 ? (
-                  <div className="text-sm text-gray-400 py-4 text-center">No page views yet</div>
+                {feedback.length > 0 && (
+                  <div className="text-xs text-gray-400 mb-4">{feedback.length} most recent message{feedback.length === 1 ? '' : 's'}</div>
+                )}
+                {feedback.length === 0 ? (
+                  <div className="text-sm text-gray-400 py-4 text-center">No feedback yet</div>
                 ) : (
-                  <div className="space-y-2">
-                    {data.topPages.map(({ path, count }) => {
-                      const max = data.topPages![0].count;
-                      return (
-                        <div key={path} className="flex items-center gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm text-gray-700 truncate">{path}</div>
-                            <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-blue-500"
-                                style={{ width: `${(count / max) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div className="text-xs font-medium text-gray-500 w-12 text-right">{count}</div>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {feedback.map(fb => (
+                      <div key={fb.id} className="border border-gray-100 rounded-lg p-3">
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.message}</p>
+                        <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                          <span>{timeAgo(fb.created_at, now)}</span>
+                          {fb.app === 'bs-hoops' && <span className="font-semibold text-orange-600">Hoops</span>}
+                          {fb.page && <span className="font-mono">{fb.page}</span>}
+                          <span className="font-mono">{fb.user_id ? fb.user_id.slice(0, 8) : 'anon'}</span>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Recent activity */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="text-sm font-bold text-gray-900 mb-4">Recent Activity</h2>
-              {data.recentEvents.length === 0 ? (
-                <div className="text-sm text-gray-400 py-4 text-center">No events yet</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
-                        <th className="pb-2 pr-4 font-medium">Event</th>
-                        <th className="pb-2 pr-4 font-medium">Details</th>
-                        <th className="pb-2 pr-4 font-medium">User</th>
-                        <th className="pb-2 font-medium">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.recentEvents.map((ev, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="py-2 pr-4">
-                            <EventBadge event={ev.event} />
-                          </td>
-                          <td className="py-2 pr-4 text-gray-500 truncate max-w-[200px]">
-                            {formatProperties(ev.properties)}
-                          </td>
-                          <td className="py-2 pr-4 text-gray-400 text-xs font-mono">
-                            {ev.user_id ? ev.user_id.slice(0, 8) : 'anon'}
-                          </td>
-                          <td className="py-2 text-gray-400 text-xs whitespace-nowrap">
-                            {timeAgo(ev.created_at, now)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            {/* 6. Detail for when a number above raises a question. Folded away so the page stays short. */}
+            <div className="space-y-6 border-t border-gray-200 pt-8">
+              <Collapsible title="Feature usage" note="what people click, ignore and fight with" defaultOpen>
+                <InteractionsSection
+                  r={data.interactions}
+                  period={period}
+                  error={data.warnings?.find(w => w.startsWith('Feature usage'))}
+                />
+              </Collapsible>
+              {data.sim3dCohorts && (
+                <Collapsible title="3D live sim experiment" note="decided Nov 6: stays free">
+                  <Sim3dSection c={data.sim3dCohorts} f={data.sim3dFollowup ?? null} period={period} />
+                </Collapsible>
               )}
-            </div>
-
-            {/* User Feedback */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-bold text-gray-900">User Feedback</h2>
-                <span className="text-xs text-gray-400">{feedback.length} messages</span>
-              </div>
-              {feedback.length === 0 ? (
-                <div className="text-sm text-gray-400 py-4 text-center">No feedback yet</div>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {feedback.map(fb => (
-                    <div key={fb.id} className="border border-gray-100 rounded-lg p-3">
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.message}</p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                        <span>{timeAgo(fb.created_at, now)}</span>
-                        {fb.app === 'bs-hoops' && <span className="font-semibold text-orange-600">Hoops</span>}
-                        {fb.page && <span className="font-mono">{fb.page}</span>}
-                        <span className="font-mono">{fb.user_id ? fb.user_id.slice(0, 8) : 'anon'}</span>
-                      </div>
+              <Collapsible title="Live event feed" note="the last 50 raw events">
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  {data.recentEvents.length === 0 ? (
+                    <div className="text-sm text-gray-400 py-4 text-center">No events yet</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                            <th className="pb-2 pr-4 font-medium">Event</th>
+                            <th className="pb-2 pr-4 font-medium">Details</th>
+                            <th className="pb-2 pr-4 font-medium">User</th>
+                            <th className="pb-2 font-medium">Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.recentEvents.map((ev, i) => (
+                            <tr key={i} className="border-b border-gray-50">
+                              <td className="py-2 pr-4">
+                                <EventBadge event={ev.event} />
+                              </td>
+                              <td className="py-2 pr-4 text-gray-500 truncate max-w-[200px]">
+                                {formatProperties(ev.properties)}
+                              </td>
+                              <td className="py-2 pr-4 text-gray-400 text-xs font-mono">
+                                {ev.user_id ? ev.user_id.slice(0, 8) : 'anon'}
+                              </td>
+                              <td className="py-2 text-gray-400 text-xs whitespace-nowrap">
+                                {timeAgo(ev.created_at, now)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+              </Collapsible>
+              <RollupHealthPanel h={data.rollups} timings={data.timingsMs} cacheAge={data.cacheAgeMs} now={now} show="status" />
             </div>
           </div>
         )}
@@ -379,37 +344,26 @@ export default function AdminAnalyticsPage() {
   );
 }
 
-function ActiveUsersSection({ title, a }: { title: string; a: ActiveUsersRolling }) {
-  const stickiness = a.engagedMau > 0 ? a.engagedDau / a.engagedMau : 0;
-  const series = a.dailyActive.slice(-30);
+/** Billing states that cost money or trust if nobody notices them. Renders nothing when there are none. */
+function BillingAlerts({ g }: { g: SubscriberGrowth | null }) {
+  if (!g) return null;
+  const items: string[] = [];
+  if (g.stripeOnlyLive > 0) {
+    items.push(`${g.stripeOnlyLive} live Stripe subscription${g.stripeOnlyLive === 1 ? ' is' : 's are'} missing from our table: ${g.stripeOnlyLive === 1 ? 'that person is' : 'those people are'} paying, but the app doesn\u2019t know they are Premium.`);
+  }
+  if (g.pastDue > 0) {
+    items.push(`${g.pastDue} subscription${g.pastDue === 1 ? '' : 's'} failed ${g.pastDue === 1 ? 'its' : 'their'} last payment. Stripe is retrying; ${g.pastDue === 1 ? 'it is' : 'they are'} not counted as subscribed until it goes through.`);
+  }
+  if (g.stripeError) {
+    items.push(`Stripe couldn\u2019t be read (${g.stripeError}), so subscriber dates are the approximate ones from our own table and MRR is missing.`);
+  }
+  if (items.length === 0) return null;
   return (
-    <div>
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{title} · active users · rolling</h2>
-      <p className="text-xs text-gray-400 mb-3">
-        Engaged = device with 2+ page views in the window. Raw device counts include crawlers and one-page bounces.
-      </p>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard label="DAU (24h)" value={a.engagedDau} sub={`${a.dau.toLocaleString()} raw devices`} />
-        <MetricCard label="WAU (7d)" value={a.engagedWau} sub={`${a.wau.toLocaleString()} raw devices`} />
-        <MetricCard label="MAU (30d)" value={a.engagedMau} sub={`${a.returningMau.toLocaleString()} returned on 2+ days · ${a.mau.toLocaleString()} raw`} />
-        <MetricCard label="Stickiness" value={`${(stickiness * 100).toFixed(0)}%`} sub="engaged DAU / MAU" />
-      </div>
-      {series.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-gray-900">{title} daily active devices (30d)</h3>
-            <div className="flex gap-4 text-xs text-gray-500">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600" />Engaged</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100" />Raw</span>
-            </div>
-          </div>
-          <DailyBars
-            bars={series.map((d) => ({ day: d.day, value: d.engaged, backdrop: d.all }))}
-            valueLabel="Engaged"
-            backdropLabel="Raw"
-          />
-        </div>
-      )}
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      <div className="font-semibold mb-1">Billing needs a look</div>
+      <ul className="list-disc pl-5 space-y-0.5">
+        {items.map(i => <li key={i}>{i}</li>)}
+      </ul>
     </div>
   );
 }
@@ -508,24 +462,12 @@ function Sim3dDefaultTest({ f }: { f: Sim3dFollowup | null }) {
   );
 }
 
-/** null = the query behind this number failed; render a dash, never a fake 0. */
-function fmt(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return '—';
-  return typeof value === 'number' ? value.toLocaleString() : value;
-}
-
-function MetricCard({ label, value, sub }: { label: string; value: string | number | null; sub?: string }) {
-  const failed = value === null;
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5" title={failed ? 'This query failed — see the warning at the top' : undefined}>
-      <div className="text-xs text-gray-500 mb-1">{label}</div>
-      <div className={`text-2xl font-bold ${failed ? 'text-gray-300' : 'text-gray-900'}`}>{fmt(value)}</div>
-      {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
-    </div>
-  );
-}
-
-function RollupHealthPanel({ h, timings, cacheAge, now }: { h?: RollupHealth; timings?: Record<string, number>; cacheAge?: Record<string, number>; now: number }) {
+/**
+ * Rendered twice: `show="problems"` at the top of the page (nothing unless
+ * something is wrong) and `show="status"` at the bottom (the one quiet line
+ * when all is well).
+ */
+function RollupHealthPanel({ h, timings, cacheAge, now, show }: { h?: RollupHealth; timings?: Record<string, number>; cacheAge?: Record<string, number>; now: number; show: 'problems' | 'status' }) {
   // Cached reports return in ~0 ms, so only queries that actually ran this request count as "slowest".
   const cachedKeys = new Set(Object.keys(cacheAge ?? {}).map(k => k.split(':')[0]));
   const slowest = Object.entries(timings ?? {}).filter(([k]) => !cachedKeys.has(k)).sort((a, b) => b[1] - a[1])[0];
@@ -559,6 +501,7 @@ function RollupHealthPanel({ h, timings, cacheAge, now }: { h?: RollupHealth; ti
     }
   }
 
+  if ((problems.length === 0) !== (show === 'status')) return null;
   if (problems.length === 0) {
     const since = h?.earliestMinute ? h.earliestMinute.slice(0, 10) : '?';
     return (
@@ -617,18 +560,4 @@ function timeAgo(iso: string, now: number): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
-}
-
-function SignupsChart({ data, period, now }: { data: Record<string, number>; period: Period; now: number }) {
-  const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-  const bars = Array.from({ length: days }, (_, i) => {
-    const day = new Date(now - (days - 1 - i) * 86400000).toISOString().slice(0, 10);
-    return { day, value: data[day] ?? 0 };
-  });
-
-  if (bars.every((b) => b.value === 0)) {
-    return <div className="text-sm text-gray-400 py-4 text-center">No signups in this period</div>;
-  }
-
-  return <DailyBars bars={bars} valueLabel="Signups" />;
 }
