@@ -992,6 +992,7 @@ function getPlayLabel(type: string): string {
     case 'extra_point': return 'XP';
     case 'kickoff': return 'Kickoff';
     case 'penalty': return 'Penalty';
+    case 'turnover_downs': return 'Turnover on downs';
     default: return type;
   }
 }

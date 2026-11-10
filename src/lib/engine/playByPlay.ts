@@ -29,6 +29,7 @@ export type PlayType =
   | 'two_minute_warning'
   | 'overtime'
   | 'final'
+  | 'turnover_downs'
   | 'timeout';
 
 export interface PlayEvent {
@@ -1655,6 +1656,15 @@ export function simulatePlayByPlay(
       // First down achieved
       state.down = 1;
       state.yardsToGo = 10;
+    } else if (state.down === 4) {
+      // Turnover on downs — a failed 4th-down "go for it" reaches here. The
+      // old code did clamp(state.down + 1, 1, 4) === clamp(5, 1, 4) === 4,
+      // which stuck the offense on 4th down and let it illegally keep the
+      // ball (re-running 4th down until it converted or scored). Hand the ball
+      // to the defense at the mirrored spot, matching the fake-punt and other
+      // turnover paths (clamp 1..99).
+      addEvent('turnover_downs', 'Turnover on downs! The defense takes over.', 0, false);
+      switchPossession(clamp(100 - state.fieldPos, 1, 99));
     } else {
       state.down = clamp(state.down + 1, 1, 4);
     }
