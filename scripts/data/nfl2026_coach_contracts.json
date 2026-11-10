@@ -1,0 +1,261 @@
+{
+ "_about": "Publicly reported NFL head-coach contracts (researched Nov 10 2026). throughSeason = last season under contract; null = length never reported. salaryM = reported average annual value in $M; null = not reported. Applied only while the named coach is still the team HC. Coordinator/position-coach contracts are not public and stay simulated.",
+ "teams": {
+  "ARI": {
+   "coach": "Mike LaFleur",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.espn.com/nfl/story/_/id/47800131/sources-cardinals-set-hire-rams-mike-lafleur-head-coach",
+   "note": "Five-year contract per ESPN; hired Feb 2026"
+  },
+  "ATL": {
+   "coach": "Kevin Stefanski",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://bleacherreport.com/articles/25350112-kevin-stefanski-falcons-agree-reported-5-year-hc-contract-after-raheem-morris-firing",
+   "note": "Five-year deal per Adam Schefter (ESPN)"
+  },
+  "BAL": {
+   "coach": "Jesse Minter",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.si.com/nfl/ravens/onsi/news/details-emerge-jesse-minters-deal-baltimore-ravens",
+   "note": "Five-year contract per Adam Schefter; replaced John Harbaugh"
+  },
+  "BUF": {
+   "coach": "Joe Brady",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://bleacherreport.com/articles/25363682-joe-brady-bills-agree-hc-contract-after-sean-mcdermotts-firing",
+   "note": "Five-year contract per Adam Schefter; promoted from OC after McDermott firing"
+  },
+  "CAR": {
+   "coach": "Dave Canales",
+   "throughSeason": 2029,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/dave-canales-gets-six-year-deal-the-nfl-equivalent-of-hazard-pay",
+   "note": "Six-year deal per multiple reports (2024-2029); no extension found"
+  },
+  "CHI": {
+   "coach": "Ben Johnson",
+   "throughSeason": 2029,
+   "salaryM": 13,
+   "confidence": "high",
+   "source": "https://www.si.com/nfl/bears-ben-johnson-massive-contract-with-bears-revealed",
+   "note": "5 years, $65M total (~$13M/yr) per ESPN's Courtney Cronin"
+  },
+  "CIN": {
+   "coach": "Zac Taylor",
+   "throughSeason": 2027,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.cbssports.com/nfl/news/bengals-gave-zac-taylor-a-secret-contract-extension-in-2023-per-report-why-that-matters-and-what-it-means",
+   "note": "Unannounced 2023 extension reported by The Athletic's Paul Dehner runs through 2027; length in years not explicitly reported (2023-2027 inferred; SI describes it as a second 5-year extension). Prior 2022 extension ran through 2026"
+  },
+  "CLE": {
+   "coach": "Todd Monken",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.si.com/nfl/browns/onsi/news/first-details-of-todd-monken-s-contract-with-the-browns-emerge-01kg5hpxw90b",
+   "note": "Five-year deal through 2030 per Jeremy Fowler (ESPN)"
+  },
+  "DAL": {
+   "coach": "Brian Schottenheimer",
+   "throughSeason": 2028,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/brian-schottenheimer-gets-four-year-contract-as-head-coach-of-cowboys",
+   "note": "Four-year contract through 2028 per Fort Worth Star-Telegram (Nick Harris)"
+  },
+  "DEN": {
+   "coach": "Sean Payton",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.nfl.com/news/broncos-hc-sean-payton-agree-to-new-five-year-contract",
+   "note": "New five-year contract through 2030 signed June 2026; replaced original 2023 5-year deal. Start season inferred from 'five years through 2030'"
+  },
+  "DET": {
+   "coach": "Dan Campbell",
+   "throughSeason": 2027,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://africa.espn.com/nfl/story/_/id/39730362/lions-extend-hc-dan-campbell-gm-brad-holmes-2027",
+   "note": "March 2024 extension through 2027; owner said under contract 'for the next four seasons'; terms undisclosed. No later extension found"
+  },
+  "GB": {
+   "coach": "Matt LaFleur",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://wtop.com/nfl/2026/01/packers-announce-extensions-for-coach-matt-lafleur-gm-brian-gutekunst-and-executive-vp-russ-ball/",
+   "note": "Multi-year extension Jan 2026 (prior deal ran through 2026); length and salary not reported"
+  },
+  "HOU": {
+   "coach": "DeMeco Ryans",
+   "throughSeason": 2028,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.houstontexans.com/news/reports-texans-ryans-reach-six-year-deal-2662862",
+   "note": "Six-year deal (2023-2028); no extension found as of Nov 2026"
+  },
+  "IND": {
+   "coach": "Shane Steichen",
+   "throughSeason": 2028,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.si.com/nfl/colts/news/shane-steichen-colts-contract-rumor",
+   "note": "Six-year deal through 2028 per Ian Rapoport; no extension found"
+  },
+  "JAX": {
+   "coach": "Liam Coen",
+   "throughSeason": 2029,
+   "salaryM": 12,
+   "confidence": "high",
+   "source": "https://www.profootballnetwork.com/?p=867522",
+   "note": "Five-year contract averaging ~$12M/yr per ESPN's Jeremy Fowler (as cited by PFN)"
+  },
+  "KC": {
+   "coach": "Andy Reid",
+   "throughSeason": 2029,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-andy-reid-becomes-nfls-highest-paid-coach-in-deal-that-runs-through-2029",
+   "note": "April 2024 extension runs through 2029 per Tom Pelissero; length not announced (2024-2029 would be 6 seasons, inferred). Reported as NFL's highest-paid coach, figure not reported"
+  },
+  "LV": {
+   "coach": "Klint Kubiak",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://nesn.com/2026/02/raiders-reportedly-giving-klint-kubiak-five-year-contract",
+   "note": "Five-year contract per Adam Schefter; replaced Pete Carroll"
+  },
+  "LAC": {
+   "coach": "Jim Harbaugh",
+   "throughSeason": 2028,
+   "salaryM": 16,
+   "confidence": "high",
+   "source": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/sources-16-million-per-year-for-jim-harbaugh",
+   "note": "Five years, ~$16M/yr (~$80M)"
+  },
+  "LAR": {
+   "coach": "Sean McVay",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.therams.com/news/rams-sign-general-manager-les-snead-and-head-coach-sean-mcvay-to-multi-year-contract-extensions-2026",
+   "note": "Multi-year extension announced Feb 2, 2026 (prior 2022 deal ran through 2026); terms not disclosed"
+  },
+  "MIA": {
+   "coach": "Jeff Hafley",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-dolphins-give-jeff-hafley-a-five-year-deal",
+   "note": "Five-year deal per reports; replaced Mike McDaniel"
+  },
+  "MIN": {
+   "coach": "Kevin O'Connell",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.startribune.com/minnesota-vikings-coach-kevin-oconnell-contract-extension/601208917",
+   "note": "Multi-year extension in early 2025 (prior deal expired after 2025); terms not announced"
+  },
+  "NE": {
+   "coach": "Mike Vrabel",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://bleacherreport.com/articles/10150570-patriots-fans-celebrate-mike-vrabels-hc-contract-nfl-legend-won-3-super-bowls",
+   "note": "Reported only as multi-year (Schefter); length not disclosed. Sportico estimate ~$14M/yr is an industry estimate, not a firm report"
+  },
+  "NO": {
+   "coach": "Kellen Moore",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.profootballrumors.com/2025/02/saints-to-hire-kellen-moore-as-hc",
+   "note": "Hired Feb 2025; contract length and salary not reported"
+  },
+  "NYG": {
+   "coach": "John Harbaugh",
+   "throughSeason": 2030,
+   "salaryM": 20,
+   "confidence": "high",
+   "source": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-giants-are-expected-to-give-five-year-100-million-deal-to-john-harbaugh",
+   "note": "Five years, $100M (~$20M/yr) per Jordan Schultz; Harbaugh confirmed five-year deal (ESPN)"
+  },
+  "NYJ": {
+   "coach": "Aaron Glenn",
+   "throughSeason": 2029,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.si.com/nfl/jets/news/length-of-aaron-glenn-s-new-contract-with-jets-revealed-by-nfl-insider-colin3",
+   "note": "Five-year deal through 2029 per Adam Schefter"
+  },
+  "PHI": {
+   "coach": "Nick Sirianni",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.inquirer.com/eagles/eagles-nick-sirianni-coach-contract-extension-super-bowl-salary-20250520.html",
+   "note": "Multi-year extension May 2025 beyond 2025 (end of original deal); terms not released"
+  },
+  "PIT": {
+   "coach": "Mike McCarthy",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.si.com/nfl/steelers/onsi/news/pittsburgh-steelers-mike-mccarthy-contract-details-emerge",
+   "note": "Five-year deal per Pittsburgh Post-Gazette (Gerry Dulac); replaced Mike Tomlin"
+  },
+  "SF": {
+   "coach": "Kyle Shanahan",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.news4jax.com/sports/2026/09/11/49ers-coach-kyle-shanahan-signed-a-contract-extension-this-offseason-ap-source-says/",
+   "note": "Unannounced multi-year extension signed 2026 offseason (reported Sept 2026, AP); length not disclosed. Prior 2023 extension ran through 2028"
+  },
+  "SEA": {
+   "coach": "Mike Macdonald",
+   "throughSeason": 2029,
+   "salaryM": 9,
+   "confidence": "high",
+   "source": "https://www.profootballnetwork.com/mike-macdonald-contract-salary-net-worth-seahawks-head-coach/",
+   "note": "Six-year deal per Tom Pelissero; ~$9M/yr per Seattle Times (approximate). No extension reported despite Super Bowl win"
+  },
+  "TB": {
+   "coach": "Todd Bowles",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.foxsports.com/articles/nfl/buccaneers-extend-coach-todd-bowles-gm-jason-licht",
+   "note": "Multi-year extension June 2025; team did not provide terms"
+  },
+  "TEN": {
+   "coach": "Robert Saleh",
+   "throughSeason": 2030,
+   "salaryM": null,
+   "confidence": "high",
+   "source": "https://www.foxsports.com/articles/nfl/robert-saleh-gets-a-second-crack-at-head-coaching-signs-fiveyear-contract-with-tennessee-titans",
+   "note": "Five-year contract (AP)"
+  },
+  "WSH": {
+   "coach": "Dan Quinn",
+   "throughSeason": null,
+   "salaryM": null,
+   "confidence": "low",
+   "source": "https://www.washingtontimes.com/news/2024/feb/3/dan-quinn-signs-contract-to-become-coach-of-washin/",
+   "note": "Hired Feb 2024; contract length and salary not publicly reported"
+  }
+ }
+}
