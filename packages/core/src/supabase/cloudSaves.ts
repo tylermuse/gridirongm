@@ -22,6 +22,52 @@ import { createClient } from './client';
 const DEVICE_ID_KEY = 'bs-cloud-device-id';
 const SYNC_ENABLED_KEY = 'bs-cloud-sync-enabled';
 const LAST_SYNCED_KEY = 'bs-cloud-last-synced';
+const SYNC_PROBLEM_KEY = 'bs-cloud-sync-problem';
+
+/**
+ * The largest payload we will send, in characters (about bytes: saves are
+ * ASCII JSON).
+ *
+ * On 2026-11-10 two Football leagues that had grown to 90-108 MB uploaded
+ * themselves on every autosave. Each upload ran the database out of memory
+ * about 40 seconds later and restarted it: 22 crashes in two and a half hours,
+ * every one preceded by one of those uploads, with sign-in and saves failing
+ * for everyone during each restart. Uploads of 9-10 MB took half a second and
+ * 23-25 MB took 2-5 seconds, already climbing steeply, so the limit sits
+ * inside the range that was plainly healthy.
+ *
+ * A save over the limit stays on the device, exactly as it does for someone
+ * who never turned sync on; only the cloud copy stops updating, and the
+ * settings page says so (getCloudSyncProblem).
+ */
+export const MAX_CLOUD_PAYLOAD_CHARS = 20 * 1024 * 1024;
+
+export type CloudSyncProblem = 'too-large';
+
+/** Why the latest save was not synced, or null when sync is healthy. */
+export function getCloudSyncProblem(): CloudSyncProblem | null {
+  try {
+    return localStorage.getItem(SYNC_PROBLEM_KEY) === 'too-large' ? 'too-large' : null;
+  } catch {
+    return null;
+  }
+}
+
+function setSyncProblem(problem: CloudSyncProblem | null): void {
+  try {
+    if (problem) localStorage.setItem(SYNC_PROBLEM_KEY, problem);
+    else localStorage.removeItem(SYNC_PROBLEM_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** True (and recorded for the settings page) when a payload is too big to send. */
+function refuseOversized(payload: string): boolean {
+  if (payload.length <= MAX_CLOUD_PAYLOAD_CHARS) return false;
+  setSyncProblem('too-large');
+  return true;
+}
 
 /** Save slots mirrored to the cloud — mirrors GAME_SAVE_KEYS in storage. */
 export const CLOUD_SAVE_SLOTS = [
@@ -88,6 +134,7 @@ function markSynced(): void {
   } catch {
     /* ignore */
   }
+  setSyncProblem(null);
 }
 
 async function getUserId(): Promise<string | null> {
@@ -114,6 +161,8 @@ export async function pushCloudSave(
 ): Promise<{ ok: boolean; reason?: string }> {
   try {
     if (!isCloudSyncEnabled()) return { ok: false, reason: 'disabled' };
+    // Before anything touches the network: see MAX_CLOUD_PAYLOAD_CHARS.
+    if (refuseOversized(payload)) return { ok: false, reason: 'too-large' };
     const client = createClient();
     if (!client) return { ok: false, reason: 'no-client' };
     const userId = await getUserId();
@@ -162,6 +211,32 @@ export async function pullCloudSave(slot: CloudSaveSlot): Promise<CloudSaveRow |
   }
 }
 
+/**
+ * Who last wrote a slot and when, without its payload. Never throws.
+ *
+ * Use this to decide whether there is anything worth restoring. The payload is
+ * megabytes, and reading it on every page load made the database unpack and
+ * re-encode the whole save just so the caller could compare a device id.
+ */
+export async function peekCloudSave(slot: CloudSaveSlot): Promise<Pick<CloudSaveRow, 'device_id' | 'updated_at'> | null> {
+  try {
+    const client = createClient();
+    if (!client) return null;
+    const userId = await getUserId();
+    if (!userId) return null;
+    const { data, error } = await client
+      .from('cloud_saves')
+      .select('device_id, updated_at')
+      .eq('user_id', userId)
+      .eq('slot', slot)
+      .maybeSingle();
+    if (error) return null;
+    return (data as Pick<CloudSaveRow, 'device_id' | 'updated_at'>) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Delete one slot's cloud row (the user removing a cloud copy). Never throws. */
 export async function deleteCloudSave(slot: CloudSaveSlot): Promise<{ ok: boolean; reason?: string }> {
   try {
@@ -194,6 +269,9 @@ export function scheduleCloudPush(slot: CloudSaveSlot, payload: string, debounce
     if (!isCloudSyncEnabled()) return;
     const existing = _timers[slot];
     if (existing) clearTimeout(existing);
+    // Checked here as well as in pushCloudSave so an oversized save is dropped
+    // now instead of being held in memory for the length of the debounce.
+    if (refuseOversized(payload)) return;
     _timers[slot] = setTimeout(() => {
       void pushCloudSave(slot, payload);
     }, debounceMs);
