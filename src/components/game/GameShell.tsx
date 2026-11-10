@@ -9,6 +9,7 @@ import { FiredModal } from './FiredModal';
 import { Button } from '@/components/ui/Button';
 import { useGameStore, flushPendingSave, useSaveLoadStatus, retrySaveLoad, continueWithoutSave } from '@/lib/engine/store';
 import { getTeamColorVars } from '@/lib/teamColors';
+import { setFeedbackContext } from '@bs/core/feedback/client';
 
 export function GameShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -36,6 +37,12 @@ export function GameShell({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
+
+  // Feedback modal: attach where the player is in their league (read lazily on send).
+  useEffect(() => setFeedbackContext(() => {
+    const { season, week, phase, teams: ts, userTeamId: uid } = useGameStore.getState();
+    return { season, week, phase, team: ts.find(t => t.id === uid)?.abbreviation ?? '' };
+  }), []);
 
   if (saveStatus !== 'ready') return <SaveLoadScreen status={saveStatus} />;
 
