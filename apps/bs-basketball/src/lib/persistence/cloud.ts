@@ -18,6 +18,8 @@ import {
   pushCloudSave,
   pullCloudSave,
   deleteCloudSave,
+  encodeSave,
+  decodeSave,
   type CloudSaveSlot,
 } from '@bs/core/supabase/cloud-saves';
 
@@ -31,42 +33,12 @@ export interface CloudLeagueMeta {
 
 const INDEX_SLOT: CloudSaveSlot = 'bs-hoops:index';
 const PUSH_DEBOUNCE_MS = 8000;
-const GZ_PREFIX = 'gz1:';
 
 export const leagueSlot = (id: string): CloudSaveSlot => `bs-hoops:${id}`;
 
-// ---------------------------------------------------------------------------
-// Encoding (gzip → base64). Falls back to raw JSON if CompressionStream is
-// unavailable; decode accepts both.
-// ---------------------------------------------------------------------------
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  return btoa(bin);
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-export async function encodeSave(json: string): Promise<string> {
-  if (typeof CompressionStream === 'undefined') return json;
-  const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
-  const buf = new Uint8Array(await new Response(stream).arrayBuffer());
-  return GZ_PREFIX + bytesToBase64(buf);
-}
-
-export async function decodeSave(payload: string): Promise<string> {
-  if (!payload.startsWith(GZ_PREFIX)) return payload;
-  const bytes = base64ToBytes(payload.slice(GZ_PREFIX.length));
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Response(stream).text();
-}
+// Encoding (gzip → base64) lives in core, shared with Football. Re-exported
+// because callers and tests import it from here.
+export { encodeSave, decodeSave };
 
 // ---------------------------------------------------------------------------
 // Index
