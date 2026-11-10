@@ -4,13 +4,13 @@
  * The weekly roster script writes a BS-only `bsCoaches` block (one head coach
  * per team from ESPN) into FBGM_NFL_Roster_2026_Updated.json. At league
  * creation the generated HC of each team is renamed to the real person; the
- * coordinators and position coaches stay generated, and files without the
- * block are untouched.
+ * real coordinators / position coaches and any reported HC contract ride along
+ * in the same block, and files without the block are untouched.
  */
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { convertFbgmLeague } from '@/lib/data/leagueImport';
-import { applyRealHeadCoach, realHeadCoachesFromFile } from '@/lib/data/realHeadCoaches';
+import { applyRealHeadCoach, applyRealStaff, realHeadCoachesFromFile } from '@/lib/data/realHeadCoaches';
 import { generateCoachingStaff } from '@/lib/engine/coaching';
 
 const TEAM = { id: 'team-det', city: 'Detroit', name: 'Lions', abbreviation: 'DET' };
@@ -73,6 +73,55 @@ describe('applyRealHeadCoach', () => {
   });
 });
 
+describe('applyRealStaff + reported HC contracts', () => {
+  const FULL = {
+    CHI: {
+      name: 'Ben Johnson', experience: 1,
+      staff: { OC: 'Press Taylor', DC: 'Dennis Allen', QB: 'J. T. Barrett', DB: 'Al Harris' },
+      contract: { years: 4, salary: 13 },
+    },
+  };
+  const CHI = { id: 'team-chi', city: 'Chicago', name: 'Bears', abbreviation: 'CHI' };
+
+  it('renames each listed role to the real coach and leaves unlisted roles generated', () => {
+    const staff = generateCoachingStaff();
+    const before = staff.map(c => ({ ...c }));
+    expect(applyRealStaff(staff, CHI, FULL, 2026)).toBe(4);
+    const by = (r: string) => staff.find(c => c.role === r)!;
+    expect(`${by('OC').firstName} ${by('OC').lastName}`).toBe('Press Taylor');
+    expect(`${by('QB').firstName} ${by('QB').lastName}`).toBe('J. T. Barrett');
+    expect(by('DC').history).toEqual([]);
+    expect(by('OC').bio).toContain('Bears');
+    // Generated rating / contract survive on renamed coaches.
+    const genOc = before.find(c => c.role === 'OC')!;
+    expect(by('OC').ovr).toBe(genOc.ovr);
+    expect(by('OC').salary).toBe(genOc.salary);
+    for (const r of ['HC', 'RB', 'WR', 'OL', 'DL']) {
+      expect(by(r)).toEqual(before.find(c => c.role === r));
+    }
+  });
+
+  it('puts the reported contract on the HC', () => {
+    const staff = generateCoachingStaff();
+    applyRealHeadCoach(staff, CHI, FULL, 2026);
+    const hc = staff.find(c => c.role === 'HC')!;
+    expect(hc.contractYears).toBe(4);
+    expect(hc.salary).toBe(13);
+    expect(hc.guaranteed).toBeCloseTo(31.2);
+  });
+
+  it('parses staff + contract from the file block and drops junk', () => {
+    const parsed = realHeadCoachesFromFile({
+      CHI: { name: 'Ben Johnson', experience: 1, staff: { OC: 'Press Taylor', XX: 'Nope', DC: '' }, contract: { years: 4, salary: 13 } },
+      DET: { name: 'Dan Campbell', experience: 5, contract: { years: 99 } },
+    })!;
+    expect(parsed.CHI.staff).toEqual({ OC: 'Press Taylor' });
+    expect(parsed.CHI.contract).toEqual({ years: 4, salary: 13 });
+    expect(parsed.DET.contract).toBeUndefined();
+    expect(parsed.DET.staff).toBeUndefined();
+  });
+});
+
 describe('shipped NFL 2026 roster file', () => {
   it('carries a real head coach for all 32 teams and the importer passes them through', () => {
     const raw = JSON.parse(readFileSync('public/rosters/FBGM_NFL_Roster_2026_Updated.json', 'utf8'));
@@ -84,7 +133,14 @@ describe('shipped NFL 2026 roster file', () => {
       expect(entry, team.abbreviation).toBeDefined();
       expect(entry.name.split(' ').length).toBeGreaterThanOrEqual(2);
       expect(entry.experience).toBeGreaterThanOrEqual(0);
+      // Real staff: OC + position coaches for every club (TB's HC calls the defense, so no DC).
+      expect(Object.keys(entry.staff ?? {}).length, team.abbreviation).toBeGreaterThanOrEqual(7);
+      const names = [entry.name, ...Object.values(entry.staff ?? {})];
+      expect(new Set(names).size, team.abbreviation).toBe(names.length);
     }
+    // Reported HC contracts for most clubs.
+    const withContract = Object.values(realHeadCoaches!).filter(e => e.contract?.years);
+    expect(withContract.length).toBeGreaterThanOrEqual(20);
     // The stock-FBGM download variant must not carry the BS-only block.
     const vanilla = JSON.parse(readFileSync('public/rosters/FBGM_NFL_Roster_2026_Vanilla.json', 'utf8'));
     expect(vanilla.bsCoaches).toBeUndefined();

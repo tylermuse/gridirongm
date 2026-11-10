@@ -8,7 +8,9 @@ Pulls current ESPN data and updates the 2026 roster in place:
   - reconciles each team's roster (signings / cuts / IR / practice squad / un-retirements)
     against ESPN active rosters (active + IR + practice squad kept on the team)
   - sets per-player injuries from the ESPN injury report (Out / Doubtful / IR)
-  - refreshes the BS-only `bsCoaches` block (real head coach per team, ESPN core API);
+  - refreshes the BS-only `bsCoaches` block: real head coach per team (ESPN core API),
+    real coordinators + position coaches (Wikipedia staff navboxes, scripts/nfl_coach_staff.py)
+    and publicly reported HC contracts (scripts/data/nfl2026_coach_contracts.json);
     `--coaches-only` rewrites just that block and the vanilla variant
   - refreshes the rosters-page card: title date, lastUpdated, cacheBust, and a
     "records through Week N" note with the division leaders
@@ -20,6 +22,7 @@ rating moves to the changelog.
 Idempotent-ish: re-running against the same ESPN state yields the same result.
 """
 import json, re, sys, subprocess, datetime, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from collections import defaultdict, Counter
 
 ROSTER = "public/rosters/FBGM_NFL_Roster_2026_Updated.json"
@@ -111,8 +114,8 @@ def fetch_espn():
     return week, teams, injured, ok
 
 # ---------- real head coaches (BS-only `bsCoaches` block) ----------
-# ESPN's core API lists the current head coach per team. Only head coaches are
-# published; coordinators / position coaches stay auto-generated in the app.
+# ESPN's core API lists the current head coach per team (HC only); the rest of
+# the staff comes from Wikipedia via nfl_coach_staff.py.
 # `experience` = seasons as an NFL head coach including this one.
 SEASON = 2026
 COACH_SEASON = 2026
@@ -139,12 +142,50 @@ def fetch_coaches():
         out[ab] = entry
     return out
 
+COACH_CONTRACTS = "scripts/data/nfl2026_coach_contracts.json"
+def _norm(n): return re.sub(r'[^a-z]', '', (n or '').lower())
+
+def apply_contracts(coaches, season=COACH_SEASON):
+    """Add the publicly reported HC contract (years left incl. this season, $M/yr) where one exists.
+    Only applied while the researched coach is still the HC, so a firing can't hand his deal to the replacement."""
+    try:
+        book = json.load(open(COACH_CONTRACTS))['teams']
+    except Exception:
+        return 0
+    n = 0
+    for ab, e in coaches.items():
+        c = book.get(ab)
+        if not c or _norm(c.get('coach')) != _norm(e.get('name')): continue
+        k = {}
+        if c.get('throughSeason'): k['years'] = max(1, c['throughSeason'] - season + 1)
+        if c.get('salaryM'): k['salary'] = c['salaryM']
+        if k: e['contract'] = k; n += 1
+    return n
+
+def apply_staff(coaches, old=None):
+    """Attach real coordinators + position coaches (Wikipedia staff navboxes) to each team's entry.
+    A team Wikipedia can't serve this week keeps last week's staff."""
+    try:
+        from nfl_coach_staff import fetch_staffs
+        staffs = fetch_staffs(coaches)
+    except Exception as ex:
+        print(f"staff: fetch failed ({ex}); keeping existing staffs", file=sys.stderr); staffs = {}
+    n = 0
+    for ab, e in coaches.items():
+        st = staffs.get(ab) or ((old or {}).get(ab) or {}).get('staff')
+        if st: e['staff'] = st; n += len(st)
+    return n
+
 def apply_coaches(d):
-    """Replace d['bsCoaches'] with the live ESPN head coaches; keep the old block if ESPN fails."""
+    """Replace d['bsCoaches'] with the live ESPN head coaches (+ real staff and reported HC contracts);
+    keep the old block if ESPN fails."""
     coaches = fetch_coaches()
     if len(coaches) < 30:
         print(f"coaches: only {len(coaches)}/32 fetched from ESPN; keeping existing bsCoaches ({len(d.get('bsCoaches') or {})})", file=sys.stderr)
         return len(d.get('bsCoaches') or {})
+    nstaff = apply_staff(coaches, d.get('bsCoaches'))
+    ncon = apply_contracts(coaches)
+    print(f"coaches: {len(coaches)} HCs, {nstaff} staff coaches, {ncon} reported HC contracts", file=sys.stderr)
     d['bsCoaches'] = coaches
     return len(coaches)
 
