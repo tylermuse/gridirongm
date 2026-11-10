@@ -174,7 +174,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17p'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17q'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1174,7 +1174,7 @@ function choreograph(res){
     const layout = deep && res.kind==='incomplete' && (res.layout ?? (window.__layout ?? Math.random() < .6));
     /* bracketed deep shot (reference: DAL @ IND on FOX, #88's fade at the pylon, Tyler 11/8): the safety rolls over the top and jars it loose */
     const bracket = deep && res.kind==='incomplete' && !layout && !!(res.bracket ?? window.__bracket ?? Math.random() < .7);
-    const dropZ = z0-(deep?7.6: scn? 5.6 : 6.4), tSet = snap+(deep?1.25: scn? .8 : 1.0); let tThrow = snap+(deep?1.85: scn? 1.3 : 1.35);
+    const dropZ = z0-(deep?7.6: scn? 5.6 : 6.4), tSet = snap+(deep?1.25: scn? .8 : 1.0); let tThrow = snap+(deep?1.85: scn? 1.55 : 1.35);
     O.rb.behav = P([snap,1.6,z0-6.6],[snap+.55,2.6,z0-5.2],[snap+.95,3.4,z0-5],[snap+1.9,9.5,z0-2.5],[snap+3.6,17,z0+5.5]);   // check, then release to the flat
     let rec, catchX, Yc, routeKeys;
     let Y = res.yards||0; td = res.kind==='complete' && Y>=toGoal; if(td) Y = toGoal;
@@ -1182,7 +1182,7 @@ function choreograph(res){
       Yc = Math.min(Yc, toGoal + 7.5);   // catch point stays inside the end zone
       catchX = rec===O.wrL ? -17.5 : 17.5; }
     else if(scn){ // screen: the back slips out behind the rush and takes a soft throw 2 yd behind the line, blockers out in front
-      rec = O.rb; const side = Math.random()<.5? -1 : 1; Yc = -2.4; catchX = side*9.5; res.screenSide = side; }
+      rec = O.rb; const side = Math.random()<.5? -1 : 1; Yc = -3; catchX = side*15; res.screenSide = side; }   /* out by the numbers: at 9.5 he was barely outside the tackle and it read as a short throw over the middle (Tyler 11/9) */
     else { const pick = Math.random();
       rec = O[res.recKey] && res.recKey!=='rb'? O[res.recKey] : bat? (pick<.55? O.slot : O.te) : pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
       catchX = rec===O.slot? -4.5 : rec===O.te? 5 : rec===O.wrR? 22.5 : -22.5; }
@@ -1461,8 +1461,10 @@ function choreograph(res){
       picker.behav = P([snap, picker.x, picker.z], [iT-.4, iX+(iX<0?1.2:-1.2), pz+1.4], [iT, iX, pz]);
       rec.behav = P(...routeKeys);
       if(!tip){ flightSeg.flight.z1 = pz; flightSeg.flight.y1 = 2.2; }
-      const ret = res.ret ?? Math.round(tip? R(0,14) : R(0,22));
-      const pick6 = pz - ret <= -49.5;   /* the return reaches the goal line: it's a touchdown the other way, not 1st-and-goal at the 1 */
+      /* in the game the engine has already spotted the ball (res.endAt: the intercepting team's yard line): run the return to that
+         spot. The sim used to make the return up, and a long one reached the end zone — a "Pick six!" the game never scored (Tyler 11/9) */
+      const ret = res.endAt!=null? Math.max(0, pz - (50 - res.endAt)) : res.ret ?? Math.round(tip? R(0,14) : R(0,22));
+      const pick6 = res.lock? !!res.td : pz - ret <= -49.5;   /* the return reaches the goal line: it's a touchdown the other way, not 1st-and-goal at the 1 (in the game only when the engine says so) */
       const zEnd = pick6? -53 : Math.max(-49, pz - ret), endX = Math.max(-25, Math.min(25, iX + R(-6,6)));
       tEnd = iT + .25 + Math.max(.4, Math.abs(pz-zEnd)/7.4);
       const pKeys = tip? [...tip.preKeys, [iT, iX, pz], [iT+.25, iX, pz+.2], [tEnd, endX, zEnd]]

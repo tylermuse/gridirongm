@@ -29,7 +29,8 @@ export interface SimPlayResult {
   ret?: number;
   /** extra point (kind 'fg'): worth 1, called an extra point, no change of possession */
   xp?: boolean;
-  /** punt: the receiving team's yard line where the returner fields it, and where he's brought down (= catchAt on a fair catch) */
+  /** punt: the receiving team's yard line where the returner fields it, and where he's brought down (= catchAt on a fair catch).
+   *  int: endAt is the intercepting team's yard line where the return ends (the engine's spot); the sim never scores a pick-six on its own */
   catchAt?: number;
   endAt?: number;
   touchback?: boolean;
@@ -121,9 +122,12 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
           : { kind: 'complete', depth: Math.max(y, toGoal) >= 20 ? 'deep' : 'short', yards: td(y) };   // a screen that scores is still a screen (goal line)
     case 'sack':
       return { kind: 'sack', yards: y };
-    case 'interception':
-      if (BATTED_RE.test(e.description)) return { kind: 'int', depth: 'short', batted: true };
-      return { kind: 'int', depth: /deep|downfield|long/i.test(e.description) ? 'deep' : 'short' };
+    case 'interception': {
+      // the engine already spotted the ball after the return: the sim runs the return to that spot
+      const end = e.returnTo != null ? { endAt: Math.max(1, Math.min(99, Math.round(e.returnTo))) } : {};
+      if (BATTED_RE.test(e.description)) return { kind: 'int', depth: 'short', batted: true, ...end };
+      return { kind: 'int', depth: /deep|downfield|long/i.test(e.description) ? 'deep' : 'short', ...end };
+    }
     case 'field_goal_good':
       return { kind: 'fg', good: true };
     case 'field_goal_miss':
