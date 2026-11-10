@@ -14,6 +14,7 @@
     "./analytics/server": "./src/analytics/server.ts",
     "./analytics/attribution": "./src/analytics/attribution.ts",
     "./feedback/server": "./src/feedback/server.ts",
+    "./feedback/client": "./src/feedback/client.tsx",
     "./storage": "./src/storage/index.ts",
     "./supabase/client": "./src/supabase/client.ts",
     "./supabase/server": "./src/supabase/server.ts",
