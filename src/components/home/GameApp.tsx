@@ -16,7 +16,8 @@ import { useGameStore, computeLuxuryTax, whenSaveLoadSettles, retrySaveLoad, flu
 import { draftStartPlan, replayForGame, type MockDraftData } from '@/lib/mockDraft/engine';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
 import { setItem as idbSetItem } from '@bs/core/storage';
-import { peekCloudSave, pullCloudSave, getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
+import { getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
+import { peekCloudAutosave, pullCloudAutosave } from '@/lib/data/cloudAutosave';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -187,7 +188,7 @@ function TeamPicker() {
         }
 
         // Cloud Saves: whenever the user is signed in, check for a cloud
-        // autosave to restore. peekCloudSave self-guards on signed-in and a row
+        // autosave to restore. peekCloudAutosave self-guards on signed-in and a row
         // only exists if the user opted into sync on some device, so users who
         // never enabled it (or aren't signed in) see nothing. We offer a
         // restore when there's no local save yet, or the cloud save came from a
@@ -196,7 +197,7 @@ function TeamPicker() {
         try {
           // Only who wrote it and when: the save itself is fetched if the user
           // taps "Load it", not on every visit to this page.
-          const remote = await peekCloudSave('gridiron-gm-autosave');
+          const remote = await peekCloudAutosave();
           if (remote) {
             const fromOtherDevice = !!remote.device_id && remote.device_id !== getDeviceId();
             const noLocalSave = !raw;
@@ -237,13 +238,15 @@ function TeamPicker() {
     if (!cloudRestore) return;
     setCloudRestoring(true);
     try {
-      const remote = await pullCloudSave('gridiron-gm-autosave');
-      if (!remote?.payload) {
+      // The cloud copy is compressed; this is the save itself, decoded. The
+      // local autosave must only ever be given raw JSON.
+      const save = await pullCloudAutosave();
+      if (!save) {
         setCloudRestoring(false);
         setError('Your cloud save could not be downloaded. Check your connection and try again.');
         return;
       }
-      await idbSetItem('gridiron-gm-autosave', remote.payload);
+      await idbSetItem('gridiron-gm-autosave', save);
       // Keep this device in sync from now on, so edits here push back up.
       setCloudSyncEnabled(true);
       window.location.reload();

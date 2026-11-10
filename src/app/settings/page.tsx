@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { createClient } from '@bs/core/supabase/client';
-import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, getCloudSyncProblem, pushCloudSaveNow } from '@bs/core/supabase/cloud-saves';
+import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, getCloudSyncProblem } from '@bs/core/supabase/cloud-saves';
+import { pushCloudAutosaveNow } from '@/lib/data/cloudAutosave';
 import { getItem as idbGetItem, flushPendingWrites } from '@bs/core/storage';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -223,7 +224,7 @@ function CloudSyncCard() {
         await flushPendingWrites();
         const raw = await idbGetItem('gridiron-gm-autosave');
         if (raw) {
-          await pushCloudSaveNow('gridiron-gm-autosave', raw);
+          await pushCloudAutosaveNow(raw);
           setLastSynced(getLastSyncedAt());
           setTooLarge(getCloudSyncProblem() === 'too-large');
         }

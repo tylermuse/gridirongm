@@ -3,7 +3,8 @@ import { persist } from 'zustand/middleware';
 import { useSyncExternalStore } from 'react';
 import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
 import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites } from '@bs/core/storage';
-import { scheduleCloudPush, isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
+import { isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
+import { scheduleCloudAutosavePush } from '@/lib/data/cloudAutosave';
 function uuid(): string {
   return crypto.randomUUID();
 }
@@ -11839,8 +11840,9 @@ export async function flushToStorage(): Promise<void> {
   queueWrite(AUTOSAVE_KEY, envelope);
   await flushPendingWrites();
   // Mirror the autosave to the user's account when cloud sync is on (no-op
-  // otherwise). Fire-and-forget + debounced so it never blocks the local save.
-  if (isCloudSyncEnabled()) scheduleCloudPush(AUTOSAVE_KEY, JSON.stringify(envelope));
+  // otherwise). Fire-and-forget + debounced so it never blocks the local save;
+  // compressed, and sent to its own cloud slot (see cloudAutosave.ts).
+  if (isCloudSyncEnabled()) scheduleCloudAutosavePush(JSON.stringify(envelope));
 }
 
 /**

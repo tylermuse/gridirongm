@@ -9,7 +9,8 @@
  *
  * Design guarantees:
  * - Signed-out users are completely unaffected (every entry point no-ops).
- * - No save-shape / SAVE_VERSION change — we sync the exact serialized blob.
+ * - No save-shape / SAVE_VERSION change — we sync the exact serialized blob,
+ *   optionally gzip-compressed for transport (encodeSave / decodeSave).
  * - Every function is guarded + try/catch'd so a sync failure never disturbs
  *   the local save.
  *
@@ -25,8 +26,9 @@ const LAST_SYNCED_KEY = 'bs-cloud-last-synced';
 const SYNC_PROBLEM_KEY = 'bs-cloud-sync-problem';
 
 /**
- * The largest payload we will send, in characters (about bytes: saves are
- * ASCII JSON).
+ * The largest payload we will send, in characters (about bytes: a payload is
+ * ASCII JSON or, once encoded with encodeSave, ASCII base64). It applies to
+ * the payload as sent, so a compressed save is measured after compression.
  *
  * On 2026-11-10 two Football leagues that had grown to 90-108 MB uploaded
  * themselves on every autosave. Each upload ran the database out of memory
@@ -69,9 +71,16 @@ function refuseOversized(payload: string): boolean {
   return true;
 }
 
-/** Save slots mirrored to the cloud — mirrors GAME_SAVE_KEYS in storage. */
+/**
+ * Football's cloud slots. `gridiron-gm-autosave` holds raw JSON and is the
+ * only slot clients from before compression read or write, so nothing but raw
+ * JSON may ever be written to it: those clients copy what they pull straight
+ * into the local save. `gridiron-gm-autosave-v2` holds an encodeSave payload
+ * and is only touched by clients that decode what they pull.
+ */
 export const CLOUD_SAVE_SLOTS = [
   'gridiron-gm-autosave',
+  'gridiron-gm-autosave-v2',
   'gridiron-gm-save-1',
   'gridiron-gm-save-2',
 ] as const;
@@ -85,6 +94,59 @@ export interface CloudSaveRow {
   payload: string;
   device_id: string | null;
   updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Payload encoding (gzip, then base64, behind a `gz1:` prefix)
+//
+// A league is megabytes of repetitive JSON and compresses about tenfold. The
+// encoded form is a different string from the save itself, so it must be
+// decoded before it is used as a save, and must only be stored where every
+// reader decodes (see CLOUD_SAVE_SLOTS).
+// ---------------------------------------------------------------------------
+
+const GZ_PREFIX = 'gz1:';
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  return btoa(bin);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** True when a payload was produced by encodeSave and needs decodeSave. */
+export function isEncodedSave(payload: string): boolean {
+  return payload.startsWith(GZ_PREFIX);
+}
+
+/**
+ * Compress a serialized save for upload. Returns the JSON unchanged where the
+ * browser has no CompressionStream; decodeSave accepts both.
+ */
+export async function encodeSave(json: string): Promise<string> {
+  if (typeof CompressionStream === 'undefined') return json;
+  const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+  const buf = new Uint8Array(await new Response(stream).arrayBuffer());
+  return GZ_PREFIX + bytesToBase64(buf);
+}
+
+/**
+ * Turn a pulled payload back into the serialized save. A payload without the
+ * prefix is a raw JSON save from before compression and is returned as is.
+ * Throws if an encoded payload is damaged.
+ */
+export async function decodeSave(payload: string): Promise<string> {
+  if (!isEncodedSave(payload)) return payload;
+  const bytes = base64ToBytes(payload.slice(GZ_PREFIX.length));
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text();
 }
 
 export function isCloudSyncEnabled(): boolean {
@@ -232,6 +294,33 @@ export async function peekCloudSave(slot: CloudSaveSlot): Promise<Pick<CloudSave
       .maybeSingle();
     if (error) return null;
     return (data as Pick<CloudSaveRow, 'device_id' | 'updated_at'>) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * peekCloudSave for several slots in one request, newest first. Returns null
+ * when the lookup itself failed, so a caller choosing between slots can tell
+ * "no row" from "could not ask" and not settle for an older slot by mistake.
+ * Never throws.
+ */
+export async function peekCloudSaves(
+  slots: readonly CloudSaveSlot[],
+): Promise<Pick<CloudSaveRow, 'slot' | 'device_id' | 'updated_at'>[] | null> {
+  try {
+    const client = createClient();
+    if (!client) return null;
+    const userId = await getUserId();
+    if (!userId) return null;
+    const { data, error } = await client
+      .from('cloud_saves')
+      .select('slot, device_id, updated_at')
+      .eq('user_id', userId)
+      .in('slot', [...slots]);
+    if (error || !Array.isArray(data)) return null;
+    const rows = data as Pick<CloudSaveRow, 'slot' | 'device_id' | 'updated_at'>[];
+    return [...rows].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
   } catch {
     return null;
   }
