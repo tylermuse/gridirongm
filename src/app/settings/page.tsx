@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { createClient } from '@bs/core/supabase/client';
-import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, pushCloudSaveNow } from '@bs/core/supabase/cloud-saves';
+import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, getCloudSyncProblem, pushCloudSaveNow } from '@bs/core/supabase/cloud-saves';
 import { getItem as idbGetItem, flushPendingWrites } from '@bs/core/storage';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -201,10 +201,12 @@ function CloudSyncCard() {
   const [enabled, setEnabled] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [tooLarge, setTooLarge] = useState(false);
 
   useEffect(() => {
     setEnabled(isCloudSyncEnabled());
     setLastSynced(getLastSyncedAt());
+    setTooLarge(getCloudSyncProblem() === 'too-large');
     setMounted(true);
   }, []);
 
@@ -223,6 +225,7 @@ function CloudSyncCard() {
         if (raw) {
           await pushCloudSaveNow('gridiron-gm-autosave', raw);
           setLastSynced(getLastSyncedAt());
+          setTooLarge(getCloudSyncProblem() === 'too-large');
         }
       } catch { /* best-effort */ }
       setPushing(false);
@@ -246,6 +249,11 @@ function CloudSyncCard() {
           </div>
           {user && enabled && (
             <div className="text-[11px] text-[var(--text-sec)] mt-1">{pushing ? 'Syncing…' : `Last synced: ${lastSyncedLabel}`}</div>
+          )}
+          {user && enabled && tooLarge && !pushing && (
+            <div className="text-[11px] text-amber-600 mt-1">
+              This league has grown too large to sync, so the cloud copy is no longer updating. Your save on this device is not affected.
+            </div>
           )}
         </div>
         <button
