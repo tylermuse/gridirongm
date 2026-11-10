@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@bs/core/supabase/server';
+import { loadAccounts, loadAcquisition, loadRevenue, loadSubscriberGrowth } from './business';
 
 function getServiceClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
     // Heavy reports go through the cache (see top of file); the three cheap
     // index-backed reads below do not, so the live feed and health line are
     // always current.
-    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, sim3dFollowupRes, interactionsRes, healthRes] = await Promise.all([
+    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, sim3dFollowupRes, interactionsRes, healthRes, subscriberGrowthRes, revenueRes, accountsRes, acquisitionRes] = await Promise.all([
       timed('summary', cachedReport(`summary:${period}`, () => service.rpc('admin_analytics_summary', { p_since: since }), cacheAge), timings),
 
       timed('recentEvents', service.from('analytics_events')
@@ -165,6 +166,12 @@ export async function GET(request: NextRequest) {
       timed('interactions', cachedReport(`interactions:${period}`, () => service.rpc('admin_interaction_report', { p_since: since, p_app: 'bs-football' }), cacheAge), timings),
       // Is the rollup pipeline applied, backfilled, and still being fed? (migration 20261101_analytics_rollup_health)
       timed('health', service.rpc('admin_analytics_health'), timings),
+      // Business reports (see ./business.ts). None depends on `period`: each returns its whole
+      // history and the page cuts it to the window, so one cached copy serves 7d, 30d and 90d.
+      timed('subscriberGrowth', cachedReport('subscriberGrowth', () => loadSubscriberGrowth(service), cacheAge), timings),
+      timed('revenue', cachedReport('revenue', () => loadRevenue(), cacheAge), timings),
+      timed('accounts', cachedReport('accounts', () => loadAccounts(service), cacheAge), timings),
+      timed('acquisition', cachedReport('acquisition', () => loadAcquisition(service), cacheAge), timings),
     ]);
 
     // A failed summary (typically a statement timeout) must not masquerade as
@@ -230,6 +237,10 @@ export async function GET(request: NextRequest) {
       sim3dCohorts: sim3dRes.error ? null : (sim3dRes.data ?? null),
       sim3dFollowup: sim3dFollowupRes.error ? null : (sim3dFollowupRes.data ?? null),
       interactions: interactionsRes.error ? null : (interactionsRes.data ?? null),
+      subscriberGrowth: subscriberGrowthRes.error ? null : (subscriberGrowthRes.data ?? null),
+      revenue: revenueRes.error ? null : (revenueRes.data ?? null),
+      accounts: accountsRes.error ? null : (accountsRes.data ?? null),
+      acquisition: acquisitionRes.error ? null : (acquisitionRes.data ?? null),
       rollups,
       timingsMs: timings,
       // Age in ms of each report served from the in-memory cache (absent = computed fresh this request).
@@ -241,6 +252,10 @@ export async function GET(request: NextRequest) {
         ['Active users (Hoops)', hoopsActiveRes.error],
         ['3D sim cohorts', sim3dRes.error],
         ['Feature usage', interactionsRes.error],
+        ['Premium subscribers', subscriberGrowthRes.error],
+        ['Revenue (Stripe)', revenueRes.error],
+        ['Accounts created', accountsRes.error],
+        ['Signup sources', acquisitionRes.error],
         ['Rollup health', healthRes.error],
       ] as const)
         .filter(([, e]) => e)

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 export interface DailyBar {
-  /** YYYY-MM-DD */
+  /** YYYY-MM-DD. With `unit="month"`, the first day of the month the bar stands for. */
   day: string;
   /** The solid foreground bar. */
   value: number;
@@ -30,12 +30,20 @@ export function xLabelIndexes(barCount: number): number[] {
   return Array.from({ length: labelCount }, (_, i) => Math.round((i * (barCount - 1)) / (labelCount - 1)));
 }
 
-function shortDate(day: string): string {
+type Unit = 'day' | 'month';
+
+function shortDate(day: string, unit: Unit): string {
+  if (unit === 'month') {
+    return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+  }
   const [, month, date] = day.split('-');
   return `${Number(month)}/${Number(date)}`;
 }
 
-function longDate(day: string): string {
+function longDate(day: string, unit: Unit): string {
+  if (unit === 'month') {
+    return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
   return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -48,24 +56,33 @@ export function DailyBars({
   bars,
   valueLabel,
   backdropLabel,
+  unit = 'day',
+  formatValue = (n) => n.toLocaleString(),
 }: {
   bars: DailyBar[];
   valueLabel: string;
   backdropLabel?: string;
+  /** What one bar spans. Changes the date labels only. */
+  unit?: Unit;
+  /** How to print a value on the axis and in the tooltip (e.g. as dollars). */
+  formatValue?: (n: number) => string;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const ticks = niceTicks(Math.max(0, ...bars.map((b) => Math.max(b.value, b.backdrop ?? 0))));
   const axisMax = ticks[ticks.length - 1];
-  const pct = (n: number) => (n / axisMax) * 100;
+  // A value below zero (a month that refunded more than it took) draws no bar; the tooltip still prints it.
+  const pct = (n: number) => (Math.max(0, n) / axisMax) * 100;
   const active = hovered === null ? undefined : bars[hovered];
 
   return (
     <div className="flex gap-2">
       {/* Y-axis */}
-      <div className="relative h-32 w-8 shrink-0 text-[10px] text-gray-400">
+      <div className="relative h-32 min-w-8 shrink-0 text-[10px] text-gray-400">
+        {/* Invisible copy of the widest tick, so the axis is as wide as its labels need */}
+        <span className="invisible leading-none">{formatValue(axisMax)}</span>
         {ticks.map((t) => (
           <span key={t} className="absolute right-0 translate-y-1/2 leading-none" style={{ bottom: `${pct(t)}%` }}>
-            {t.toLocaleString()}
+            {formatValue(t)}
           </span>
         ))}
       </div>
@@ -87,8 +104,8 @@ export function DailyBars({
               <div
                 key={b.day}
                 role="img"
-                aria-label={`${longDate(b.day)}: ${b.value} ${valueLabel}${
-                  backdropLabel ? `, ${b.backdrop ?? 0} ${backdropLabel}` : ''
+                aria-label={`${longDate(b.day, unit)}: ${formatValue(b.value)} ${valueLabel}${
+                  backdropLabel ? `, ${formatValue(b.backdrop ?? 0)} ${backdropLabel}` : ''
                 }`}
                 className={`relative flex-1 min-w-0 h-full flex items-end rounded-t-sm ${hovered === i ? 'bg-gray-100' : ''}`}
                 onPointerEnter={() => setHovered(i)}
@@ -117,13 +134,13 @@ export function DailyBars({
                   : { right: `calc(${(1 - hovered / bars.length) * 100}% + 6px)` }
               }
             >
-              <div className="font-semibold mb-0.5">{longDate(active.day)}</div>
+              <div className="font-semibold mb-0.5">{longDate(active.day, unit)}</div>
               <div className="flex items-center justify-between gap-4">
                 <span className="flex items-center gap-1.5 text-gray-300">
                   <span className="w-2 h-2 rounded-sm bg-blue-500" />
                   {valueLabel}
                 </span>
-                <span className="font-semibold tabular-nums">{active.value.toLocaleString()}</span>
+                <span className="font-semibold tabular-nums">{formatValue(active.value)}</span>
               </div>
               {backdropLabel && (
                 <div className="flex items-center justify-between gap-4">
@@ -131,7 +148,7 @@ export function DailyBars({
                     <span className="w-2 h-2 rounded-sm bg-blue-100" />
                     {backdropLabel}
                   </span>
-                  <span className="font-semibold tabular-nums">{(active.backdrop ?? 0).toLocaleString()}</span>
+                  <span className="font-semibold tabular-nums">{formatValue(active.backdrop ?? 0)}</span>
                 </div>
               )}
             </div>
@@ -146,7 +163,7 @@ export function DailyBars({
               className="absolute -translate-x-1/2 whitespace-nowrap leading-none"
               style={{ left: `${((i + 0.5) / bars.length) * 100}%` }}
             >
-              {shortDate(bars[i].day)}
+              {shortDate(bars[i].day, unit)}
             </span>
           ))}
         </div>
