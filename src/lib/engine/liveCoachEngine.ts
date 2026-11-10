@@ -593,10 +593,13 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const interceptor = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.cb1;
       const cbName = nameOrFallback(interceptor, 'the corner');
-      events.push(makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false));
+      // The defense takes over about where the pass was thrown from (mirror of the line of scrimmage, give or take the
+      // throw and the return). The old cap at its own 60 moved a pick thrown from deep in the offense's end out to the
+      // offense's 40, so the spot never matched where the pick was pictured.
+      const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 97);
+      events.push({ ...makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false), returnTo: returnPos });
       bump(ok.qb, { passAttempts: 1, interceptions: 1 });
       bump(interceptor, { defensiveINTs: 1 });
-      const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
       // In OT, the possession that just threw the INT actually ran a play, so
       // mark it before switching — otherwise otPossessionsCompleted never counts
       // this turn and the OT end check can't fire after the opponent scores.
@@ -1014,13 +1017,16 @@ export function createLiveCoachEngine(
       const offScoreDiff = state.possession === 'home'
         ? state.homeScore - state.awayScore
         : state.awayScore - state.homeScore;
-      const isEndOfHalf = (state.quarter === 2 && state.timeSecs <= 10) ||
-                          (state.quarter >= 4 && state.timeSecs <= 10);
+      const isEndOfHalf = state.quarter === 2 && state.timeSecs <= 10;
+      const isEndOfGame = state.quarter >= 4 && state.timeSecs <= 10;
       const isLateAndClose = state.quarter >= 4 && state.timeSecs <= 30 && state.down >= 2;
-      // Kick if: in range AND (time expiring, tied/trailing) OR (late Q4, within a FG of tying/winning)
+      // At the end of the game a field goal only helps if it ties or wins: down 4+ the kick can't change the result,
+      // so the offense has to throw for the end zone (Tyler 11/9: SF kicked a 53-yarder down 6 with 0:02 left).
+      const fgTiesOrWins = offScoreDiff >= -3 && offScoreDiff <= 0;
+      // Kick if: in range AND (half expiring, tied/trailing) OR (game on the line and the kick ties or wins it)
       const shouldKickNow = inFGRange && (
         (isEndOfHalf && offScoreDiff <= 0) ||
-        (isLateAndClose && offScoreDiff >= -3 && offScoreDiff <= 0)
+        ((isEndOfGame || isLateAndClose) && fgTiesOrWins)
       );
       if (shouldKickNow) {
         runFieldGoal(events);
@@ -1036,7 +1042,22 @@ export function createLiveCoachEngine(
       // Default AI 4th down logic
       const distanceToGoal = 100 - state.fieldPos;
       const fgDist = distanceToGoal + 17;
-      if (state.yardsToGo <= 2 || (state.yardsToGo <= 4 && state.fieldPos >= 60)) {
+      // Trailing late (same rule as the watch-live engine): a kick that ties or wins is taken, otherwise the offense
+      // goes for it — a field goal down 4+ or a punt with the clock running out just ends the game.
+      const scoreDiff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
+      const desperationGo = state.quarter >= 4 && scoreDiff < 0 && (
+        state.timeSecs <= 180 ||
+        (scoreDiff <= -8 && state.timeSecs <= 300) ||
+        (scoreDiff <= -16 && state.timeSecs <= 600)
+      );
+      const smartFG = state.quarter >= 4 && scoreDiff >= -3 && scoreDiff <= 0 && fgDist <= 55;
+      if (smartFG) {
+        runFieldGoal(events);
+        if (state.overtime) state.otPlayRunThisPossession = true;
+        checkTwoMinWarning(events);
+        checkQuarterEnd(events);
+        return events;
+      } else if (state.yardsToGo <= 2 || desperationGo || (state.yardsToGo <= 4 && state.fieldPos >= 60)) {
         // go for it (fall through to play call)
       } else if (state.fieldPos >= 55 && fgDist <= 55) {
         runFieldGoal(events);
@@ -1094,7 +1115,11 @@ export function createLiveCoachEngine(
       const isThirdLong = state.down === 3 && state.yardsToGo >= 7;
       const isShortYardage = state.yardsToGo <= 3;
       const passChance = isThirdLong ? 0.85 : isShortYardage ? 0.45 : 0.58;
-      playType = Math.random() < passChance
+      // Last snap of the game while trailing: it has to go to the end zone (a run or a checkdown just ends it).
+      const offDiff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
+      const lastGasp = state.quarter >= 4 && !state.overtime && offDiff < 0 && state.timeSecs <= 12;
+      if (lastGasp) playType = 100 - state.fieldPos > 12 ? 'pass_deep' : 'pass_short';
+      else playType = Math.random() < passChance
         ? (Math.random() < 0.25 ? 'pass_deep' : 'pass_short')
         : 'run';
     }

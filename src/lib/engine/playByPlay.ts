@@ -50,6 +50,10 @@ export interface PlayEvent {
   homeScore: number;
   awayScore: number;
   isScoring: boolean;
+  /** Interception only: the intercepting team's yard line (1-99, from its own goal line) where the return ended and
+   *  its drive starts. The 3D sim runs the return to this spot instead of making one up (it used to picture pick-sixes
+   *  the engine never scored). Optional: older saved games don't carry it. */
+  returnTo?: number;
   /** Cumulative bucket snapshots taken when this event was pushed. Used by
    *  the live-game UI to render running per-play box-score stats (tofftanaut
    *  + woahitsholly 4/27 — stats should refresh as plays go in, not just at
@@ -1200,14 +1204,17 @@ export function simulatePlayByPlay(
       const offScoreDiff = state.possession === 'home'
         ? state.homeScore - state.awayScore
         : state.awayScore - state.homeScore;
-      const isEndOfHalf = (state.quarter === 2 && state.timeSecs <= 10) ||
-                          (state.quarter >= 4 && state.timeSecs <= 10);
+      const isEndOfHalf = state.quarter === 2 && state.timeSecs <= 10;
+      const isEndOfGame = state.quarter >= 4 && state.timeSecs <= 10;
       const isLateAndClose = state.quarter >= 4 && state.timeSecs <= 30 && state.down >= 2;
+      // At the end of the game a field goal only helps if it ties or wins: down 4+ the kick can't change the result,
+      // so the offense has to throw for the end zone (Tyler 11/9: SF kicked a 53-yarder down 6 with 0:02 left).
+      const fgTiesOrWins = offScoreDiff >= -3 && offScoreDiff <= 0;
 
-      // Kick FG if: in range AND (time expiring OR trailing by ≤3 with <30s left)
+      // Kick FG if: in range AND (half expiring, tied/trailing) OR (game on the line and the kick ties or wins it)
       const shouldKickNow = inFGRange && (
         (isEndOfHalf && offScoreDiff <= 0) || // end of half, tied or trailing → kick
-        (isLateAndClose && offScoreDiff >= -3 && offScoreDiff <= 0) // late Q4, within FG range of tying/winning
+        ((isEndOfGame || isLateAndClose) && fgTiesOrWins)
       );
 
       if (shouldKickNow) {
@@ -1554,10 +1561,14 @@ export function simulatePlayByPlay(
         if (interceptor) db.perInterceptor[interceptor.id] = (db.perInterceptor[interceptor.id] ?? 0) + 1;
 
         const desc = descInterception(ok.qb, interceptor);
+        // The defense takes over about where the pass was thrown from (mirror of the line of scrimmage, give or take the
+        // throw and the return). The old cap at its own 60 moved a pick thrown from deep in the offense's end out to the
+        // offense's 40, so the spot never matched where the pick was pictured.
+        const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 97);
         addEvent('interception', desc, 0, false);
+        events[events.length - 1].returnTo = returnPos;
         shiftMomentum(-20); // big momentum shift to defense
 
-        const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
         switchPossession(returnPos);
         advanceClock(5);
 
