@@ -8,6 +8,7 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { getItem as idbGetItem, removeItem as idbRemoveItem } from '@bs/core/storage';
 import { formatRecord } from '@/types';
+import { openFeedback } from '@bs/core/feedback/client';
 
 const NAV_SECTIONS = [
   {
@@ -432,7 +433,22 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </nav>
 
       {/* Community links */}
-      <div className="px-2 pb-2">
+      <div className="px-2 pb-2 space-y-1">
+        {/* Pinned (outside the scrolling nav) so it's always in view: the
+            Booth owns the bottom-right corner on game screens, so this is the
+            in-game door to the feedback modal. */}
+        <button
+          onClick={() => { onNavigate?.(); openFeedback(); }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left bg-blue-600/10 text-blue-700 hover:bg-blue-600/20 transition-colors"
+        >
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold leading-tight">Feedback &amp; questions</span>
+            <span className="block text-[11px] text-blue-700/70 leading-tight mt-0.5">Report a bug, suggest an idea, ask</span>
+          </span>
+        </button>
         <a
           href="https://discord.gg/RMtusS2GKW"
           target="_blank"

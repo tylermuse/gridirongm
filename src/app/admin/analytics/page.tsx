@@ -80,7 +80,16 @@ interface FeedbackItem {
   created_at: string;
   user_id: string | null;
   app?: string | null;
+  kind?: string | null;
+  contact?: string | null;
+  context?: Record<string, unknown> | null;
 }
+
+const FEEDBACK_KIND: Record<string, { label: string; className: string }> = {
+  bug: { label: 'Bug', className: 'bg-red-50 text-red-700' },
+  idea: { label: 'Idea', className: 'bg-amber-50 text-amber-700' },
+  question: { label: 'Question', className: 'bg-blue-50 text-blue-700' },
+};
 
 export default function AdminAnalyticsPage() {
   const { user, isAdmin, loading: authLoading } = useSubscription();
@@ -270,11 +279,22 @@ export default function AdminAnalyticsPage() {
                     {feedback.map(fb => (
                       <div key={fb.id} className="border border-gray-100 rounded-lg p-3">
                         <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.message}</p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-400">
                           <span>{timeAgo(fb.created_at, now)}</span>
+                          {fb.kind && FEEDBACK_KIND[fb.kind] && (
+                            <span className={`font-semibold px-1.5 py-0.5 rounded ${FEEDBACK_KIND[fb.kind].className}`}>{FEEDBACK_KIND[fb.kind].label}</span>
+                          )}
                           {fb.app === 'bs-hoops' && <span className="font-semibold text-orange-600">Hoops</span>}
                           {fb.page && <span className="font-mono">{fb.page}</span>}
+                          {fb.context?.season != null && (
+                            <span>S{String(fb.context.season)}{fb.context.week != null ? ` W${String(fb.context.week)}` : ''}{fb.context.phase ? ` · ${String(fb.context.phase)}` : ''}</span>
+                          )}
                           <span className="font-mono">{fb.user_id ? fb.user_id.slice(0, 8) : 'anon'}</span>
+                          {fb.contact && (
+                            <a href={`mailto:${fb.contact}?subject=${encodeURIComponent('Re: your BS Sports feedback')}`} className="font-semibold text-blue-600 hover:underline">
+                              Reply to {fb.contact}
+                            </a>
+                          )}
                         </div>
                       </div>
                     ))}

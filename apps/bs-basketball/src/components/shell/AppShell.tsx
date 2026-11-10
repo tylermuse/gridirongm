@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { openFeedback, setFeedbackContext } from '@bs/core/feedback/client';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -55,6 +56,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     void continueLatest().finally(() => setBooting(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Feedback modal: attach where the player is in their league (read lazily on send).
+  useEffect(() => setFeedbackContext(() => {
+    const l = useLeagueStore.getState().league;
+    if (!l) return {};
+    const team = (l.teams as BasketballTeam[]).find(t => t.id === l.userTeamId);
+    return { season: l.currentSeason, phase: String(l.currentPhase), team: team?.abbreviation ?? '' };
+  }), []);
 
   // Publish the active league's per-team logo URLs so TeamLogo can render them.
   useEffect(() => {
@@ -369,8 +378,21 @@ function TickerRow({ onMenu, fallbackLabel }: { onMenu: () => void; fallbackLabe
           }
         />
       </div>
-      {/* Right-edge fade hints that the strip scrolls. */}
-      <div className="absolute right-0 top-0 bottom-0 w-6 pointer-events-none sm:hidden" style={{ background: 'linear-gradient(to left, var(--bg), transparent)' }} />
+      {/* Right-edge fade hints that the strip scrolls (stops short of the feedback button on phones). */}
+      <div className="absolute right-11 md:right-0 top-0 bottom-0 w-6 pointer-events-none sm:hidden" style={{ background: 'linear-gradient(to left, var(--bg), transparent)' }} />
+      {/* Phones: one tap to the feedback modal (the sidebar entry lives in the drawer). */}
+      <button
+        onClick={() => openFeedback()}
+        aria-label="Feedback & questions"
+        title="Feedback & questions"
+        className="md:hidden shrink-0 w-11 flex items-center justify-center border-l hover:bg-[var(--surface-2)] transition-colors"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--accent)' }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          <path d="M12 7v3M12 13h.01" />
+        </svg>
+      </button>
     </div>
   );
 }

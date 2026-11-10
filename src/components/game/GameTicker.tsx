@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { openFeedback } from '@bs/core/feedback/client';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { BoxScoreModal } from './BoxScoreModal';
@@ -89,8 +90,8 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
   return (
     <>
       <div className="border-b border-[var(--border)] bg-[var(--bg)] flex items-stretch relative">
-        {/* Right edge fade to hint more content */}
-        <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--bg)] to-transparent pointer-events-none z-10 sm:hidden" />
+        {/* Right edge fade to hint more content (stops short of the feedback button on phones). */}
+        <div className={`absolute ${onMenuToggle ? 'right-11' : 'right-0'} top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--bg)] to-transparent pointer-events-none z-10 sm:hidden`} />
         {/* Mobile menu toggle — replaces the leftmost ticker slot so the
             dedicated TopBar hamburger row can collapse. */}
         {onMenuToggle && (
@@ -265,6 +266,20 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
             </Link>
           )}
         </div>
+        {/* Phones: one tap to the feedback modal (the sidebar entry lives in the drawer). */}
+        {onMenuToggle && (
+          <button
+            onClick={() => openFeedback()}
+            aria-label="Feedback & questions"
+            title="Feedback & questions"
+            className="md:hidden shrink-0 w-11 flex items-center justify-center border-l border-[var(--border)] bg-[var(--surface)] text-blue-600 hover:bg-[var(--surface-2)] transition-colors"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <path d="M12 7v3M12 13h.01" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Box Score Modal */}
