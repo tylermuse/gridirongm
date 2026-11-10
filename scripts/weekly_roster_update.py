@@ -29,7 +29,17 @@ ROSTER = "public/rosters/FBGM_NFL_Roster_2026_Updated.json"
 PAGE   = "src/app/rosters/page.tsx"
 # Trades ESPN's team-roster feed hasn't reflected yet. normalized "first last" -> tid.
 # Forced every run so an ESPN lag can't flip the player back; harmless once ESPN catches up.
-MANUAL_OVERRIDES = {"joey porter jr": 8}  # Joey Porter Jr. -> Cowboys (Oct 2026)
+MANUAL_OVERRIDES = {
+    "joey porter jr": 8,     # Joey Porter Jr. -> Cowboys (Oct 2026)
+    # Trade deadline, Nov 10 2026
+    "ryan neuzil": 2,        # C, Falcons -> Ravens
+    "andrew vorhees": 1,     # G, Ravens -> Falcons
+    "josh downs": 15,        # WR, Colts -> Chiefs
+    "daiyan henley": 9,      # LB, Chargers -> Broncos
+    "kirk cousins": 20,      # QB, Raiders -> Vikings
+    "amani hooker": 3,       # S, Titans -> Bills
+    "keenan allen": 27,      # WR, Colts -> 49ers
+}
 def _rawkey(p):
     import re as _re
     return _re.sub(r'[^a-z0-9 ]','',((p.get('firstName') or '')+' '+(p.get('lastName') or '')).lower()).strip()
@@ -41,6 +51,48 @@ def apply_overrides(d):
             p['tid']=MANUAL_OVERRIDES[k]; n+=1
     return n
 TID_ABBR = {0:'ari',1:'atl',2:'bal',3:'buf',4:'car',5:'chi',6:'cin',7:'cle',8:'dal',9:'den',10:'det',11:'gb',12:'hou',13:'ind',14:'jax',15:'kc',16:'lv',17:'lac',18:'lar',19:'mia',20:'min',21:'ne',22:'no',23:'nyg',24:'nyj',25:'phi',26:'pit',27:'sf',28:'sea',29:'tb',30:'ten',31:'wsh'}
+
+# In-season draft-pick trades (season, round, original team, from -> to), forced every run.
+# A pick is moved only while the sending team still holds it; anything else is reported, not guessed.
+PICK_TRADES = [
+    # Sep 27  J.J. McCarthy -> NYG
+    (2027,5,'nyg','nyg','min'),
+    # Oct 1   Joey Porter Jr. -> DAL
+    (2027,6,'dal','dal','pit'), (2028,2,'dal','dal','pit'),
+    # Oct 7   Cam Jurgens -> BAL
+    (2027,7,'phi','phi','bal'), (2027,5,'bal','bal','phi'), (2028,2,'bal','bal','phi'),
+    # Oct 11  Marvin Harrison Jr. -> HOU
+    (2027,6,'ari','ari','hou'), (2027,2,'hou','hou','ari'), (2027,7,'hou','hou','ari'),
+    # Oct 27  DeForest Buckner -> SF; Quenton Nelson -> SEA
+    (2027,4,'sf','sf','ind'), (2027,3,'sea','sea','ind'), (2028,5,'sea','sea','ind'),
+    # Oct 29  Jeffery Simmons -> CHI
+    (2028,5,'ten','ten','chi'), (2027,1,'chi','chi','ten'), (2027,4,'chi','chi','ten'), (2028,1,'chi','chi','ten'),
+    # Nov 6   Jacoby Brissett -> BAL
+    (2027,5,'ari','ari','bal'), (2027,4,'bal','bal','ari'), (2028,7,'bal','bal','ari'),
+    # Nov 9   Jessie Bates -> JAX; Davon Godchaux -> JAX; Jordan Davis -> JAX; Andre Cisco -> DET
+    (2027,2,'jax','jax','atl'), (2028,5,'jax','jax','atl'), (2028,6,'jax','jax','no'),
+    (2027,1,'jax','jax','phi'), (2029,2,'jax','jax','phi'), (2028,6,'det','det','nyj'),
+    # Nov 10 (deadline)
+    (2028,6,'bal','bal','atl'),                                   # Neuzil/Vorhees
+    (2027,7,'ind','ind','kc'), (2027,4,'kc','kc','ind'), (2027,5,'kc','kc','ind'),  # Josh Downs -> KC
+    (2027,4,'den','den','lac'), (2028,5,'den','den','lac'),       # Daiyan Henley -> DEN
+    (2027,3,'min','min','lv'),                                    # Kirk Cousins -> MIN
+    (2027,5,'ten','ten','buf'), (2027,2,'buf','buf','ten'),       # Amani Hooker -> BUF
+    (2027,6,'sf','sf','ind'),                                     # Keenan Allen -> SF
+]
+def apply_pick_trades(d):
+    tid = {v: k for k, v in TID_ABBR.items()}
+    moved, skipped = 0, []
+    for season, rnd, orig, frm, to in PICK_TRADES:
+        pk = [p for p in d.get('draftPicks', []) if p.get('season') == season and p.get('round') == rnd and p.get('originalTid') == tid[orig]]
+        if not pk: skipped.append(f"{season} R{rnd} {orig.upper()}: not in file"); continue
+        p = pk[0]
+        if p['tid'] == tid[to]: continue
+        if p['tid'] != tid[frm]:
+            skipped.append(f"{season} R{rnd} {orig.upper()}: held by {TID_ABBR.get(p['tid'],'?').upper()}, expected {frm.upper()}"); continue
+        p['tid'] = tid[to]; moved += 1
+    for s_ in skipped: print(f"pick trade skipped: {s_}", file=sys.stderr)
+    return moved
 TEAM_NAME = {0:'Cardinals',1:'Falcons',2:'Ravens',3:'Bills',4:'Panthers',5:'Bears',6:'Bengals',7:'Browns',8:'Cowboys',9:'Broncos',10:'Lions',11:'Packers',12:'Texans',13:'Colts',14:'Jaguars',15:'Chiefs',16:'Raiders',17:'Chargers',18:'Rams',19:'Dolphins',20:'Vikings',21:'Patriots',22:'Saints',23:'Giants',24:'Jets',25:'Eagles',26:'Steelers',27:'49ers',28:'Seahawks',29:'Buccaneers',30:'Titans',31:'Commanders'}
 
 import time
@@ -400,6 +452,7 @@ def main():
     n0=len(d['players'])
     moves,unret,cuts,jset = reconcile(d, teams, ok)
     nov = apply_overrides(d)
+    npk = apply_pick_trades(d)
     ninj = apply_injuries(d, injured, week, today)
     ncoach = apply_coaches(d)
     assert len(d['players'])==n0
@@ -410,7 +463,7 @@ def main():
     subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variants (Current + Week 1 start)
     subprocess.run([sys.executable,"scripts/build_mock_draft.py"],check=True)  # /mock-draft data: 2027 class, draft order, pick owners, team needs
     append_rating_changes(fn)
-    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
+    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"pickTrades":npk,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":
     main()
