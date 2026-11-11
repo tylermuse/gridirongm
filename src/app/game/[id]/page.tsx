@@ -947,6 +947,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       down: es?.down ?? null,
       distance: es?.yardsToGo ?? null,
       field_pos: es?.fieldPos ?? null,
+      def_look: es?.defLook ?? null,
     });
   }, [trackLiveCoach]);
 
@@ -976,6 +977,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       },
       userTeamSide ?? 'home',
       isPlayoffGame,
+      { opponentDefScheme: (() => {
+        // the CPU team's defensive scheme (its DC's, else its HC's) tilts which looks it shows the user
+        const cpu = (userTeamSide ?? 'home') === 'home' ? awayTeam : homeTeam;
+        const dc = cpu.coaches?.find(c => c.role === 'DC'), hc = cpu.coaches?.find(c => c.role === 'HC');
+        return dc?.defensiveScheme ?? hc?.defensiveScheme ?? null;
+      })() },
     );
     // Pivot right AFTER the seed event so the kept pre-sim slice always
     // includes it. When this runs at kickoff (revealedCount 0) the auto-start
@@ -2081,6 +2088,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     : liveTime;
   // Once the play on screen is over (2D animation and 3D sim both done) the header, drive ribbon and 3D formation show
   // the NEXT snap's situation, the same one the 3D scorebug moved to (see nextSnapSituation)
+  // How the user's previous called snap fared against the look it ran into (shown in the play-call menu)
+  const lastLookRead = (() => {
+    for (let i = liveExtraEvents.length - 1; i >= 0; i--) {
+      const e = liveExtraEvents[i];
+      if (e.defLook) return { look: e.defLook, edge: e.lookEdge ?? 0 };
+      // an older read is stale once the other team has snapped the ball or a kick has happened
+      if (['run', 'pass_complete', 'pass_incomplete', 'sack', 'interception', 'punt', 'kickoff'].includes(e.type)) return null;
+    }
+    return null;
+  })();
   const afterPlay = engineSnapshot || isFinished || !currentEvent || !animationComplete || sim3dActive ? null
     : nextSnapSituation(allEvents[revealedCount], liveEngineRef.current?.getState());
   const livePoss = engineSnapshot?.possession ?? afterPlay?.possession ?? currentEvent?.possession ?? 'home';
@@ -2333,6 +2350,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 awaitingKickoffChoice={es.awaitingKickoffChoice}
                 timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
                 pendingRunoff={es.pendingRunoff ?? 0}
+                defLook={es.defLook ?? null}
+                lastRead={lastLookRead}
                 onPlayCall={(playCall) => {
                   trackPlayCall(playCall);
                   setOutcomeChip(null);
@@ -3163,6 +3182,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 awaitingKickoffChoice={es.awaitingKickoffChoice}
                 timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
                 pendingRunoff={es.pendingRunoff ?? 0}
+                defLook={es.defLook ?? null}
+                lastRead={lastLookRead}
                 onPlayCall={(playCall) => {
                   trackPlayCall(playCall);
                   setOutcomeChip(null);
