@@ -34,8 +34,9 @@ describe('mock draft team pages', () => {
   });
 
   it('preselects a team from ?team=, starting at 3 rounds when it has no 1st', () => {
-    const chi = findTeamBySlug(data, 'bears')!;
-    expect(parseTeamPreselect(data, new URLSearchParams('team=bears'))).toEqual({ userTids: [chi.tid], rounds: 1 });
+    // Any team that owns a 1st (the weekly data moves picks around, so don't hard-code one).
+    const withFirst = data.teams.find((t) => data.order.some((slot) => slot.round === 1 && slot.tid === t.tid))!;
+    expect(parseTeamPreselect(data, new URLSearchParams(`team=${teamSlug(withFirst)}`))).toEqual({ userTids: [withFirst.tid], rounds: 1 });
     expect(parseTeamPreselect(data, new URLSearchParams('team=nope'))).toBeNull();
     expect(parseTeamPreselect(data, new URLSearchParams(''))).toBeNull();
 
