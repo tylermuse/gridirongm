@@ -3411,7 +3411,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     <div key={ev.id} className={`px-2.5 py-1.5 text-[10px] border-b border-[var(--border)] last:border-0 ${ev.isScoring ? 'bg-amber-50' : isTurnover(ev.type) ? 'bg-red-50' : ''}`}>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[var(--text-sec)] font-mono shrink-0">Q{ev.quarter}</span>
-                        <span className="flex-1 leading-snug truncate">{ev.description}</span>
+                        <span className="flex-1 min-w-0 leading-snug line-clamp-2">{ev.description}</span>
                         {ev.yardsGained !== 0 && !isSeparator(ev.type) && ev.type !== 'punt' && (
                           <span className={`shrink-0 font-bold ${ev.yardsGained > 0 ? 'text-green-600' : 'text-red-500'}`}>
                             {ev.yardsGained > 0 ? `+${ev.yardsGained}` : ev.yardsGained}

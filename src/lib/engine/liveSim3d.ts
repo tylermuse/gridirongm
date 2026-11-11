@@ -374,7 +374,9 @@ export function whoMadeThePlay(
     const d = namesIn(e.description, defense)[0]; if (d) who.def = man(d.p);
   }
   if (e.type !== 'sack' && e.type !== 'interception') {
-    const o = namesIn(e.description, offense);
+    // the tackler / the man who broke up the pass is named in the line too: cut that part, or a defender who shares a
+    // name with someone on the offense would be taken for the man with the ball
+    const o = namesIn(e.defNote ? e.description.replace(e.defNote, '') : e.description, offense);
     // the passer is named first on a throw; the man with the ball is the last non-QB named (or the QB himself on a keeper)
     const ball = [...o].reverse().find(x => x.p.position !== 'QB') ?? (o.length === 1 ? o[0] : undefined);
     if (ball) who.ball = man(ball.p);

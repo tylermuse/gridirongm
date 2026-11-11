@@ -14,7 +14,7 @@
 
 import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
-import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickWeighted } from './playByPlay';
+import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickTackler, pickPassDefender, tackleNote, PASS_BREAKUP_CHANCE } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
@@ -191,18 +191,6 @@ function extractDef(players: Player[], depthChart?: Record<string, string[]>): K
     cbs,
     safeties,
   };
-}
-
-/** Pick the tackler on a run or short completion. LBs lead, DL and safeties
- *  contribute, corners least — weighted by tackling rating so the live-coach
- *  box score spreads tackles the way the full sim's team tackle bucket does. */
-function pickTackler(dk: KeyDef): Player | null {
-  const pool = [...dk.lbs, ...dk.dls, ...dk.safeties, ...dk.cbs];
-  return pickWeighted(pool, p => {
-    const base = p.position === 'LB' ? 3.0 : p.position === 'DL' ? 2.0
-      : p.position === 'S' ? 1.5 : 0.6;
-    return base * (p.ratings.tackling ?? 60);
-  });
 }
 
 function rating(p: Player | null, key: keyof Player['ratings'], fallback = 70): number {
@@ -538,12 +526,13 @@ export function createLiveCoachEngine(
             ? `${prefix}${name} stuffed at the line for no gain.`
             : `${prefix}${name} loses ${Math.abs(finalYards)} on the play.`;
 
-    events.push(makeEvent('run', desc, finalYards, isTD));
+    // A runner who isn't scoring got tackled — the line names the defender and
+    // the box score credits him (same pick the watch-live engine makes).
+    const tackler = isTD ? null : pickTackler(dk, 'run');
+    const tackleLine = tackler ? tackleNote(nameOrFallback(tackler, 'the defender'), finalYards) : '';
+    events.push({ ...makeEvent('run', desc + tackleLine, finalYards, isTD), ...(tackleLine ? { defNote: tackleLine } : {}) });
     bump(rusher, { rushAttempts: 1, rushYards: finalYards, rushTDs: isTD ? 1 : 0 });
-    // A runner who isn't scoring got tackled — credit a front-seven/secondary
-    // defender (mirrors the full sim's team tackle on every non-TD carry).
-    const tackler = isTD ? null : pickTackler(dk);
-    if (tackler) bump(tackler, { tackles: 1 });
+    if (tackler) bump(tackler, { tackles: 1, tacklesForLoss: finalYards < 0 ? 1 : 0 });
 
     if (isTD) {
       handleTouchdown(events, state.possession === userSide);
@@ -557,7 +546,7 @@ export function createLiveCoachEngine(
         : clamp(0.015 - (carrying / 100) * 0.008, 0.003, 0.02);
       const keptFumble = Math.random() < fumbleChance;   // about as many again that the offense falls on
       if (Math.random() < fumbleChance) {
-        const rec = pickTackler(dk) ?? tackler;
+        const rec = pickTackler(dk, 'run') ?? tackler;
         loseFumble(events, `Fumble! ${name} has it punched out — recovered by ${nameOrFallback(rec, 'the defense')}!`, rusher, tackler);
         return;
       }
@@ -586,13 +575,16 @@ export function createLiveCoachEngine(
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 5));
       const qbName = nameOrFallback(ok.qb, 'the QB');
-      events.push(makeEvent('sack', `${prefix}${qbName} is sacked for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
       // Credit the sack to a pass rusher (DL-weighted, LBs contribute) so
-      // live-coached sacks reach the box score + DPOY/sack leaderboards.
+      // live-coached sacks reach the box score + DPOY/sack leaderboards, and
+      // name him in the line (the quarterback stays first: the booth and the
+      // 3D sim read the passer from there).
       // Sacks are tracked separately from tackles here, matching the full sim
       // (which increments sacks, not tackles, on a sack) so simmed and
       // live-coached box scores stay consistent.
       const sacker = pickSacker(dk.dls, dk.lbs) ?? dk.dl1;
+      const sackedBy = sacker ? ` by ${nameOrFallback(sacker, 'the rusher')}` : '';
+      events.push(makeEvent('sack', `${prefix}${qbName} is sacked${sackedBy} for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
       bump(sacker, { sacks: 1 });
       state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
       state.yardsToGo -= sackYards;
@@ -668,11 +660,12 @@ export function createLiveCoachEngine(
           ? `${prefix}${qbName} fires deep to ${recName} — ${finalYards} yards!`
           : `${prefix}${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
 
-      events.push(makeEvent('pass_complete', desc, finalYards, isTD));
+      // Receiver brought down short of the end zone — name the tackler and credit him.
+      const tackler = isTD ? null : pickTackler(dk, 'pass');
+      const tackleLine = tackler ? tackleNote(nameOrFallback(tackler, 'the defender'), finalYards) : '';
+      events.push({ ...makeEvent('pass_complete', desc + tackleLine, finalYards, isTD), ...(tackleLine ? { defNote: tackleLine } : {}) });
       bump(ok.qb, { passAttempts: 1, passCompletions: 1, passYards: finalYards, passTDs: isTD ? 1 : 0 });
       bump(target, { targets: 1, receptions: 1, receivingYards: finalYards, receivingTDs: isTD ? 1 : 0 });
-      // Receiver brought down short of the end zone — credit the tackle.
-      const tackler = isTD ? null : pickTackler(dk);
       if (tackler) bump(tackler, { tackles: 1 });
 
       if (isTD) {
@@ -699,9 +692,18 @@ export function createLiveCoachEngine(
     } else {
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const recName = nameOrFallback(target, 'the receiver');
-      events.push(makeEvent('pass_incomplete', `${prefix}${qbName}'s pass to ${recName} falls incomplete.`, 0, false));
+      // Some incompletions are a defender's doing: name the man in coverage who broke it up (not on a screen, where
+      // nobody is in coverage on the back).
+      const breaker = depth !== 'screen' && Math.random() < PASS_BREAKUP_CHANCE ? pickPassDefender(dk) : null;
+      const bName = nameOrFallback(breaker, 'the defender');
+      const breakLine = !breaker ? '' : Math.random() < 0.5 ? ` is broken up by ${bName}.` : ` is knocked away by ${bName}.`;
+      events.push({
+        ...makeEvent('pass_incomplete', `${prefix}${qbName}'s pass to ${recName}${breakLine || ' falls incomplete.'}`, 0, false),
+        ...(breakLine ? { defNote: breakLine } : {}),
+      });
       bump(ok.qb, { passAttempts: 1 });
       bump(target, { targets: 1 });
+      bump(breaker, { passDeflections: 1 });
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
         return;
