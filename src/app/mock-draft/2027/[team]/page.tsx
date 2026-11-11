@@ -389,6 +389,23 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
         <CtaButton team={team} />
       </div>
 
+      <section className="mt-10">
+        <h2 className="text-xl font-bold text-gray-900 mb-3">More on the {team.name}</h2>
+        <ul className="list-disc pl-5 text-gray-700 space-y-1">
+          <li>
+            <Link href={`/predictions/${slug}`} prefetch={false} className="text-blue-600 hover:underline">
+              {name} playoff chances
+            </Link>
+            : playoff, division and Super Bowl odds, plus win chances for every remaining game
+          </li>
+          <li>
+            <Link href={`/rosters/2026/${team.abbrev.toLowerCase()}`} prefetch={false} className="text-blue-600 hover:underline">
+              {name} 2026 roster
+            </Link>
+          </li>
+        </ul>
+      </section>
+
       <section className="mt-12">
         <h2 className="text-xl font-bold text-gray-900 mb-3">{data.draftYear} mock drafts for every team</h2>
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-1 text-sm">

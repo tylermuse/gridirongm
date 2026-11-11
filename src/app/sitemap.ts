@@ -53,5 +53,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...staticPages, ...blogPages, ...sectionPages, ...rosterPages, ...mockDraftTeamPages];
+  const predictionTeamPages: MetadataRoute.Sitemap = getMockDraftData().teams.map((team) => ({
+    url: `${BASE_URL}/predictions/${teamSlug(team)}`,
+    lastModified: now,
+    changeFrequency: 'weekly' as const,
+    priority: 0.8,
+  }));
+
+  return [...staticPages, ...blogPages, ...sectionPages, ...rosterPages, ...mockDraftTeamPages, ...predictionTeamPages];
 }
