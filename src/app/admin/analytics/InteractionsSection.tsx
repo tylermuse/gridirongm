@@ -31,7 +31,7 @@ const FEATURE_COLUMNS: { key: SortKey; label: string; help: string; fmt: (r: Fea
 
 const PAGE_SIZE = 25;
 
-export function InteractionsSection({ r, period, error }: { r: InteractionReport | null; period: string; error?: string }) {
+export function InteractionsSection({ r, when, error }: { r: InteractionReport | null; /** "last 7d", "all time" */ when: string; error?: string }) {
   const [sort, setSort] = useState<SortKey>('devices');
   const [feature, setFeature] = useState<string>('all');
   const [query, setQuery] = useState('');
@@ -81,7 +81,7 @@ export function InteractionsSection({ r, period, error }: { r: InteractionReport
   if (r.totals.clicks + r.totals.hovers === 0) {
     return (
       <Card title="Feature Usage & Interactions">
-        <p className="text-sm text-gray-500">No interaction events in the last {period} yet. Capture starts as soon as the tracking deploy is live.</p>
+        <p className="text-sm text-gray-500">No interaction events yet ({when}). Capture starts as soon as the tracking deploy is live.</p>
       </Card>
     );
   }
@@ -91,7 +91,7 @@ export function InteractionsSection({ r, period, error }: { r: InteractionReport
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Feature usage · last {period}</h2>
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Feature usage · {when}</h2>
         <p className="text-xs text-gray-400 mb-3">
           Captured automatically from every click, hover (mouse only, 600ms+), and setting change. Admin pages are excluded.
         </p>

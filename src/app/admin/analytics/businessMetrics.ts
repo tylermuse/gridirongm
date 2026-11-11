@@ -3,7 +3,7 @@
  * created, and where those accounts came from.
  *
  * Pure. The API route sends each report whole (every day it has), and the page
- * cuts it to the selected period here, so switching 7d/30d/90d never refetches
+ * cuts it to the selected period here, so switching ranges never refetches
  * these and "vs the previous period" needs no second query.
  */
 
