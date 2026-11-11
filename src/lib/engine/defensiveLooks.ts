@@ -182,3 +182,49 @@ export function pickDefensiveLook(s: LookSituation, rand: () => number = Math.ra
   for (const k of DEFENSIVE_LOOKS) { r -= w[k]; if (r < 0) return k; }
   return 'soft_zone';
 }
+
+// ── Calling the defense ──
+/**
+ * When the user calls the defense the roles flip. The CPU offense lines up in a set, the user answers with one of the
+ * same five looks, and the CPU's play is resolved against that look with the same table (so a look that an offensive
+ * call beats is, from the other sideline, the wrong defensive call against that play).
+ *
+ * The set is the read. The CPU's play is chosen exactly as before; the set is then drawn from SET_GIVEN_PLAY, so it
+ * leans toward the play without giving it away. Showing a set never changes what the CPU runs, and a user who picks
+ * looks in the neutral mix allows, on average, what the defense allowed before (the table is zero-sum against it).
+ */
+export type OffensiveSet = 'heavy' | 'balanced' | 'spread' | 'max_protect';
+/** The scrimmage plays the CPU offense calls. */
+export type CpuPlay = 'run' | 'pass_short' | 'pass_deep';
+
+export const OFFENSIVE_SETS: OffensiveSet[] = ['heavy', 'balanced', 'spread', 'max_protect'];
+
+export const SET_INFO: Record<OffensiveSet, { label: string; icon: string; read: string }> = {
+  heavy:       { label: 'Heavy',       icon: '🐘', read: 'Two tight ends and a fullback. They are built to run it.' },
+  balanced:    { label: 'Balanced',    icon: '⚖️', read: 'One back, receivers on both sides. It could be anything.' },
+  spread:      { label: 'Spread',      icon: '↔️', read: 'Four wide in the shotgun. The ball is probably coming out quick.' },
+  max_protect: { label: 'Max Protect', icon: '🧤', read: 'Extra blockers are staying in. They want time to throw deep.' },
+};
+
+/** The chance of each set given the play the CPU has already chosen (each row sums to 1). */
+export const SET_GIVEN_PLAY: Record<CpuPlay, Record<OffensiveSet, number>> = {
+  run:        { heavy: 0.45, balanced: 0.40, spread: 0.12, max_protect: 0.03 },
+  pass_short: { heavy: 0.08, balanced: 0.37, spread: 0.50, max_protect: 0.05 },
+  pass_deep:  { heavy: 0.05, balanced: 0.30, spread: 0.30, max_protect: 0.35 },
+};
+
+export function pickOffensiveSet(play: CpuPlay, rand: () => number = Math.random): OffensiveSet {
+  const w = SET_GIVEN_PLAY[play];
+  let r = rand();
+  for (const k of OFFENSIVE_SETS) { r -= w[k]; if (r < 0) return k; }
+  return 'balanced';
+}
+
+/** What each look is for when the user is the one calling it (the defense menu's button captions). */
+export const LOOK_CALL_INFO: Record<DefensiveLook, { stops: string; risk: string }> = {
+  blitz:       { stops: 'Gets home on a deep drop', risk: 'a quick throw beats it' },
+  stacked_box: { stops: 'Stuffs the run',           risk: 'open deep' },
+  two_high:    { stops: 'Takes away the deep ball', risk: 'soft against the run' },
+  man_press:   { stops: 'Smothers short throws',    risk: 'can be beaten deep' },
+  soft_zone:   { stops: 'Keeps the deep ball in front', risk: 'gives up the short pass' },
+};
