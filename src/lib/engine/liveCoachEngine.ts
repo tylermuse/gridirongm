@@ -19,7 +19,10 @@ import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
 import type { DefensiveScheme } from '@/types';
-import { lookModifier, pickDefensiveLook, NO_LOOK, TENDENCY_WINDOW, type DefensiveLook, type LookModifier, type LookPlay } from './defensiveLooks';
+import {
+  lookModifier, pickDefensiveLook, pickOffensiveSet, NO_LOOK, TENDENCY_WINDOW, LOOK_INFO,
+  type CpuPlay, type DefensiveLook, type LookModifier, type LookPlay, type OffensiveSet,
+} from './defensiveLooks';
 
 export interface LiveEngineState {
   quarter: number;
@@ -57,6 +60,10 @@ export interface LiveEngineState {
   /** The look the defense is showing for the user's next offensive snap (null when the user isn't calling a
    *  scrimmage play). The play-call menu shows it; the call is resolved against it. See defensiveLooks.ts. */
   defLook?: DefensiveLook | null;
+  /** The set the CPU offense is lined up in for its next snap, when the user is calling the defense and the CPU is
+   *  about to run a scrimmage play (null otherwise: defense calling off, the user has the ball, or a kick is coming).
+   *  The defense menu shows it; the user's look is resolved against the play behind it. See defensiveLooks.ts. */
+  offSet?: OffensiveSet | null;
 }
 
 export interface LiveCoachOptions {
@@ -64,11 +71,15 @@ export interface LiveCoachOptions {
   defensiveLooks?: boolean;
   /** The CPU team's defensive scheme (its DC's, else its HC's): tilts which looks it shows. */
   opponentDefScheme?: DefensiveScheme | null;
+  /** The user also calls the defense: the engine shows the CPU's set before each of its scrimmage snaps. Default false. */
+  callDefense?: boolean;
 }
 
 export interface LiveCoachEngine {
   /** Run one play (or several if continuation like TD → XP → kickoff). Returns new events. */
-  runOnePlay: (userCall?: PlayCallType) => PlayEvent[];
+  runOnePlay: (userCall?: PlayCallType, defCall?: DefensiveLook) => PlayEvent[];
+  /** Turn defensive play calling on or off mid-game (see LiveCoachOptions.callDefense). */
+  setCallDefense: (on: boolean) => void;
   /** Charge `side` a timeout between plays (used for defensive timeouts). */
   callTimeoutFor: (side: 'home' | 'away', elapsedRunoffSecs?: number) => PlayEvent[];
   /** True when the user team has the ball on offense AND it's a regular play (not kickoff/XP). */
@@ -232,6 +243,10 @@ export function createLiveCoachEngine(
   const looksOn = opts.defensiveLooks !== false;
   /** The user's recent scrimmage calls, oldest first: the defense adjusts its looks to them. */
   const recentCalls: LookPlay[] = [];
+  /** The user calls the defense too (see rollOffSet). */
+  let callDefense = !!opts.callDefense;
+  /** The play the CPU has already chosen for its next snap, behind the set it is showing. */
+  let pendingCpuPlay: CpuPlay | null = null;
   const homeOff = extractOff(homePlayers, homeTeam.depthChart);
   const awayOff = extractOff(awayPlayers, awayTeam.depthChart);
   const homeDef = extractDef(homePlayers, homeTeam.depthChart);
@@ -809,6 +824,8 @@ export function createLiveCoachEngine(
     advanceClock(elapsed);
     state.pendingRunoff = 0;
     callTimeout(events, side);
+    // The clock stopped, so what the CPU does next can change (a last-second kick becomes a play, or the reverse).
+    state.offSet = rollOffSet(true);
     return events;
   }
 
@@ -884,15 +901,113 @@ export function createLiveCoachEngine(
   }
   state.defLook = rollLook();
 
+  // ── What the offense does when nobody calls its play ──
+  /** A trailing CPU with the ball late in Q4 stops the clock after an in-bounds play (see runOnePlayInner). */
+  function cpuOffenseStopsClock(): boolean {
+    const cpuSide: 'home' | 'away' = userSide === 'home' ? 'away' : 'home';
+    const cpuTimeouts = cpuSide === 'home' ? state.homeTimeouts : state.awayTimeouts;
+    const cpuScore = cpuSide === 'home' ? state.homeScore : state.awayScore;
+    const oppScore = cpuSide === 'home' ? state.awayScore : state.homeScore;
+    const deficit = oppScore - cpuScore; // > 0 = CPU trailing
+    return !state.overtime &&
+      state.quarter === 4 &&
+      state.timeSecs <= 120 &&
+      (state.pendingRunoff ?? 0) > 0 && // only if there's clock to save
+      state.possession === cpuSide &&   // the CPU (not the user) has the ball
+      deficit > 0 && deficit <= 8 &&    // trailing by one score — must hurry
+      cpuTimeouts > 0;
+  }
+
+  /** Kick, punt or run a play, for an offense with no call, with `timeSecs` on the clock at the snap. */
+  function autoDecision(timeSecs: number): 'field_goal' | 'punt' | 'play' {
+    // End-of-half / end-of-game field goal awareness for auto (CPU) decisions.
+    // Ported from the sim engine (playByPlay.ts): when the clock is about to
+    // expire and the possessing team is in FG range while tied or trailing,
+    // kick the field goal instead of going for it or punting. Runs regardless
+    // of down. (#1 voted football feature — AI 4th-down clock awareness.)
+    const distanceToGoal = 100 - state.fieldPos;
+    const fgDist = distanceToGoal + 17;
+    const scoreDiff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
+    {
+      const inFGRange = fgDist <= 58; // reasonable FG range
+      const isEndOfHalf = state.quarter === 2 && timeSecs <= 10;
+      const isEndOfGame = state.quarter >= 4 && timeSecs <= 10;
+      const isLateAndClose = state.quarter >= 4 && timeSecs <= 30 && state.down >= 2;
+      // At the end of the game a field goal only helps if it ties or wins: down 4+ the kick can't change the result,
+      // so the offense has to throw for the end zone (Tyler 11/9: SF kicked a 53-yarder down 6 with 0:02 left).
+      const fgTiesOrWins = scoreDiff >= -3 && scoreDiff <= 0;
+      // Kick if: in range AND (half expiring, tied/trailing) OR (game on the line and the kick ties or wins it)
+      if (inFGRange && (
+        (isEndOfHalf && scoreDiff <= 0) ||
+        ((isEndOfGame || isLateAndClose) && fgTiesOrWins)
+      )) return 'field_goal';
+    }
+    if (state.down !== 4) return 'play';
+    // Default AI 4th down logic
+    // Trailing late (same rule as the watch-live engine): a kick that ties or wins is taken, otherwise the offense
+    // goes for it — a field goal down 4+ or a punt with the clock running out just ends the game.
+    const desperationGo = state.quarter >= 4 && scoreDiff < 0 && (
+      timeSecs <= 180 ||
+      (scoreDiff <= -8 && timeSecs <= 300) ||
+      (scoreDiff <= -16 && timeSecs <= 600)
+    );
+    const smartFG = state.quarter >= 4 && scoreDiff >= -3 && scoreDiff <= 0 && fgDist <= 55;
+    if (smartFG) return 'field_goal';
+    if (state.yardsToGo <= 2 || desperationGo || (state.yardsToGo <= 4 && state.fieldPos >= 60)) return 'play';
+    if (state.fieldPos >= 55 && fgDist <= 55) return 'field_goal';
+    return 'punt';
+  }
+
+  /** The play an offense with no call runs, by down and distance. */
+  function pickAutoPlay(timeSecs: number): CpuPlay {
+    const isThirdLong = state.down === 3 && state.yardsToGo >= 7;
+    const isShortYardage = state.yardsToGo <= 3;
+    const passChance = isThirdLong ? 0.85 : isShortYardage ? 0.45 : 0.58;
+    // Last snap of the game while trailing: it has to go to the end zone (a run or a checkdown just ends it).
+    const offDiff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
+    const lastGasp = state.quarter >= 4 && !state.overtime && offDiff < 0 && timeSecs <= 12;
+    if (lastGasp) return 100 - state.fieldPos > 12 ? 'pass_deep' : 'pass_short';
+    return Math.random() < passChance
+      ? (Math.random() < 0.25 ? 'pass_deep' : 'pass_short')
+      : 'run';
+  }
+
+  // ── Calling the defense ──
+  /**
+   * The set the CPU shows for its next snap, or null when the user isn't about to call the defense: defense calling
+   * is off, the user has the ball, or the CPU is going to kick, punt or run out of clock. The CPU's play is chosen here,
+   * before the user answers, and kept in pendingCpuPlay; the set leans toward it (defensiveLooks.ts).
+   * `keep`: the situation is the same snap as before (a timeout), so a play already chosen stands.
+   */
+  function rollOffSet(keep = false): OffensiveSet | null {
+    const kept = keep ? pendingCpuPlay : null;
+    pendingCpuPlay = null;
+    if (!callDefense || state.isGameOver || state.possession === userSide) return null;
+    if (state.awaitingXpChoice || state.awaitingKickoffChoice || state.awaitingTwoPointCall) return null;
+    const atSnap = cpuOffenseStopsClock() ? state.timeSecs : state.timeSecs - (state.pendingRunoff ?? 0);
+    if (atSnap <= 0 || autoDecision(atSnap) !== 'play') return null;
+    if (kept && state.offSet) { pendingCpuPlay = kept; return state.offSet; }
+    pendingCpuPlay = pickAutoPlay(atSnap);
+    return pickOffensiveSet(pendingCpuPlay);
+  }
+  state.offSet = rollOffSet();
+
+  function setCallDefense(on: boolean) {
+    if (on === callDefense) return;
+    callDefense = on;
+    state.offSet = rollOffSet();
+  }
+
   // ── Main runOnePlay ──
-  function runOnePlay(userCall?: PlayCallType): PlayEvent[] {
-    const events = runOnePlayInner(userCall);
+  function runOnePlay(userCall?: PlayCallType, defCall?: DefensiveLook): PlayEvent[] {
+    const events = runOnePlayInner(userCall, defCall);
     // A timeout doesn't change what the defense is showing; anything else sets up a new snap.
     if (userCall !== 'timeout' || !state.defLook) state.defLook = rollLook();
+    state.offSet = rollOffSet();
     return events;
   }
 
-  function runOnePlayInner(userCall?: PlayCallType): PlayEvent[] {
+  function runOnePlayInner(userCall?: PlayCallType, defCall?: DefensiveLook): PlayEvent[] {
     const events: PlayEvent[] = [];
     if (state.isGameOver) return events;
 
@@ -1009,24 +1124,10 @@ export function createLiveCoachEngine(
     // driving for the tying/go-ahead score. Complements the defensive clock-stop
     // above — together they give the CPU real 2-minute clock management instead of
     // letting the clock bleed out. (yo46363 — CPU never called timeouts on offense.)
-    {
+    if (cpuOffenseStopsClock()) {
       const cpuSide: 'home' | 'away' = userSide === 'home' ? 'away' : 'home';
-      const cpuTimeouts = cpuSide === 'home' ? state.homeTimeouts : state.awayTimeouts;
-      const cpuScore = cpuSide === 'home' ? state.homeScore : state.awayScore;
-      const oppScore = cpuSide === 'home' ? state.awayScore : state.homeScore;
-      const deficit = oppScore - cpuScore; // > 0 = CPU trailing
-      if (
-        !state.overtime &&
-        state.quarter === 4 &&
-        state.timeSecs <= 120 &&
-        (state.pendingRunoff ?? 0) > 0 && // only if there's clock to save
-        state.possession === cpuSide &&   // the CPU (not the user) has the ball
-        deficit > 0 && deficit <= 8 &&    // trailing by one score — must hurry
-        cpuTimeouts > 0
-      ) {
-        if (callTimeout(events, cpuSide)) {
-          state.pendingRunoff = 0;
-        }
+      if (callTimeout(events, cpuSide)) {
+        state.pendingRunoff = 0;
       }
     }
 
@@ -1042,69 +1143,12 @@ export function createLiveCoachEngine(
       }
     }
 
-    // End-of-half / end-of-game field goal awareness for auto (CPU) decisions.
-    // Ported from the sim engine (playByPlay.ts): when the clock is about to
-    // expire and the possessing team is in FG range while tied or trailing,
-    // kick the field goal instead of going for it or punting. Runs regardless
-    // of down and only when there is no explicit user call. (#1 voted football
-    // feature — AI 4th-down clock awareness.)
+    // No call from the user: the offense decides for itself whether to kick, punt or run a play (autoDecision).
     if (!userCall) {
-      const distToGoal = 100 - state.fieldPos;
-      const fgDist = distToGoal + 17;
-      const inFGRange = fgDist <= 58; // reasonable FG range
-      const offScoreDiff = state.possession === 'home'
-        ? state.homeScore - state.awayScore
-        : state.awayScore - state.homeScore;
-      const isEndOfHalf = state.quarter === 2 && state.timeSecs <= 10;
-      const isEndOfGame = state.quarter >= 4 && state.timeSecs <= 10;
-      const isLateAndClose = state.quarter >= 4 && state.timeSecs <= 30 && state.down >= 2;
-      // At the end of the game a field goal only helps if it ties or wins: down 4+ the kick can't change the result,
-      // so the offense has to throw for the end zone (Tyler 11/9: SF kicked a 53-yarder down 6 with 0:02 left).
-      const fgTiesOrWins = offScoreDiff >= -3 && offScoreDiff <= 0;
-      // Kick if: in range AND (half expiring, tied/trailing) OR (game on the line and the kick ties or wins it)
-      const shouldKickNow = inFGRange && (
-        (isEndOfHalf && offScoreDiff <= 0) ||
-        ((isEndOfGame || isLateAndClose) && fgTiesOrWins)
-      );
-      if (shouldKickNow) {
-        runFieldGoal(events);
-        if (state.overtime) state.otPlayRunThisPossession = true;
-        checkTwoMinWarning(events);
-        checkQuarterEnd(events);
-        return events;
-      }
-    }
-
-    // 4th down — handle user override or default decision
-    if (state.down === 4 && !userCall) {
-      // Default AI 4th down logic
-      const distanceToGoal = 100 - state.fieldPos;
-      const fgDist = distanceToGoal + 17;
-      // Trailing late (same rule as the watch-live engine): a kick that ties or wins is taken, otherwise the offense
-      // goes for it — a field goal down 4+ or a punt with the clock running out just ends the game.
-      const scoreDiff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
-      const desperationGo = state.quarter >= 4 && scoreDiff < 0 && (
-        state.timeSecs <= 180 ||
-        (scoreDiff <= -8 && state.timeSecs <= 300) ||
-        (scoreDiff <= -16 && state.timeSecs <= 600)
-      );
-      const smartFG = state.quarter >= 4 && scoreDiff >= -3 && scoreDiff <= 0 && fgDist <= 55;
-      if (smartFG) {
-        runFieldGoal(events);
-        if (state.overtime) state.otPlayRunThisPossession = true;
-        checkTwoMinWarning(events);
-        checkQuarterEnd(events);
-        return events;
-      } else if (state.yardsToGo <= 2 || desperationGo || (state.yardsToGo <= 4 && state.fieldPos >= 60)) {
-        // go for it (fall through to play call)
-      } else if (state.fieldPos >= 55 && fgDist <= 55) {
-        runFieldGoal(events);
-        if (state.overtime) state.otPlayRunThisPossession = true;
-        checkTwoMinWarning(events);
-        checkQuarterEnd(events);
-        return events;
-      } else {
-        runPunt(events);
+      const decision = autoDecision(state.timeSecs);
+      if (decision !== 'play') {
+        if (decision === 'field_goal') runFieldGoal(events);
+        else runPunt(events);
         if (state.overtime) state.otPlayRunThisPossession = true;
         checkTwoMinWarning(events);
         checkQuarterEnd(events);
@@ -1149,17 +1193,10 @@ export function createLiveCoachEngine(
     else if (userCall === 'screen') playType = 'screen';
     else if (userCall === 'go_for_it') playType = 'pass_short'; // default for 'go for it'
     else {
-      // No user call — pick by down/distance
-      const isThirdLong = state.down === 3 && state.yardsToGo >= 7;
-      const isShortYardage = state.yardsToGo <= 3;
-      const passChance = isThirdLong ? 0.85 : isShortYardage ? 0.45 : 0.58;
-      // Last snap of the game while trailing: it has to go to the end zone (a run or a checkdown just ends it).
-      const offDiff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
-      const lastGasp = state.quarter >= 4 && !state.overtime && offDiff < 0 && state.timeSecs <= 12;
-      if (lastGasp) playType = 100 - state.fieldPos > 12 ? 'pass_deep' : 'pass_short';
-      else playType = Math.random() < passChance
-        ? (Math.random() < 0.25 ? 'pass_deep' : 'pass_short')
-        : 'run';
+      // No user call — pick by down/distance. A CPU snap the user is calling the defense on was chosen when its set
+      // was shown (rollOffSet), so the set the user read is the set this play came out of.
+      const shown = state.possession !== userSide && state.offSet ? pendingCpuPlay : null;
+      playType = shown ?? pickAutoPlay(state.timeSecs);
     }
 
     // Play-call-aware icon prefixes for descriptions
@@ -1167,13 +1204,17 @@ export function createLiveCoachEngine(
       run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot',
       qb_run: '⚡ QB Scramble', screen: '🛡️ Screen',
     };
-    const callPrefix = userCall ? (CALL_ICONS[playType] ?? '') : '';
+    // The user's defensive call counts on a CPU scrimmage snap only
+    const calledLook = !userCall && defCall && state.possession !== userSide ? defCall : null;
+    const shownSet = calledLook ? (state.offSet ?? null) : null;
+    const callPrefix = userCall ? (CALL_ICONS[playType] ?? '')
+      : calledLook ? `${LOOK_INFO[calledLook].icon} vs ${LOOK_INFO[calledLook].label}` : '';
 
     // Execute the play
     // a called Run always goes to the back: the 10% QB keeper made 'Run' play out as a QB scramble (that's its own call)
     // The look only counts on a snap the user called: CPU snaps and auto-simmed user snaps play out as before.
     const look = userCall && state.possession === userSide ? (state.defLook ?? null) : null;
-    const mod = lookModifier(playType, look);
+    const mod = lookModifier(playType, look ?? calledLook);
     if (userCall) { recentCalls.push(playType); if (recentCalls.length > TENDENCY_WINDOW) recentCalls.shift(); }
     const snapIdx = events.length;
     if (playType === 'run') runRunPlay(events, userCall === 'run' ? 'rb' : undefined, callPrefix, mod);
@@ -1182,6 +1223,12 @@ export function createLiveCoachEngine(
     else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix, mod);
     else runPassPlay(events, 'screen', callPrefix, mod);
     if (look && events[snapIdx]) { events[snapIdx].defLook = look; events[snapIdx].lookEdge = mod.edge; }
+    if (calledLook && events[snapIdx]) {
+      // the table's edge is the offense's; from the user's sideline it is the other way round
+      events[snapIdx].userDefCall = calledLook;
+      events[snapIdx].userDefEdge = mod.edge === 0 ? 0 : mod.edge > 0 ? -1 : 1;
+      if (shownSet) events[snapIdx].offSet = shownSet;
+    }
     if (state.overtime) state.otPlayRunThisPossession = true;
 
     checkTwoMinWarning(events);
@@ -1211,6 +1258,7 @@ export function createLiveCoachEngine(
 
   return {
     runOnePlay,
+    setCallDefense,
     callTimeoutFor,
     isUserOffense: () => false, // caller knows; this is here for completeness
     isFinished: () => state.isGameOver,
