@@ -54,6 +54,10 @@ export interface PlayEvent {
    *  its drive starts. The 3D sim runs the return to this spot instead of making one up (it used to picture pick-sixes
    *  the engine never scored). Optional: older saved games don't carry it. */
   returnTo?: number;
+  /** The part of `description` that credits a defender with the tackle or the pass breakup (" Tackled by T. Diggs."),
+   *  exactly as it appears there. Code that finds the ball carrier by name cuts it out first, so a defender who shares
+   *  a name with an opposing player is never taken for him. Optional: older events and plays with no credit lack it. */
+  defNote?: string;
   /** Live Coach only: the look the defense showed on a snap the user called, and how the call fared against it
    *  (-1 the look had it covered, 0 even, +1 the call beat the look). See defensiveLooks.ts. */
   defLook?: import('./defensiveLooks').DefensiveLook;
@@ -294,6 +298,76 @@ export function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]
   });
 }
 
+/** The defensive position pools, each in depth-chart order. */
+export interface DefenderPools { dls: Player[]; lbs: Player[]; cbs: Player[]; safeties: Player[] }
+
+/** Men past the usual starters at a position rarely make the play: they are on the field far less. */
+const STARTER_SLOTS: Record<string, number> = { DL: 4, LB: 4, CB: 3, S: 2 };
+function depthFactor(pool: Player[], p: Player): number {
+  return pool.indexOf(p) < (STARTER_SLOTS[p.position] ?? 3) ? 1 : 0.3;
+}
+
+/** Pick who makes the tackle on a run or a completion. Same position split as the quick sim (simulate.ts): linebackers
+ *  lead, the line gets more of the runs and the secondary more of the catches, scaled by tackling and overall. */
+export function pickTackler(d: DefenderPools, kind: 'run' | 'pass'): Player | null {
+  const posWeight: Record<string, number> = kind === 'run'
+    ? { LB: 2.0, DL: 1.6, S: 1.5, CB: 1.0 }
+    : { LB: 2.2, S: 1.8, CB: 1.4, DL: 1.0 };
+  const entries = [d.lbs, d.dls, d.safeties, d.cbs].flatMap(pool => pool.map(p => ({
+    p,
+    w: (posWeight[p.position] ?? 1) * ((p.ratings.tackling ?? 60) / 70) * Math.max(0.1, p.ratings.overall / 80) * depthFactor(pool, p),
+  })));
+  return pickWeighted(entries, e => e.w)?.p ?? null;
+}
+
+/** Pick the man in coverage who breaks up an incompletion: corners by slot, safeties about a quarter of the time,
+ *  a linebacker now and then. */
+export function pickPassDefender(d: DefenderPools): Player | null {
+  const entries = [
+    ...d.cbs.map((p, i) => ({ p, w: (i === 0 ? 4 : i === 1 ? 3 : i === 2 ? 2 : 0.5) * ((p.ratings.coverage ?? 60) / 70) })),
+    ...d.safeties.map((p, i) => ({ p, w: (i < 2 ? 1.5 : 0.4) * ((p.ratings.coverage ?? 60) / 70) })),
+    ...d.lbs.map((p, i) => ({ p, w: (i < 3 ? 0.5 : 0.15) * ((p.ratings.coverage ?? 60) / 70) })),
+  ];
+  return pickWeighted(entries, e => e.w)?.p ?? null;
+}
+
+/** Share of incompletions a defender in coverage breaks up (the quick sim credits a deflection on 40%), and the share
+ *  batted down at the line by a rusher. */
+export const PASS_BREAKUP_CHANCE = 0.34;
+export const BATTED_AT_LINE_CHANCE = 0.07;
+
+/** The sentence added to a run or a completion that names the tackler. `name` is already formatted for the feed.
+ *  Kept clear of the words other code reads a play line for (deep, screen, scramble, sack, fumble, batted). */
+export function tackleNote(name: string, yards: number): string {
+  if (yards < 0) {
+    return pick([
+      ` ${name} makes the stop in the backfield.`,
+      ` Dropped for the loss by ${name}.`,
+      ` ${name} gets him behind the line.`,
+    ]);
+  }
+  if (yards === 0) {
+    return pick([
+      ` Stopped by ${name}.`,
+      ` ${name} makes the stop.`,
+      ` ${name} meets him at the line.`,
+    ]);
+  }
+  if (yards >= 15) {
+    return pick([
+      ` ${name} finally brings him down.`,
+      ` ${name} makes the saving tackle.`,
+      ` Run down by ${name}.`,
+    ]);
+  }
+  return pick([
+    ` Tackled by ${name}.`,
+    ` ${name} makes the tackle.`,
+    ` Brought down by ${name}.`,
+    ` ${name} makes the stop.`,
+  ]);
+}
+
 /** Pick a pass target. WRs are weighted by depth-chart slot, TEs and the
  *  receiving back get a fixed share. Mirrors the slot-percentage logic that
  *  existed before but uses pickWeighted so the exact same player isn't
@@ -330,11 +404,15 @@ function rating(p: Player | null, key: keyof Player['ratings'], fallback = 70): 
 function descRun(rb: Player | null, yards: number, fieldPosLabel_: string): string {
   const name = playerTag(rb, 'the running back');
   const abs = Math.abs(yards);
-  if (yards <= 0) {
+  if (yards === 0) {
     return pick([
       `${name} stuffed at the line for no gain.`,
-      `${name} stopped for a loss of ${abs} yard${abs !== 1 ? 's' : ''}.`,
       `Stack at the line — ${name} gains nothing.`,
+    ]);
+  }
+  if (yards < 0) {
+    return pick([
+      `${name} stopped for a loss of ${abs} yard${abs !== 1 ? 's' : ''}.`,
       `Nowhere to go. ${name} gets swallowed up behind the line.`,
       `The defense blows this one up. ${name} loses ${abs}.`,
     ]);
@@ -412,8 +490,30 @@ function descPassIncomplete(qb: Player | null, receiver: Player | null): string 
     `Incomplete — ${qbName} misses ${recName} downfield.`,
     `${qbName} overthrows ${recName}. Incomplete.`,
     `Pass falls incomplete, ${recName} couldn't hold on.`,
-    `${qbName} intended for ${recName} but it's batted down.`,
   ]);
+}
+
+/** An incompletion a defender in coverage broke up: the line, and the part of it that credits him. */
+function descPassBrokenUp(qb: Player | null, receiver: Player | null, defender: Player): { base: string; note: string } {
+  const qbName = playerTag(qb, 'the quarterback');
+  const recName = playerTag(receiver, 'the receiver');
+  const d = playerTag(defender, 'the defender');
+  return pick([
+    { base: `Incomplete — ${qbName} throws for ${recName},`, note: ` broken up by ${d}.` },
+    { base: `${qbName} fires for ${recName}.`, note: ` ${d} knocks it away. Incomplete.` },
+    { base: `${qbName} targets ${recName}`, note: ` but ${d} breaks it up.` },
+    { base: `${qbName} looks for ${recName}.`, note: ` ${d} gets a hand in there. Incomplete.` },
+  ]);
+}
+
+/** An incompletion batted down at the line by a rusher (the 3D sim keys on "batted down"). */
+function descPassBatted(qb: Player | null, receiver: Player | null, rusher: Player | null): { base: string; note: string } {
+  const qbName = playerTag(qb, 'the quarterback');
+  const recName = playerTag(receiver, 'the receiver');
+  return {
+    base: `${qbName} intended for ${recName} but it's batted down at the line.`,
+    note: rusher ? ` ${playerTag(rusher, 'the rusher')} gets a hand on it.` : '',
+  };
 }
 
 function descSack(qb: Player | null, dl: Player | null, yards: number): string {
@@ -615,6 +715,14 @@ export interface PerRusherStat {
   fumbles: number;
 }
 
+/** What one defender did on the plays that name him: tackles (and the ones for a loss), passes broken up, fumbles forced. */
+export interface PerDefenderStat {
+  tackles: number;
+  tfls: number;
+  pds: number;
+  ffs: number;
+}
+
 export interface StatBucket {
   passAttempts: number;
   passCompletions: number;
@@ -652,6 +760,9 @@ export interface StatBucket {
   // boxscore both reflect real rotation instead of piling onto DL1/CB1.
   perSacker: Record<string, number>;
   perInterceptor: Record<string, number>;
+  // Tackles, pass breakups and forced fumbles, credited to the defender the play-by-play line names, so the feed and
+  // the box score agree. Optional: buckets from before per-play credit don't carry it.
+  perDefender?: Record<string, PerDefenderStat>;
 }
 
 function emptyBucket(): StatBucket {
@@ -667,6 +778,7 @@ function emptyBucket(): StatBucket {
     perRusher: {},
     perSacker: {},
     perInterceptor: {},
+    perDefender: {},
   };
 }
 
@@ -676,12 +788,15 @@ function cloneBucket(b: StatBucket): StatBucket {
   for (const [id, rec] of Object.entries(b.perReceiver)) perReceiver[id] = { ...rec };
   const perRusher: Record<string, PerRusherStat> = {};
   for (const [id, rec] of Object.entries(b.perRusher)) perRusher[id] = { ...rec };
+  const perDefender: Record<string, PerDefenderStat> = {};
+  for (const [id, rec] of Object.entries(b.perDefender ?? {})) perDefender[id] = { ...rec };
   return {
     ...b,
     perReceiver,
     perRusher,
     perSacker: { ...b.perSacker },
     perInterceptor: { ...b.perInterceptor },
+    perDefender,
   };
 }
 
@@ -710,6 +825,21 @@ function creditRusher(
     yards: cur.yards + (patch.yards ?? 0),
     tds: cur.tds + (patch.tds ?? 0),
     fumbles: cur.fumbles + (patch.fumbles ?? 0),
+  };
+}
+
+function creditDefender(
+  bucket: StatBucket,
+  defenderId: string,
+  patch: Partial<PerDefenderStat>,
+): void {
+  const map = (bucket.perDefender ??= {});
+  const cur = map[defenderId] ?? { tackles: 0, tfls: 0, pds: 0, ffs: 0 };
+  map[defenderId] = {
+    tackles: cur.tackles + (patch.tackles ?? 0),
+    tfls: cur.tfls + (patch.tfls ?? 0),
+    pds: cur.pds + (patch.pds ?? 0),
+    ffs: cur.ffs + (patch.ffs ?? 0),
   };
 }
 
@@ -827,6 +957,17 @@ export function simulatePlayByPlay(
     ev.awayBucketSnap = cloneBucket(awayBucket);
     events.push(ev);
     return ev;
+  }
+
+  /** The tackle on a run or completion that didn't score: picks the defender, credits him, and returns the sentence
+   *  that names him for the play's line. Call before addEvent so the event's bucket snapshot includes the tackle. */
+  function creditTackle(kind: 'run' | 'pass', yards: number): { tackler: Player | null; note: string } {
+    const tackler = pickTackler(defKey(), kind);
+    if (!tackler) return { tackler: null, note: '' };
+    const db = defBucket();
+    db.tackles += 1;
+    creditDefender(db, tackler.id, { tackles: 1, tfls: yards < 0 ? 1 : 0 });
+    return { tackler, note: tackleNote(playerTag(tackler, 'the defender'), yards) };
   }
 
   function switchPossession(newFieldPos = 25) {
@@ -1031,7 +1172,7 @@ export function simulatePlayByPlay(
   }
 
   function applyPenalty(): boolean {
-    // Returns true if down replays, updates state
+    // Returns true if the snap is over (the down replays, or the ball changed hands); updates state
     const penaltyRoll = Math.random();
     interface PenaltyDef {
       name: string;
@@ -1071,7 +1212,9 @@ export function simulatePlayByPlay(
     if (state.down === 4 && pen.side === 'offense' && pen.replay) {
       const newPos = clamp(100 - state.fieldPos, 1, 99);
       switchPossession(newPos);
-      return false;
+      // The snap is over: the other team has the ball. Returning false here let the play go on with the old offense's
+      // players under the new team's possession (a run by one team's back, stamped and spotted as the other's).
+      return true;
     }
 
     return pen.replay;
@@ -1375,7 +1518,6 @@ export function simulatePlayByPlay(
 
       ob.qbRushAttempts += 1;
       ob.qbRushYards += yardsGained;
-      db.tackles += 1;
 
       const isTD = state.fieldPos + yardsGained >= 100;
       if (isTD) {
@@ -1385,14 +1527,15 @@ export function simulatePlayByPlay(
         advanceClock(Math.floor(Math.random() * 8) + 30);
         return true;
       }
+      const tackle = creditTackle('run', yardsGained);
 
       // Lost fumble, or one the offense falls on (about as common in the NFL) — decided before the line is written.
       const fumbleChance = clamp(0.018 - (qbCarrying / 100) * 0.006, 0.005, 0.025);
       const lostFumble = Math.random() < fumbleChance;
       const keptFumble = !lostFumble && Math.random() < fumbleChance;
-      const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession))
+      const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession)) + tackle.note
         + (keptFumble ? keptFumbleTail(ok.qb, keptRecoverer(ok.qb, ok.ols)) : '');
-      addEvent('run', desc, yardsGained, false);
+      addEvent('run', desc, yardsGained, false).defNote = tackle.note || undefined;
       if (keptFumble && ok.qb) creditRusher(ob, ok.qb.id, { fumbles: 1 });
 
       state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
@@ -1400,7 +1543,8 @@ export function simulatePlayByPlay(
       advanceClock(Math.floor(Math.random() * 8) + 30);
 
       if (lostFumble) {
-        const desc2 = descFumble(ok.qb, dk.lb1);
+        if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
+        const desc2 = descFumble(ok.qb, tackle.tackler ?? dk.lb1);
         addEvent('fumble', desc2, 0, false);
         shiftMomentum(-20);
         const newPos = clamp(100 - state.fieldPos, 15, 75);
@@ -1430,7 +1574,6 @@ export function simulatePlayByPlay(
       ob.rushAttempts += 1;
       ob.rushYards += yardsGained;
       if (rusher) creditRusher(ob, rusher.id, { attempts: 1, yards: yardsGained });
-      db.tackles += 1;
 
       const isTD = state.fieldPos + yardsGained >= 100;
       if (isTD) {
@@ -1439,15 +1582,16 @@ export function simulatePlayByPlay(
         advanceClock(Math.floor(Math.random() * 8) + 30);
         return true;
       }
+      const tackle = creditTackle('run', yardsGained);
 
       // Skill-based fumble rate (Bug 3 fix). About half of NFL fumbles are recovered by the offense: same odds again for one
       // it keeps (the play stands, the drive goes on).
       const fumbleChance = clamp(0.015 - (rbCarrying / 100) * 0.008, 0.003, 0.02);
       const lostFumble = Math.random() < fumbleChance;
       const keptFumble = !lostFumble && Math.random() < fumbleChance;
-      const desc = descRun(rusher, yardsGained, fieldPosLabel(state.fieldPos, state.possession))
+      const desc = descRun(rusher, yardsGained, fieldPosLabel(state.fieldPos, state.possession)) + tackle.note
         + (keptFumble ? keptFumbleTail(rusher, keptRecoverer(rusher, ok.ols)) : '');
-      addEvent('run', desc, yardsGained, false);
+      addEvent('run', desc, yardsGained, false).defNote = tackle.note || undefined;
       if (keptFumble && rusher) creditRusher(ob, rusher.id, { fumbles: 1 });
 
       state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
@@ -1455,7 +1599,8 @@ export function simulatePlayByPlay(
       advanceClock(Math.floor(Math.random() * 8) + 30);
 
       if (lostFumble) {
-        const desc2 = descFumble(rusher, dk.lb1);
+        if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
+        const desc2 = descFumble(rusher, tackle.tackler ?? dk.lb1);
         addEvent('fumble', desc2, 0, false);
         if (rusher) creditRusher(ob, rusher.id, { fumbles: 1 });
         shiftMomentum(-20); // turnover momentum
@@ -1486,7 +1631,6 @@ export function simulatePlayByPlay(
 
         ob.qbRushAttempts += 1;
         ob.qbRushYards += yardsGained;
-        db.tackles += 1;
 
         const isTD = state.fieldPos + yardsGained >= 100;
         if (isTD) {
@@ -1497,8 +1641,9 @@ export function simulatePlayByPlay(
           return true;
         }
 
-        const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession));
-        addEvent('run', desc, yardsGained, false);
+        const tackle = creditTackle('run', yardsGained);
+        const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession)) + tackle.note;
+        addEvent('run', desc, yardsGained, false).defNote = tackle.note || undefined;
 
         state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
         state.yardsToGo -= yardsGained;
@@ -1618,7 +1763,6 @@ export function simulatePlayByPlay(
         if (receiver) {
           creditReceiver(ob, receiver.id, { targets: 1, receptions: 1, yards: yardsGained });
         }
-        db.tackles += 1;
 
         const isTD = state.fieldPos + yardsGained >= 100;
         if (isTD) {
@@ -1631,9 +1775,10 @@ export function simulatePlayByPlay(
         // Fumble after the catch (~1 in 175 completions lost at NFL rates; about as many the offense falls on).
         const catchLost = Math.random() < catchFumbleLossChance(receiver);
         const catchKept = !catchLost && Math.random() < catchFumbleLossChance(receiver);
-        const desc = descPassComplete(ok.qb, receiver, yardsGained, isLong)
+        const tackle = creditTackle('pass', yardsGained);
+        const desc = descPassComplete(ok.qb, receiver, yardsGained, isLong) + tackle.note
           + (catchKept ? keptFumbleTail(receiver, keptRecoverer(receiver, [...ok.wrs, ...ok.tes])) : '');
-        addEvent('pass_complete', desc, yardsGained, false);
+        addEvent('pass_complete', desc, yardsGained, false).defNote = tackle.note || undefined;
         if (catchKept && receiver) creditRusher(ob, receiver.id, { fumbles: 1 });
         if (isLong) shiftMomentum(12); // big play momentum
 
@@ -1642,6 +1787,7 @@ export function simulatePlayByPlay(
         advanceClock(Math.floor(Math.random() * 10) + 25);
 
         if (catchLost) {
+          if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
           const recoverer = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.lb1;
           addEvent('fumble', descCatchFumble(receiver, recoverer), 0, false);
           if (receiver) creditRusher(ob, receiver.id, { fumbles: 1 });
@@ -1659,8 +1805,16 @@ export function simulatePlayByPlay(
         ob.receivingTargets += 1;
         if (receiver) creditReceiver(ob, receiver.id, { targets: 1 });
 
-        const desc = descPassIncomplete(ok.qb, receiver);
-        addEvent('pass_incomplete', desc, 0, false);
+        // Some incompletions are the defense's doing: batted at the line by a rusher, or broken up in coverage.
+        const how = Math.random();
+        const batter = how < BATTED_AT_LINE_CHANCE ? (pickSacker(dk.dls, dk.lbs) ?? dk.dl1) : null;
+        const cover = !batter && how < BATTED_AT_LINE_CHANCE + PASS_BREAKUP_CHANCE ? pickPassDefender(dk) : null;
+        const line = batter ? descPassBatted(ok.qb, receiver, batter)
+          : cover ? descPassBrokenUp(ok.qb, receiver, cover)
+          : { base: descPassIncomplete(ok.qb, receiver), note: '' };
+        const breaker = batter ?? cover;
+        if (breaker) creditDefender(db, breaker.id, { pds: 1 });
+        addEvent('pass_incomplete', line.base + line.note, 0, false).defNote = line.note || undefined;
 
         // Clock stops on incomplete
         advanceClock(5);
@@ -1844,27 +1998,23 @@ export function simulatePlayByPlay(
       };
     }
 
-    // Defenders — tackles distributed by position/rating weight (no per-play
-    // tackler tracking yet); sacks + INTs use the exact per-player maps the
-    // play loop credited so the live feed matches the final boxscore.
-    const defenders = teamPlayers.filter(p =>
-      ['DL', 'LB', 'CB', 'S'].includes(p.position) && (!p.injury || p.injury.weeksLeft === 0),
-    );
-    const totalTackles = Math.max(bucket.tackles, 30 + Math.floor(Math.random() * 20));
-    const defWeights = defenders.map(d => {
-      const posW = d.position === 'LB' ? 3.5 : (d.position === 'CB' || d.position === 'S') ? 1.8 : 0.8;
-      return posW * (d.ratings.tackling / 70);
-    });
-    const totalWeight = defWeights.reduce((s, w) => s + w, 0) || 1;
-    for (let i = 0; i < defenders.length; i++) {
-      const share = defWeights[i] / totalWeight;
-      const tackles = Math.round(totalTackles * share * (0.85 + Math.random() * 0.3));
-      const did = defenders[i].id;
+    // Defenders — every tackle, breakup and forced fumble went to the man the play-by-play line named, and sacks + INTs
+    // use the per-player maps the play loop credited, so the live feed matches the final boxscore.
+    const defIds = new Set([
+      ...Object.keys(bucket.perDefender ?? {}),
+      ...Object.keys(bucket.perSacker),
+      ...Object.keys(bucket.perInterceptor),
+    ]);
+    for (const did of defIds) {
+      const d = bucket.perDefender?.[did];
       const existing = playerStats[did];
       playerStats[did] = {
         ...existing,
         gamesPlayed: 1,
-        tackles: (existing?.tackles ?? 0) + tackles,
+        tackles: (existing?.tackles ?? 0) + (d?.tackles ?? 0),
+        tacklesForLoss: (existing?.tacklesForLoss ?? 0) + (d?.tfls ?? 0),
+        passDeflections: (existing?.passDeflections ?? 0) + (d?.pds ?? 0),
+        forcedFumbles: (existing?.forcedFumbles ?? 0) + (d?.ffs ?? 0),
         sacks: (existing?.sacks ?? 0) + (bucket.perSacker[did] ?? 0),
         defensiveINTs: (existing?.defensiveINTs ?? 0) + (bucket.perInterceptor[did] ?? 0),
       };
@@ -2082,10 +2232,8 @@ export function liveGameToGameResult(
 /**
  * Derive a partial per-player stats map from a single bucket snapshot.
  * Used by the live-game UI to render running box-score numbers as plays
- * tick in. Tackles are skipped because the final tackle distribution is
- * randomized at end-of-game in applyBucketToStats — running tackle counts
- * pop in once the game finishes. Everything else (passing, rushing,
- * receiving, sacks, INTs) accumulates deterministically per play.
+ * tick in. Everything (passing, rushing, receiving, tackles, breakups, sacks,
+ * INTs) accumulates per play, credited to the player the feed named.
  */
 export function livePlayerStatsAtEvent(
   event: PlayEvent | undefined,
@@ -2143,6 +2291,17 @@ export function livePlayerStatsAtEvent(
     for (const [pid, ints] of Object.entries(bucket.perInterceptor)) {
       const existing = out[pid];
       out[pid] = { ...existing, gamesPlayed: 1, defensiveINTs: (existing?.defensiveINTs ?? 0) + ints };
+    }
+    for (const [pid, d] of Object.entries(bucket.perDefender ?? {})) {
+      const existing = out[pid];
+      out[pid] = {
+        ...existing,
+        gamesPlayed: 1,
+        tackles: (existing?.tackles ?? 0) + d.tackles,
+        tacklesForLoss: (existing?.tacklesForLoss ?? 0) + d.tfls,
+        passDeflections: (existing?.passDeflections ?? 0) + d.pds,
+        forcedFumbles: (existing?.forcedFumbles ?? 0) + d.ffs,
+      };
     }
     const k = sidePlayers.find(p => p.position === 'K');
     if (k && (bucket.fieldGoalAttempts > 0 || bucket.extraPointAttempts > 0)) {
