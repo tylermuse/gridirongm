@@ -19,6 +19,13 @@ import { POSITIONS, getUnamortizedBonus } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { calculateSchemeFit, schemeFitDot, schemeFitColor } from '@/lib/engine/coaching';
+import { isDraftPickSpent } from '@/lib/engine/draftPicks';
+
+/** A pick that can still go in a trade: not used yet and its draft isn't over. */
+function isPickTradeable(pk: DraftPick): boolean {
+  const state = useGameStore.getState();
+  return pk.year >= state.season && !isDraftPickSpent(pk, state);
+}
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -434,7 +441,7 @@ function generateRecommendedTrades(
 
     // Map estimated cost to user's actual picks
     const availablePicks = userTeam.draftPicks
-      .filter((pk: any) => pk.year >= useGameStore.getState().season && !pk.playerId)
+      .filter((pk: any) => isPickTradeable(pk))
       .sort((a: any, b: any) => a.round - b.round);
 
     if (tv >= 120 && availablePicks.length > 0) {
@@ -575,7 +582,7 @@ function TradeFinderContent({
 
   // Cap space
   const capSpace = userTeam ? userTeam.salaryCap - userTeam.totalPayroll : 0;
-  const userPicks = userTeam?.draftPicks.filter(pk => pk.year >= upcomingDraftYear && !pk.playerId) ?? [];
+  const userPicks = userTeam?.draftPicks.filter(pk => pk.year >= upcomingDraftYear && isPickTradeable(pk)) ?? [];
 
   return (
     <div className="space-y-6">
@@ -1787,11 +1794,11 @@ function TradesPage() {
                               toggleSelect={(id) => togglePlayerSelect(id, counterOfferedPlayerIds, setCounterOfferedPlayerIds)}
                               playerTradeValue={playerTradeValue}
                             />
-                            {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
+                            {userTeam && userTeam.draftPicks.filter(pk => isPickTradeable(pk)).length > 0 && (
                               <>
                                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
                                 {userTeam.draftPicks
-                                  .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                                  .filter(pk => isPickTradeable(pk))
                                   .sort((a, b) => a.year - b.year || a.round - b.round)
                                   .map(pk => (
                                   <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
@@ -1822,11 +1829,11 @@ function TradesPage() {
                               toggleSelect={(id) => togglePlayerSelect(id, counterReceivedPlayerIds, setCounterReceivedPlayerIds)}
                               playerTradeValue={playerTradeValue}
                             />
-                            {counterTeam && counterTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
+                            {counterTeam && counterTeam.draftPicks.filter(pk => isPickTradeable(pk)).length > 0 && (
                               <>
                                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
                                 {counterTeam.draftPicks
-                                  .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                                  .filter(pk => isPickTradeable(pk))
                                   .sort((a, b) => a.year - b.year || a.round - b.round)
                                   .map(pk => (
                                   <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
@@ -2001,11 +2008,11 @@ function TradesPage() {
                       </div>
                     </div>
 
-                    {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
+                    {userTeam && userTeam.draftPicks.filter(pk => isPickTradeable(pk)).length > 0 && (
                       <div>
                         <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
                         {userTeam.draftPicks
-                          .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                          .filter(pk => isPickTradeable(pk))
                           .sort((a, b) => a.year - b.year || a.round - b.round)
                           .map(pk => (
                           <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
@@ -2289,11 +2296,11 @@ function TradesPage() {
                         onPlayerClick={setSelectedPlayerId}
                       />
                     </div>
-                    {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
+                    {userTeam && userTeam.draftPicks.filter(pk => isPickTradeable(pk)).length > 0 && (
                       <div>
                         <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
                         {userTeam.draftPicks
-                          .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                          .filter(pk => isPickTradeable(pk))
                           .sort((a, b) => a.year - b.year || a.round - b.round)
                           .map(pk => (
                           <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
@@ -2330,11 +2337,11 @@ function TradesPage() {
                             playerTradeValue={playerTradeValue}
                           />
                         </div>
-                        {selectedAITeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
+                        {selectedAITeam.draftPicks.filter(pk => isPickTradeable(pk)).length > 0 && (
                           <div>
                             <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
                             {selectedAITeam.draftPicks
-                              .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                              .filter(pk => isPickTradeable(pk))
                               .sort((a, b) => a.year - b.year || a.round - b.round)
                               .map(pk => (
                               <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">

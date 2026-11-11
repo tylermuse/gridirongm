@@ -45,6 +45,8 @@ import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { trackEvent } from '@bs/core/analytics/track';
 import { trackFeature } from '@bs/core/analytics/feature';
 import { parseSave, serializeSave } from './saveStatCompaction';
+import { isDraftPickSpent, resolvePickOnClock } from './draftPicks';
+import { makeRookieTest } from './rookies';
 
 const SAVE_VERSION = 37;
 const AUTOSAVE_KEY = 'gridiron-gm-autosave';
@@ -1813,7 +1815,7 @@ export function computeAllLeagueTeams(
   allRookie: { position: Position; playerId: string; teamId: string }[];
 } {
   const activePlayers = state.players.filter(p => !p.retired && p.teamId && p.stats.gamesPlayed >= 10);
-  const rookies = activePlayers.filter(p => p.draftYear === state.season);
+  const rookies = activePlayers.filter(makeRookieTest(state.players, state.season));
 
   const first: { position: Position; playerId: string; teamId: string }[] = [];
   const second: { position: Position; playerId: string; teamId: string }[] = [];
@@ -2002,7 +2004,7 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     // Rebuilding teams: NEVER add pick sweeteners (they want picks, not to trade them)
     // Contending teams: ~40% chance to include a draft pick to sweeten
     if (!isRebuilding && Math.random() < 0.40) {
-      const aiPicks = aiTeam.draftPicks.filter(pk => pk.year >= state.season);
+      const aiPicks = aiTeam.draftPicks.filter(pk => pk.year >= state.season && !isDraftPickSpent(pk, state));
       if (aiPicks.length > 0) {
         // Prefer lower-round picks (less valuable) to add as sweetener
         // Don't add a pick that would make the offer more than 1.15x target value
@@ -2025,7 +2027,7 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     if (pickOnlyTrade) {
       // Find the best-fit pick that doesn't massively overshoot
       const aiPicks = aiTeam.draftPicks
-        .filter(pk => pk.year >= state.season)
+        .filter(pk => pk.year >= state.season && !isDraftPickSpent(pk, state))
         .map(pk => ({ pick: pk, pv: pickTradeValue(pk, state.teams) }))
         .filter(({ pv }) => pv <= targetValue * 1.15) // Don't overshoot by more than 15%
         .sort((a, b) => Math.abs(a.pv - targetValue) - Math.abs(b.pv - targetValue));
@@ -5458,44 +5460,23 @@ export const useGameStore = create<GameStore>()(
           })];
         }
 
-        // PRD-13: Update depth chart for drafting team + mark the DraftPick as used
-        // Critical: filter by year as well as round/owner. Without the year
-        // filter, leftover unused picks from a prior draft (e.g., a 2030 R1
-        // that was silently skipped) would be wrongly consumed by current-year
-        // picks, leaving the current-year pick orphaned in draftResults.
-        //
-        // Also critical: when a team has MULTIPLE picks in the same round
-        // (their original + a traded-in pick), we must mark the SPECIFIC pick
-        // that's on the clock right now — not the first one in the array.
-        // Otherwise drafting at pick #1 could accidentally consume the #7
-        // pick, making #7 disappear from the team's tradeable list.
-        //
-        // Resolution: count how many picks this team has already made in this
-        // round this year (from draftResults), then among the team's unused
-        // matching picks, mark the next one in array order.
+        // PRD-13: Update depth chart for drafting team + mark the DraftPick as used.
+        // The slot on the clock names the exact pick (draftPickOrder is pick ids
+        // in slot order). Guessing by "first unused pick in this round" stamped
+        // the wrong pick when a team held two in a round and left the other
+        // unstamped for good, so a pick could be traded again after it was used.
         const draftYear = state.currentDraftYear ?? state.season;
-        const priorPicksByThisTeamInRound = state.draftResults.filter(r =>
-          r.teamId === currentPickTeamId && r.round === round,
-        ).length;
-        let matchesSeen = 0;
-        let pickMarked = false;
+        const pickOnClockId = resolvePickOnClock(state.teams, {
+          draftPickOrder: state.draftPickOrder,
+          slotIndex: (state.draftPickOrder?.length ?? 0) - state.draftOrder.length,
+          draftYear,
+          teamId: currentPickTeamId,
+          round,
+        });
         const updatedTeams = state.teams.map(t => {
-          const updatedPicks = t.draftPicks.map(pk => {
-            if (
-              !pickMarked &&
-              pk.year === draftYear &&
-              pk.ownerTeamId === currentPickTeamId &&
-              pk.round === round &&
-              !pk.playerId
-            ) {
-              if (matchesSeen === priorPicksByThisTeamInRound) {
-                pickMarked = true;
-                return { ...pk, playerId, pick: overallPick };
-              }
-              matchesSeen++;
-            }
-            return pk;
-          });
+          const updatedPicks = pickOnClockId
+            ? t.draftPicks.map(pk => (pk.id === pickOnClockId ? { ...pk, playerId, pick: overallPick } : pk))
+            : t.draftPicks;
           if (t.id !== currentPickTeamId) return { ...t, draftPicks: updatedPicks };
           const chart = insertIntoDepthChart(t.depthChart, player.position, playerId, state.players);
           return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart, draftPicks: updatedPicks };
@@ -5621,21 +5602,17 @@ export const useGameStore = create<GameStore>()(
               ? { ...p, teamId: pickTeam, draftYear: draftYear, draftPick: overallPick, acquiredVia: 'draft' as const, acquiredSeason: draftYear, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
-          let pickMarkedSim = false;
+          const pickOnClockId = resolvePickOnClock(teams, {
+            draftPickOrder: state.draftPickOrder,
+            slotIndex: (state.draftPickOrder?.length ?? 0) - draftOrder.length,
+            draftYear,
+            teamId: pickTeam,
+            round,
+          });
           teams = teams.map(t => {
-            const updPicks = t.draftPicks.map(pk => {
-              if (
-                !pickMarkedSim &&
-                pk.year === draftYear &&
-                pk.ownerTeamId === pickTeam &&
-                pk.round === round &&
-                !pk.playerId
-              ) {
-                pickMarkedSim = true;
-                return { ...pk, playerId: pid, pick: overallPick };
-              }
-              return pk;
-            });
+            const updPicks = pickOnClockId
+              ? t.draftPicks.map(pk => (pk.id === pickOnClockId ? { ...pk, playerId: pid, pick: overallPick } : pk))
+              : t.draftPicks;
             if (t.id !== pickTeam) return { ...t, draftPicks: updPicks };
             const chart = insertIntoDepthChart(t.depthChart, player.position, pid, players);
             return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart, draftPicks: updPicks };
@@ -5722,21 +5699,17 @@ export const useGameStore = create<GameStore>()(
               ? { ...p, teamId: pickTeam, draftYear: draftYear, draftPick: overallPick, acquiredVia: 'draft' as const, acquiredSeason: draftYear, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
-          let pickMarkedSim = false;
+          const pickOnClockId = resolvePickOnClock(teams, {
+            draftPickOrder: state.draftPickOrder,
+            slotIndex: (state.draftPickOrder?.length ?? 0) - draftOrder.length,
+            draftYear,
+            teamId: pickTeam,
+            round,
+          });
           teams = teams.map(t => {
-            const updPicks = t.draftPicks.map(pk => {
-              if (
-                !pickMarkedSim &&
-                pk.year === draftYear &&
-                pk.ownerTeamId === pickTeam &&
-                pk.round === round &&
-                !pk.playerId
-              ) {
-                pickMarkedSim = true;
-                return { ...pk, playerId: pid, pick: overallPick };
-              }
-              return pk;
-            });
+            const updPicks = pickOnClockId
+              ? t.draftPicks.map(pk => (pk.id === pickOnClockId ? { ...pk, playerId: pid, pick: overallPick } : pk))
+              : t.draftPicks;
             if (t.id !== pickTeam) return { ...t, draftPicks: updPicks };
             const chart = insertIntoDepthChart(t.depthChart, player.position, pid, players);
             return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart, draftPicks: updPicks };
@@ -7502,6 +7475,15 @@ export const useGameStore = create<GameStore>()(
         const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
         if (!userTeam || !aiTeam) return { success: false, reason: 'Team not found' };
 
+        // A pick that has already been used (or whose draft is over) is worth
+        // nothing to either side, so it can't be part of a trade.
+        const offeredPickIdSet = new Set(offeredPickIds);
+        const receivedPickIdSet = new Set(receivedPickIds);
+        const spentPickInTrade =
+          userTeam.draftPicks.some(pk => offeredPickIdSet.has(pk.id) && isDraftPickSpent(pk, state)) ||
+          aiTeam.draftPicks.some(pk => receivedPickIdSet.has(pk.id) && isDraftPickSpent(pk, state));
+        if (spentPickInTrade) return { success: false, reason: 'That draft pick has already been used' };
+
         // Evaluate trade values from the AI's perspective (§1.4): it values every
         // player through its OWN positional need — paying up for a spot it's thin
         // at (whether acquiring the player or giving one up) and discounting a
@@ -8019,7 +8001,7 @@ export const useGameStore = create<GameStore>()(
           const hardCeiling = totalBlockedValue * 2.0;
 
           const aiPicks = aiTeam.draftPicks
-            .filter(pk => pk.year >= state.season && !pk.playerId)
+            .filter(pk => pk.year >= state.season && !isDraftPickSpent(pk, state))
             .sort((a, b) => pickTradeValue(b, state.teams) - pickTradeValue(a, state.teams));
 
           // ── Build offer based on what user WANTS ──
@@ -10088,7 +10070,7 @@ export const useGameStore = create<GameStore>()(
                 isUserTeam: true,
               }));
               // Top rookies
-              const rookies = userRoster.filter(p => p.experience === 0).sort((a, b) => b.ratings.overall - a.ratings.overall);
+              const rookies = userRoster.filter(makeRookieTest(allPlayersForNewSeason, newSeason)).sort((a, b) => b.ratings.overall - a.ratings.overall);
               if (rookies.length > 0) {
                 const top = rookies[0];
                 preseasonNews.push(makeNews({

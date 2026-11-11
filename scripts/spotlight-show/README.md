@@ -96,7 +96,8 @@ two-shot and both are composited back over the still:
    at every shot change a 1 s clip of the hosts actually turning their heads
    (`turn_pc.mp4` / `turn_cp.mp4`: a Seedance start-frame/end-frame
    generation between the two stills, retimed, persons only composited over
-   the still; `turn_cp` is `turn_pc` reversed) is cut in at the pause, with
+   the still; `turn_cp` is `turn_pc` reversed — built by
+   `python3 make_turns.py` from `turn_pc_raw.mp4` / `turn_pc_n_raw.mp4`) is cut in at the pause, with
    1 s of silence added to the audio, so every line after a turn moves back
    by 1 s — `timing.json` has the lines' final spans. Every HeyGen render is
    delayed 0.16 s (its lips run ahead of the voice by about that). Copy to
@@ -110,6 +111,18 @@ two-shot and both are composited back over the still:
    re-render (`python3 plan_shots.py --plan-only`). p↔P is a 0.35 s crossfade
    at the pause; c↔p turns use the straight-faced `turn_pc_n.mp4` /
    `turn_cp_n.mp4` (Seedance, medium.png → medium_cam.png)..
+8. The turns must sit exactly on the stills. Seedance returns the clip about
+   2.1% larger than the frames it was given (uniformly, about the frame
+   centre), so `make_turns.py` scales every frame back down before the hosts
+   are laid over the still, matches its levels to the stills, and starts and
+   ends each turn on the generated frames that match the stills. Left zoomed,
+   both hosts sit ~9 px further apart for the second a turn is on screen and
+   snap back when it ends (it read as a jiggle before every grin). Check a new
+   turn the same way: the hosts' torsos must not move across the splice.
+   A composed clip whose per-segment renders are gone can't be recomposed;
+   `python3 patch_turns.py <in.mp4> <out.mp4> <turn s>…` takes the zoom out of
+   its turns in place (`buysell_open_1`, `buysell_open_3` were done this way).
+
 ## Verdict stamps (`kind: "stamp"`)
 
 Contender or Pretender verdicts are said to camera instead of voiced over the

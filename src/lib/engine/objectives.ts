@@ -4,6 +4,7 @@
  */
 
 import type { Team, Player, OwnerObjective } from '@/types';
+import { makeRookieTest } from './rookies';
 
 function uuid(): string {
   return crypto.randomUUID();
@@ -177,7 +178,8 @@ export function evaluateObjectives(
           completed = youngImproved.length >= (obj.target as number);
         } else {
           // "Draft and start a rookie"
-          const rookieStarter = roster.find(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
+          const isRookie = makeRookieTest(players, season);
+          const rookieStarter = roster.find(p => isRookie(p) && p.stats.gamesPlayed >= 10);
           completed = !!rookieStarter;
         }
         break;
