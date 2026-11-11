@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { getNflOdds, type NflOdds, type NflTeamOdds } from '@/lib/predictions/nflOdds';
+import { teamSlug } from '@/lib/mockDraft/engine';
 
 /**
  * /predictions — NFL playoff & Super Bowl odds from BS Football's season
@@ -77,7 +78,7 @@ function ConferenceTable({ conference, teams }: { conference: string; teams: Nfl
             {rows.map(t => (
               <tr key={t.abbrev} className="border-t border-gray-100">
                 <td className="px-3 py-2.5 sticky left-0 bg-white">
-                  <div className="font-semibold text-gray-900 whitespace-nowrap"><span className="hidden sm:inline">{t.city} </span>{t.name}</div>
+                  <Link href={`/predictions/${teamSlug(t)}`} className="block font-semibold text-gray-900 whitespace-nowrap hover:text-blue-600 hover:underline"><span className="hidden sm:inline">{t.city} </span>{t.name}</Link>
                   <div className="text-xs text-gray-500 whitespace-nowrap">{t.record}<span className="hidden sm:inline"> · {t.division}</span></div>
                 </td>
                 <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${shade(t.playoffs)}`}>{pct(t.playoffs)}</td>

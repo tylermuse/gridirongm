@@ -29,7 +29,21 @@ import { teamPower, playerAvailable } from '@/lib/engine/simulate';
 import type { Player } from '@/types';
 import snapshot from '@/lib/data/predictions/nfl-latest.json';
 
-export type NflOdds = typeof snapshot;
+/** One regular-season game. `homeWinProb` is the model's chance the home team wins (null once played). */
+export interface NflGame {
+  week: number;
+  date: string;
+  home: string;
+  away: string;
+  neutral: boolean;
+  done: boolean;
+  homePts: number;
+  awayPts: number;
+  homeWinProb: number | null;
+}
+
+// `games` is optional so an older committed snapshot (without it) still type-checks.
+export type NflOdds = Omit<typeof snapshot, 'games'> & { games?: NflGame[] };
 export type NflTeamOdds = NflOdds['teams'][number];
 
 const ROSTER_FILE = 'public/rosters/FBGM_NFL_Roster_2026_Updated.json';
@@ -199,7 +213,7 @@ function simulate({ games, asOfWeek, resultsBeforeWeek, currentWeek, info, roste
   // Base records from completed games (W, L, T, div W/L, conf W/L, points for/against).
   const base = teams.map(() => ({ w: 0, l: 0, t: 0, dw: 0, dl: 0, cw: 0, cl: 0, pf: 0, pa: 0 }));
   const baseH2H: number[][] = teams.map(() => teams.map(() => 0)); // wins of row over col
-  const remaining: Array<{ h: number; a: number; p: number; weeksAhead: number; neutral: boolean; sameDiv: boolean; sameConf: boolean }> = [];
+  const remaining: Array<{ game: Game; h: number; a: number; p: number; weeksAhead: number; neutral: boolean; sameDiv: boolean; sameConf: boolean }> = [];
   for (const g of games) {
     const h = idx.get(g.home)!, a = idx.get(g.away)!;
     const sameDiv = div[h] === div[a], sameConf = conf[h] === conf[a];
@@ -213,7 +227,7 @@ function simulate({ games, asOfWeek, resultsBeforeWeek, currentWeek, info, roste
       if (sameDiv) { base[win].dw++; base[lose].dl++; }
       if (sameConf) { base[win].cw++; base[lose].cl++; }
     } else {
-      remaining.push({ h, a, p: NaN, weeksAhead: Math.max(0, g.week - currentWeek), neutral: g.neutral, sameDiv, sameConf });
+      remaining.push({ game: g, h, a, p: NaN, weeksAhead: Math.max(0, g.week - currentWeek), neutral: g.neutral, sameDiv, sameConf });
     }
   }
 
@@ -315,6 +329,7 @@ function simulate({ games, asOfWeek, resultsBeforeWeek, currentWeek, info, roste
   const r1 = (x: number) => Math.round(x * 1000) / 10; // fraction → % with 1 decimal
   return {
     remainingGames: remaining.length,
+    homeWinProb: new Map(remaining.map(r => [r.game, r.p])),
     teams: teams.map((t, i) => {
       const b = base[i];
       return {
@@ -367,6 +382,11 @@ export async function computeNflOdds(sims = DEFAULT_SIMS): Promise<NflOdds> {
         playoffsChange: p ? round1(t.playoffs - p.playoffs) : null,
         championChange: p ? round1(t.champion - p.champion) : null,
       };
+    }),
+    // The full schedule for the per-team pages, with the model's pick for each game still to play.
+    games: games.map(g => {
+      const p = now.homeWinProb.get(g);
+      return { ...g, homeWinProb: p === undefined ? null : Math.round(p * 1000) / 1000 };
     }),
   } as NflOdds;
 }
