@@ -39,6 +39,7 @@ import { AdSlot } from '@/components/AdSlot';
 
 function TeamPicker() {
   const { newLeague } = useGameStore();
+  const { user } = useSubscription();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -378,6 +379,20 @@ function TeamPicker() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
+      {/* Account strip — lets guests find Sign In before picking a team
+          (players asked where to log in from the landing page). */}
+      <div className="w-full max-w-5xl mx-auto flex justify-end mb-2 px-1">
+        {user ? (
+          <span className="text-sm text-[var(--text-sec)]">
+            Signed in as{' '}
+            <span className="font-semibold text-[var(--text)]">
+              {(user.user_metadata?.display_name as string | undefined) ?? user.email?.split('@')[0] ?? 'GM'}
+            </span>
+          </span>
+        ) : (
+          <Link href="/login"><Button size="sm" variant="secondary">Sign In</Button></Link>
+        )}
+      </div>
       {/* First-visit hero — orients cold traffic (ChatGPT/Google) and drives
           straight to team selection. Only the TeamPicker renders this, so it is
           shown to new/guest visitors; returning players with a save land in the

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -11,6 +11,7 @@ import { createClient } from '@bs/core/supabase/client';
 import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, getCloudSyncProblem } from '@bs/core/supabase/cloud-saves';
 import { pushCloudAutosaveNow } from '@/lib/data/cloudAutosave';
 import { getItem as idbGetItem, flushPendingWrites } from '@bs/core/storage';
+import { loadNativeSaveIntoApp, looksLikeBsfNativeSave } from '@/lib/data/leagueImport';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -443,11 +444,98 @@ function AccountCard() {
       ) : (
         <div className="flex items-center justify-between">
           <div className="text-sm text-[var(--text-sec)]">
-            Sign in to save your progress across devices.
+            Sign in to access leaderboards and your GM profile.
           </div>
           <Link href="/login"><Button size="sm">Sign In</Button></Link>
         </div>
       )}
+    </Card>
+  );
+}
+
+function SaveBackupCard() {
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleExport() {
+    setBusy(true);
+    setStatus(null);
+    try {
+      await flushPendingWrites();
+      const raw = await idbGetItem('gridiron-gm-autosave');
+      if (!raw) {
+        setStatus('No active save to export yet — start or load a league first.');
+        return;
+      }
+      const blob = new Blob([raw], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bs-football-save-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus('Save exported. Keep the .json file somewhere safe.');
+    } catch {
+      setStatus('Could not export your save. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error('That file is not valid JSON.');
+      }
+      if (!looksLikeBsfNativeSave(parsed)) {
+        throw new Error('That does not look like a BS Football save export.');
+      }
+      await loadNativeSaveIntoApp(parsed);
+      setStatus('Save imported — reloading…');
+      setTimeout(() => window.location.reload(), 600);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Could not import that file.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mb-4">
+      <CardHeader><CardTitle>Save Backup</CardTitle></CardHeader>
+      <div className="space-y-3">
+        <p className="text-sm text-[var(--text-sec)]">
+          Your game is saved in this browser. Export a backup file you can keep or move to another
+          browser or device, then import it there to restore your franchise.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={handleExport} disabled={busy}>Export Save</Button>
+          <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={busy}>Import Save</Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+        </div>
+        <p className="text-[11px] text-[var(--text-sec)]">
+          Importing replaces your current in-browser save with the backup file.
+        </p>
+        {status && <p className="text-[11px] text-[var(--text-sec)]">{status}</p>}
+      </div>
     </Card>
   );
 }
@@ -530,6 +618,7 @@ export default function SettingsPage() {
 
         {/* Cloud Saves */}
         <CloudSyncCard />
+        <SaveBackupCard />
 
         {/* Finance Settings */}
         <Card className="mb-4">

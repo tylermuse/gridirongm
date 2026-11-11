@@ -711,7 +711,15 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       // the one-shot photo backfill (fetches the bundled NBA roster, matches
       // by first+last, patches sportData.photoUrl). Persists the patched
       // league back to Dexie so we don't repeat the fetch on next hydrate.
-      const league = await backfillPlayerPhotos(loaded);
+      // If the photo backfill (network fetch of the bundled roster) stalls, the
+      // store would never leave loading:true and pages like /buzz hang on an
+      // infinite skeleton. The league is already loaded here — the backfill only
+      // enriches photos — so bound it to 5s and fall back to the un-enriched
+      // league rather than hanging forever.
+      const league = await Promise.race<typeof loaded>([
+        backfillPlayerPhotos(loaded),
+        new Promise<typeof loaded>(resolve => setTimeout(() => resolve(loaded), 5000)),
+      ]);
       if (league !== loaded) {
         try { await saveLeague(league); } catch (err) { console.warn('[bs-hoops] photo backfill save failed', err); }
       }
