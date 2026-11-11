@@ -57,6 +57,8 @@ export interface FlowPlay {
 export interface GameFlow {
   us: { teamId: string; abbreviation: string; color: string };
   them: { teamId: string; abbreviation: string; color: string };
+  /** Whether `us` was the home team (for the highlight clips' uniforms and scorebug). */
+  usHome?: boolean;
   plays: FlowPlay[];
   /** Quarters played (5 with overtime). */
   quarters: number;
@@ -232,6 +234,7 @@ export function gameFlowOf(g: GameResult, team: Team, opp: Team, players: Player
   return {
     us: { teamId: team.id, abbreviation: team.abbreviation, color: team.primaryColor || '#1e3a5f' },
     them: { teamId: opp.id, abbreviation: opp.abbreviation, color: !themColor || colorDistance(themColor, '#ffffff') < 60 ? '#94a3b8' : themColor },
+    usHome: home,
     plays,
     quarters: Math.max(4, ...sps.map(p => p.quarter)),
     lowPoint: lowN,

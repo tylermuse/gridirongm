@@ -34,7 +34,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
 }
 
 const SIM_BUILD = 'b17q';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
-const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
+export const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
 
@@ -95,6 +95,28 @@ export function readSim3DPref(): boolean {
     if (saved !== null) return saved === '1';
   } catch { return false; }
   return sim3dTestArm() === 'on';
+}
+
+/** This browser turned the 3D sim off itself (not just "never chose"): other 3D features stay off too. Client only. */
+export function sim3dOptedOut(): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return window.localStorage.getItem(STORAGE_KEY) === '0'; } catch { return false; }
+}
+
+/** Real-roster players (imported photos): each starter's skin tone, read off his headshot once per session. */
+export function usePhotoSkins(enabled: boolean, homePlayers?: SimPlayerLike[], awayPlayers?: SimPlayerLike[]): Record<string, string> {
+  const [photoSkins, setPhotoSkins] = useState<Record<string, string>>({});
+  const photoKey = [...starterPhotos(homePlayers), ...starterPhotos(awayPlayers)].join('|');
+  useEffect(() => {
+    if (!enabled || !photoKey) return;
+    let live = true;
+    const urls = photoKey.split('|').filter(u => !photoSkinCache.has(u));
+    const known = () => Object.fromEntries([...photoSkinCache].filter((e): e is [string, string] => !!e[1]));
+    // nothing new to measure: the tones already read this session are handed over the same way, a tick later
+    Promise.all(urls.map(u => sampleSkinFromPhoto(u).then(s => { photoSkinCache.set(u, s); }))).then(() => { if (live) setPhotoSkins(known()); });
+    return () => { live = false; };
+  }, [enabled, photoKey]);
+  return photoSkins;
 }
 
 export function useSim3DMode(): [boolean, (on: boolean) => void] {
@@ -207,17 +229,7 @@ export function LiveSim3D({
 
   // Team colours → sim (once ready, and whenever the matchup changes)
   // Real-roster players (imported photos): read each starter's skin tone off his headshot once, then re-send the lineup
-  const [photoSkins, setPhotoSkins] = useState<Record<string, string>>({});
-  const photoKey = [...starterPhotos(homePlayers), ...starterPhotos(awayPlayers)].join('|');
-  useEffect(() => {
-    if (!enabled || !photoKey) return;
-    let live = true;
-    const urls = photoKey.split('|').filter(u => !photoSkinCache.has(u));
-    const known = () => Object.fromEntries([...photoSkinCache].filter((e): e is [string, string] => !!e[1]));
-    if (!urls.length) { setPhotoSkins(known()); return; }
-    Promise.all(urls.map(u => sampleSkinFromPhoto(u).then(s => { photoSkinCache.set(u, s); }))).then(() => { if (live) setPhotoSkins(known()); });
-    return () => { live = false; };
-  }, [enabled, photoKey]);
+  const photoSkins = usePhotoSkins(enabled, homePlayers, awayPlayers);
   const homeSim: SimTeam | null = homeTeam ? toSimTeam(homeTeam, 'home', homePlayers, photoSkins) : null;
   const awaySim: SimTeam | null = awayTeam ? toSimTeam(awayTeam, 'away', awayPlayers, photoSkins) : null;
   const homeKey = JSON.stringify(homeSim), awayKey = JSON.stringify(awaySim);
