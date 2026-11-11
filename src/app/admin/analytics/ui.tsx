@@ -150,6 +150,3 @@ export function Collapsible({ title, note, defaultOpen = false, children }: { ti
     </details>
   );
 }
-
-export const PERIOD_DAYS = { '7d': 7, '30d': 30, '90d': 90 } as const;
-export type Period = keyof typeof PERIOD_DAYS;

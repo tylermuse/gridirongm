@@ -8,7 +8,9 @@ import { OverviewSection } from './OverviewSection';
 import { RevenueSection } from './RevenueSection';
 import { GrowthSection } from './GrowthSection';
 import { EngagementSection, type ActiveUsersRolling } from './EngagementSection';
-import { Collapsible, SectionHeading, type Period } from './ui';
+import { Collapsible, SectionHeading } from './ui';
+import { DEFAULT_PERIOD, PERIODS, parsePeriod, resolveRange, type ActiveDay, type Period } from './periods';
+import { periodDays } from './businessMetrics';
 import type { SubscriberGrowth } from './subscriberGrowth';
 import type { AccountsReport, AcquisitionReport, RevenueReport } from './businessMetrics';
 
@@ -33,6 +35,12 @@ interface AnalyticsData {
   recentEvents: { event: string; properties: Record<string, unknown>; created_at: string; user_id: string | null }[];
   activeUsersRolling: ActiveUsersRolling | null;
   hoopsActiveUsersRolling: ActiveUsersRolling | null;
+  /**
+   * Daily active devices for a range longer than 30 days, keyed by app
+   * (migration 20261110_analytics_daily_active). Absent when the range needs
+   * none; null when the query failed or the migration is not applied.
+   */
+  dailyActive?: Record<string, ActiveDay[]> | null;
   sim3dCohorts: Sim3dCohorts | null;
   /** null until migration 20261106_sim3d_followup is applied (or the query failed) */
   sim3dFollowup?: Sim3dFollowup | null;
@@ -96,7 +104,7 @@ export default function AdminAnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<Period>('30d');
+  const [period, setPeriod] = useState<Period>(DEFAULT_PERIOD);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
 
   const fetchData = useCallback(async (p: Period) => {
@@ -140,6 +148,31 @@ export default function AdminAnalyticsPage() {
   // keys off it so render stays pure (no Date.now() while rendering).
   const now = data?.generatedAt ? Date.parse(data.generatedAt) : 0;
 
+  // The money and account reports arrive whole and are cut to the range here,
+  // so those sections switch the moment a range is picked. The traffic numbers
+  // are fetched per range: until the new ones land, their sections keep showing
+  // (faded) the range they were loaded for, labelled as that range.
+  const loadedPeriod = data ? parsePeriod(data.period) : period;
+  const stale = `transition-opacity ${loading ? 'opacity-50' : ''}`;
+  // "All time" is as long as the oldest thing any business report knows about.
+  const firstDay = data
+    ? [
+        ...Object.keys(data.accounts?.byDay ?? {}),
+        ...Object.keys(data.revenue?.byDay ?? {}),
+        ...(data.subscriberGrowth?.days.length ? [data.subscriberGrowth.days[0].day] : []),
+      ].sort()[0] ?? null
+    : null;
+  const range = resolveRange(period, now, firstDay);
+  const trafficRange = resolveRange(loadedPeriod, now, firstDay);
+  // Visits are only counted from where the rollup tables start. When the range
+  // reaches back further, the traffic numbers cover less time than the money
+  // and account numbers beside them, and the page has to say so.
+  const trafficStart = data?.rollups?.earliestMinute?.slice(0, 10) ?? null;
+  const trafficFrom =
+    trafficStart && now && trafficStart > periodDays(now, trafficRange.days)[0]
+      ? new Date(`${trafficStart}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+      : null;
+
   // Auth loading
   if (authLoading) {
     return (
@@ -177,19 +210,16 @@ export default function AdminAnalyticsPage() {
                 Updated {new Date(data.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
               </span>
             )}
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-            {(['7d', '30d', '90d'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-                  period === p ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
+            <label className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="hidden sm:inline">Range</span>
+              <select
+                value={period}
+                onChange={e => setPeriod(parsePeriod(e.target.value))}
+                className="text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-lg pl-3 pr-8 py-1.5 shadow-sm hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               >
-                {p}
-              </button>
-            ))}
-          </div>
+                {PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </label>
           </div>
         </div>
       </header>
@@ -205,7 +235,7 @@ export default function AdminAnalyticsPage() {
         ) : !data ? (
           <div className="text-center py-20 text-gray-400">No data available yet. Events will appear once users start visiting.</div>
         ) : (
-          <div className={`space-y-10 transition-opacity ${loading ? 'opacity-50' : ''}`}>
+          <div className="space-y-10">
             {/* What needs a look: failed queries, a stalled rollup pipeline, billing that disagrees with itself. Silent when all is well. */}
             {data.warnings && data.warnings.length > 0 && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -227,7 +257,7 @@ export default function AdminAnalyticsPage() {
                 football: data.activeUsersRolling?.engagedMau ?? null,
                 hoops: data.hoopsActiveUsersRolling?.engagedMau ?? null,
               }}
-              period={period}
+              range={range}
               now={now}
             />
 
@@ -241,29 +271,40 @@ export default function AdminAnalyticsPage() {
                 convertible: data.convertibleUsers,
                 founders: data.grandfatheredUsers,
               }}
-              period={period}
+              range={range}
               now={now}
             />
 
             {/* 3. Top of the funnel and where it comes from. */}
+            <div className={stale}>
             <GrowthSection
               visitors={data.uniqueDevices}
               accounts={data.accounts ?? null}
               fallbackSignupsByDay={data.signupsByDay}
               growth={data.subscriberGrowth ?? null}
               acquisition={data.acquisition ?? null}
-              period={period}
+              range={trafficRange}
+              trafficFrom={trafficFrom}
               now={now}
             />
+            </div>
 
             {/* 4. Do people come back. */}
+            <div className={stale}>
             <EngagementSection
               football={data.activeUsersRolling}
               hoops={data.hoopsActiveUsersRolling}
               windowed={{ activeUsers: data.activeUsers, sessions: data.sessions, pageViews: data.pageViews }}
               topPages={data.topPages}
-              period={period}
+              longDaily={
+                data.dailyActive === undefined
+                  ? undefined
+                  : data.dailyActive && { football: data.dailyActive['bs-football'] ?? [], hoops: data.dailyActive['bs-hoops'] ?? [] }
+              }
+              range={trafficRange}
+              trafficFrom={trafficFrom}
             />
+            </div>
 
             {/* 5. What players say, in their words. */}
             <div>
@@ -304,17 +345,17 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* 6. Detail for when a number above raises a question. Folded away so the page stays short. */}
-            <div className="space-y-6 border-t border-gray-200 pt-8">
+            <div className={`space-y-6 border-t border-gray-200 pt-8 ${stale}`}>
               <Collapsible title="Feature usage" note="what people click, ignore and fight with" defaultOpen>
                 <InteractionsSection
                   r={data.interactions}
-                  period={period}
+                  when={trafficRange.phrase}
                   error={data.warnings?.find(w => w.startsWith('Feature usage'))}
                 />
               </Collapsible>
               {data.sim3dCohorts && (
                 <Collapsible title="3D live sim experiment" note="decided Nov 6: stays free">
-                  <Sim3dSection c={data.sim3dCohorts} f={data.sim3dFollowup ?? null} period={period} />
+                  <Sim3dSection c={data.sim3dCohorts} f={data.sim3dFollowup ?? null} when={trafficRange.phrase} />
                 </Collapsible>
               )}
               <Collapsible title="Live event feed" note="the last 50 raw events">
@@ -388,7 +429,7 @@ function BillingAlerts({ g }: { g: SubscriberGrowth | null }) {
   );
 }
 
-function Sim3dSection({ c, f, period }: { c: Sim3dCohorts; f: Sim3dFollowup | null; period: string }) {
+function Sim3dSection({ c, f, when }: { c: Sim3dCohorts; f: Sim3dFollowup | null; /** "last 7d", "all time" */ when: string }) {
   const on = c.cohorts.on, off = c.cohorts.off;
   const rows: { label: string; key: keyof Sim3dCohort; fmt: (v: number) => string; help: string }[] = [
     { label: 'Devices', key: 'devices', fmt: v => String(v), help: 'game-watching devices in the cohort' },
@@ -403,7 +444,7 @@ function Sim3dSection({ c, f, period }: { c: Sim3dCohorts; f: Sim3dFollowup | nu
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-baseline justify-between mb-1">
         <h2 className="text-sm font-bold">3D Live Sim — free for everyone</h2>
-        <span className="text-xs text-gray-500">last {period} · {c.toggles.on} toggled on · {c.toggles.off} off</span>
+        <span className="text-xs text-gray-500">{when} · {c.toggles.on} toggled on · {c.toggles.off} off</span>
       </div>
       <p className="text-xs text-gray-500 mb-4">
         Free since Oct 23; kept free on Nov 6 as a retention feature. Devices that opened a game page, split by whether the 3D sim was ever on. These devices chose 3D themselves, so the gap overstates what 3D causes — the default-on test below is the causal read.

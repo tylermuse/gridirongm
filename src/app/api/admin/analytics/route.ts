@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@bs/core/supabase/server';
 import { loadAccounts, loadAcquisition, loadRevenue, loadSubscriberGrowth } from './business';
+import { needsLongDailySeries, parsePeriod, sinceIso } from '@/app/admin/analytics/periods';
 
 function getServiceClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -120,9 +121,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse period
-    const period = request.nextUrl.searchParams.get('period') ?? '30d';
-    const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const period = parsePeriod(request.nextUrl.searchParams.get('period'));
+    const since = sinceIso(period, Date.now());
+    const longDaily = needsLongDailySeries(period);
 
     // All aggregation happens in Postgres. Since 20261025_analytics_rollups every
     // report reads the small rollup tables (analytics_device_minutes,
@@ -139,7 +140,7 @@ export async function GET(request: NextRequest) {
     // Heavy reports go through the cache (see top of file); the three cheap
     // index-backed reads below do not, so the live feed and health line are
     // always current.
-    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, sim3dRes, sim3dFollowupRes, interactionsRes, healthRes, subscriberGrowthRes, revenueRes, accountsRes, acquisitionRes] = await Promise.all([
+    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes, dailyActiveRes, sim3dRes, sim3dFollowupRes, interactionsRes, healthRes, subscriberGrowthRes, revenueRes, accountsRes, acquisitionRes] = await Promise.all([
       timed('summary', cachedReport(`summary:${period}`, () => service.rpc('admin_analytics_summary', { p_since: since }), cacheAge), timings),
 
       timed('recentEvents', service.from('analytics_events')
@@ -157,6 +158,12 @@ export async function GET(request: NextRequest) {
       // See supabase/migrations/20260930_active_user_metrics.sql.
       timed('activeUsers', cachedReport('activeUsers', () => service.rpc('admin_active_users', { p_app: 'bs-football' }), cacheAge), timings),
       timed('hoopsActiveUsers', cachedReport('hoopsActiveUsers', () => service.rpc('admin_active_users', { p_app: 'bs-hoops' }), cacheAge), timings),
+      // The daily chart for a range past the 30 days admin_active_users carries: both apps in one
+      // pass (migration 20261110_analytics_daily_active). Skipped for 7d/30d, so the default load
+      // costs nothing extra. Not in `warnings`: if it fails the chart shows its 30 days and says so.
+      longDaily
+        ? timed('dailyActive', cachedReport(`dailyActive:${period}`, () => service.rpc('admin_daily_active', { p_since: since }), cacheAge), timings)
+        : Promise.resolve<RpcResult>({ data: null, error: null }),
       // 3D live sim launch experiment: free-for-all from 2026-10-23, compare 3D-on vs 3D-off devices (migration 20261023_sim3d_cohorts)
       timed('sim3dCohorts', cachedReport(`sim3dCohorts:${period}`, () => service.rpc('admin_sim3d_cohorts', { p_since: since }), cacheAge), timings),
       // 3D sim follow-up: free→Premium conversion per cohort + the default-on test arms (migration 20261106_sim3d_followup).
@@ -167,7 +174,7 @@ export async function GET(request: NextRequest) {
       // Is the rollup pipeline applied, backfilled, and still being fed? (migration 20261101_analytics_rollup_health)
       timed('health', service.rpc('admin_analytics_health'), timings),
       // Business reports (see ./business.ts). None depends on `period`: each returns its whole
-      // history and the page cuts it to the window, so one cached copy serves 7d, 30d and 90d.
+      // history and the page cuts it to the window, so one cached copy serves every range.
       timed('subscriberGrowth', cachedReport('subscriberGrowth', () => loadSubscriberGrowth(service), cacheAge), timings),
       timed('revenue', cachedReport('revenue', () => loadRevenue(), cacheAge), timings),
       timed('accounts', cachedReport('accounts', () => loadAccounts(service), cacheAge), timings),
@@ -234,6 +241,8 @@ export async function GET(request: NextRequest) {
       // null if the migration hasn't been applied yet — the page hides the row.
       activeUsersRolling: activeRes.error ? null : (activeRes.data ?? null),
       hoopsActiveUsersRolling: hoopsActiveRes.error ? null : (hoopsActiveRes.data ?? null),
+      // Only present for a range longer than 30 days; null when its query failed.
+      ...(longDaily ? { dailyActive: dailyActiveRes.error ? null : (dailyActiveRes.data ?? null) } : {}),
       sim3dCohorts: sim3dRes.error ? null : (sim3dRes.data ?? null),
       sim3dFollowup: sim3dFollowupRes.error ? null : (sim3dFollowupRes.data ?? null),
       interactions: interactionsRes.error ? null : (interactionsRes.data ?? null),

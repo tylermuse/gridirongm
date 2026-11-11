@@ -2,7 +2,8 @@
 
 import { change, money, netOf, revenueInPeriod, sumPeriod, type AccountsReport, type RevenueReport } from './businessMetrics';
 import type { SubscriberGrowth } from './subscriberGrowth';
-import { Delta, PERIOD_DAYS, SectionHeading, Tile, type Period } from './ui';
+import type { Range } from './periods';
+import { Delta, SectionHeading, Tile } from './ui';
 
 /**
  * The five numbers to read before anything else, each against the same span
@@ -14,7 +15,7 @@ export function OverviewSection({
   revenue,
   accounts,
   engagedMau,
-  period,
+  range,
   now,
 }: {
   growth: SubscriberGrowth | null;
@@ -22,12 +23,11 @@ export function OverviewSection({
   accounts: AccountsReport | null;
   /** Engaged devices in the last 30 days, per app; null when that report failed. */
   engagedMau: { football: number | null; hoops: number | null };
-  period: Period;
+  range: Range;
   now: number;
 }) {
-  const days = PERIOD_DAYS[period];
-  const ago = `vs ${days} days ago`;
-  const previous = `vs previous ${period}`;
+  // `ago` and `previous` are null for all time: there is no earlier period to set it against.
+  const { days, ago, previous } = range;
 
   const series = growth?.days ?? [];
   const today = series[series.length - 1];
@@ -50,27 +50,27 @@ export function OverviewSection({
           size="lg"
           label="Monthly recurring revenue"
           value={today ? money(today.mrrCents) : growth ? money(0) : null}
-          delta={today && <Delta change={change(today.mrrCents, before?.mrrCents ?? 0)} vs={ago} format={money} />}
+          delta={today && ago && <Delta change={change(today.mrrCents, before?.mrrCents ?? 0)} vs={ago} format={money} />}
           sub={today ? `${money(today.mrrCents * 12)} a year at this rate` : undefined}
         />
         <Tile
           size="lg"
           label="Premium subscribers"
           value={today ? today.active : growth ? 0 : null}
-          delta={today && <Delta change={{ ...change(today.active, before?.active ?? 0), pct: null }} vs={ago} />}
+          delta={today && ago && <Delta change={{ ...change(today.active, before?.active ?? 0), pct: null }} vs={ago} />}
         />
         <Tile
           size="lg"
-          label={`Net revenue · last ${period}`}
+          label={`Net revenue · ${range.phrase}`}
           value={net === null ? null : money(net)}
-          delta={net !== null && netBefore !== null && <Delta change={change(net, netBefore)} vs={previous} format={money} />}
+          delta={previous && net !== null && netBefore !== null && <Delta change={change(net, netBefore)} vs={previous} format={money} />}
           sub="after refunds and Stripe fees"
         />
         <Tile
           size="lg"
-          label={`New accounts · last ${period}`}
+          label={`New accounts · ${range.phrase}`}
           value={created}
-          delta={created !== null && createdBefore !== null && <Delta change={change(created, createdBefore)} vs={previous} />}
+          delta={previous && created !== null && createdBefore !== null && <Delta change={change(created, createdBefore)} vs={previous} />}
           sub={accounts ? `${accounts.total.toLocaleString()} all time` : undefined}
         />
         <Tile
