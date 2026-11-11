@@ -216,7 +216,7 @@ export function ScoreBug({
       {/* Last play text */}
       {lastPlayDescription && (
         <div className="bg-[var(--surface)] border border-t-0 border-[var(--border)] rounded-b-xl px-4 py-2">
-          <p className="text-xs text-[var(--text-sec)] leading-relaxed truncate">
+          <p className="text-xs text-[var(--text-sec)] leading-relaxed line-clamp-2">
             {lastPlayDescription}
           </p>
         </div>
