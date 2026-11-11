@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { computeSeasonAwards, allLeagueScore, droyScore } from '@/lib/engine/awards';
+import { makeRookieTest } from '@/lib/engine/rookies';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -584,7 +585,8 @@ export default function PlayoffsPage() {
           // Rookie pools for the All-Rookie team (rendered below). Sorted
           // best-first so the top entry seeds the All-Rookie squad at its
           // position — unchanged from before this bug fix.
-          const rookies = activePlayers.filter(p => p.draftYear === season && p.stats.gamesPlayed >= 10);
+          const isRookie = makeRookieTest(players, season);
+          const rookies = activePlayers.filter(p => isRookie(p) && p.stats.gamesPlayed >= 10);
           const offRookies = rookies
             .filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position))
             .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));

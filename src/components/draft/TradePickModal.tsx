@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { pickTradeValue } from '@/lib/engine/store';
+import { isDraftPickSpent } from '@/lib/engine/draftPicks';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { DraftPick, Team } from '@/types';
@@ -67,8 +68,16 @@ export function TradePickModal({
     executeTrade,
     currentDraftYear,
     draftPickOrder,
+    phase,
+    champions,
   } = useGameStore();
   const draftYear = currentDraftYear ?? season;
+  // A pick whose slot has already gone by is spent even if it was never stamped
+  // with a player (older saves), so it must not be offered for trade again.
+  const pickContext = useMemo(
+    () => ({ season, phase, currentDraftYear, draftPickOrder, draftOrder, champions }),
+    [season, phase, currentDraftYear, draftPickOrder, draftOrder, champions],
+  );
 
   const [partnerTeamId, setPartnerTeamId] = useState<string>('');
   const [selectedMyPicks, setSelectedMyPicks] = useState<Set<string>>(new Set());
@@ -83,17 +92,17 @@ export function TradePickModal({
   const myAvailablePicks = useMemo(() => {
     if (!userTeam) return [];
     return userTeam.draftPicks
-      .filter(pk => pk.year === draftYear && !pk.playerId)
+      .filter(pk => pk.year === draftYear && !isDraftPickSpent(pk, pickContext))
       .sort((a, b) => a.round - b.round || estimatePickOverall(a, teams) - estimatePickOverall(b, teams));
-  }, [userTeam, draftYear, teams]);
+  }, [userTeam, draftYear, teams, pickContext]);
 
   // Current year picks owned by partner that haven't been used yet
   const theirAvailablePicks = useMemo(() => {
     if (!partnerTeam) return [];
     return partnerTeam.draftPicks
-      .filter(pk => pk.year === draftYear && !pk.playerId)
+      .filter(pk => pk.year === draftYear && !isDraftPickSpent(pk, pickContext))
       .sort((a, b) => a.round - b.round || estimatePickOverall(a, teams) - estimatePickOverall(b, teams));
-  }, [partnerTeam, draftYear, teams]);
+  }, [partnerTeam, draftYear, teams, pickContext]);
 
   // Trade value calculations
   const myValue = useMemo(() => {
