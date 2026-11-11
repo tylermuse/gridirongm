@@ -11,7 +11,7 @@
 import type { ReactNode } from 'react';
 import { HOSTS, type Host } from '@/lib/spotlight/showScript';
 import { ordinal, rankTone, type ShowStatLine } from '@/lib/spotlight/teamStats';
-import type { TileStat } from '@/lib/spotlight/playerStats';
+import { tilesForCard, type TileStat } from '@/lib/spotlight/playerStats';
 import type { ScheduleRow, StandingsRow } from '@/lib/spotlight/showStandings';
 import type { GameFlow } from '@/lib/spotlight/showGame';
 import { THEMES, type Calls, type ShowThemeId, type Verdict } from '@/lib/spotlight/showThemes';
@@ -412,9 +412,8 @@ export function ShowGraphic(p: GraphicProps) {
   const push = 1.03 + 0.05 * clamp01(blockMs / 24000);
   const anyHot = p.tiles ? p.tiles.some(s => p.mentioned.includes(s.key)) : false;
   // Beside a player card there's room for one row of three: the stats the
-  // line mentions first, then the rest in order.
-  const shown = !p.tiles ? null : !p.player ? p.tiles
-    : [...p.tiles.filter(t => p.mentioned.includes(t.key)), ...p.tiles.filter(t => !p.mentioned.includes(t.key))].slice(0, 3);
+  // line mentions first, then the rest in order (see tilesForCard).
+  const shown = !p.tiles ? null : !p.player ? p.tiles : tilesForCard(p.tiles, p.mentioned);
 
   return (
     // Sized off the stage itself (container units), so the layout is the

@@ -167,7 +167,8 @@ const KEYWORDS: [string, RegExp][] = [
   ['cmp', /\bcomplet(ion|ions|ing|ed)\b|\baccura/i],
   ['int', /\bintercept|\bpicks?\b|\bturnovers?\b/i],
   ['rating', /\brating\b/i],
-  ['passTd', /\btouchdown pass|\btd pass|\bpassing touchdowns?/i],
+  // A quarterback's line read out loud: "three scores, one pick".
+  ['passTd', /\btouchdown pass|\btd pass|\bpassing touchdowns?|\b(no|zero|one|two|three|four|five|six|seven|\d+) (touchdowns?|tds?|scores?)\b/i],
   ['passYds', /\bpassing yards\b|\bthrowing for\b/i],
   ['ypc', /\bper carry\b|\bypc\b/i],
   ['rushYds', /\brushing yards\b|\brushed for\b/i],
@@ -183,6 +184,24 @@ const KEYWORDS: [string, RegExp][] = [
   ['ff', /\bforced fumbles?\b|\bstrip(ped)?\b/i],
   ['fgPct', /\bfield goals?\b|\bkick(ing|er)\b/i],
 ];
+
+/** Tiles a player's card never drops: a quarterback's interceptions with no
+ *  touchdowns beside them read as the whole story. */
+const ALWAYS_SHOWN = ['passTd'];
+
+/** The tiles that fit beside a player's card (one row of `room`): the stats
+ *  the line mentions first, then the rest in order. One that always belongs
+ *  takes the last open spot if it would have been cut. */
+export function tilesForCard(tiles: TileStat[], mentioned: string[], room = 3): TileStat[] {
+  const said = tiles.filter(t => mentioned.includes(t.key));
+  const pick = [...said, ...tiles.filter(t => !said.includes(t))].slice(0, room);
+  for (const t of tiles) {
+    if (ALWAYS_SHOWN.includes(t.key) && pick.length && !pick.includes(t)) pick[pick.length - 1] = t;
+  }
+  // Mentioned first, each group in the line's own order.
+  const keep = (t: TileStat) => pick.includes(t);
+  return [...said.filter(keep), ...tiles.filter(t => keep(t) && !said.includes(t))];
+}
 
 /** Player-stat tiles a line of commentary is talking about. */
 export function playerStatsMentioned(text: string, tiles: TileStat[]): string[] {
