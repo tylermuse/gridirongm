@@ -1,4 +1,5 @@
 import type { LeagueState, Player, Team } from '@/types';
+import { makeRookieTest } from './rookies';
 
 // ---------------------------------------------------------------------------
 // Per-award scoring functions. These are the SINGLE source of truth — both
@@ -193,11 +194,12 @@ export function computeSeasonAwards(state: LeagueState): { award: string; player
     awards.push({ award: 'Offensive POY', playerId: opoy.id, teamId: opoy.teamId! });
   }
 
-  // Rookies = drafted in the current season, i.e. experience === 0.
-  // Experience is incremented at the season-rollover step (startNewSeason),
-  // so during the season-end winner pass these players are still on year 0.
-  // Tyler 4/27 PM caught Year-2 players showing up as ROY candidates.
-  const rookies = rookieEligible.filter(p => p.experience === 0 && p.stats.gamesPlayed >= 10);
+  // Rookies = players in their first season. Experience can't tell on its own:
+  // a rookie on an imported mid-year roster is at 0, but a rookie drafted
+  // in-game has already been through the rollover and is at 1 (which left
+  // every season after the first with no rookie award winners). See rookies.ts.
+  const isRookie = makeRookieTest(state.players, state.season);
+  const rookies = rookieEligible.filter(p => isRookie(p) && p.stats.gamesPlayed >= 10);
   const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
   if (offensiveRookies.length > 0) {
     const oroy = [...offensiveRookies].sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
@@ -336,9 +338,9 @@ export function computeAwardRaces(
     .sort((a, b) => b.score - a.score)
     .slice(0, topN);
 
-  // Same rookie definition as computeSeasonAwards — players drafted in the
-  // current season have experience === 0 until rollover increments it.
-  const rookies = active.filter(p => p.experience === 0);
+  // Same rookie definition as computeSeasonAwards (see rookies.ts).
+  const isRookie = makeRookieTest(state.players, state.season);
+  const rookies = active.filter(isRookie);
   const oroy = rookies
     .filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position))
     .map(p => buildEntry(p, allLeagueScore(p)))
