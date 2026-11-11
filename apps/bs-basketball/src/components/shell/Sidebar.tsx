@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { SidebarFooter, DISCORD_URL } from './SidebarFooter';
+import { openFeedback } from '@bs/core/feedback/client';
 import type { useLeagueStore } from '@/lib/store/leagueStore';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import { pendingProposalCount } from '@/lib/trade/proposals';
@@ -207,6 +208,25 @@ export function Sidebar({
             Join the Community
           </a>
         </div>
+      </div>
+
+      {/* Pinned above the footer so it's always in view: the Booth owns the
+          bottom-right corner on game screens, so this is the in-game door to
+          the feedback modal. */}
+      <div className="px-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+        <button
+          onClick={() => { onNavigate?.(); openFeedback(); }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors hover:brightness-95"
+          style={{ background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}
+        >
+          <svg className="w-5 shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold leading-tight">Feedback &amp; questions</span>
+            <span className="block text-[11px] opacity-75 leading-tight mt-0.5">Report a bug, suggest an idea, ask</span>
+          </span>
+        </button>
       </div>
 
       <SidebarFooter onNavigate={onNavigate} />

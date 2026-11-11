@@ -29,7 +29,7 @@ import type { TeamId } from '@bs/core/adapter';
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
-const CACHE_BUST = 15;
+const CACHE_BUST = 16;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
 // Stock-BBGM download variant (built by scripts/build_vanilla_bbgm.py): starts at

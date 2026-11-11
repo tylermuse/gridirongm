@@ -1899,7 +1899,7 @@
    "pos": "S",
    "residualZ": 3.11,
    "sample": 495,
-   "tid": 30
+   "tid": 3
   },
   "13158": {
    "applied": {
@@ -3205,7 +3205,7 @@
    "pos": "QB",
    "residualZ": 0.95,
    "sample": 348,
-   "tid": 16
+   "tid": 20
   },
   "1480": {
    "applied": {
@@ -5028,7 +5028,7 @@
    "pos": "WR",
    "residualZ": -0.9,
    "sample": 58,
-   "tid": 13
+   "tid": 27
   },
   "541": {
    "applied": {
@@ -7205,7 +7205,7 @@
    "pos": "WR",
    "residualZ": -0.55,
    "sample": 57,
-   "tid": 13
+   "tid": 15
   },
   "7454": {
    "applied": {
@@ -7867,7 +7867,7 @@
    "pos": "LB",
    "residualZ": -0.17,
    "sample": 446,
-   "tid": 17
+   "tid": 9
   },
   "7688": {
    "applied": {

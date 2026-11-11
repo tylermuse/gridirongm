@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Shared UI from @bs/core (e.g. the feedback modal) lives outside this app's root. */
+@source "../../../../packages/core/src/feedback";
 
 /* ---------------------------------------------------------------------------
  * BS Hoops theme tokens.

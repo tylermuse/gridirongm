@@ -16,6 +16,19 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient } from '../supabase/server';
 
 const MAX_MESSAGE = 2000;
+const KINDS = new Set(['bug', 'idea', 'question']);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Keep client context small and flat: scalar values only, capped. */
+function cleanContext(raw: unknown): Record<string, string | number | boolean> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 20)) {
+    if (typeof v === 'string') out[k.slice(0, 40)] = v.slice(0, 200);
+    else if ((typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean') out[k.slice(0, 40)] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 export interface FeedbackRow {
   id: string;
@@ -24,6 +37,9 @@ export interface FeedbackRow {
   created_at: string;
   user_id: string | null;
   app: string | null;
+  kind?: string | null;
+  contact?: string | null;
+  context?: Record<string, unknown> | null;
 }
 
 function getServiceClient() {
@@ -48,7 +64,8 @@ async function currentUserId(): Promise<string | null> {
 export function createFeedbackHandlers(app: string) {
   async function POST(request: Request) {
     try {
-      const { message, page } = await request.json();
+      const body = await request.json();
+      const { message, page } = body ?? {};
       if (!message || typeof message !== 'string' || message.trim().length === 0) {
         return NextResponse.json({ error: 'Message is required' }, { status: 400 });
       }
@@ -56,18 +73,38 @@ export function createFeedbackHandlers(app: string) {
       const service = getServiceClient();
       if (!service) return NextResponse.json({ error: 'Not configured' }, { status: 500 });
 
-      const userId = await currentUserId();
+      // The in-game modal sends includeAccount explicitly (anonymous unless
+      // ticked); older callers that don't send it keep attaching the user.
+      const includeAccount = typeof body.includeAccount === 'boolean' ? body.includeAccount : true;
+      const userId = includeAccount ? await currentUserId() : null;
       const text = message.trim().slice(0, MAX_MESSAGE);
       const pagePath = typeof page === 'string' ? page.slice(0, 300) : null;
+      const kind = KINDS.has(body.kind) ? (body.kind as string) : null;
+      const contact = typeof body.contact === 'string' && EMAIL_RE.test(body.contact.trim())
+        ? body.contact.trim().slice(0, 200)
+        : null;
+      const context = cleanContext(body.context);
 
-      const { error } = await service.from('feedback').insert({ user_id: userId, message: text, page: pagePath, app });
+      const full = { user_id: userId, message: text, page: pagePath, app, kind, contact, context };
+      let { error } = await service.from('feedback').insert(full);
+      if (error) {
+        // kind/contact/context columns not migrated yet (20261110_feedback_kind.sql):
+        // keep the message in the base columns, with the kind + reply email inline.
+        const prefix = [kind && `[${kind}]`, contact && `[reply: ${contact}]`].filter(Boolean).join(' ');
+        ({ error } = await service.from('feedback').insert({
+          user_id: userId,
+          message: (prefix ? `${prefix} ${text}` : text).slice(0, MAX_MESSAGE),
+          page: pagePath,
+          app,
+        }));
+      }
       if (!error) return NextResponse.json({ ok: true });
 
       // Table missing (migration not applied yet) or schema drift — keep the message.
       const fallback = await service.from('analytics_events').insert({
         user_id: userId,
         event: 'feedback',
-        properties: { message: text, page: pagePath, app },
+        properties: { message: text, page: pagePath, app, kind, contact, context },
       });
       if (fallback.error) {
         console.error('[feedback] insert failed', error.message, fallback.error.message);
@@ -96,7 +133,7 @@ export function createFeedbackHandlers(app: string) {
 
     const [tableRes, eventsRes] = await Promise.all([
       service.from('feedback')
-        .select('id, message, page, created_at, user_id, app')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(limit),
       service.from('analytics_events')
@@ -116,6 +153,9 @@ export function createFeedbackHandlers(app: string) {
         created_at: r.created_at as string,
         user_id: (r.user_id as string | null) ?? null,
         app: typeof p.app === 'string' ? p.app : null,
+        kind: typeof p.kind === 'string' ? p.kind : null,
+        contact: typeof p.contact === 'string' ? p.contact : null,
+        context: p.context && typeof p.context === 'object' ? p.context as Record<string, unknown> : null,
       };
     });
 
