@@ -145,17 +145,25 @@ export interface PersistEnvelope<S = unknown> {
 const WRITE_DEBOUNCE_MS = 500;
 const WRITE_MAX_WAIT_MS = 2000;
 
-const pendingWrites = new Map<string, PersistEnvelope>();
+/** Turns a queued envelope into the string that is stored. */
+export type EnvelopeSerializer = (envelope: PersistEnvelope) => string;
+
+interface PendingWrite {
+  envelope: PersistEnvelope;
+  serialize: EnvelopeSerializer;
+}
+
+const pendingWrites = new Map<string, PendingWrite>();
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let firstPendingAt = 0;
 let draining: Promise<void> | null = null;
 
 async function runDrain(): Promise<void> {
   while (pendingWrites.size > 0) {
-    const [key, envelope] = pendingWrites.entries().next().value as [string, PersistEnvelope];
+    const [key, { envelope, serialize }] = pendingWrites.entries().next().value as [string, PendingWrite];
     pendingWrites.delete(key);
     try {
-      await writeValue(key, JSON.stringify(envelope));
+      await writeValue(key, serialize(envelope));
     } catch (err) {
       console.error(`[storage] Autosave write failed ("${key}")`, err);
     }
@@ -214,10 +222,20 @@ export async function flushPendingWrites(): Promise<void> {
  * Instead, keep only the latest envelope per key, serialize it once the burst
  * settles (at most WRITE_MAX_WAIT_MS later), and never have more than one write
  * in flight.
+ *
+ * `serialize` is how the envelope becomes the stored string (default
+ * JSON.stringify). It runs once per write, when the write happens, never per
+ * queued update, so a game can give its save a more compact form on disk
+ * there. Whatever it returns must still parse as the `{ state: { teams,
+ * players, … } }` JSON the save-wipe guard above reads.
  */
-export function queueWrite(key: string, envelope: PersistEnvelope): void {
+export function queueWrite(
+  key: string,
+  envelope: PersistEnvelope,
+  serialize: EnvelopeSerializer = JSON.stringify,
+): void {
   if (typeof indexedDB === 'undefined') return; // server render
-  pendingWrites.set(key, envelope);
+  pendingWrites.set(key, { envelope, serialize });
   scheduleDrain();
 }
 

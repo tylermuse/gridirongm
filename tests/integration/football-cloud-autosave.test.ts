@@ -11,6 +11,7 @@
  * the one they do (`gridiron-gm-autosave`).
  */
 
+import { isDeepStrictEqual } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface Row { user_id: string; slot: string; payload: string; device_id: string | null; updated_at: string }
@@ -61,7 +62,7 @@ import {
   pushCloudSave,
   setCloudSyncEnabled,
 } from '@bs/core/supabase/cloud-saves';
-import { getItem } from '@bs/core/storage';
+import { getItem, setItem } from '@bs/core/storage';
 import {
   AUTOSAVE_SLOT,
   LEGACY_AUTOSAVE_SLOT,
@@ -70,7 +71,8 @@ import {
   pushCloudAutosaveNow,
   scheduleCloudAutosavePush,
 } from '@/lib/data/cloudAutosave';
-import { flushToStorage, useGameStore, whenSaveLoadSettles } from '@/lib/engine/store';
+import { flushToStorage, retrySaveLoad, useGameStore, whenSaveLoadSettles } from '@/lib/engine/store';
+import { emptyStats } from '@/types';
 
 /**
  * A client from before compression, as it behaves forever (its code is
@@ -316,9 +318,42 @@ describe('the store', () => {
 
     await vi.waitFor(() => expect(table.has(AUTOSAVE_SLOT)).toBe(true), { timeout: 10_000, interval: 100 });
     expect(table.has(LEGACY_AUTOSAVE_SLOT)).toBe(false);
-    expect(uploads[0].payload.length).toBeLessThan(local!.length / 5);
+    // Against the league as plain JSON; the local save is itself compact now
+    // (zero stat fields left out — saveStatCompaction.ts), and so is what is
+    // uploaded.
+    expect(uploads[0].payload.length).toBeLessThan(serializedLeague().length / 5);
+    expect(local!.length).toBeLessThan(serializedLeague().length / 2);
 
     useDevice('device-b');
     expect(await pullCloudAutosave()).toBe(local);
+  }, 30_000);
+
+  it('a restored cloud save loads with every stat field, as the league that was uploaded', async () => {
+    // Device A's league, uploaded in the compact form.
+    await whenSaveLoadSettles();
+    await useGameStore.getState().newLeague('');
+    const uploaded = JSON.parse(serializedLeague()).state;
+    await flushToStorage();
+    await vi.waitFor(() => expect(table.has(AUTOSAVE_SLOT)).toBe(true), { timeout: 10_000, interval: 100 });
+
+    // Device B has some other league. "Load it" in GameApp writes the pulled
+    // save over the autosave and reloads the page.
+    useDevice('device-b');
+    setCloudSyncEnabled(false); // B's own league stays off the cloud
+    await useGameStore.getState().newLeague('');
+    await flushToStorage();
+    const pulled = await pullCloudAutosave();
+    expect(pulled).toBeTruthy();
+    await setItem('gridiron-gm-autosave', pulled!);
+    expect(await retrySaveLoad()).toBe('ready');
+
+    // Compared as booleans: a toEqual mismatch on a whole league takes
+    // minutes to print.
+    const restored = JSON.parse(serializedLeague()).state;
+    expect(isDeepStrictEqual(restored, uploaded)).toBe(true);
+    const statKeys = Object.keys(emptyStats());
+    const lines = (restored.players as { stats: Record<string, unknown>; careerStats: Record<string, unknown> }[])
+      .flatMap(p => [p.stats, p.careerStats]);
+    expect(lines.filter(line => statKeys.some(k => typeof line[k] !== 'number')).length).toBe(0);
   }, 30_000);
 });

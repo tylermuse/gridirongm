@@ -44,8 +44,9 @@ import { clearRolloverTickInstrumentation, setAutocutSubstep, recordTickTiming, 
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { trackEvent } from '@bs/core/analytics/track';
 import { trackFeature } from '@bs/core/analytics/feature';
+import { parseSave, serializeSave } from './saveStatCompaction';
 
-const SAVE_VERSION = 36;
+const SAVE_VERSION = 37;
 const AUTOSAVE_KEY = 'gridiron-gm-autosave';
 
 // ---------------------------------------------------------------------------
@@ -10965,13 +10966,16 @@ export const useGameStore = create<GameStore>()(
           const startedAt = performance.now();
           const raw = await idbGetItem(name);
           lastSaveRead = { mb: Math.round((raw?.length ?? 0) / 1e5) / 10, readMs: Math.round(performance.now() - startedAt) };
-          return raw === null ? null : JSON.parse(raw);
+          // The save on disk leaves zero-valued stat fields out; parseSave
+          // puts them back before migrate (which reads stats) or anything
+          // else sees the state. See saveStatCompaction.ts.
+          return raw === null ? null : parseSave(raw);
         },
         // Nothing in memory is worth saving until the league has loaded:
         // before that (and after a failed load) the store is the empty initial
         // state. Writes are coalesced — see queueWrite.
         setItem: (name, value) => {
-          if (saveLoadStatus === 'ready') queueWrite(name, value);
+          if (saveLoadStatus === 'ready') queueWrite(name, value, serializeSave);
         },
         removeItem: idbRemoveItem,
       },
@@ -11814,6 +11818,14 @@ export const useGameStore = create<GameStore>()(
           // behavior, so no data transform is needed. The bump just versions
           // the new field so saves round-trip cleanly.
         }
+        if (version < 37) {
+          // v37 is the first version that writes compact stat lines (zero
+          // stat fields left out on disk — saveStatCompaction.ts). There is
+          // nothing to transform: storage.getItem expands every save before
+          // it gets here, whatever version wrote it, so the state is already
+          // full. The bump marks saves that code from before v37 cannot read
+          // correctly (it would see the omitted fields as undefined).
+        }
         return state;
       },
     },
@@ -11837,12 +11849,14 @@ export async function flushToStorage(): Promise<void> {
   const { partialize } = useGameStore.persist.getOptions();
   const state = useGameStore.getState();
   const envelope = { state: partialize ? partialize(state) : state, version: SAVE_VERSION };
-  queueWrite(AUTOSAVE_KEY, envelope);
+  queueWrite(AUTOSAVE_KEY, envelope, serializeSave);
   await flushPendingWrites();
   // Mirror the autosave to the user's account when cloud sync is on (no-op
   // otherwise). Fire-and-forget + debounced so it never blocks the local save;
   // compressed, and sent to its own cloud slot (see cloudAutosave.ts).
-  if (isCloudSyncEnabled()) scheduleCloudAutosavePush(JSON.stringify(envelope));
+  // The cloud copy is the same compact form as the local one; every restore
+  // goes through the persist getItem, which expands it.
+  if (isCloudSyncEnabled()) scheduleCloudAutosavePush(serializeSave(envelope));
 }
 
 /**
