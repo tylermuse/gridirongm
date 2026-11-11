@@ -4,6 +4,7 @@ import { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react
 import type { PlayEvent } from '@/lib/engine/playByPlay';
 import { deriveFieldState, idleFieldState, setUserSide, type GameFieldState } from '@/lib/game/fieldState';
 import { setAnimUserSide } from '@/lib/game/animations';
+import { LOOK_INFO, lookDefenders, type DefensiveLook } from '@/lib/engine/defensiveLooks';
 import {
   buildPlayAnimation,
   bezierArcPoint,
@@ -49,6 +50,9 @@ interface Props {
   drivePossession?: 'home' | 'away';
   /** Which side the user controls — anchors their team to the left endzone */
   userSide?: 'home' | 'away';
+  /** Live Coach: the look the defense is in for this snap. Its eleven men are drawn at the line: held while the user
+   *  is choosing a play (the paused pre-snap event), and fading out as a called play gets under way. */
+  look?: DefensiveLook | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +284,61 @@ function drawYardGainIndicator(
   const x = Math.min(fromX, toX);
   const width = Math.abs(toX - fromX);
   ctx.fillRect(x, 0, width, h);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Draw the defense lined up in a look (Live Coach)
+// ---------------------------------------------------------------------------
+
+/** Field width in yards: a defender's distance across from the ball becomes a share of it. */
+const FIELD_WIDTH_YARDS = 53.3;
+
+function drawDefensiveLook(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  losYard: number,
+  /** +1 when the offense is driving toward the right edge of the canvas, -1 toward the left */
+  dir: 1 | -1,
+  look: DefensiveLook,
+  defenseColor: string,
+  alpha: number,
+) {
+  if (alpha <= 0) return;
+  const r = Math.max(2.4, Math.min(4.5, h * 0.024));
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // a dark halo keeps a green or dark jersey colour readable on the grass
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 2;
+  for (const man of lookDefenders(look)) {
+    const x = absYardToCanvasX(Math.max(0, Math.min(100, losYard + dir * man.depth)), w);
+    const y = lateralToCanvasY(0.5 + (dir * man.x) / FIELD_WIDTH_YARDS, h);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = defenseColor;
+    ctx.fill();
+    ctx.lineWidth = 1.25;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  // Name the look over the defense, at the top of the field
+  const label = LOOK_INFO[look].label.toUpperCase();
+  ctx.font = 'bold 9px system-ui, sans-serif';
+  const pillW = ctx.measureText(label).width + 10;
+  const pillH = 15;
+  const cx = absYardToCanvasX(Math.max(6, Math.min(94, losYard + dir * 7)), w);
+  const pillX = Math.max(2, Math.min(w - pillW - 2, cx - pillW / 2));
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.beginPath();
+  ctx.roundRect(pillX, 4, pillW, pillH, 4);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, pillX + pillW / 2, 4 + pillH / 2);
   ctx.restore();
 }
 
@@ -736,6 +795,7 @@ export function AnimatedField({
   driveYards = 0,
   drivePossession,
   userSide = 'home',
+  look = null,
 }: Props) {
   // Set user-anchored orientation in coordinate system modules + local
   setUserSide(userSide);
@@ -746,6 +806,11 @@ export function AnimatedField({
   const containerRef = useRef<HTMLDivElement>(null);
   const onAnimCompleteRef = useRef(onAnimationComplete);
   onAnimCompleteRef.current = onAnimationComplete;
+  // read inside the render loop, whose closure does not follow props
+  const lookRef = useRef(look);
+  lookRef.current = look;
+  const userSideRef = useRef(userSide);
+  userSideRef.current = userSide;
 
   // Animation state refs (avoid re-renders during animation loop)
   const animRef = useRef<{
@@ -1110,13 +1175,25 @@ export function AnimatedField({
     // state = ref.nextState = deriveFieldState(currentEvent), where scrimmageYard
     // is computed from event.fieldPos (the pre-snap field position for this play).
     // During reset phase, interpolate from old positions to new.
-    let losYard = state.scrimmageYard;
-    let fdYard = state.firstDownYard;
+    const losYard = state.scrimmageYard;
+    const fdYard = state.firstDownYard;
     // LOS and first down marker — always from current state, no interpolation
     // (reset phase removed; state is truth)
 
     // Draw LOS and first down marker
     drawLines(ctx, w, h, losYard, fdYard);
+
+    // Live Coach: the defense lined up in its look. Held on the paused pre-snap event (the user is choosing a play
+    // against it); on a called play it is there at the snap and fades as the play develops.
+    {
+      const lookNow = lookRef.current;
+      const lookEvt = (ref as Record<string, unknown>).currentEvent as PlayEvent | null;
+      if (lookNow && lookEvt && !isSeparator(lookEvt.type) && lookEvt.down >= 1) {
+        const lookAlpha = lookEvt.id === -1 ? 1 : ref.isAnimating ? Math.max(0, Math.min(1, 1.6 - progress * 2.4)) : 0;
+        const defenseColor = state.possession === 'home' ? awayColor : homeColor;
+        drawDefensiveLook(ctx, w, h, losYard, state.possession === userSideRef.current ? 1 : -1, lookNow, defenseColor, lookAlpha);
+      }
+    }
 
     // Draw yard-gain indicator (fading zone between old and new ball position)
     if (ref.gainFadeProgress < 1) {
@@ -1299,6 +1376,11 @@ export function AnimatedField({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [event, render]);
+
+  // A look appearing or changing on a still field needs its own repaint
+  useEffect(() => {
+    rafRef.current = requestAnimationFrame(render);
+  }, [look, render]);
 
   // Kick off loop when confetti/animation active
   useEffect(() => {

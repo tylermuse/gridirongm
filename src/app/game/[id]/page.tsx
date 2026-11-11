@@ -2407,6 +2407,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               isScoring: false,
             } : currentEvent}
             prevEvent={previousEvent}
+            look={engineSnapshot ? (engineSnapshot.defLook ?? null) : (currentEvent?.defLook ?? currentEvent?.userDefCall ?? null)}
             homeColor={homeColor}
             awayColor={awayColor}
             homeAbbr={homeAbbr}
@@ -2432,7 +2433,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             clock={{ secs: clockSeconds(tickingTime), quarter: liveQuarter }}
             state={{ possession: kickoffPending ? kickTeam : livePoss, fieldPos: xpPending ? 85 : kickoffPending ? 35 : liveFieldPos, down: xpPending || kickoffPending ? 1 : liveDown, toGo: xpPending ? 15 : kickoffPending ? 10 : liveYtg, quarter: liveQuarter,
               clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore,
-              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : kickNext ? { form: kickNext } : {}) }}
+              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : kickNext ? { form: kickNext } : {}),
+              // the look the CPU defense is showing while the user picks a play: the 3D defense lines up in it
+              ...(engineSnapshot?.defLook && !xpPending && !kickoffPending ? { look: engineSnapshot.defLook } : {}) }}
             onActiveChange={setSim3dActive}
             onPlayDead={setSim3dDeadId}
             onPlayResult={setSim3dResultId}

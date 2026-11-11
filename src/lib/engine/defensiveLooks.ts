@@ -228,3 +228,37 @@ export const LOOK_CALL_INFO: Record<DefensiveLook, { stops: string; risk: string
   man_press:   { stops: 'Smothers short throws',    risk: 'can be beaten deep' },
   soft_zone:   { stops: 'Keeps the deep ball in front', risk: 'gives up the short pass' },
 };
+
+// ── Showing a look on the field ──
+/**
+ * Where the back seven stand before the snap in each look, so a look can be SEEN (the 3D sim lines the defenders up
+ * this way; the 2D field draws them at the line). Each man is [x, depth]: x = yards across from the ball (negative is
+ * the offense's left), depth = yards off the line of scrimmage. Order: linebackers left / middle / right, corners
+ * left / right, safeties left / right. The four linemen never move.
+ *
+ * The 3D sim is plain JS and cannot import this, so it carries the same table (public/chase-cam/index.html, LOOKS).
+ * tests/integration/football-look-alignment.test.ts fails if the two drift apart.
+ */
+export interface LookAlignment { lb: [number, number][]; cb: [number, number][]; s: [number, number][] }
+
+export const DL_ALIGNMENT: [number, number][] = [[-6.4, 1.7], [-2.2, 1.7], [2.2, 1.7], [6.4, 1.7]];
+
+export const LOOK_ALIGNMENT: Record<DefensiveLook, LookAlignment> = {
+  // backers walked up into the gaps, one safety creeping down
+  blitz:       { lb: [[-4.3, 2.2], [0, 2.4], [4.3, 2.2]], cb: [[-20, 6.5], [19.5, 6.5]], s: [[-3, 11.5], [8, 7.5]] },
+  // backers tight, a safety down as the eighth man, the other alone deep
+  stacked_box: { lb: [[-5, 3.3], [0, 3.3], [5, 3.3]], cb: [[-20, 6.5], [19.5, 6.5]], s: [[0, 14], [8.5, 4.2]] },
+  // both safeties deep and wide, a light box
+  two_high:    { lb: [[-5, 5.2], [0, 5.2], [5, 5.2]], cb: [[-20, 6.5], [19.5, 6.5]], s: [[-12, 15], [12, 15]] },
+  // corners up on the receivers, a safety down over the slot, one deep
+  man_press:   { lb: [[-5, 4.8], [0, 4.8], [5, 4.8]], cb: [[-20, 1.6], [19.5, 1.6]], s: [[-11.5, 4.5], [1, 13]] },
+  // everyone backed off
+  soft_zone:   { lb: [[-7, 6.3], [0, 6.3], [7, 6.3]], cb: [[-20, 9.5], [19.5, 9.5]], s: [[-10, 16], [10, 16]] },
+};
+
+/** All eleven defenders in a look, front to back. */
+export function lookDefenders(look: DefensiveLook): { x: number; depth: number; unit: 'dl' | 'lb' | 'cb' | 's' }[] {
+  const a = LOOK_ALIGNMENT[look];
+  const men = (unit: 'dl' | 'lb' | 'cb' | 's', list: [number, number][]) => list.map(([x, depth]) => ({ x, depth, unit }));
+  return [...men('dl', DL_ALIGNMENT), ...men('lb', a.lb), ...men('cb', a.cb), ...men('s', a.s)];
+}
