@@ -20,6 +20,9 @@ import type { PlayEvent } from '@/lib/engine/playByPlay';
 import { getDeviceId, DEVICE_CREATED_KEY } from '@bs/core/analytics/track';
 import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimNamedPlayer, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
+/** A defensive call the user just made is shown set for this long before the ball is snapped (ms). */
+const LOOK_HOLD_MS = 900;
+
 /** Skin tones measured from real headshots, per photo URL, for the whole session (null = couldn't read it). */
 const photoSkinCache = new Map<string, string | null>();
 const STARTERS: Record<string, number> = { QB: 1, RB: 1, WR: 3, TE: 1, OL: 5, DL: 4, LB: 3, CB: 2, S: 2, K: 1, P: 1 };
@@ -33,7 +36,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b17q';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b17r';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -133,7 +136,7 @@ export function LiveSim3D({
   /** the event after this one, when the page already has it (a lost fumble is logged right after its run) */
   nextEvent?: PlayEvent | null;
   /** Current situation (spot, down, score, clock) for the pre-snap formation between plays — e.g. the two-point try at the 3 while the user picks a play */
-  state: SimStateMessage['pre'] & { possession: 'home' | 'away'; form?: 'xp' | 'kickoff' | 'punt' | 'fg' } | null;
+  state: SimStateMessage['pre'] & { possession: 'home' | 'away'; form?: 'xp' | 'kickoff' | 'punt' | 'fg'; look?: SimStateMessage['look'] } | null;
   /** e.g. speed === 'max' or the user skipped to the end: never hold the game */
   disabled?: boolean;
   homeTeam: TeamLike | null;
@@ -168,6 +171,8 @@ export function LiveSim3D({
   const activeIdRef = useRef<number | null>(null);
   const lastIdRef = useRef<number | null>(null);
   const activeRef = useRef(false);
+  /** Pending "show the called look, then snap" delay (see LOOK_HOLD_MS) */
+  const holdTimerRef = useRef<number | null>(null);
 
   const setActiveBoth = useCallback((v: boolean) => {
     if (activeRef.current === v) return;
@@ -240,8 +245,8 @@ export function LiveSim3D({
     if (!enabled || !ready || !state || active) return;
     if (tabHidden) return;
     if (stateKey === lastPlayPreRef.current) return;   // still the situation of the play just shown: the sim already moved on to its result
-    const { possession, form, ...pre } = state;
-    post({ type: 'bsgm:state', possession, pre, ...(form ? { form } : {}) } satisfies SimStateMessage);
+    const { possession, form, look, ...pre } = state;
+    post({ type: 'bsgm:state', possession, pre, ...(form ? { form } : {}), ...(look ? { look } : {}) } satisfies SimStateMessage);
   }, [enabled, ready, stateKey, active, post, tabHidden]);   // eslint-disable-line react-hooks/exhaustive-deps -- state is keyed by stateKey
 
   // Game clock → 3D scorebug, always (the page's clock runs during the play; without this the 3D bug sat at the snap time)
@@ -261,18 +266,29 @@ export function LiveSim3D({
     if (!play) return;   // nothing to picture (kickoff, fumble, XP, penalty…): the 2D field carries it
     activeIdRef.current = play.id;
     lastPlayPreRef.current = JSON.stringify({ possession: play.possession, ...play.pre });
-    post(play);
     setActiveBoth(true);
+    if (event.userDefCall && play.look) {
+      // The user just called this look: line the defense up in it and let it be seen before the snap. (On the user's own
+      // snaps the CPU's look has been on the field the whole time they were choosing, so those go straight to the play.)
+      post({ type: 'bsgm:state', possession: play.possession, pre: play.pre, look: play.look } satisfies SimStateMessage);
+      holdTimerRef.current = window.setTimeout(() => { holdTimerRef.current = null; if (activeIdRef.current === play.id) post(play); }, LOOK_HOLD_MS);
+    } else {
+      post(play);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rosters/skins only label the play; a change must not re-send it
   }, [enabled, event, off, ready, failed, post, setActiveBoth]);
 
   // Bail out if playback gets disabled mid-play (skip to end / max speed) or the mode is switched off
   useEffect(() => {
-    if ((off || !enabled) && activeRef.current) { post({ type: 'bsgm:skip' }); activeIdRef.current = null; setActiveBoth(false); }
+    if ((off || !enabled) && activeRef.current) {
+      if (holdTimerRef.current != null) { window.clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+      post({ type: 'bsgm:skip' }); activeIdRef.current = null; setActiveBoth(false);
+    }
   }, [off, enabled, post, setActiveBoth]);
 
   // Unmount → never leave the page held
   useEffect(() => () => { if (activeRef.current) onActiveChange(false); }, [onActiveChange]);
+  useEffect(() => () => { if (holdTimerRef.current != null) window.clearTimeout(holdTimerRef.current); }, []);
 
   if (!enabled) return null;
   return (

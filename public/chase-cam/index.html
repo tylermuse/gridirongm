@@ -174,7 +174,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17q'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17r'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -737,6 +737,12 @@ function buildSideline(){
 }
 function placeChain(z0){ if(!sideline.chainRods) return; const zs=[z0, z0+Math.min(G.toGo, 100-G.fieldPos), z0]; const xs=[26.67+1.1, 26.67+1.1, 26.67+1.6];
   sideline.chain.filter(r=>r.isChain!=null).forEach(r=>{ const i=r.isChain; r.root.position.set(xs[i], 0, zs[i] + (i===2? .9 : 0)); sideline.chainRods[i].position.set(xs[i]-.35, 1.2, zs[i]); }); }
+/* Defensive looks from the game's Live Coach: where the back seven line up before the snap, as [x, yards off the ball] for
+   lb left/middle/right, cb left/right, s left/right. Same table as LOOK_ALIGNMENT in src/lib/engine/defensiveLooks.ts (a test
+   compares the two; the next line must stay one line of valid JSON). Their paths start from wherever they stand, so the play runs as before. */
+const LOOKS = {"blitz":{"lb":[[-4.3,2.2],[0,2.4],[4.3,2.2]],"cb":[[-20,6.5],[19.5,6.5]],"s":[[-3,11.5],[8,7.5]]},"stacked_box":{"lb":[[-5,3.3],[0,3.3],[5,3.3]],"cb":[[-20,6.5],[19.5,6.5]],"s":[[0,14],[8.5,4.2]]},"two_high":{"lb":[[-5,5.2],[0,5.2],[5,5.2]],"cb":[[-20,6.5],[19.5,6.5]],"s":[[-12,15],[12,15]]},"man_press":{"lb":[[-5,4.8],[0,4.8],[5,4.8]],"cb":[[-20,1.6],[19.5,1.6]],"s":[[-11.5,4.5],[1,13]]},"soft_zone":{"lb":[[-7,6.3],[0,6.3],[7,6.3]],"cb":[[-20,9.5],[19.5,9.5]],"s":[[-10,16],[10,16]]}};
+function applyLook(z0){ const L = LOOKS[G.look]; if(!L) return; const put=(a,p)=>{ a.x=p[0]; a.z=Math.min(z0+p[1], 57); };
+  D.lb.forEach((a,i)=>put(a, L.lb[i])); put(D.cbL, L.cb[0]); put(D.cbR, L.cb[1]); put(D.sL, L.s[0]); put(D.sR, L.s[1]); }
 function setupFormation(kind){
   clearPlayers(); G.formKind = kind || null; buildSideline();
   const to = team(G.off), td = team(1-G.off);
@@ -759,6 +765,7 @@ function setupFormation(kind){
   D.all = [...D.dl, ...D.lb, D.cbL, D.cbR, D.sL, D.sR];
   O.all = [...O.ol, O.te, O.wrL, O.slot, O.wrR, O.qb, O.rb];
   [...O.ol, ...D.dl].forEach(a=>a.stance='three'); O.qb.stance='qb'; [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>a.stance='db');
+  if(!kind) applyLook(z0);   /* a scrimmage snap with a look called: the back seven line up in it */
   if(kind==='fg' || kind==='punt'){ // special teams: tight 7-man line, wings, holder/kicker or protector/punter; defense crowds the line
     const lineO = [O.wrL, ...O.ol, O.te], xs7=[-7.5,-5.0,-2.5,0,2.5,5.0,7.5];
     lineO.forEach((a,i)=>{ a.x=xs7[i]; a.z=z0-.75; a.face=0; a.stance='three'; });
@@ -2472,7 +2479,7 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
 }).catch(e=>{ $('hint').textContent='Player model failed to load: '+(e&&e.message||e); console.error(e); if(EMBED && window.parent) window.parent.postMessage({type:'bsgm:error', message:String(e&&e.message||e)}, '*'); });
 // ---------- Embed protocol (the BS Football game page drives the sim through postMessage) ----------
 // in:  {type:'bsgm:setup', home:{id,name,jersey,num,pants,helmet,stripe,lineup?}, away:{...}}   lineup: {qb,rb,te,k,p:{n,s}, wr[3],ol[5],dl[4],lb[3],cb[2],s[2]:[{n,s}]} (n jersey, s skin hex)
-//      {type:'bsgm:play', id, possession:'home'|'away', pre:{fieldPos,down,toGo,quarter,clock,homeScore,awayScore}, res:{kind,yards,depth,good}}
+//      {type:'bsgm:play', id, possession:'home'|'away', pre:{fieldPos,down,toGo,quarter,clock,homeScore,awayScore}, res:{kind,yards,depth,good}, look?}   (look: 'blitz'|'stacked_box'|'two_high'|'man_press'|'soft_zone' — also on bsgm:state)
 //      {type:'bsgm:clock', clock, quarter}   (any time: the 3D scorebug clock mirrors the page's)
 //      {type:'bsgm:state', possession, pre:{...}}   (idle only: pre-snap formation + scorebug for the current situation)
 //      {type:'bsgm:skip'}
@@ -2480,11 +2487,11 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
 function embedStart(){
   const post = m => { try{ window.parent.postMessage(m, '*'); }catch(e){} };
   let pending=null, current=null; window.__embedQueue = ()=>pending;
-  const applyPre = m => { G.off = m.possession==='away'? 1 : 0; const pr=m.pre||{}; G.fieldPos = clamp(Math.round(pr.fieldPos ?? 25),1,99); G.down = pr.down ?? 1; G.toGo = pr.toGo ?? 10; G.quarter = pr.quarter ?? 1; G.clock = pr.clock ?? 900; G.score = [pr.homeScore ?? 0, pr.awayScore ?? 0]; };
+  const applyPre = m => { G.off = m.possession==='away'? 1 : 0; const pr=m.pre||{}; G.fieldPos = clamp(Math.round(pr.fieldPos ?? 25),1,99); G.down = pr.down ?? 1; G.toGo = pr.toGo ?? 10; G.quarter = pr.quarter ?? 1; G.clock = pr.clock ?? 900; G.score = [pr.homeScore ?? 0, pr.awayScore ?? 0]; G.look = (m.look in LOOKS)? m.look : null; };   /* look: the defense's look for this snap (LOOKS), if one was called */
   const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id; window.__curPlayId=m.id; G.pat = !!(m.res && m.res.xp);
     applyPre(m);
     if(G.fieldPos >= 99 && (m.res.kind==='run' || m.res.kind==='complete') && m.res.yards >= 1) m.res.yards = 99;   /* at the 1: any gain is a score */
-    m.res.lock = true; renderBug(); PLAY_OVR = planWho(m); setupFormation((m.res.kind==='fg' || m.res.kind==='punt' || m.res.kind==='kickoff')? m.res.kind : null); runPlay(m.res); PLAY_OVR = []; };
+    m.res.lock = true; renderBug(); PLAY_OVR = planWho(m); setupFormation((m.res.kind==='fg' || m.res.kind==='punt' || m.res.kind==='kickoff')? m.res.kind : null); runPlay(m.res); PLAY_OVR = []; G.look = null; };   /* the look is this snap's only: the re-form after the play is the base defense */
   window.addEventListener('message', ev=>{ const m=ev.data; if(!m || typeof m!=='object') return;
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }
