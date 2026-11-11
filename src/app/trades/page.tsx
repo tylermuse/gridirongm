@@ -2,6 +2,7 @@
 
 import { NOTABLE_MIN_OVR } from '@/lib/engine/tradeRequests';
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage, pickTradeValue } from '@/lib/engine/store';
@@ -848,6 +849,20 @@ function TradesPage() {
   const [receivedPickIds, setReceivedPickIds] = useState<string[]>([]);
   const [tradeResult, setTradeResult] = useState<'accepted' | 'rejected' | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+  // Page-level confirmation of the last completed trade. Lives above the tabs so
+  // it survives the things that used to swallow the success message: accepting
+  // an incoming offer (the old banner only rendered on the Propose tab) and an
+  // accepted counter (its proposal card — and the message inside — unmounts).
+  const [completedTrade, setCompletedTrade] = useState<{
+    teamId: string;
+    got: string[];
+    gave: string[];
+    via: 'offer' | 'incoming' | 'counter';
+  } | null>(null);
+  const completedTradeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (completedTrade) completedTradeRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [completedTrade]);
   const [activeTab, setActiveTab] = useState<'incoming' | 'propose' | 'block' | 'finder'>('incoming');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
@@ -1052,6 +1067,34 @@ function TradesPage() {
     return `${pk.year} Round ${pk.round}${via}`;
   }
 
+  // Snapshot a finished deal for the confirmation banner. `players`/`teams` here
+  // are this render's (pre-trade) values, so labels resolve even though the
+  // store has already moved the assets.
+  function recordCompletedTrade(
+    via: 'offer' | 'incoming' | 'counter',
+    teamId: string,
+    gavePlayerIds: string[], gavePickIds: string[],
+    gotPlayerIds: string[], gotPickIds: string[],
+  ) {
+    const allPicks = teams.flatMap(t => t.draftPicks);
+    const describe = (playerIds: string[], pickIds: string[]) => [
+      ...playerIds.flatMap(id => {
+        const p = players.find(pl => pl.id === id);
+        return p ? [`${p.position} ${p.firstName} ${p.lastName}`] : [];
+      }),
+      ...pickIds.flatMap(id => {
+        const pk = allPicks.find(x => x.id === id);
+        return pk ? [pickLabel(pk)] : [];
+      }),
+    ];
+    setCompletedTrade({
+      teamId,
+      via,
+      got: describe(gotPlayerIds, gotPickIds),
+      gave: describe(gavePlayerIds, gavePickIds),
+    });
+  }
+
   // Compute team average OVR (top 22 starters, like a real depth chart)
   function teamAvgOvr(teamId: string, addPlayerIds: string[] = [], removePlayerIds: string[] = []): number {
     const removeSet = new Set(removePlayerIds);
@@ -1150,6 +1193,7 @@ function TradesPage() {
     setTradeResult(result.success ? 'accepted' : 'rejected');
     setRejectionReason(result.reason ?? null);
     if (result.success) {
+      recordCompletedTrade('offer', selectedTeamId, offeredPlayerIds, offeredPickIds, receivedPlayerIds, receivedPickIds);
       setOfferedPlayerIds([]);
       setOfferedPickIds([]);
       setReceivedPlayerIds([]);
@@ -1167,6 +1211,7 @@ function TradesPage() {
     setTradeResult(result.success ? 'accepted' : 'rejected');
     setRejectionReason(result.reason ?? null);
     if (result.success) {
+      recordCompletedTrade('offer', selectedTeamId, offeredPlayerIds, offeredPickIds, receivedPlayerIds, receivedPickIds);
       setOfferedPlayerIds([]);
       setOfferedPickIds([]);
       setReceivedPlayerIds([]);
@@ -1231,9 +1276,16 @@ function TradesPage() {
     setCounterReason(result.success ? null : (result.reason ?? null));
     setCounterAttempt(n => (result.success ? 0 : n + 1));
     if (result.success) {
+      recordCompletedTrade(
+        'counter', proposal.proposingTeamId,
+        counterOfferedPlayerIds, counterOfferedPickIds,
+        counterReceivedPlayerIds, counterReceivedPickIds,
+      );
+      // Retiring the original proposal drops it from the pending list, which
+      // unmounts this counter UI — so the confirmation is the page-level banner,
+      // not anything rendered inside the card.
       respondToTradeProposal(proposal.id, false);
-      // DON'T immediately cancel — keep the UI open with the success message.
-      // The user dismisses via the "Done" button rendered when counterResult === 'accepted'.
+      handleCancelCounter();
     }
   }
 
@@ -1412,6 +1464,43 @@ function TradesPage() {
             })()}
           </Card>
         )}
+
+        {/* Trade confirmation — shown on every tab */}
+        {completedTrade && (() => {
+          const partner = teams.find(t => t.id === completedTrade.teamId);
+          return (
+            <div
+              ref={completedTradeRef}
+              role="status"
+              aria-live="polite"
+              data-testid="trade-confirmation"
+              className="mb-4 bg-green-50 border border-green-300 rounded-lg p-4 flex items-start gap-3"
+            >
+              <span className="text-2xl leading-none">✅</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-green-700">
+                  {completedTrade.via === 'counter' ? 'Counter accepted' : 'Trade accepted'}
+                  {partner ? ` — deal done with ${partner.city} ${partner.name}` : ' — the deal is done'}
+                </p>
+                <p className="text-xs text-green-700 mt-1">
+                  <span className="font-semibold">You get:</span> {completedTrade.got.length > 0 ? completedTrade.got.join(', ') : 'nothing'}
+                </p>
+                <p className="text-xs text-green-700 mt-0.5">
+                  <span className="font-semibold">You send:</span> {completedTrade.gave.length > 0 ? completedTrade.gave.join(', ') : 'nothing'}
+                </p>
+                <Link href="/roster" className="inline-block text-xs font-semibold text-green-700 underline hover:text-green-900 mt-1.5">
+                  View roster →
+                </Link>
+              </div>
+              <button
+                onClick={() => setCompletedTrade(null)}
+                className="shrink-0 text-xs text-green-700 hover:text-green-900 font-medium"
+              >
+                Dismiss
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Tabs */}
         <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit overflow-x-auto max-w-full">
@@ -1646,7 +1735,11 @@ function TradesPage() {
                         onClick={() => {
                           const success = respondToTradeProposal(proposal.id, true);
                           if (success) {
-                            setTradeResult('accepted');
+                            recordCompletedTrade(
+                              'incoming', proposal.proposingTeamId,
+                              proposal.requestedPlayerIds, proposal.requestedPickIds,
+                              proposal.offeredPlayerIds, proposal.offeredPickIds,
+                            );
                           } else {
                             alert('Trade failed — you may be over the salary cap or the players are no longer available.');
                           }
@@ -1773,21 +1866,6 @@ function TradesPage() {
                                     ? `Counter rejected — they want roughly ${Math.ceil(counterReceivedValue * 0.95 - counterOfferedValue).toLocaleString()} more pts of value. Add a player or pick, or ask for less.`
                                     : 'Counter rejected — offer more value or adjust your asks.'}
                               </p>
-                            )}
-                            {counterResult === 'accepted' && (
-                              <div className="mt-2 bg-green-50 border border-green-300 rounded-lg p-3 flex items-center gap-3">
-                                <span className="text-xl">✅</span>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-bold text-green-700">Counter Accepted!</p>
-                                  <p className="text-xs text-green-600 mt-0.5">The deal is done. Check your roster for the new additions.</p>
-                                </div>
-                                <button
-                                  onClick={handleCancelCounter}
-                                  className="text-xs font-bold text-green-700 hover:text-green-900 px-3 py-1.5 rounded bg-green-100 hover:bg-green-200 transition-colors"
-                                >
-                                  Done
-                                </button>
-                              </div>
                             )}
                           </div>
                           <Button
@@ -2366,21 +2444,6 @@ function TradesPage() {
                           <p className="text-sm text-amber-700">
                             {rejectionReason ?? 'Trade rejected.'} <span className="font-medium">Adjust the deal and try again.</span>
                           </p>
-                        </div>
-                      )}
-                      {tradeResult === 'accepted' && (
-                        <div className="mt-2 bg-green-50 border border-green-300 rounded-lg p-4 flex items-center gap-3">
-                          <span className="text-2xl">✅</span>
-                          <div>
-                            <p className="text-sm font-bold text-green-700">Trade Accepted!</p>
-                            <p className="text-xs text-green-600 mt-0.5">The deal is done. Check your roster to see the new additions.</p>
-                          </div>
-                          <button
-                            onClick={() => setTradeResult(null)}
-                            className="ml-auto text-xs text-green-600 hover:text-green-800 font-medium"
-                          >
-                            Dismiss
-                          </button>
                         </div>
                       )}
                     </div>
