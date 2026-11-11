@@ -2,8 +2,8 @@
  * Loaders for the business reports on /admin/analytics: subscribers and MRR,
  * revenue, accounts created, and where signups came from.
  *
- * None of these depend on the 7d/30d/90d selector. Each returns everything it
- * has and the page cuts it to the period, so one cached copy serves all three.
+ * None of these depend on the range selector. Each returns everything it
+ * has and the page cuts it to the range, so one cached copy serves every range.
  * They read Stripe and a few small tables; none touches analytics_events.
  */
 

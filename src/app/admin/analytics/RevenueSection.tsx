@@ -3,7 +3,8 @@
 import { DailyBars } from './DailyBars';
 import { change, money, netOf, revenueByMonth, type RevenueReport } from './businessMetrics';
 import { sampleDays, windowChange, type SubscriberGrowth } from './subscriberGrowth';
-import { Card, Delta, PERIOD_DAYS, SectionHeading, Tile, type Period } from './ui';
+import type { Range } from './periods';
+import { Card, Delta, SectionHeading, Tile } from './ui';
 
 const shortDay = (day: string) =>
   new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -11,23 +12,23 @@ const shortDay = (day: string) =>
 /**
  * Who pays, who left, and what actually landed in the bank. The two charts are
  * all-time on purpose: growth is the question, and a 7-day slice of numbers
- * this small is a flat line. The tiles follow the period selector.
+ * this small is a flat line. The tiles follow the range selector.
  */
 export function RevenueSection({
   growth,
   revenue,
   conversion,
-  period,
+  range,
   now,
 }: {
   growth: SubscriberGrowth | null;
   revenue: RevenueReport | null;
   /** Subscribers over accounts that are able to subscribe; null fields when the summary failed. */
   conversion: { rate: number | null; subscribers: number; convertible: number | null; founders: number | null };
-  period: Period;
+  range: Range;
   now: number;
 }) {
-  const days = PERIOD_DAYS[period];
+  const { days, previous } = range;
   const series = growth?.days ?? [];
   const current = windowChange(series, days);
   const earlier = windowChange(series.slice(0, -days), days);
@@ -45,14 +46,14 @@ export function RevenueSection({
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Tile
-          label={`New subscribers · last ${period}`}
+          label={`New subscribers · ${range.phrase}`}
           value={growth ? current.started : null}
-          delta={growth && <Delta change={{ ...change(current.started, earlier.started), pct: null }} vs={`vs previous ${period}`} />}
+          delta={growth && previous && <Delta change={{ ...change(current.started, earlier.started), pct: null }} vs={previous} />}
         />
         <Tile
-          label={`Lost subscribers · last ${period}`}
+          label={`Lost subscribers · ${range.phrase}`}
           value={growth ? current.churned : null}
-          delta={growth && <Delta change={{ ...change(current.churned, earlier.churned), pct: null }} vs={`vs previous ${period}`} upIsGood={false} />}
+          delta={growth && previous && <Delta change={{ ...change(current.churned, earlier.churned), pct: null }} vs={previous} upIsGood={false} />}
           sub={everSubscribed > 0 ? `${Math.round((current.churned / everSubscribed) * 100)}% of the ${everSubscribed} subscribed at some point in the period` : 'cancelled or lapsed'}
         />
         <Tile
