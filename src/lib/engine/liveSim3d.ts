@@ -10,6 +10,7 @@
  * down / yardsToGo / fieldPos are PRE-snap; homeScore / awayScore are POST-play.
  */
 import type { PlayEvent } from './playByPlay';
+import type { DefensiveLook } from './defensiveLooks';
 import { portraitFileFor } from '@/lib/portraits/portraitPool';
 import portraitSkin from '@/lib/portraits/portraitSkin.json';
 
@@ -48,6 +49,8 @@ export interface SimPlayMessage {
   res: SimPlayResult;
   /** who has the ball / makes the sack or pick, by number + skin (see whoMadeThePlay) */
   who?: SimWho;
+  /** Live Coach: the look the defense is in for this snap (the CPU's on the user's call, or the one the user called) */
+  look?: DefensiveLook;
 }
 
 /** Pre-snap situation for the idle sim (no play running): it re-forms at this spot with this scorebug. */
@@ -57,6 +60,8 @@ export interface SimStateMessage {
   /** 'xp': a touchdown was just scored and the try is next — the sim lines up the kick unit at the 15 */
   form?: 'xp' | 'kickoff' | 'punt' | 'fg';
   pre: { fieldPos: number; down: number; toGo: number; quarter: number; clock: number; homeScore: number; awayScore: number };
+  /** Live Coach: the look the defense is showing for the snap being set up */
+  look?: DefensiveLook;
 }
 
 /** One man on the field: jersey number + skin tone (hex). */
@@ -201,6 +206,7 @@ export function toSimPlay(
       awayScore: e.awayScore - (e.possession === 'away' ? pts : 0),
     },
     res,
+    ...(e.defLook ?? e.userDefCall ? { look: e.defLook ?? e.userDefCall } : {}),
     ...(rosters ? { who: withKeptRecoverer(withRecoverer(whoMadeThePlay(keptAt >= 0 ? { ...e, description: e.description.slice(0, keptAt) } : e,
       offense, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins),
       fumbleNext ? next : null, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins, res.kind), keptRec, rosters.photoSkins) } : {}),

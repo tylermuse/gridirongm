@@ -20,6 +20,8 @@ import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { buildMatchupMetrics, rankForMetric } from '@/lib/engine/matchupRanks';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
+import { DefenseCallMenu } from '@/components/game/DefenseCallMenu';
+import type { DefensiveLook } from '@/lib/engine/defensiveLooks';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
@@ -113,6 +115,30 @@ const SPEED_MS: Record<Speed, number> = {
   '5x': 800,
   'max': 0,
 };
+
+/** Calling the defense in Live Coach is opt-in and remembered per browser. */
+const CALL_DEFENSE_KEY = 'bs-live-coach-call-defense';
+function readCallDefensePref(): boolean {
+  try { return window.localStorage.getItem(CALL_DEFENSE_KEY) === '1'; } catch { return false; }
+}
+
+/** How long a play the user did not call on offense stays up before the engine moves on: animation, reading time,
+ *  and extra dwell for a turnover, score or kick. A broadcast paces this itself. */
+function playDwellMs(speed: Speed, lastEvent: PlayEvent | undefined, broadcastDriving: boolean): number {
+  if (broadcastDriving) return 0;
+  const animMs = SPEED_MS[speed] * 0.35;
+  const pauseMs = speed === '0.5x' ? 6000 : speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 1700 : 0;
+  const isBigMoment = !!lastEvent && (
+    lastEvent.type === 'interception' || lastEvent.type === 'fumble' ||
+    lastEvent.type === 'touchdown' || !!lastEvent.isScoring ||
+    lastEvent.type === 'field_goal_good' || lastEvent.type === 'field_goal_miss' ||
+    lastEvent.type === 'punt'
+  );
+  const bigExtra = isBigMoment
+    ? (speed === '0.5x' ? 8000 : speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
+    : 0;
+  return Math.max(300, animMs + pauseMs + bigExtra);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -923,6 +949,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     started: false,
     finishedSent: false,
     playsCalled: 0,
+    defenseCalled: 0,
     quartersSkipped: 0,
     endedBy: null as null | 'auto_sim' | 'off' | 'end_game',
   });
@@ -951,6 +978,24 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     });
   }, [trackLiveCoach]);
 
+  // Calling the defense too: before each opponent scrimmage snap the engine shows their set and waits for a look.
+  // Off by default (it roughly doubles the calls in a game) and remembered per browser.
+  const [callDefenseOn, setCallDefenseOnState] = useState(false);
+  useEffect(() => {
+    // effect-gated read of localStorage so SSR and the first client render agree (no hydration mismatch)
+    setCallDefenseOnState(readCallDefensePref());
+  }, []);
+  // Keep the engine in step with the switch (it may have been created before the saved choice was read).
+  useEffect(() => {
+    liveEngineRef.current?.setCallDefense(callDefenseOn);
+  }, [callDefenseOn, liveEnginePivotIdx]);
+  const setCallDefenseOn = useCallback((on: boolean, source: 'toolbar' | 'menu') => {
+    setCallDefenseOnState(on);
+    try { window.localStorage.setItem(CALL_DEFENSE_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
+    liveEngineRef.current?.setCallDefense(on);
+    trackLiveCoach(on ? 'live_coach_defense_on' : 'live_coach_defense_off', { source });
+  }, [trackLiveCoach]);
+
   const activateLiveEngine = useCallback((trigger: 'default' | 'toggle') => {
     if (liveEngineRef.current !== null || !homeTeam || !awayTeam) return;
     const seedEvent = allEvents[revealedCount - 1] ?? allEvents[0];
@@ -977,7 +1022,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       },
       userTeamSide ?? 'home',
       isPlayoffGame,
-      { opponentDefScheme: (() => {
+      { callDefense: callDefenseOn, opponentDefScheme: (() => {
         // the CPU team's defensive scheme (its DC's, else its HC's) tilts which looks it shows the user
         const cpu = (userTeamSide ?? 'home') === 'home' ? awayTeam : homeTeam;
         const dc = cpu.coaches?.find(c => c.role === 'DC'), hc = cpu.coaches?.find(c => c.role === 'HC');
@@ -995,7 +1040,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       lcTelemetryRef.current.started = true;
       trackLiveCoach('live_coach_started', { trigger });
     }
-  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide, isPlayoffGame, trackLiveCoach]);
+  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide, isPlayoffGame, trackLiveCoach, callDefenseOn]);
 
   // Auto-activate as soon as the game is ready when Live Coach defaults ON
   // (managed games) — mirrors what a manual toggle-click already did, so a
@@ -1016,6 +1061,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     trackLiveCoach('live_coach_game_finished', {
       ended_by: t.endedBy ?? 'played',
       quarters_skipped: t.quartersSkipped,
+      defense_calls: t.defenseCalled,
     });
   }, [isFinished, trackLiveCoach]);
 
@@ -1408,7 +1454,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // Check if next play is user offensive OR awaiting XP/2PT choice
     const engineState = liveEngineRef.current.getState();
     const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
-    const needsUserInput = isUserOffenseNow || engineState.awaitingXpChoice || engineState.awaitingKickoffChoice || !!engineState.awaitingTwoPointCall;
+    // ...or a CPU scrimmage snap the user is calling the defense on (the engine only shows a set for those)
+    const isUserDefenseNow = callDefenseOn && !!userTeamSide && engineState.possession !== userTeamSide && !!engineState.offSet && !engineState.isGameOver;
+    const needsUserInput = isUserOffenseNow || isUserDefenseNow || engineState.awaitingXpChoice || engineState.awaitingKickoffChoice || !!engineState.awaitingTwoPointCall;
     if (liveCoachOn && needsUserInput) {
       // Let the play that was just revealed finish animating first. Pausing
       // swaps the field to the static engine snapshot (id -1), which cancelled
@@ -1433,27 +1481,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       pendingAutoPlayRef.current = true;
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
 
-      // Compute delay: animation + pause time based on speed.
-      // 5/25 (icantletugoo msg 1502864375202189493): bump 5x pauseMs from
-      // 150 -> 1700 so plays render at ~2s on the fastest readable speed.
-      // Prior 5x total was 280ms animMs + 150ms pause = 430ms — felt
-      // jarringly fast for an at-a-glance read. Now ~1.98s. 'max' is
-      // unchanged (intended to be near-instant).
-      const animMs = SPEED_MS[speed] * 0.35;
-      const pauseMs = speed === '0.5x' ? 6000 : speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 1700 : 0;
-      // Big moments (turnovers, scores, FGs) get extra dwell time
-      const lastEvent = newEvents[newEvents.length - 1];
-      const isBigMoment = lastEvent && (
-        lastEvent.type === 'interception' || lastEvent.type === 'fumble' ||
-        lastEvent.type === 'touchdown' || lastEvent.isScoring ||
-        lastEvent.type === 'field_goal_good' || lastEvent.type === 'field_goal_miss' ||
-        lastEvent.type === 'punt'
-      );
-      const bigExtra = isBigMoment
-        ? (speed === '0.5x' ? 8000 : speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
-        : 0;
+      // Dwell: animation + reading time for the speed, longer for big moments (turnovers, scores, kicks).
+      // 5/25 (icantletugoo msg 1502864375202189493): 5x reads at ~2s a play; 'max' is near-instant.
       // A broadcast already paced this with the call and its dwell.
-      const delay = broadcastDriving ? 0 : Math.max(300, animMs + pauseMs + bigExtra);
+      const delay = playDwellMs(speed, newEvents[newEvents.length - 1], broadcastDriving);
 
       // Reveal the event immediately (so animation starts) — unless a broadcast
       // is driving, which reveals it once its call is ready to go.
@@ -1469,7 +1500,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastDriving, broadcast.status, pregameOpen, animationComplete, allEvents, sim3dActive, tabHidden]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, callDefenseOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastDriving, broadcast.status, pregameOpen, animationComplete, allEvents, sim3dActive, tabHidden]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -2069,7 +2100,112 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const newTotal = allEvents.length + evs.length;
     setLiveExtraEvents(prev => [...prev, ...evs]);
     setRevealedCount(newTotal);
+    resumeIfNoDefenseCall();
   };
+
+  // ── Calling the defense ──
+  /** Is the Call the Defense menu what the pause is for? (CPU scrimmage snap, set showing, defense calling on) */
+  const defenseCallPending = (es: ReturnType<LiveCoachEngine['getState']>) =>
+    callDefenseOn && !!userTeamSide && es.possession !== userTeamSide && !!es.offSet
+    && !es.awaitingXpChoice && !es.awaitingKickoffChoice && !es.awaitingTwoPointCall;
+  /** If the game is held for a defensive call that is no longer wanted (defense calling switched off, or a timeout
+   *  changed the CPU's mind to a kick), let it run again. Reads the engine directly: call it after changing it. */
+  function resumeIfNoDefenseCall() {
+    const eng = liveEngineRef.current;
+    if (!eng || !liveCoachPaused || !userTeamSide) return;
+    const es = eng.getState();
+    const cpuSnap = es.possession !== userTeamSide && !es.awaitingXpChoice && !es.awaitingKickoffChoice && !es.awaitingTwoPointCall;
+    if (cpuSnap && !es.offSet) { setLiveCoachPaused(false); setIsPlaying(true); }
+  }
+  const submitDefenseCall = (look: DefensiveLook) => {
+    const eng = liveEngineRef.current;
+    if (!eng) return;
+    const es = eng.getState();
+    lcTelemetryRef.current.defenseCalled += 1;
+    trackLiveCoach('live_coach_defense_called', {
+      look, off_set: es.offSet ?? null, down: es.down, distance: es.yardsToGo, field_pos: es.fieldPos,
+      defense_calls: lcTelemetryRef.current.defenseCalled,
+    });
+    setOutcomeChip(null);
+    const newEvents = eng.runOnePlay(undefined, look);
+    if (newEvents.length > 0) {
+      setLiveExtraEvents(prev => [...prev, ...newEvents]);
+      setRevealedCount(prev => prev + 1);
+      setAnimationComplete(false);
+      // Hold the engine while this play is on screen. The next defensive call still comes up as soon as the animation
+      // ends; the hold is for what the CPU does on its own next (a punt, a kick), which would otherwise cut this play off.
+      if (!broadcastDriving) {
+        pendingAutoPlayRef.current = true;
+        setTimeout(() => {
+          pendingAutoPlayRef.current = false;
+          setAutoRunTick(t => t + 1);
+        }, playDwellMs(speed, newEvents[newEvents.length - 1], false));
+      }
+    }
+    setLiveCoachPaused(false);
+    setIsPlaying(true);
+  };
+  /** Timeout from the defense menu: the snap hasn't come, so the whole between-plays runoff is saved. */
+  const callTimeoutFromDefenseMenu = () => {
+    const eng = liveEngineRef.current;
+    if (!eng || !userTeamSide) return;
+    const evs = eng.callTimeoutFor(userTeamSide, 0);
+    if (evs.length === 0) return;
+    const newTotal = allEvents.length + evs.length;
+    setLiveExtraEvents(prev => [...prev, ...evs]);
+    setRevealedCount(newTotal);
+    resumeIfNoDefenseCall();
+  };
+  const autoSimRestFromMenu = () => {
+    lcTelemetryRef.current.endedBy = 'auto_sim';
+    trackLiveCoach('live_coach_auto_sim');
+    if (liveEngineRef.current) {
+      const allRest: PlayEvent[] = [];
+      let safety = 0;
+      while (!liveEngineRef.current.isFinished() && safety < 500) {
+        allRest.push(...liveEngineRef.current.runOnePlay());
+        safety++;
+      }
+      if (allRest.length > 0) setLiveExtraEvents(prev => [...prev, ...allRest]);
+    }
+    setLiveCoachOn(false);
+    setLiveCoachPaused(false);
+    setIsPlaying(true);
+  };
+  /** How the user's previous defensive call fared (shown in the defense menu) */
+  const lastDefenseRead = (() => {
+    for (let i = liveExtraEvents.length - 1; i >= 0; i--) {
+      const e = liveExtraEvents[i];
+      if (e.userDefCall) return { call: e.userDefCall, edge: e.userDefEdge ?? 0 };
+      // an older call is stale once another snap or a kick has happened
+      if (['run', 'pass_complete', 'pass_incomplete', 'sack', 'interception', 'punt', 'kickoff'].includes(e.type)) return null;
+    }
+    return null;
+  })();
+  const renderDefenseMenu = (es: ReturnType<LiveCoachEngine['getState']>) => (
+    <DefenseCallMenu
+      state={{
+        quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
+        timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+        homeScore: es.homeScore,
+        awayScore: es.awayScore,
+        homeAbbr: homeTeam?.abbreviation || 'HOME',
+        awayAbbr: awayTeam?.abbreviation || 'AWAY',
+        down: es.down,
+        yardsToGo: es.yardsToGo,
+        fieldPos: es.fieldPos,
+        offenseAbbr: (es.possession === 'home' ? homeTeam?.abbreviation : awayTeam?.abbreviation) || 'CPU',
+      }}
+      offSet={es.offSet!}
+      lastRead={lastDefenseRead}
+      timeoutsRemaining={userTeamSide === 'home' ? es.homeTimeouts : es.awayTimeouts}
+      pendingRunoff={es.pendingRunoff ?? 0}
+      onCall={submitDefenseCall}
+      onTimeout={callTimeoutFromDefenseMenu}
+      onStopCalling={() => { setCallDefenseOn(false, 'menu'); resumeIfNoDefenseCall(); }}
+      onAutoSimRest={autoSimRestFromMenu}
+    />
+  );
   const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
   const liveAwayScore = engineSnapshot?.awayScore ?? currentEvent?.awayScore ?? 0;
   // Derive effective quarter — if the engine is in overtime but its quarter
@@ -2271,6 +2407,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               isScoring: false,
             } : currentEvent}
             prevEvent={previousEvent}
+            look={engineSnapshot ? (engineSnapshot.defLook ?? null) : (currentEvent?.defLook ?? currentEvent?.userDefCall ?? null)}
             homeColor={homeColor}
             awayColor={awayColor}
             homeAbbr={homeAbbr}
@@ -2296,7 +2433,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             clock={{ secs: clockSeconds(tickingTime), quarter: liveQuarter }}
             state={{ possession: kickoffPending ? kickTeam : livePoss, fieldPos: xpPending ? 85 : kickoffPending ? 35 : liveFieldPos, down: xpPending || kickoffPending ? 1 : liveDown, toGo: xpPending ? 15 : kickoffPending ? 10 : liveYtg, quarter: liveQuarter,
               clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore,
-              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : kickNext ? { form: kickNext } : {}) }}
+              ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : kickNext ? { form: kickNext } : {}),
+              // the look the CPU defense is showing while the user picks a play: the 3D defense lines up in it
+              ...(engineSnapshot?.defLook && !xpPending && !kickoffPending ? { look: engineSnapshot.defLook } : {}) }}
             onActiveChange={setSim3dActive}
             onPlayDead={setSim3dDeadId}
             onPlayResult={setSim3dResultId}
@@ -2329,6 +2468,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
           const fp = es.fieldPos;
           const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+          if (defenseCallPending(es)) return <div className="lg:hidden">{renderDefenseMenu(es)}</div>;
           return (
             <div className="lg:hidden">
               <PlayCallMenu
@@ -2569,6 +2709,20 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               title="Take control of every user offensive snap"
             >
               🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
+            </button>
+          )}
+          {/* Call Defense — with Live Coach on, also call a look before each opponent snap. Off by default. */}
+          {userInGame && !isFinished && liveCoachOn && (
+            <button
+              onClick={() => { setCallDefenseOn(!callDefenseOn, 'toolbar'); resumeIfNoDefenseCall(); }}
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+                callDefenseOn
+                  ? 'bg-slate-700 text-white hover:bg-slate-800'
+                  : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Also call the defense: read the offense's formation and pick a look before every opponent snap"
+            >
+              🛡️ Call Defense {callDefenseOn ? 'ON' : 'OFF'}
             </button>
           )}
           {/* Defensive timeout — Live Coach on, opponent has the ball. */}
@@ -3161,6 +3315,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
             const fp = es.fieldPos;
             const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+            if (defenseCallPending(es)) return <div className="min-h-[22rem]">{renderDefenseMenu(es)}</div>;
             return (
               <div className="min-h-[22rem]">
               <PlayCallMenu
