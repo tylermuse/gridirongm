@@ -58,6 +58,11 @@ export interface PlayEvent {
    *  (-1 the look had it covered, 0 even, +1 the call beat the look). See defensiveLooks.ts. */
   defLook?: import('./defensiveLooks').DefensiveLook;
   lookEdge?: -1 | 0 | 1;
+  /** Live Coach only: the look the USER called on defense for this CPU snap, how it fared from the user's side
+   *  (-1 the play beat it, 0 even, +1 the call had the play covered), and the set the offense showed. */
+  userDefCall?: import('./defensiveLooks').DefensiveLook;
+  userDefEdge?: -1 | 0 | 1;
+  offSet?: import('./defensiveLooks').OffensiveSet;
   /** Cumulative bucket snapshots taken when this event was pushed. Used by
    *  the live-game UI to render running per-play box-score stats (tofftanaut
    *  + woahitsholly 4/27 — stats should refresh as plays go in, not just at
