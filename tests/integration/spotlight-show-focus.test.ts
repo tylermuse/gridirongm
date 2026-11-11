@@ -125,7 +125,7 @@ describe('key moments in a game breakdown', () => {
     expect(focusForLine('And then that drive.', { ...c, play: 2 })).toEqual({ kind: 'moment', play: 2 });
   });
   it('a player\'s one play → his score on the timeline; his numbers → his line', () => {
-    expect(focusForLine('starterson\'s touchdown in the fourth quarter put it away.', c)).toEqual({ kind: 'moment', play: 3 });
+    expect(focusForLine('starterson\'s touchdown in the fourth quarter put it away.', c)).toEqual({ kind: 'moment', play: 3, clip: true });
     expect(focusForLine('starterson threw for 287 yards.', c)).toMatchObject({ kind: 'player' });
   });
   it('"down seven" → the low point; a box-score number → the box score', () => {
@@ -135,6 +135,24 @@ describe('key moments in a game breakdown', () => {
   it('the game as a whole → the flow; a marked moment carries to the next line', () => {
     expect(focusForLine('What a game.', c)).toEqual({ kind: 'moment', play: null });
     expect(focusForLine('Unreal.', { ...c, earlier: ['x'], earlierPlays: [3] })).toEqual({ kind: 'moment', play: 3 });
+  });
+
+  it('cuts to the highlight only when the line is on the play itself', () => {
+    const clip = (text: string, extra: object = {}) => {
+      const f = focusForLine(text, { ...c, ...extra });
+      return f.kind === 'moment' ? [f.play, !!f.clip] : [f.kind];
+    };
+    // The play by what it was, or by the man who scored.
+    expect(clip('And then the 34-yarder to take the lead.', { play: 2 })).toEqual([2, true]);
+    expect(clip('That starterson run was the killer.', { play: 3 })).toEqual([3, true]);
+    // Filed under a score, but about the game around it: the chart, with that score marked.
+    expect(clip('They kept answering every time New York got a little momentum, six lead changes.', { play: 2 })).toEqual([2, false]);
+    expect(clip('That first quarter was a fistfight, both teams trading punches.', { play: 1 })).toEqual([1, false]);
+    // A follow-up stays on the play they were just on…
+    const after = { play: 2, earlier: ['And then the 34-yarder to take the lead.'], earlierPlays: [2] };
+    expect(clip('Dropped it right in the bucket.', after)).toEqual([2, true]);
+    // …unless it has moved on to the game.
+    expect(clip('And from there the momentum never came back.', after)).toEqual([2, false]);
   });
 });
 
@@ -157,6 +175,15 @@ describe('focusForLine — the other team', () => {
   it('a line about the next opponent shows their numbers, not ours', () => {
     expect(focusForLine('Carolina. Nine and eight, and they rank third in points per game.', c2)).toMatchObject({ kind: 'team', teamId: 'car', mentioned: ['ppg'] });
     expect(focusForLine('And they just keep winning.', { ...c2, earlier: ['The Panthers are hot.'] })).toMatchObject({ kind: 'team', teamId: 'car' });
+  });
+
+  it('a team we did something to is not the subject: our numbers stay up', () => {
+    const ours = (text: string) => { const f = focusForLine(text, c2); return f.kind === 'team' ? f.teamId ?? 'ours' : f.kind; };
+    expect(ours("Alright, but the defense is why people don't fully trust them. They let Carolina hang around way too long.")).not.toBe('car');
+    expect(ours('They held the Panthers to ten points.')).not.toBe('car');
+    // Carolina doing something is still a line about Carolina.
+    expect(ours('Carolina let them hang around way too long.')).toBe('car');
+    expect(ours('They beat the Panthers, but the Panthers ran all over them.')).toBe('car');
   });
 
   it("finds the opponent's player by last name, and the first one named wins", () => {

@@ -29,7 +29,10 @@ export type Focus =
   | { kind: 'schedule' }
   /** The game's flow (every score on a timeline), with one score called
    *  out — or none, when the line is about the game as a whole. */
-  | { kind: 'moment'; play: number | null; quarter?: number }
+  | { kind: 'moment'; play: number | null; quarter?: number;
+      /** The line is on that one play (not the game around it): the show
+       *  cuts to its highlight instead of the chart. */
+      clip?: true }
   | { kind: 'none' };
 
 /** Playoff-race / standings talk → the standings board. */
@@ -295,6 +298,21 @@ export function otherTeamsNamedIn(text: string, team: Team, teams: Team[]): Team
   return teams.filter(t => t.id !== team.id).map(t => ({ t, i: at(t) })).filter(x => x.i >= 0).sort((a, b) => a.i - b.i).map(x => x.t);
 }
 
+/** What the spotlight team did TO the other one ("they let Detroit hang
+ *  around", "held Seattle to ten", "beat the Giants"): the line is about the
+ *  spotlight team, and the other is only who it happened against. */
+const DID_TO = /\b(let|lets|letting|held|hold|holds|holding|allow(ed|s|ing)?|gave|give|gives|giving|kept|keep|keeps|keeping|stop(ped|s|ping)?|beat|beats|beating|handled|outlasted|survived|edged|crushed|routed|buried|blew out|put away|got past|knocked off|took down|shut (down|out))\s+(the\s+)?$/i;
+
+/** The other teams a line is actually about: one that only ever appears as
+ *  the object of something the spotlight team did is dropped. */
+function teamsAbout(text: string, others: Team[]): Team[] {
+  return others.filter(t => {
+    const words = [t.city, t.name, t.abbreviation].filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const hits = [...text.matchAll(new RegExp(`(?<![A-Za-z])(${words.join('|')})(?![A-Za-z])`, 'g'))];
+    return !hits.length || hits.some(m => !DID_TO.test(text.slice(0, m.index)));
+  });
+}
+
 function focusOf(text: string, c: FocusContext): Focus | null {
   const others = otherTeamsNamedIn(text, c.team, c.teams);
   const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? []), ...others.map(t => t.id)], teamWords(c.teams));
@@ -320,7 +338,8 @@ function focusOf(text: string, c: FocusContext): Focus | null {
   const race = standingsOf(text) ?? scheduleOf(text);
   if (race) return race;
   // A line about another team (the next opponent, a rival): their numbers.
-  if (others.length) return { kind: 'team', teamId: others[0].id, mentioned: statsMentioned(text) };
+  const about = teamsAbout(text, others);
+  if (about.length) return { kind: 'team', teamId: about[0].id, mentioned: statsMentioned(text) };
   for (const [unit, re] of UNIT_WORDS) {
     if (!re.test(text)) continue;
     const tiles = computeUnitLine(unit, c.team, c.teams, c.players);
@@ -343,7 +362,33 @@ export function measurableIn(text: string, c: FocusContext): boolean {
   return !!(c.play && c.topic?.gameFlow?.plays[c.play - 1]) || focusOf(text, c) != null;
 }
 
+/** Talk about how the game went, not about a play. */
+const flowTalk = (text: string) => FLOW.test(text) || BEHIND.test(text) || AHEAD.test(text);
+
+/** Is this line about score `n` itself — "the 34-yarder", "that Bothwell
+ *  run", the man who scored by name — rather than the stretch of game the
+ *  writer filed it under ("six lead changes", "that first quarter")? */
+function onThePlay(text: string, flow: GameFlow, n: number, players: Player[]): boolean {
+  if (ONE_PLAY.test(text)) return true;
+  return (flow.plays[n - 1]?.playerIds ?? []).some(id => {
+    const last = players.find(p => p.id === id)?.lastName;
+    return !!last && new RegExp(`\\b${last.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
+  });
+}
+
 export function focusForLine(text: string, c: FocusContext): Focus {
+  const f = focusOfLine(text, c);
+  const flow = c.topic?.gameFlow;
+  if (f.kind !== 'moment' || f.play == null || !flow) return f;
+  if (onThePlay(text, flow, f.play, c.players)) return { ...f, clip: true };
+  // A follow-up on the play they were just on ("Dropped it right in the
+  // bucket.") stays with it, unless it has moved on to the game.
+  const k = c.earlier.length - 1;
+  const stays = k >= 0 && c.earlierPlays?.[k] === f.play && onThePlay(c.earlier[k], flow, f.play, c.players) && !flowTalk(text);
+  return stays ? { ...f, clip: true } : f;
+}
+
+function focusOfLine(text: string, c: FocusContext): Focus {
   const flow = c.topic?.gameFlow;
   // The writer marked the score this line is about.
   if (flow && c.play && flow.plays[c.play - 1]) {
