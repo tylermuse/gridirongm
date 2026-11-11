@@ -1101,6 +1101,18 @@ export function pickTradeValue(pick: DraftPick, teams?: Team[], draftPickOrder?:
     const overallPick = estimateOverallPick(pick.round, teams, pick.originalTeamId);
     return draftPickPointValue(overallPick);
   }
+  // Fallback: no draftPickOrder match and no teams list. This path values every
+  // pick in a round identically (round-midpoint, assumes 32 teams), which makes
+  // AI pick-for-pick trades exploitable (a round-1 #1 and #16 both score ~1670).
+  // Every real caller passes state.teams, so this should not run in practice —
+  // warn (in dev) so a future caller that forgets `teams` is caught before it ships.
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(
+      `[pickTradeValue] fallback hit — no draftPickOrder match and empty/undefined teams; ` +
+      `all round-${pick.round} picks collapse to the same value. Pass state.teams to fix.`,
+      { pickId: pick.id, round: pick.round, originalTeamId: pick.originalTeamId },
+    );
+  }
   // Fallback: use round midpoint estimate (assumes 32 teams)
   const midPick = (pick.round - 1) * 32 + 16;
   return draftPickPointValue(midPick);
