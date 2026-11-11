@@ -18,6 +18,8 @@ import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickWeighted } f
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
+import type { DefensiveScheme } from '@/types';
+import { lookModifier, pickDefensiveLook, NO_LOOK, TENDENCY_WINDOW, type DefensiveLook, type LookModifier, type LookPlay } from './defensiveLooks';
 
 export interface LiveEngineState {
   quarter: number;
@@ -52,6 +54,16 @@ export interface LiveEngineState {
    *  Used to avoid the initial OT kickoff's switchPossession accidentally
    *  counting as a "completed possession". */
   otPlayRunThisPossession?: boolean;
+  /** The look the defense is showing for the user's next offensive snap (null when the user isn't calling a
+   *  scrimmage play). The play-call menu shows it; the call is resolved against it. See defensiveLooks.ts. */
+  defLook?: DefensiveLook | null;
+}
+
+export interface LiveCoachOptions {
+  /** Show a defensive look before each user snap and resolve the call against it. Default true. */
+  defensiveLooks?: boolean;
+  /** The CPU team's defensive scheme (its DC's, else its HC's): tilts which looks it shows. */
+  opponentDefScheme?: DefensiveScheme | null;
 }
 
 export interface LiveCoachEngine {
@@ -215,7 +227,11 @@ export function createLiveCoachEngine(
    *  OT period expires still tied we start another sudden-death OT period
    *  instead of ending the game in a tie. Regular-season ties stand. */
   isPlayoff: boolean = false,
+  opts: LiveCoachOptions = {},
 ): LiveCoachEngine {
+  const looksOn = opts.defensiveLooks !== false;
+  /** The user's recent scrimmage calls, oldest first: the defense adjusts its looks to them. */
+  const recentCalls: LookPlay[] = [];
   const homeOff = extractOff(homePlayers, homeTeam.depthChart);
   const awayOff = extractOff(awayPlayers, awayTeam.depthChart);
   const homeDef = extractDef(homePlayers, homeTeam.depthChart);
@@ -473,7 +489,7 @@ export function createLiveCoachEngine(
     advancePlayClock(6, 0);
   }
 
-  function runRunPlay(events: PlayEvent[], rusherOverride?: 'rb' | 'qb', callPrefix = '') {
+  function runRunPlay(events: PlayEvent[], rusherOverride?: 'rb' | 'qb', callPrefix = '', mod: LookModifier = NO_LOOK) {
     const ok = offKey();
     const dk = defKey();
     const isQb = rusherOverride === 'qb' || (!rusherOverride && Math.random() < 0.10);
@@ -483,9 +499,9 @@ export function createLiveCoachEngine(
       : rating(rusher, 'carrying', 70) * 0.5 + rating(rusher, 'speed', 70) * 0.3 + rating(rusher, 'agility', 70) * 0.2;
     const defStop = rating(dk.lb1, 'tackling', 70) * 0.5 + rating(dk.dl1, 'strength', 70) * 0.5;
 
-    let yards = Math.round((skill - defStop) / 12 + gaussian(4, 3));
+    let yards = Math.round((skill - defStop) / 12 + gaussian(4, 3) + mod.yards);
     // Big run chance
-    if (Math.random() < 0.06) yards += 8 + Math.floor(Math.random() * 12);
+    if (Math.random() < 0.06 * mod.bigPlayMult) yards += 8 + Math.floor(Math.random() * 12);
     yards = clamp(yards, -5, 60);
 
     // Goal line
@@ -542,7 +558,7 @@ export function createLiveCoachEngine(
     }
   }
 
-  function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' = 'short', callPrefix = '') {
+  function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' = 'short', callPrefix = '', mod: LookModifier = NO_LOOK) {
     const ok = offKey();
     const dk = defKey();
     const target = depth === 'screen'
@@ -550,7 +566,7 @@ export function createLiveCoachEngine(
       : (pickReceiver(ok.wrs, ok.tes, ok.rbs) ?? ok.wr1);
 
     // Sack chance based on depth and pass rush
-    const sackChance = depth === 'deep' ? 0.10 : depth === 'short' ? 0.05 : 0.02;
+    const sackChance = (depth === 'deep' ? 0.10 : depth === 'short' ? 0.05 : 0.02) * mod.sackMult;
     const prefix = callPrefix ? `${callPrefix} — ` : '';
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 5));
@@ -588,7 +604,7 @@ export function createLiveCoachEngine(
     }
 
     // INT chance — higher for deep shots
-    const intChance = depth === 'deep' ? 0.06 : depth === 'short' ? 0.025 : 0.015;
+    const intChance = (depth === 'deep' ? 0.06 : depth === 'short' ? 0.025 : 0.015) * mod.intMult;
     if (Math.random() < intChance) {
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const interceptor = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.cb1;
@@ -612,18 +628,18 @@ export function createLiveCoachEngine(
     }
 
     // Completion check
-    const compRate = depth === 'deep' ? 0.45 : depth === 'short' ? 0.70 : 0.78;
+    const compRate = clamp((depth === 'deep' ? 0.45 : depth === 'short' ? 0.70 : 0.78) + mod.comp, 0.05, 0.95);
     const isComplete = Math.random() < compRate;
 
     if (isComplete) {
       let yards: number;
-      if (depth === 'deep') yards = Math.round(15 + gaussian(8, 6));
-      else if (depth === 'short') yards = Math.round(7 + gaussian(2, 3));
-      else yards = Math.round(4 + gaussian(2, 2)); // screen
+      if (depth === 'deep') yards = Math.round(15 + gaussian(8, 6) + mod.yards);
+      else if (depth === 'short') yards = Math.round(7 + gaussian(2, 3) + mod.yards);
+      else yards = Math.round(4 + gaussian(2, 2) + mod.yards); // screen
       yards = clamp(yards, 1, 75);
 
       // Big play
-      if (Math.random() < 0.05) yards += 10 + Math.floor(Math.random() * 15);
+      if (Math.random() < 0.05 * mod.bigPlayMult) yards += 10 + Math.floor(Math.random() * 15);
 
       const newPos = state.fieldPos + yards;
       const isTD = newPos >= 100;
@@ -853,8 +869,30 @@ export function createLiveCoachEngine(
     switchPossession(newFieldPos);
   }
 
+  // ── Defensive look ──
+  /** The look for the next snap, or null when the user isn't about to call a scrimmage play. */
+  function rollLook(): DefensiveLook | null {
+    if (!looksOn || state.isGameOver || state.possession !== userSide) return null;
+    if (state.awaitingXpChoice || state.awaitingKickoffChoice || state.awaitingTwoPointCall) return null;
+    const offScore = userSide === 'home' ? state.homeScore : state.awayScore;
+    const defScore = userSide === 'home' ? state.awayScore : state.homeScore;
+    return pickDefensiveLook({
+      down: state.down, yardsToGo: state.yardsToGo, fieldPos: state.fieldPos,
+      quarter: state.quarter, timeSecs: state.timeSecs, offenseLead: offScore - defScore,
+      scheme: opts.opponentDefScheme, recentCalls,
+    });
+  }
+  state.defLook = rollLook();
+
   // ── Main runOnePlay ──
   function runOnePlay(userCall?: PlayCallType): PlayEvent[] {
+    const events = runOnePlayInner(userCall);
+    // A timeout doesn't change what the defense is showing; anything else sets up a new snap.
+    if (userCall !== 'timeout' || !state.defLook) state.defLook = rollLook();
+    return events;
+  }
+
+  function runOnePlayInner(userCall?: PlayCallType): PlayEvent[] {
     const events: PlayEvent[] = [];
     if (state.isGameOver) return events;
 
@@ -1133,11 +1171,17 @@ export function createLiveCoachEngine(
 
     // Execute the play
     // a called Run always goes to the back: the 10% QB keeper made 'Run' play out as a QB scramble (that's its own call)
-    if (playType === 'run') runRunPlay(events, userCall === 'run' ? 'rb' : undefined, callPrefix);
-    else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix);
-    else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix);
-    else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix);
-    else runPassPlay(events, 'screen', callPrefix);
+    // The look only counts on a snap the user called: CPU snaps and auto-simmed user snaps play out as before.
+    const look = userCall && state.possession === userSide ? (state.defLook ?? null) : null;
+    const mod = lookModifier(playType, look);
+    if (userCall) { recentCalls.push(playType); if (recentCalls.length > TENDENCY_WINDOW) recentCalls.shift(); }
+    const snapIdx = events.length;
+    if (playType === 'run') runRunPlay(events, userCall === 'run' ? 'rb' : undefined, callPrefix, mod);
+    else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix, mod);
+    else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix, mod);
+    else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix, mod);
+    else runPassPlay(events, 'screen', callPrefix, mod);
+    if (look && events[snapIdx]) { events[snapIdx].defLook = look; events[snapIdx].lookEdge = mod.edge; }
     if (state.overtime) state.otPlayRunThisPossession = true;
 
     checkTwoMinWarning(events);
