@@ -1178,7 +1178,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // A line on one score cuts to that play, re-enacted in 3D (SpotlightShowClip).
   // The sim loads when the show opens and goes once the game has been covered.
   const clipOn = !!clipFlow && !noClips && gfxIdx <= lastGameSeg && !over;
-  const clipPlay = clipOn && onGfx && flow && flowData === clipFlow && flow.play != null && hasClip(flow.plays[flow.play - 1]) ? flow.play : null;
+  // Only for a line on the play itself: one about the game around it keeps the chart.
+  const clipPlay = clipOn && onGfx && flow && flowData === clipFlow && focus?.kind === 'moment' && focus.clip && flow.play != null && hasClip(flow.plays[flow.play - 1]) ? flow.play : null;
   // A game's team box score reads as a side-by-side: us left, them right.
   const cmpData = gfxTopic?.gameCompare && tiles && tiles === gfxTopic.gameTeam ? gfxTopic.gameCompare : null;
   const teamOf = (id: string) => teams.find(x => x.id === id);
