@@ -13,7 +13,7 @@ import { HOSTS, type Host } from '@/lib/spotlight/showScript';
 import { ordinal, rankTone, type ShowStatLine } from '@/lib/spotlight/teamStats';
 import { tilesForCard, type TileStat } from '@/lib/spotlight/playerStats';
 import type { ScheduleRow, StandingsRow } from '@/lib/spotlight/showStandings';
-import type { GameFlow } from '@/lib/spotlight/showGame';
+import type { FlowPlay, GameFlow } from '@/lib/spotlight/showGame';
 import { THEMES, type Calls, type ShowThemeId, type Verdict } from '@/lib/spotlight/showThemes';
 
 export const TWO_SHOT_SRC = '/show/two_shot.jpg';
@@ -275,6 +275,34 @@ export type FlowView = GameFlow & {
 const KIND_LABEL = { td: 'Touchdown', fg: 'Field goal', safety: 'Safety', other: 'Score' } as const;
 const SWING_LABEL = { 'go-ahead': 'Go-ahead', ties: 'Ties it', extends: 'Extends lead', cuts: 'Cuts the lead', opens: 'Opens scoring' } as const;
 
+/** The score being discussed, called out: when, who, what it did to the game. */
+function FlowCallout({ f, hi, lineMs }: { f: FlowView; hi: FlowPlay; lineMs: number }) {
+  const callIn = anim(lineMs, 0, 380);
+  const prev = hi.n > 1 ? f.plays[hi.n - 2] : { us: 0, them: 0 };
+  return (
+    <div className="flex items-center gap-[0.7em] rounded-[0.7em] bg-white px-[0.8em] py-[0.35em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]" style={{ opacity: callIn, transform: `translateY(${(1 - callIn) * 0.6}em)` }}>
+      {f.scorer && <div key={f.scorer.key} className="h-[2.8em] w-[2.8em] shrink-0 overflow-hidden rounded-full bg-slate-100 ring-[0.12em] ring-white shadow">{f.scorer.art}</div>}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-[0.4em] text-[0.55em] font-extrabold uppercase tracking-[0.16em]">
+          <span className="rounded bg-[#1e3a5f] px-[0.5em] py-[0.1em] text-white">{hi.quarter === 5 ? 'OT' : `Q${hi.quarter}`}{hi.timeLeft ? ` · ${hi.timeLeft}` : ''}</span>
+          <span className="rounded px-[0.5em] py-[0.1em] text-white" style={{ background: hi.ours ? f.us.color : f.them.color }}>{hi.ours ? f.us.abbreviation : f.them.abbreviation} {KIND_LABEL[hi.kind]}</span>
+          {hi.swing !== 'extends' && <span className="rounded bg-orange-100 px-[0.5em] py-[0.1em] text-orange-700">{SWING_LABEL[hi.swing]}</span>}
+        </div>
+        <div className="mt-[0.1em] truncate text-[1em] font-extrabold text-[#0f1f35]">{hi.title}</div>
+      </div>
+      <div className="flex shrink-0 items-center gap-[0.4em] tabular-nums">
+        <span className="h-[1.6em] w-[1.6em]">{f.usArt}</span>
+        <span className={`text-[1.5em] font-extrabold ${hi.ours ? 'text-orange-600' : 'text-[#0f1f35]'}`}>{hi.us}</span>
+        <span className="text-[1em] font-bold text-slate-300">–</span>
+        <span className={`text-[1.5em] font-extrabold ${!hi.ours ? 'text-orange-600' : 'text-[#0f1f35]'}`}>{hi.them}</span>
+        <span className="h-[1.6em] w-[1.6em]">{f.themArt}</span>
+        {/* The score before this play. Not uppercase: "WAS 13–6" read as Washington. */}
+        <span className="ml-[0.2em] text-[0.55em] font-semibold leading-tight text-slate-400">from<br />{prev.us}–{prev.them}</span>
+      </div>
+    </div>
+  );
+}
+
 /** The game as a margin chart: above the line, the team leads; below, the
  *  opponent. Every score is a dot; the one being discussed is called out
  *  under it with the score it made. */
@@ -298,7 +326,6 @@ function FlowBoard({ f, blockMs, lineMs, text }: { f: FlowView; blockMs: number;
   const low = f.lowPoint != null ? f.plays[f.lowPoint - 1] : undefined;
   const high = f.highPoint != null ? f.plays[f.highPoint - 1] : undefined;
   const callIn = anim(lineMs, 0, 380);
-  const prev = hi ? (hi.n > 1 ? f.plays[hi.n - 2] : { us: 0, them: 0 }) : undefined;
   return (
     <>
       <div className="my-auto min-h-0 py-[0.2em]">
@@ -367,26 +394,7 @@ function FlowBoard({ f, blockMs, lineMs, text }: { f: FlowView; blockMs: number;
           </div>
         </div>
         {hi ? (
-          <div key={hi.n} className="mt-[0.45em] flex items-center gap-[0.7em] rounded-[0.7em] bg-white px-[0.8em] py-[0.35em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]" style={{ opacity: callIn, transform: `translateY(${(1 - callIn) * 0.6}em)` }}>
-            {f.scorer && <div key={f.scorer.key} className="h-[2.8em] w-[2.8em] shrink-0 overflow-hidden rounded-full bg-slate-100 ring-[0.12em] ring-white shadow">{f.scorer.art}</div>}
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-[0.4em] text-[0.55em] font-extrabold uppercase tracking-[0.16em]">
-                <span className="rounded bg-[#1e3a5f] px-[0.5em] py-[0.1em] text-white">{hi.quarter === 5 ? 'OT' : `Q${hi.quarter}`}{hi.timeLeft ? ` · ${hi.timeLeft}` : ''}</span>
-                <span className="rounded px-[0.5em] py-[0.1em] text-white" style={{ background: hi.ours ? f.us.color : f.them.color }}>{hi.ours ? f.us.abbreviation : f.them.abbreviation} {KIND_LABEL[hi.kind]}</span>
-                {hi.swing !== 'extends' && <span className="rounded bg-orange-100 px-[0.5em] py-[0.1em] text-orange-700">{SWING_LABEL[hi.swing]}</span>}
-              </div>
-              <div className="mt-[0.1em] truncate text-[1em] font-extrabold text-[#0f1f35]">{hi.title}</div>
-            </div>
-            <div className="flex shrink-0 items-center gap-[0.4em] tabular-nums">
-              <span className="h-[1.6em] w-[1.6em]">{f.usArt}</span>
-              <span className={`text-[1.5em] font-extrabold ${hi.ours ? 'text-orange-600' : 'text-[#0f1f35]'}`}>{hi.us}</span>
-              <span className="text-[1em] font-bold text-slate-300">–</span>
-              <span className={`text-[1.5em] font-extrabold ${!hi.ours ? 'text-orange-600' : 'text-[#0f1f35]'}`}>{hi.them}</span>
-              <span className="h-[1.6em] w-[1.6em]">{f.themArt}</span>
-              {/* The score before this play. Not uppercase: "WAS 13–6" read as Washington. */}
-              {prev && <span className="ml-[0.2em] text-[0.55em] font-semibold leading-tight text-slate-400">from<br />{prev.us}–{prev.them}</span>}
-            </div>
-          </div>
+          <div key={hi.n} className="mt-[0.45em]"><FlowCallout f={f} hi={hi} lineMs={lineMs} /></div>
         ) : (
           <div className="mt-[0.45em] flex flex-wrap gap-[0.5em] text-[0.7em] font-bold text-[#1e3a5f]" style={{ opacity: anim(blockMs, 900, 400) }}>
             {last && <span className="rounded-full bg-white px-[0.8em] py-[0.2em] shadow">Final: {f.us.abbreviation} {last.us}, {f.them.abbreviation} {last.them}</span>}
@@ -697,6 +705,40 @@ export function ShowGraphic(p: GraphicProps) {
         </>
       )}
      </div>
+    </div>
+  );
+}
+
+/** Over a highlight clip (SpotlightShowClip): the replay tag and the score's
+ *  callout up top (over the stands, clear of the play), who's talking and
+ *  what they're saying along the bottom. Same type scale and clocks as the
+ *  graphic it cuts from. */
+export function ClipLowerThird({ f, speaker, speakerMs, lineMs, text }: { f: FlowView; speaker: Host; speakerMs: number; lineMs: number; text: string }) {
+  const hi = f.play != null ? f.plays[f.play - 1] : undefined;
+  if (!hi) return null;
+  return (
+    <div className="absolute inset-0 [container-type:size]">
+      <div className="absolute inset-0 [font-size:1.85cqw]">
+        <div className="absolute inset-x-0 top-0 h-[1.2%] bg-orange-600" />
+        {/* Over the sim's own "LIVE" tag: this already happened. */}
+        <div className="absolute right-[1.2%] top-[3%] flex items-center gap-[0.4em] rounded-[0.3em] bg-orange-600 px-[0.7em] py-[0.2em] text-[0.7em] font-extrabold uppercase tracking-[0.2em] text-white shadow-lg">
+          <span className="h-[0.55em] w-[0.55em] rounded-full bg-white" style={{ opacity: 0.55 + 0.45 * Math.abs(Math.sin(lineMs / 420)) }} />
+          Replay
+        </div>
+        {/* Below the sim's scorebug (a wider chip on phones), right-hand side:
+            the score, and under it the line being said. The bottom middle is
+            left to the sim's own call ("Touchdown!", "Field goal GOOD"). */}
+        <div className="absolute left-[33%] right-[1.2%] top-[16.5%]">
+          <div key={hi.n}><FlowCallout f={f} hi={hi} lineMs={lineMs} /></div>
+          {text && (
+            <div key={text} className="ml-auto mt-[0.35em] w-fit max-w-full rounded-[0.5em] bg-[#0f1f35]/80 px-[0.75em] py-[0.3em] text-[0.72em] font-semibold leading-snug text-white" style={{ opacity: anim(lineMs, 120, 380) }}>
+              <div className="line-clamp-2">{text}</div>
+            </div>
+          )}
+        </div>
+        <div className="absolute inset-x-0 bottom-0 h-[18%] bg-gradient-to-t from-[#0f1f35]/70 to-transparent" />
+        <div className="absolute left-[4%] bottom-[4.5%]"><SpeakerChip speaker={speaker} speakerMs={speakerMs} lineMs={lineMs} /></div>
+      </div>
     </div>
   );
 }

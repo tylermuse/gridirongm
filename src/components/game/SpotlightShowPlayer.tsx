@@ -26,7 +26,10 @@ import { conferenceRace, divisionTable, upcomingSchedule } from '@/lib/spotlight
 import type { GameResult, Player, Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
-import { ShowCaption, ShowGraphic, ThemeCard, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
+import { ClipLowerThird, ShowCaption, ShowGraphic, ThemeCard, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
+import { SpotlightShowClip } from './SpotlightShowClip';
+import { sim3dOptedOut } from './LiveSim3D';
+import { hasClip } from '@/lib/spotlight/showClip';
 import { wideLineAt, type Calls, type ShowThemeId, type Verdict } from '@/lib/spotlight/showThemes';
 import { ALL_SFX, MUSIC_LEVEL, SFX_GAIN, graphicCues, sfxSrc, type MusicId, type SfxId } from '@/lib/spotlight/showSfx';
 import { trackFeature } from '@bs/core/analytics/feature';
@@ -222,6 +225,19 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // Focus per segment, recomputed when the episode or league data changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache per input is the point
   const focusCache = useMemo(() => new Map<number, Focus>(), [segments, players, teams, team, topics]);
+  // Highlight clips: the game whose scores can be re-enacted, and the last
+  // line of its breakdown (the 3D sim is only up until then).
+  const clipFlow = useMemo(() => topics.map(t => t.gameFlow).find(f => f?.plays.some(hasClip)) ?? null, [topics]);
+  const lastGameSeg = useMemo(() => {
+    let last = -1;
+    segments.forEach((sg, i) => {
+      const t = sg.kind === 'tts' ? sg.topicIdx : sg.kind === 'clip' && sg.voiceover ? sg.voiceover.topicIdx : -1;
+      if (t >= 0 && topics[t]?.gameFlow) last = i;
+    });
+    return last;
+  }, [segments, topics]);
+  // A browser that turned the 3D sim off in live games keeps the chart here too.
+  const [noClips] = useState(sim3dOptedOut);
   const otsRefs = useRef(new Map<string, HTMLVideoElement>());
   const panelKey = useRef('');
   const topicStart = useRef(0);
@@ -1159,6 +1175,10 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       scorer: scorer ? { key: scorer.id, name: `${scorer.firstName} ${scorer.lastName}`, pos: scorer.position, art: <PlayerAvatar player={scorer} size="fill" teamColor={scorer.teamId ? t(scorer.teamId)?.primaryColor : undefined} /> } : null,
     };
   })() : null;
+  // A line on one score cuts to that play, re-enacted in 3D (SpotlightShowClip).
+  // The sim loads when the show opens and goes once the game has been covered.
+  const clipOn = !!clipFlow && !noClips && gfxIdx <= lastGameSeg && !over;
+  const clipPlay = clipOn && onGfx && flow && flowData === clipFlow && flow.play != null && hasClip(flow.plays[flow.play - 1]) ? flow.play : null;
   // A game's team box score reads as a side-by-side: us left, them right.
   const cmpData = gfxTopic?.gameCompare && tiles && tiles === gfxTopic.gameTeam ? gfxTopic.gameCompare : null;
   const teamOf = (id: string) => teams.find(x => x.id === id);
@@ -1281,6 +1301,15 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 revealMs={gfx.revealed && Object.fromEntries(gfx.revealed.map(h => [h, onGfx ? clock - (revealAt.current.get(`${gfx.topicIdx}:${h}`) ?? topicStart.current) : 60_000]))}
               />
             </div>
+          )}
+
+          {/* The highlight: over the game-flow chart while a line is on one score. */}
+          {clipOn && clipFlow && (
+            <SpotlightShowClip flow={clipFlow} play={clipPlay} teams={teams} players={players}>
+              {flow && gfx && (
+                <ClipLowerThird f={flow} speaker={gfx.speaker} speakerMs={clock - speakerStart.current} lineMs={clock - lineStart.current} text={gfx.text} />
+              )}
+            </SpotlightShowClip>
           )}
 
           {/* Over-the-shoulder: the listener facing camera (looping, silent). */}
