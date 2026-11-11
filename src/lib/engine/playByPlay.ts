@@ -54,6 +54,10 @@ export interface PlayEvent {
    *  its drive starts. The 3D sim runs the return to this spot instead of making one up (it used to picture pick-sixes
    *  the engine never scored). Optional: older saved games don't carry it. */
   returnTo?: number;
+  /** Live Coach only: the look the defense showed on a snap the user called, and how the call fared against it
+   *  (-1 the look had it covered, 0 even, +1 the call beat the look). See defensiveLooks.ts. */
+  defLook?: import('./defensiveLooks').DefensiveLook;
+  lookEdge?: -1 | 0 | 1;
   /** Cumulative bucket snapshots taken when this event was pushed. Used by
    *  the live-game UI to render running per-play box-score stats (tofftanaut
    *  + woahitsholly 4/27 — stats should refresh as plays go in, not just at

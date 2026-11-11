@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { LOOK_INFO, type DefensiveLook } from '@/lib/engine/defensiveLooks';
 
 interface PlayCallMenuProps {
   state: {
@@ -28,6 +29,10 @@ interface PlayCallMenuProps {
    *  preserve. 0 means the previous play stopped the clock on its own (e.g.
    *  incomplete pass) so a timeout wouldn't save anything. */
   pendingRunoff?: number;
+  /** What the defense is showing for this snap (Live Coach defensive looks); null/undefined hides the strip */
+  defLook?: DefensiveLook | null;
+  /** How the user's previous call fared against the look it ran into (shown under the current look) */
+  lastRead?: { look: DefensiveLook; edge: -1 | 0 | 1 } | null;
   onPlayCall: (type: PlayCallType) => void;
   onAutoSimRest: () => void;
   onToggleOff: () => void;
@@ -60,7 +65,7 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
 /** Longest field goal the menu offers (LOS + 17). The NFL record is 66; past ~62 the make rate is a few percent at best. */
 const MAX_FG_YARDS = 62;
 
-export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTwoPointCall, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
+export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTwoPointCall, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, defLook, lastRead, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
   const [goingForIt, setGoingForIt] = useState(false);
   const fgYards = 100 - state.fieldPos + 17;
   const fgInRange = fgYards <= MAX_FG_YARDS;
@@ -101,6 +106,24 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTw
             </span>
           )}
         </div>
+
+        {/* What the defense is showing — every call is better or worse against it (defensiveLooks.ts) */}
+        {defLook && !awaitingKickoffChoice && !awaitingXpChoice && !awaitingTwoPointCall && (
+          <div className="px-3 py-2 border-b border-[var(--border)]" data-track-area="defensive-look">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-sec)]">Defense shows</span>
+              <span className="text-sm font-black leading-tight">{LOOK_INFO[defLook].icon} {LOOK_INFO[defLook].label}</span>
+            </div>
+            <div className="text-[11px] leading-snug text-[var(--text-sec)]">{LOOK_INFO[defLook].read}</div>
+            {lastRead && lastRead.edge !== 0 && (
+              <div className={`mt-1 text-[10px] font-bold ${lastRead.edge > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {lastRead.edge > 0
+                  ? `✓ Good read: your last call beat the ${LOOK_INFO[lastRead.look].label}.`
+                  : `✗ The ${LOOK_INFO[lastRead.look].label} had your last call covered.`}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Play buttons */}
         <div className="px-3 py-3">

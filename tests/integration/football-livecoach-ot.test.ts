@@ -79,9 +79,10 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('live coach overtime end rules', () => {
   it('an OT interception counts the throwing team’s possession (Part 1 of the fix)', () => {
-    // pass_deep call order: [pickReceiver, sack?, INT?, pickInterceptor, returnPos]
-    // 0.5 picks a receiver, 0.5 >= sackChance(0.10) = no sack, 0.001 < intChance(0.06) = INT.
-    mockRandom([0.5, 0.5, 0.001]);
+    // The engine first draws the defensive look for the user's snap (at creation), then the pass_deep call order is
+    // [pickReceiver, sack?, INT?, pickInterceptor, returnPos].
+    // 0.5 picks a look, 0.5 picks a receiver, 0.5 is no sack under any look, 0.001 is an INT under any look.
+    mockRandom([0.5, 0.5, 0.5, 0.001]);
     const engine = engineIn(
       otState({ possession: 'home', fieldPos: 50, homeScore: 20, awayScore: 20 }),
       'home',
