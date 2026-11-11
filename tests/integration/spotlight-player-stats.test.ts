@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePlayerStatLine, playerStatsMentioned } from '@/lib/spotlight/playerStats';
+import { computePlayerStatLine, playerStatsMentioned, tilesForCard, type TileStat } from '@/lib/spotlight/playerStats';
 import type { Player, PlayerStats } from '@/types';
 
 const zero = {
@@ -50,5 +50,35 @@ describe('defensive backs', () => {
     expect(line.map(t => t.key)).toEqual(['defInt', 'pd', 'tackles', 'ff']);
     expect(line[0]).toMatchObject({ value: '3', rank: 2, of: 3 }); // the 2-game backup isn't in the pool
     expect(line[3]).toMatchObject({ value: '0', rank: 0, note: 'None' });
+  });
+});
+
+describe('tilesForCard (the three tiles beside a player)', () => {
+  const tile = (key: string): TileStat => ({ key, label: key, value: '1', rank: 0, of: 0 });
+  // A quarterback's game line, in the order the postgame segment builds it.
+  const game = ['cmp', 'passYds', 'passTd', 'int', 'rushYds'].map(tile);
+  const keys = (line: string, tiles = game) => tilesForCard(tiles, playerStatsMentioned(line, tiles)).map(t => t.key);
+
+  it("a quarterback's touchdowns stay up when the line is about his interception", () => {
+    expect(keys('He threw a brutal pick right before the half.')).toEqual(['int', 'cmp', 'passTd']);
+  });
+
+  it('"three scores, one pick" lights the touchdowns and the interception together', () => {
+    const line = 'Twenty-five of thirty-eight, 258 yards, three scores, one pick.';
+    expect(playerStatsMentioned(line, game)).toEqual(expect.arrayContaining(['passTd', 'int']));
+    expect(keys(line)).toEqual(['passTd', 'int', 'cmp']);
+  });
+
+  it('touchdowns make it even when three other stats are mentioned', () => {
+    const season = computePlayerStatLine(a, all)!;
+    const shown = keys('His completion rate and passing yards are fine, but the rating and the picks are not.', season);
+    expect(shown).toHaveLength(3);
+    expect(shown).toContain('passTd');
+  });
+
+  it('nothing mentioned: the first three in order, as before', () => {
+    expect(keys('What a night for him.')).toEqual(['cmp', 'passYds', 'passTd']);
+    const rb = ['rushAtt', 'rushYds', 'ypc', 'rushTd', 'recYds'].map(tile);
+    expect(keys('What a night for him.', rb)).toEqual(['rushAtt', 'rushYds', 'ypc']);
   });
 });
