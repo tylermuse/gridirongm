@@ -167,7 +167,6 @@ export function computeSeasonAwards(state: LeagueState): { award: string; player
   const awards: { award: string; playerId: string; teamId: string }[] = [];
   const activePlayers = state.players.filter(p => !p.retired && p.teamId);
   const majorEligible = activePlayers.filter(p => p.ratings.overall >= 70);
-  const rookieEligible = activePlayers.filter(p => p.ratings.overall >= 60);
 
   const withGames = (pos: string[], pool: typeof activePlayers = majorEligible) =>
     pool.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
@@ -199,7 +198,12 @@ export function computeSeasonAwards(state: LeagueState): { award: string; player
   // in-game has already been through the rollover and is at 1 (which left
   // every season after the first with no rookie award winners). See rookies.ts.
   const isRookie = makeRookieTest(state.players, state.season);
-  const rookies = rookieEligible.filter(p => isRookie(p) && p.stats.gamesPlayed >= 10);
+  // ROY eligibility must NOT inherit the OVR gate used for the major awards:
+  // first-year rookies are almost never 60+ OVR, so sourcing them from an
+  // OVR-filtered pool silently emptied OROY/DROY (whole rookie pool filtered
+  // out). Source rookies directly from active players (first season + 10+
+  // games); the OVR gate still applies to MVP / DPOY / OPOY above.
+  const rookies = activePlayers.filter(p => isRookie(p) && p.stats.gamesPlayed >= 10);
   const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
   if (offensiveRookies.length > 0) {
     const oroy = [...offensiveRookies].sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { BuzzFeed } from '@/components/feed/BuzzFeed';
@@ -16,12 +16,21 @@ import { PageHeader } from '@/components/ui/PageHeader';
 export default function BuzzPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  // Safety valve: if hydration stalls (e.g. a hung Dexie read), stop showing the
+  // skeleton after 6s and fall through to the "no league" state below so the
+  // user always gets an actionable screen instead of an infinite loader.
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (!loading) { setTimedOut(false); return; }
+    const t = setTimeout(() => setTimedOut(true), 6000);
+    return () => clearTimeout(t);
+  }, [loading]);
 
-  if (loading) return <main className="max-w-2xl mx-auto p-3 sm:p-5 md:p-8"><Skeleton className="h-8 w-40 mb-4" /><SkeletonList rows={6} /></main>;
+  if (loading && !timedOut) return <main className="max-w-2xl mx-auto p-3 sm:p-5 md:p-8"><Skeleton className="h-8 w-40 mb-4" /><SkeletonList rows={6} /></main>;
   if (!league) {
     return (
       <main className="max-w-2xl mx-auto p-3 sm:p-5 md:p-8">
-        <p className="mb-4">{error ?? 'No league loaded.'}</p>
+        <p className="mb-4">{error ?? (timedOut ? 'This is taking longer than usual to load. Try reloading, or start / load a league below.' : 'No league loaded.')}</p>
         <Link href="/" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Start or load a league</Link>
       </main>
     );
