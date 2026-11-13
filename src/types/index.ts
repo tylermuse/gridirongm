@@ -660,6 +660,11 @@ export interface Player {
   previousSeasonStats?: PlayerStats;
   /** Season-by-season stat history */
   seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
+  /** Team the player finished the current season on. Stamped when the
+   *  offseason begins and cleared at rollover, so the season log (and the
+   *  records built from it) credits the team he played for rather than one
+   *  he joined in free agency. Absent during the season and on older saves. */
+  seasonTeamId?: string;
   /** Career awards earned */
   awards?: { award: string; season: number }[];
   /** Discipline rating (0-100). Low = more likely to get suspended. */

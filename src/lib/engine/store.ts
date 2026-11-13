@@ -4249,7 +4249,15 @@ export const useGameStore = create<GameStore>()(
             return { ...p, retired: true };
           }
           return p;
-        });
+        }).map(p =>
+          // Stamp the team each player finished the season on, before any
+          // offseason move. Rollover credits the season log to this team, so
+          // a player who then signs elsewhere (or retires) keeps the season
+          // under the team he played it for.
+          p.teamId && p.stats.gamesPlayed > 0 && !p.seasonTeamId
+            ? { ...p, seasonTeamId: p.teamId }
+            : p,
+        );
 
         // Remove retired players from team rosters
         const teamsAfterRetirement = retiredIds.size > 0
@@ -9497,8 +9505,22 @@ export const useGameStore = create<GameStore>()(
         }
 
         const agedPlayers = playersWithAwards.map(p => {
+          // Save current season stats to seasonLog before clearing. Credit
+          // the team the player finished the season on (stamped when the
+          // offseason began); saves that were already mid-offseason have no
+          // stamp and fall back to the current team.
+          const seasonTeamId = p.seasonTeamId ?? p.teamId;
+          const updatedLog = p.stats.gamesPlayed > 0 && seasonTeamId
+            ? [...(p.seasonLog ?? []), { season: state.season, teamId: seasonTeamId, stats: { ...p.stats } }]
+            : (p.seasonLog ?? []);
+          const seasonLog = updatedLog.length > 0 ? updatedLog : undefined;
+
           // Clear teamId on previously retired players so they don't re-appear in lists
-          if (p.retired) return p.teamId ? { ...p, teamId: null, stats: emptyStats() } : p;
+          if (p.retired) {
+            return p.teamId || p.seasonTeamId
+              ? { ...p, teamId: null, stats: emptyStats(), seasonLog, seasonTeamId: undefined }
+              : p;
+          }
 
           if (p.teamId === null) {
             const isFutureProspect =
@@ -9510,7 +9532,7 @@ export const useGameStore = create<GameStore>()(
             // tier) need to stay in the pool so the user can always find
             // cheap options at every position.
             if (!isFutureProspect && !isRecentDraft && p.age >= 33) {
-              return { ...p, retired: true, stats: emptyStats() };
+              return { ...p, retired: true, stats: emptyStats(), seasonLog, seasonTeamId: undefined };
             }
           }
 
@@ -9576,18 +9598,13 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          // Save current season stats to seasonLog before clearing
-          const hasStats = p.stats.gamesPlayed > 0;
-          const updatedLog = hasStats && p.teamId
-            ? [...(p.seasonLog ?? []), { season: state.season, teamId: p.teamId, stats: { ...p.stats } }]
-            : (p.seasonLog ?? []);
-
           return {
             ...p,
             age: p.age + 1,
             experience: isUnsignedFutureProspect ? 0 : p.experience + 1,
             stats: emptyStats(),
-            seasonLog: updatedLog.length > 0 ? updatedLog : undefined,
+            seasonLog,
+            seasonTeamId: undefined,
             injury: null,
             onIR: false,
             contract: advancedContract,

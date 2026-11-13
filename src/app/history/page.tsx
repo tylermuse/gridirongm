@@ -7,8 +7,9 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import type { SeasonSummary, AllLeagueEntry, Player, PlayerStats } from '@/types';
+import type { SeasonSummary, AllLeagueEntry } from '@/types';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { RecordsView } from './_components/RecordsView';
 
 function WinLossSparkline({ seasonHistory, userTeamId }: { seasonHistory: SeasonSummary[]; userTeamId: string }) {
   if (seasonHistory.length === 0) return null;
@@ -97,74 +98,18 @@ function AllLeagueList({
   );
 }
 
-// All-time career-stat leaderboards. careerStats accumulate across a player's
-// whole career and persist on retired players (they stay in state.players with
-// retired=true), so this works on existing saves with no engine changes.
-const RECORD_CATEGORIES: { label: string; value: (s: PlayerStats) => number }[] = [
-  { label: 'Passing Yards', value: s => s.passYards },
-  { label: 'Passing TDs', value: s => s.passTDs },
-  { label: 'Rushing Yards', value: s => s.rushYards },
-  { label: 'Receiving Yards', value: s => s.receivingYards },
-  { label: 'Total TDs', value: s => s.passTDs + s.rushTDs + s.receivingTDs },
-  { label: 'Sacks', value: s => s.sacks },
-  { label: 'Tackles', value: s => s.tackles },
-  { label: 'Tackles for Loss', value: s => s.tacklesForLoss },
-  { label: 'Def. Interceptions', value: s => s.defensiveINTs },
-  { label: 'Pass Deflections', value: s => s.passDeflections },
+type HistoryTab = 'seasons' | 'records';
+
+const HISTORY_TABS: { key: HistoryTab; label: string }[] = [
+  { key: 'seasons', label: 'Seasons' },
+  { key: 'records', label: 'Records' },
 ];
-
-function FranchiseRecords({
-  players,
-  teamAbbr,
-  onSelectPlayer,
-}: {
-  players: Player[];
-  teamAbbr: (teamId: string) => string;
-  onSelectPlayer: (id: string) => void;
-}) {
-  const boards = RECORD_CATEGORIES.map(cat => ({
-    cat,
-    leaders: players
-      .map(p => ({ p, v: cat.value(p.careerStats) }))
-      .filter(x => x.v > 0)
-      .sort((a, b) => b.v - a.v)
-      .slice(0, 10),
-  })).filter(b => b.leaders.length > 0);
-
-  if (boards.length === 0) return null;
-
-  return (
-    <div className="mt-10">
-      <h3 className="text-lg font-black mb-1">Franchise Records</h3>
-      <p className="text-[var(--text-sec)] text-xs mb-4">All-time career leaders across your league.</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {boards.map(({ cat, leaders }) => (
-          <Card key={cat.label}>
-            <CardHeader><CardTitle>{cat.label}</CardTitle></CardHeader>
-            <div className="space-y-1">
-              {leaders.map((x, i) => (
-                <div key={x.p.id} className="flex items-center gap-2 text-sm border-t border-[var(--border)] pt-1.5 first:border-t-0 first:pt-0">
-                  <span className="text-[var(--text-sec)] w-5 shrink-0 font-mono text-xs">{i + 1}</span>
-                  <span className="text-[var(--text-sec)] w-8 shrink-0 font-mono text-[10px]">{x.p.position}</span>
-                  <PlayerLink playerId={x.p.id} onSelect={onSelectPlayer}>
-                    <span className="truncate">{x.p.firstName} {x.p.lastName}</span>
-                  </PlayerLink>
-                  <span className="text-xs text-[var(--text-sec)]">{x.p.teamId ? teamAbbr(x.p.teamId) : '—'}</span>
-                  <span className="ml-auto font-bold tabular-nums">{Math.round(x.v).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function HistoryPage() {
   const { seasonHistory, players, teams, userTeamId, season } = useGameStore();
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [tab, setTab] = useState<HistoryTab>('seasons');
 
   const selected = seasonHistory.find(s => s.season === selectedSeason);
 
@@ -195,15 +140,40 @@ export default function HistoryPage() {
     <GameShell>
       <div className="max-w-6xl mx-auto">
         <h2 className="text-2xl font-black mb-2">Season History</h2>
-        <p className="text-[var(--text-sec)] text-sm mb-6">
+        <p className="text-[var(--text-sec)] text-sm mb-4">
           Currently in Season {season}. {seasonHistory.length} season{seasonHistory.length !== 1 ? 's' : ''} completed.
         </p>
 
-        {seasonHistory.length > 0 && (
+        <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit">
+          {HISTORY_TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              aria-pressed={tab === t.key}
+              className={`px-4 py-1.5 text-xs rounded font-medium transition-colors ${
+                tab === t.key ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'records' && (
+          <RecordsView
+            players={players}
+            teams={teams}
+            userTeamId={userTeamId}
+            season={season}
+            onSelectPlayer={setSelectedPlayerId}
+          />
+        )}
+
+        {tab === 'seasons' && seasonHistory.length > 0 && (
           <WinLossSparkline seasonHistory={seasonHistory} userTeamId={userTeamId} />
         )}
 
-        {seasonHistory.length === 0 ? (
+        {tab !== 'seasons' ? null : seasonHistory.length === 0 ? (
           <EmptyState
             icon="📜"
             title="No History Yet"
@@ -308,8 +278,6 @@ export default function HistoryPage() {
             </div>
           </div>
         )}
-
-        <FranchiseRecords players={players} teamAbbr={teamAbbr} onSelectPlayer={setSelectedPlayerId} />
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
