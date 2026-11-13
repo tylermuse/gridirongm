@@ -68,6 +68,8 @@ def strip_bs_blocks(d):
     # reads the real records, schedule and stats rows it needs elsewhere.
     d.pop("bsRealSeason", None)
     d.pop("bsCoaches", None)  # BS-only real head coaches; stock FBGM has no coaches
+    for p in d["players"]:  # BS-only practice squad / IR tags
+        p.pop("bsRosterStatus", None)
     # Stock FBGM refuses to sim while the user's team is over maxRosterSize, and
     # every team here is over the 60 BS Football uses (practice squad + IR are on
     # the roster). Raise the cap for the downloads so Play works out of the box.
