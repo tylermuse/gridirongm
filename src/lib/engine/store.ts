@@ -10591,22 +10591,20 @@ export const useGameStore = create<GameStore>()(
             tickedPlayers = decrementInjuryWeeks(tickedPlayers, injuryWeeksToTick);
           }
 
-          // Update player stats on top of any injury decrements. A watched
-          // playoff game goes on the season line, so it goes on the career
-          // line with it: a career total is never below its seasons.
-          const newPlayers = tickedPlayers.map(p => {
-            const playerStats = result.playerStats?.[p.id];
-            if (!playerStats) return p;
-            return { ...p, stats: addStats(p.stats, playerStats), careerStats: addStats(p.careerStats, playerStats) };
-          });
+          // No player stats here. `stats` and `careerStats` are regular-season
+          // lines: the playoff sims (simPlayoffGame, simPlayoffRound,
+          // simAllPlayoffGames) write none, so a watched playoff game writes
+          // none either. Otherwise the user's team alone would carry up to
+          // four extra games into the season awards, the stat leaders and the
+          // season log. The box score stays in `schedule` (above).
 
           // Re-injury rolls for any player who played through their injury
           const gameTeamIds = new Set([result.homeTeamId, result.awayTeamId]);
-          const playedIds = new Set(newPlayers.filter(p => p.teamId && gameTeamIds.has(p.teamId)).map(p => p.id));
+          const playedIds = new Set(tickedPlayers.filter(p => p.teamId && gameTeamIds.has(p.teamId)).map(p => p.id));
           const ht = state.teams.find(t => t.id === result.homeTeamId);
           const at = state.teams.find(t => t.id === result.awayTeamId);
           const gameLabel = `${at?.city ?? 'AWY'} at ${ht?.city ?? 'HOM'}`;
-          const reInj = rollReInjuries(newPlayers, playedIds, gameLabel, state.season, 100 + playedRound, state.userTeamId);
+          const reInj = rollReInjuries(tickedPlayers, playedIds, gameLabel, state.season, 100 + playedRound, state.userTeamId);
 
           const newInjuryRound = injuryWeeksToTick > 0 ? targetRound : lastInjuryRound;
           set({ playoffBracket: bracket, champions, newsItems: [...newsItems, ...reInj.news], finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: reInj.players, playoffInjuryRound: newInjuryRound });
