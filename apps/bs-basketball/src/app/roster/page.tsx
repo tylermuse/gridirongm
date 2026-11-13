@@ -98,6 +98,21 @@ export default function RosterPage() {
     const t = setTimeout(() => setAutoFillNote(null), 4000);
     return () => clearTimeout(t);
   }, [autoFillNote]);
+  // Mobile lineup editing: HTML5 drag-and-drop doesn't fire on touch screens, so
+  // on touch devices we offer a tap-to-select / tap-to-swap fallback. `isTouch`
+  // gates it (desktop drag is untouched); `selectedForSwap` holds the first-tapped
+  // player id while we wait for the second tap.
+  const [isTouch, setIsTouch] = useState(false);
+  const [selectedForSwap, setSelectedForSwap] = useState<string | null>(null);
+  // Detect a touch/coarse pointer so we can light up the tap-to-swap fallback.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const update = () => setIsTouch(mq.matches);
+    update();
+    mq.addEventListener?.('change', update);
+    return () => mq.removeEventListener?.('change', update);
+  }, []);
   const [menu, setMenu] = useState<MenuState | null>(null);
   // FEAT-26: which team's roster we're viewing. Defaults to the user's team;
   // any other selection renders read-only (no lineup editing / front-office).
@@ -318,9 +333,47 @@ export default function RosterPage() {
     } catch { /* ignore */ }
   }
 
+  // Touch fallback for drag-and-drop: first tap selects a player (highlight),
+  // second tap on a slot or another player performs the move using the same
+  // mutation helpers the drag handlers use. Mirrors the drag semantics exactly:
+  //  • bench/starter → starting slot  = setStarter (promote + demote occupant)
+  //  • starter → bench player         = swap (bench player into the starter's slot)
+  //  • bench → bench player           = reorder the rotation (take that rung)
+  function tapSwap(target: { type: 'slot'; slot: number } | { type: 'bench'; id: string }) {
+    if (isReadOnly) return;
+    const tappedId = target.type === 'slot' ? starters[target.slot] : target.id;
+    // First tap: select a real player (an empty slot can't be the source).
+    if (!selectedForSwap) {
+      if (tappedId) setSelectedForSwap(tappedId);
+      return;
+    }
+    // Tapping the already-selected player cancels.
+    if (tappedId === selectedForSwap) { setSelectedForSwap(null); return; }
+    const selId = selectedForSwap;
+    const selIsStarter = starters.includes(selId);
+    setSaved(false);
+    if (target.type === 'slot') {
+      if (selId !== starters[target.slot]) setStarter(target.slot, selId);
+    } else if (selIsStarter) {
+      // Swap the selected starter with this bench player.
+      const selSlot = starters.indexOf(selId);
+      if (selSlot !== -1) setStarter(selSlot, target.id);
+    } else {
+      // Both on the bench — selected player takes the target's rung in the rotation.
+      setBench(prev => {
+        const without = prev.filter(x => x !== selId);
+        const ti = without.indexOf(target.id);
+        if (ti < 0) return prev;
+        without.splice(ti, 0, selId);
+        return without;
+      });
+    }
+    setSelectedForSwap(null);
+  }
+
   async function save() {
     const ok = await store.saveLineup(team!.id, lineup);
-    if (ok) { setSaved(true); setAutoFillNote(null); }
+    if (ok) { setSaved(true); setAutoFillNote(null); setSelectedForSwap(null); }
   }
 
   function autoFill() {
@@ -574,7 +627,7 @@ export default function RosterPage() {
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <p className="basis-full sm:basis-auto text-xs text-[var(--text-sec)] sm:mr-auto">
                 <span className="hidden sm:inline">Drag a player onto a starting slot, or use <b>Start</b> / <b>Bench</b>, then save.</span>
-                <span className="sm:hidden">Use <b>Start</b> / <b>Bench</b>, then save.</span>
+                <span className="sm:hidden">{isTouch ? <>Tap a player, then tap a slot or another player to swap — or use <b>Start</b> / <b>Bench</b>. Then save.</> : <>Use <b>Start</b> / <b>Bench</b>, then save.</>}</span>
               </p>
               <Button variant="ghost" onClick={autoFill}>Auto-fill</Button>
               <Button variant="primary" disabled={!validation.valid || store.loading} onClick={() => void save()}>
@@ -586,6 +639,15 @@ export default function RosterPage() {
                   {autoFillNote.text}
                 </span>
               )}
+            </div>
+          )}
+
+          {isTouch && !isReadOnly && selectedForSwap && (
+            <div role="status" className="flex items-center gap-2 mb-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--accent)', background: tint('var(--accent)', 10), color: 'var(--text)' }}>
+              <span className="mr-auto">
+                Selected <b>{playerById[selectedForSwap]?.firstName} {playerById[selectedForSwap]?.lastName}</b> — tap a slot or another player to swap.
+              </span>
+              <button type="button" className="font-semibold underline" style={{ color: 'var(--accent)' }} onClick={() => setSelectedForSwap(null)}>Cancel</button>
             </div>
           )}
 
@@ -612,9 +674,10 @@ export default function RosterPage() {
                   onDragOver={isReadOnly ? undefined : e => { e.preventDefault(); setDragOverSlot(slot); }}
                   onDragLeave={isReadOnly ? undefined : () => setDragOverSlot(s => (s === slot ? null : s))}
                   onDrop={isReadOnly ? undefined : e => onDropSlot(slot, e)}
+                  onClick={!isReadOnly && isTouch ? e => { if (!(e.target as HTMLElement).closest('button,a,input,select,[role="menu"]')) tapSwap({ type: 'slot', slot }); } : undefined}
                   className={`${ROW_GRID} border-t`}
-                  style={{ borderColor: 'var(--border)', background: dragOverSlot === slot ? tint('var(--accent)', 14) : tint('var(--accent)', 5) }}
-                  title={`Open starting slot (${pos})`}
+                  style={{ borderColor: 'var(--border)', background: isTouch && selectedForSwap ? tint('var(--accent)', 12) : dragOverSlot === slot ? tint('var(--accent)', 14) : tint('var(--accent)', 5) }}
+                  title={isTouch && selectedForSwap ? `Tap to move the selected player into the ${pos} slot` : `Open starting slot (${pos})`}
                 >
                   <span className={`${PIN_MIN} text-[10px] font-black`} style={{ ...INHERIT_BG, color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
                   <EmptyStarter />
@@ -634,8 +697,9 @@ export default function RosterPage() {
                 const dragData = isStarter ? { id: p.id, from: 'starter', slot } : { id: p.id, from: 'bench', slot: -1 };
                 const starterBg = dragOverSlot === slot ? tint('var(--accent)', 14) : tint('var(--accent)', 5);
                 const benchDragBg = !isStarter && dragOverBenchId === p.id ? tint('var(--accent)', 14) : null;
+                const isSwapSelected = isTouch && selectedForSwap === p.id;
                 // null = a plain bench row: solid surface with a hover lift.
-                const rowBg = isPending ? tint('#f59e0b', 12) : isStarter ? starterBg : benchDragBg;
+                const rowBg = isSwapSelected ? tint('var(--accent)', 22) : isPending ? tint('#f59e0b', 12) : isStarter ? starterBg : benchDragBg;
                 const dnp = min <= 0;
                 return (
                   <Fragment key={p.id}>
@@ -655,8 +719,9 @@ export default function RosterPage() {
                       onDragOver={isReadOnly ? undefined : isStarter ? e => { e.preventDefault(); setDragOverSlot(slot); } : e => { e.preventDefault(); setDragOverBenchId(p.id); }}
                       onDragLeave={isReadOnly ? undefined : isStarter ? () => setDragOverSlot(s => (s === slot ? null : s)) : () => setDragOverBenchId(cur => (cur === p.id ? null : cur))}
                       onDrop={isReadOnly ? undefined : isStarter ? e => onDropSlot(slot, e) : e => onDropBench(p.id, e)}
+                      onClick={!isReadOnly && isTouch ? e => { if (!(e.target as HTMLElement).closest('button,a,input,select,[role="menu"]')) tapSwap(isStarter ? { type: 'slot', slot } : { type: 'bench', id: p.id }); } : undefined}
                       className={`${ROW_GRID} border-t ${rowBg ? '' : 'bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors'} ${!isReadOnly ? 'cursor-grab' : ''}`}
-                      style={{ borderColor: 'var(--border)', ...(rowBg ? { background: rowBg } : null) }}
+                      style={{ borderColor: 'var(--border)', ...(rowBg ? { background: rowBg } : null), ...(isSwapSelected ? { boxShadow: 'inset 0 0 0 2px var(--accent)' } : null) }}
                       title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : (!isStarter && !isReadOnly ? 'Drag up onto another bench player to move up the rotation (more minutes)' : undefined)}
                     >
                       <span

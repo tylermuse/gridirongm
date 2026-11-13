@@ -11,13 +11,14 @@ import { getDraft } from '../draft';
 import { getBracket } from '../playoffs';
 import { isSeasonUnderway } from '../freeAgency';
 import { getTradeDeadlineDay, getMaxRoster } from '../rules/leagueRules';
+import { allStarBreakAhead, getAllStarDay } from '../allStar/allStar';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
 export type ActionKey =
-  | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
+  | 'simDay' | 'simWeek' | 'simDeadline' | 'simAllStar' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
   | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'startFreeAgency' | 'finishInaugural' | 'beginRegularSeason' | 'goFreeAgency' | 'goReSign';
 
@@ -156,10 +157,21 @@ export function nextAction(league: LeagueState): NextAction {
     primary: 'simDay',
     secondary: [
       { label: 'Sim Week', key: 'simWeek' },
-      ...(league.currentTick <= getTradeDeadlineDay(league)
-        ? [{ label: 'Sim to Trade Deadline', key: 'simDeadline' as ActionKey }]
-        : []),
+      // Whichever milestone comes first sits first (the break is ~day 85, the
+      // stock deadline day 115, but leagues can move the deadline).
+      ...allStarAndDeadline(league),
       { label: 'Sim Rest of Season', key: 'simSeason' },
     ],
   };
 }
+
+function allStarAndDeadline(league: LeagueState): { label: string; key: ActionKey }[] {
+  const out: { label: string; key: ActionKey; day: number }[] = [];
+  if (allStarBreakAhead(league)) {
+    out.push({ label: 'Sim to All-Star Break', key: 'simAllStar', day: getAllStarDay(league) ?? 0 });
+  }
+  const deadline = getTradeDeadlineDay(league);
+  if (league.currentTick <= deadline) out.push({ label: 'Sim to Trade Deadline', key: 'simDeadline', day: deadline });
+  return out.sort((a, b) => a.day - b.day).map(({ label, key }) => ({ label, key }));
+}
+

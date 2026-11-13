@@ -9,7 +9,7 @@ import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-export const CHANGELOG_VERSION = 3;
+export const CHANGELOG_VERSION = 4;
 
 export interface ChangelogEntry {
   v: number;
@@ -18,6 +18,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    v: 4,
+    title: 'All-Star Weekend',
+    items: [
+      'An All-Star Game at the midpoint of the season: 12 All-Stars per conference, East vs West',
+      'Projected rosters update as you sim, with injury replacements when a selection is hurt',
+      'All-Star Game MVP, a full box score, and All-Star selections on every player card',
+      'New "Sim to All-Star Break" option in the sim menu',
+    ],
+  },
   {
     v: 3,
     title: 'Polish + depth',
