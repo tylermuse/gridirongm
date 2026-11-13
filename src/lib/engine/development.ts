@@ -108,14 +108,50 @@ export function developPlayers(
   coachDevMultipliers?: Map<string, number>,
 ): Player[] {
   return players.map(p => {
-    // Already retired — nothing to do
-    if (p.retired) return p;
-
     // Record this season's ending OVR before any development changes
     const ratingHistory = [
       ...(p.ratingHistory ?? []),
       { season: completedSeason, overall: p.ratings.overall },
     ];
+
+    // Already retired — they no longer progress, but a retired player sitting in
+    // the free-agency pool should still physically decline as he ages instead of
+    // being frozen at his retirement-day OVR forever. Apply position-based decay
+    // at ~70% of the normal active rate for anyone past their positional peak.
+    if (p.retired) {
+      const retAging = POSITION_AGING[p.position];
+      if (retAging && p.age > retAging.peakEnd) {
+        const retRatings = { ...p.ratings };
+        const retPrimaryKeys = getPrimaryKeys(p.position);
+        const yearsOverPeak = p.age - retAging.peakEnd;
+        // 0.7x the active early-decline magnitude, scaled by position + years past peak.
+        const declineAmount =
+          clamp(gaussian((2.0 + yearsOverPeak * 0.6) * 0.7, 0.5), 0.5, 5) *
+          regressionMult *
+          retAging.declineRate;
+        for (const key of retPrimaryKeys) {
+          const k = key as string;
+          (retRatings as Record<string, number>)[k] = clamp(
+            (retRatings as Record<string, number>)[k] - declineAmount * 0.7,
+          );
+        }
+        for (const key of RATING_KEYS) {
+          if (!retPrimaryKeys.includes(key)) {
+            const k = key as string;
+            (retRatings as Record<string, number>)[k] = clamp(
+              (retRatings as Record<string, number>)[k] - declineAmount * 0.35,
+            );
+          }
+        }
+        retRatings.overall = clamp(
+          p.ratings.overall +
+            Math.round(computeOvrDelta(p.ratings, retRatings as Record<string, number>, p.position)),
+        );
+        return { ...p, ratings: retRatings, ratingHistory };
+      }
+      // Not yet past peak (rare for a retiree) — record history, hold ratings.
+      return { ...p, ratingHistory };
+    }
 
     // Age-based retirement: position-specific retirement ages
     const aging = POSITION_AGING[p.position];
