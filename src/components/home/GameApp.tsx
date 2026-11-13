@@ -324,7 +324,7 @@ function TeamPicker() {
       // Clear ?roster= from the URL so HomeContent stops forcing TeamPicker.
       // Without this, users who arrived via /rosters "Play in BS Football"
       // would stay stuck on the picker even after initializing a new league.
-      if (searchParams.get('roster') !== null) {
+      if (searchParams.get('roster') !== null || searchParams.get('import') === 'fbgm') {
         router.replace('/');
       }
       // Store is now initialized — Dashboard renders automatically on this page
@@ -1935,8 +1935,11 @@ import { Suspense } from 'react';
 function HomeContent() {
   const initialized = useGameStore(s => s.initialized);
   const searchParams = useSearchParams();
-  const hasRosterParam = searchParams.get('roster') !== null;
-  return initialized && !hasRosterParam ? <Dashboard /> : <TeamPicker />;
+  // ?roster= and ?import=fbgm (a Football GM upload, e.g. handed off from /live)
+  // open the team picker even for a player with a saved league; picking a team
+  // backs that league up to a free save slot first (handlePick).
+  const forcePicker = searchParams.get('roster') !== null || searchParams.get('import') === 'fbgm';
+  return initialized && !forcePicker ? <Dashboard /> : <TeamPicker />;
 }
 
 export default function Home() {
