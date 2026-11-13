@@ -951,10 +951,23 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // snap and shows the play call menu. Toggleable at any time during the game.
   // Defaults ON only for games the user is actively managing (userTeamSide set);
   // spectator / sim-past-weeks games start OFF so they simulate without pausing.
-  // A /live exhibition is a watch-first experience: it starts with Live Coach off
-  // so the 3D game never sits waiting on a play call below the fold; one tap turns it on.
-  const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null && !isExhibition);
+  // A /live exhibition starts with Live Coach and Call Defense on: the player
+  // coaches their roster from the first snap (the call menu is kept in view, below).
+  const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null);
   const [liveCoachPaused, setLiveCoachPaused] = useState(false);
+  // In an exhibition, keep the call menu on screen when the game stops for the
+  // user's call: off screen, a paused 3D game just looks frozen.
+  useEffect(() => {
+    if (!isExhibition || !liveCoachPaused) return;
+    const id = requestAnimationFrame(() => {
+      const slot = [...document.querySelectorAll<HTMLElement>('[data-play-call-slot]')]
+        .find(el => el.offsetParent !== null && el.childElementCount > 0);
+      if (!slot) return;
+      const r = slot.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isExhibition, liveCoachPaused]);
   // Live Coach engine — generates events one-at-a-time after takeover
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
   const [liveExtraEvents, setLiveExtraEvents] = useState<PlayEvent[]>([]);
@@ -1041,10 +1054,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   // Calling the defense too: before each opponent scrimmage snap the engine shows their set and waits for a look.
   // Off by default (it roughly doubles the calls in a game) and remembered per browser.
-  const [callDefenseOn, setCallDefenseOnState] = useState(false);
+  const [callDefenseOn, setCallDefenseOnState] = useState(isExhibition);
   useEffect(() => {
-    // effect-gated read of localStorage so SSR and the first client render agree (no hydration mismatch)
-    setCallDefenseOnState(readCallDefensePref());
+    // effect-gated read of localStorage so SSR and the first client render agree (no hydration mismatch).
+    // An exhibition always starts with Call Defense on, whatever the saved choice.
+    setCallDefenseOnState(isExhibition || readCallDefensePref());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Keep the engine in step with the switch (it may have been created before the saved choice was read).
   useEffect(() => {
@@ -2549,9 +2564,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
           const fp = es.fieldPos;
           const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
-          if (defenseCallPending(es)) return <div className="lg:hidden">{renderDefenseMenu(es)}</div>;
+          if (defenseCallPending(es)) return <div data-play-call-slot className="lg:hidden">{renderDefenseMenu(es)}</div>;
           return (
-            <div className="lg:hidden">
+            <div data-play-call-slot className="lg:hidden">
               <PlayCallMenu
                 state={{
                   quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
@@ -3389,7 +3404,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               slot with the Live Feed below: the menu shows on the user's snap,
               the feed fills the slot otherwise — no layout shift between
               plays and no empty reserved gap while the opponent has the ball. */}
-          <div className="hidden lg:block">
+          <div data-play-call-slot className="hidden lg:block">
           {liveEngineRef.current && liveCoachPaused && (() => {
             const es = liveEngineRef.current!.getState();
             const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
