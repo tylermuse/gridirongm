@@ -19,6 +19,7 @@ import { getDiscipline } from '../discipline';
 import { getInjuries } from '../injuries';
 import { getTransactions } from '../transactions/transactions';
 import { buildRivalryEvents } from '../rivalries/rivalries';
+import { getAllStarGame, SIDE_LABEL } from '../allStar/allStar';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -38,6 +39,7 @@ export type FeedKind =
   | 'fine'
   | 'trade'
   | 'rivalry'
+  | 'all_star'
   | 'schedule_notice';
 
 export interface FeedItem {
@@ -53,6 +55,8 @@ export interface FeedItem {
   playerId?: string;
   /** Subject team — drives the team-color chip in the news feed. */
   teamId?: string;
+  /** In-app route to open (e.g. the All-Star page). */
+  href?: string;
 }
 
 const ICONS: Record<FeedKind, string> = {
@@ -65,6 +69,7 @@ const ICONS: Record<FeedKind, string> = {
   fine: '💸',
   trade: '🔄',
   rivalry: '😤',
+  all_star: '⭐',
   schedule_notice: '📅',
 };
 
@@ -278,6 +283,37 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
       day: r.day,
       gameId: r.gameId,
       teamId: r.homeTeamId,
+    });
+  }
+
+  // ── All-Star break: the rosters + the game (exhibition, kept off league.games) ──
+  const asg = getAllStarGame(league);
+  if (asg) {
+    const loser = asg.winner === 'east' ? 'west' : 'east';
+    const mvp = asg.mvpId ? players[asg.mvpId] : null;
+    const mvpLine = mvp && asg.lines[mvp.id]
+      ? ` — ${mvp.firstName} ${mvp.lastName} takes MVP with ${asg.lines[mvp.id].pts} points`
+      : '';
+    items.push({
+      id: `allstar-game-${asg.season}`,
+      kind: 'all_star',
+      icon: ICONS.all_star,
+      headline: `All-Star Game: ${SIDE_LABEL[asg.winner]} ${asg.finalScore[asg.winner]}, ${SIDE_LABEL[loser]} ${asg.finalScore[loser]}${mvpLine}`,
+      day: asg.day + 0.3,
+      href: '/all-star',
+    });
+    const uid = league.userTeamId;
+    const mine = uid ? [...asg.rosters.east, ...asg.rosters.west].filter(s => s.teamId === uid) : [];
+    items.push({
+      id: `allstar-rosters-${asg.season}`,
+      kind: 'all_star',
+      icon: ICONS.all_star,
+      headline: mine.length > 0
+        ? `All-Stars named: ${mine.map(s => s.name).join(', ')} ${mine.length === 1 ? 'makes' : 'make'} the team`
+        : 'All-Star rosters announced — 12 per conference',
+      day: asg.day + 0.2,
+      href: '/all-star',
+      teamId: mine.length > 0 ? uid ?? undefined : undefined,
     });
   }
 

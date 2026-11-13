@@ -40,6 +40,7 @@ function sectionsFor({ userTeamId, inDraftOffseason, draftComplete }: NavContext
         { href: '/players', label: 'Player Search', icon: '🔎' },
         // Football folds its ranking boards into one item with in-page tabs.
         { href: '/power-rankings', label: 'Rankings', icon: '📈', alsoActive: ['/gm-rankings', '/award-race'] },
+        { href: '/all-star', label: 'All-Star Game', icon: '⭐' },
         { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
         { href: '/news', label: 'News', icon: '📰', alsoActive: ['/recap'] },
         { href: '/show', label: 'The Show', icon: '🎙️' },

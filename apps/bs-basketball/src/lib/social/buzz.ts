@@ -68,6 +68,7 @@ const KIND_POOL: Record<FeedKind | 'trade' | 'signing' | 'release' | 'draft' | '
   suspension: ['insider', 'hater', 'casual'],
   fine: ['casual', 'analyst', 'beat'],
   rivalry: ['homer', 'hater', 'beat'],
+  all_star: ['homer', 'casual', 'hater'],
   schedule_notice: ['casual', 'beat'],
   trade: ['insider', 'beat', 'analyst'],
   signing: ['insider', 'homer', 'casual'],

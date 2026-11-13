@@ -42,6 +42,7 @@ const CAT: Record<FeedKind, { label: string; tone: ChipTone }> = {
   fine: { label: 'Fine', tone: 'violet' },
   trade: { label: 'Trade', tone: 'accent' },
   rivalry: { label: 'Rivalry', tone: 'red' },
+  all_star: { label: 'All-Star', tone: 'amber' },
   schedule_notice: { label: 'Schedule', tone: 'slate' },
 };
 
@@ -86,11 +87,12 @@ export function NewsFeed({ league, max, filter, items: precomputed }: NewsFeedPr
 
   const onActivate = (item: FeedItem) => {
     if (item.playerId) setModalPlayerId(item.playerId);
+    else if (item.href) router.push(item.href);
     else if (item.gameId) router.push(`/game/${item.gameId}`);
   };
 
   const renderCard = (item: FeedItem) => {
-    const clickable = !!item.gameId || !!item.playerId;
+    const clickable = !!item.gameId || !!item.playerId || !!item.href;
     const cat = CAT[item.kind];
     const team = item.teamId ? teamById.get(item.teamId) : undefined;
     const isUser = !!userTeamId && item.teamId === userTeamId;

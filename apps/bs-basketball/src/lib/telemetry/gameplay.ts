@@ -80,7 +80,7 @@ export function rosterFileName(url: string): string | null {
   return url.split('/').pop()?.split('?')[0] || null;
 }
 
-export type DaySimMode = 'day' | 'next_game' | 'watch_game' | 'week' | 'deadline' | 'season';
+export type DaySimMode = 'day' | 'next_game' | 'watch_game' | 'week' | 'deadline' | 'allstar' | 'season';
 
 /** `day_simmed` properties. Hoops is day-based, so this is deliberately a
  *  different event from Football's `week_simmed`. `league` is the pre-sim
