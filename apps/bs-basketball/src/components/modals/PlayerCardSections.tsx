@@ -17,6 +17,7 @@ import {
 } from '@bs/sport-basketball';
 import { getSeasonHistory, type HistoryAwardRef } from '@/lib/history';
 import { ratingFullLabel } from '@/lib/ui/ratingLabels';
+import { playerAllStarSeasons } from '@/lib/allStar/allStar';
 import { ratingHex, ratingTier } from '@/lib/ui/ratingColor';
 
 type LeagueLike = Parameters<typeof getSeasonHistory>[0];
@@ -270,6 +271,12 @@ export function playerAwardChips(league: LeagueLike, playerId: string): PlayerAw
       });
     });
   }
+
+  // All-Star selections + All-Star Game MVPs (played mid-season, so the
+  // current season counts as soon as the break is in the books).
+  const asg = playerAllStarSeasons(league, playerId);
+  for (const season of asg.mvps) add('allStarMvp', 'All-Star MVP', '🌟', 90, season);
+  for (const season of asg.selections) add('allStar', 'All-Star', '⭐', 95, season);
 
   return [...chips.values()].sort((a, b) => a.rank - b.rank);
 }

@@ -113,6 +113,7 @@ import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gm
 import { scoutProspect as scoutProspectState, scoutMany as scoutManyState, toggleWatchlist as toggleWatchlistState } from '../scouting';
 import type { ScoutLevel } from '../draft/types';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
+import { allStarNote, getAllStarDay } from '../allStar/allStar';
 import type { TeamId, BaseCoach, PlayerId } from '@bs/core/adapter';
 import type { BasketballLineup, BasketballPlayer, BasketballTeam, BasketballGamePlan } from '@bs/sport-basketball';
 
@@ -205,7 +206,7 @@ interface LeagueStore {
 
   /** Bulk-sim to a milestone: a week ahead, the trade deadline, or the end of
    *  the regular season. Returns days + games simmed. */
-  simRange: (target: 'week' | 'deadline' | 'season') => Promise<{ daysSimmed: number; gamesSimmed: number } | null>;
+  simRange: (target: 'week' | 'deadline' | 'allstar' | 'season') => Promise<{ daysSimmed: number; gamesSimmed: number } | null>;
 
   /** Seed + generate the playoff bracket once the regular season is done.
    *  Returns true if playoffs were started (or already running). */
@@ -906,7 +907,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       }
       await saveLeague(outcome.league);
       trackDaySimmed(get, current, 'day', 1, outcome.gamesSimmed);
-      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) + newProposalNote(current, outcome.league) } });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) + newProposalNote(current, outcome.league) + allStarNote(current, outcome.league) } });
       return { day: outcome.day, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simDay failed:', err);
@@ -1934,6 +1935,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     const targetDay =
       target === 'week' ? current.currentTick + 7 :
       target === 'deadline' ? getTradeDeadlineDay(current) :
+      target === 'allstar' ? getAllStarDay(current) :
       null;
     const total = scheduledDaysThrough(current, targetDay);
     set({ loading: true, error: null, simProgress: { done: 0, total } });
@@ -1972,7 +1974,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       }
       await saveLeague(league);
       trackDaySimmed(get, current, target, daysSimmed, gamesSimmed);
-      set({ league, loading: false, simProgress: null, simToast: { text: simSummary(league, gamesSimmed) + newProposalNote(current, league) } });
+      set({ league, loading: false, simProgress: null, simToast: { text: simSummary(league, gamesSimmed) + newProposalNote(current, league) + allStarNote(current, league) } });
       return { daysSimmed, gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simRange failed:', err);

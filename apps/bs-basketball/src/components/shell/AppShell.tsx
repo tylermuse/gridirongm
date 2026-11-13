@@ -97,7 +97,7 @@ const GAME_ROUTE_PREFIXES = [
   '/playoffs', '/news', '/show', '/buzz', '/staff', '/finances', '/draft', '/free-agency',
   '/trade', '/transactions', '/awards', '/award-race', '/recap', '/history', '/settings',
   '/team/', '/player/', '/game/', '/coach/', '/compare', '/expansion', '/league', '/schedule',
-  '/draft-preview', '/draft-recap', '/predictions',
+  '/draft-preview', '/draft-recap', '/predictions', '/all-star',
 ];
 
 function isGameRoute(pathname: string): boolean {
@@ -287,6 +287,7 @@ function useShellActions(league: League, pathname: string): ShellActions {
       case 'simDay': await store.simDay(); break;
       case 'simWeek': await store.simRange('week'); break;
       case 'simDeadline': await store.simRange('deadline'); break;
+      case 'simAllStar': await store.simRange('allstar'); break;
       case 'simSeason': await store.simRange('season'); break;
       case 'simPlayoffDay': await store.simPlayoffDay(); break;
       case 'simPlayoffRound': await store.simPlayoffRound(); break;

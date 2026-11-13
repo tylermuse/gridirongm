@@ -39,6 +39,7 @@ import type {
 } from '@bs/sport-basketball';
 import { trimPlayLogs } from '../live/trimPlayLogs';
 import { ensureSeasonObjectives } from '../owner/objectives';
+import { maybePlayAllStarGame } from '../allStar/allStar';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -181,7 +182,11 @@ export function simNextDay(input: LeagueState): SimDayResult | null {
       ? runAiFreeAgency(withRequests, { rounds: 1, fillOnly: true }).league
       : withRequests;
 
-  return { league: withFa, day: nextDay, gamesSimmed };
+  // All-Star break: once the first half is in the books, name the All-Stars and
+  // play East vs West (an exhibition — kept off league.games). No-op otherwise.
+  const withAllStar = maybePlayAllStarGame(withFa, league.currentTick);
+
+  return { league: withAllStar, day: nextDay, gamesSimmed };
 }
 
 // ===========================================================================
