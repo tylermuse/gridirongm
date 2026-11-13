@@ -4,6 +4,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { trackEvent } from '@bs/core/analytics/track';
 import {
   encodeShareQuery,
+  parseQuickStart,
   parseShareQuery,
   parseTeamPreselect,
   randomSeed,
@@ -37,6 +38,10 @@ interface DraftState {
   paused: boolean;
   /** Opened from a share link, so it shouldn't count as a completed mock. */
   fromShare: boolean;
+  /** One-line note above the board, e.g. the prospect picked on a team page was already gone. */
+  notice: string | null;
+  /** Opened straight from a team page (`go=1`), tracked once on mount. */
+  quickStart: { team: string; prefilled: boolean } | null;
 }
 
 type State = SetupState | DraftState;
@@ -52,7 +57,7 @@ type Action =
 
 function reducer(state: State, action: Action): State {
   if (action.type === 'start') {
-    return { screen: 'draft', settings: action.settings, speed: action.speed, userPicks: [], revealed: 0, paused: false, fromShare: false };
+    return { screen: 'draft', settings: action.settings, speed: action.speed, userPicks: [], revealed: 0, paused: false, fromShare: false, notice: null, quickStart: null };
   }
   if (state.screen !== 'draft') return state;
   switch (action.type) {
@@ -90,6 +95,8 @@ function initialState(data: MockDraftData, initialQuery: string): State {
       revealed: share.replay.picks.length,
       paused: false,
       fromShare: true,
+      notice: null,
+      quickStart: null,
     };
   }
   if (share.kind === 'stale') {
@@ -100,7 +107,22 @@ function initialState(data: MockDraftData, initialQuery: string): State {
       userTids: share.hint.userTids,
     };
   }
-  // `?team=bears` from a team page's CTA: open setup with that team picked.
+  // `?team=bears&go=1[&pick=<pid>]` from a team page: straight into the draft, no setup screen.
+  const quick = parseQuickStart(data, params, randomSeed());
+  if (quick) {
+    return {
+      screen: 'draft',
+      settings: quick.settings,
+      speed: 'fast',
+      userPicks: quick.userPicks,
+      revealed: 0,
+      paused: false,
+      fromShare: false,
+      notice: quick.goneNotice,
+      quickStart: { team: params.get('team') ?? '', prefilled: quick.prefilled },
+    };
+  }
+  // `?team=bears` (older links): open setup with that team picked.
   const preselect = parseTeamPreselect(data, params);
   return preselect ? { ...setup, ...preselect } : setup;
 }
@@ -136,6 +158,23 @@ function MockDraftSession({ data, asOf, initialQuery }: { data: MockDraftData; a
   useEffect(() => {
     if (shareQuery) window.history.replaceState(null, '', `/mock-draft?${shareQuery}`);
   }, [shareQuery]);
+
+  // A team-page quick start skips handleStart, so log its start here, once.
+  const quickStart = drafting?.quickStart ?? null;
+  const trackedQuickStart = useRef(false);
+  useEffect(() => {
+    if (!quickStart || !settings || trackedQuickStart.current) return;
+    trackedQuickStart.current = true;
+    trackEvent('mock_draft_start', {
+      rounds: settings.rounds,
+      teams: settings.userTids.length,
+      speed: 'fast',
+      source: 'team_page',
+      team: quickStart.team,
+      prefilled: quickStart.prefilled,
+      pick_gone: Boolean(drafting?.notice),
+    });
+  }, [quickStart, settings, drafting?.notice]);
 
   const fromShare = drafting?.fromShare;
   const trackedCompletion = useRef<string | null>(null);
@@ -200,7 +239,11 @@ function MockDraftSession({ data, asOf, initialQuery }: { data: MockDraftData; a
   }
 
   return (
-    <DraftScreen
+    <>
+      {state.notice && (
+        <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{state.notice}</p>
+      )}
+      <DraftScreen
       data={data}
       settings={state.settings}
       replay={replay}
@@ -213,7 +256,8 @@ function MockDraftSession({ data, asOf, initialQuery }: { data: MockDraftData; a
       onTogglePause={() => dispatch({ type: 'togglePause' })}
       onUndo={handleUndo}
       onRestart={handleRestart}
-    />
+      />
+    </>
   );
 }
 
