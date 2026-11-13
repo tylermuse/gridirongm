@@ -25,7 +25,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
-import { type ImportedLeagueData, loadLeagueFromUrl, loadNativeSaveIntoApp, BsfNativeSaveImportError } from '@/lib/data/leagueImport';
+import { type ImportedLeagueData, loadLeagueFromUrl, loadNativeSaveIntoApp, BsfNativeSaveImportError, readUploadedLeagueFile, LeagueFileUploadError } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
@@ -44,8 +44,22 @@ function TeamPicker() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showImport, setShowImport] = useState(false);
+  // ?import=fbgm (linked from Football GM posts) opens the import panel.
+  const [showImport, setShowImport] = useState(searchParams.get('import') === 'fbgm');
   const [importUrl, setImportUrl] = useState('');
+  // Name of the Football GM export the player uploaded, when the active league
+  // came from a file rather than a URL. Its blob: URL lives in activeUrl.
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  // The import panel sits below the hero and team grid; bring it into view
+  // when a Football GM player arrives via ?import=fbgm.
+  useEffect(() => {
+    if (searchParams.get('import') !== 'fbgm') return;
+    const id = window.setTimeout(() => {
+      document.getElementById('league-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [searchParams]);
   const [importLoading, setImportLoading] = useState(false);
   const [importedTeams, setImportedTeams] = useState<ImportedLeagueData | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
@@ -310,7 +324,7 @@ function TeamPicker() {
       // Clear ?roster= from the URL so HomeContent stops forcing TeamPicker.
       // Without this, users who arrived via /rosters "Play in BS Football"
       // would stay stuck on the picker even after initializing a new league.
-      if (searchParams.get('roster') !== null) {
+      if (searchParams.get('roster') !== null || searchParams.get('import') === 'fbgm') {
         router.replace('/');
       }
       // Store is now initialized — Dashboard renders automatically on this page
@@ -350,6 +364,8 @@ function TeamPicker() {
     setError(null);
     try {
       const data = await loadLeagueFromUrl(importUrl.trim());
+      releaseUploadUrl();
+      setUploadedFileName(null);
       setImportedTeams(data);
       setActiveUrl(importUrl.trim());
       // On phones the import panel sits below the team grid, so bring the
@@ -366,10 +382,48 @@ function TeamPicker() {
     }
   }
 
+  /** Free the blob: URL behind a previous upload before replacing it. */
+  function releaseUploadUrl() {
+    if (activeUrl?.startsWith('blob:')) URL.revokeObjectURL(activeUrl);
+  }
+
+  // A Football GM export from the player's own computer (.json or .json.gz).
+  // Converted here for the team picker; newLeague re-reads it via a blob: URL.
+  async function handleUploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImportLoading(true);
+    setError(null);
+    try {
+      const result = await readUploadedLeagueFile(file);
+      if (result.kind === 'native') {
+        const routed = await routeNativeSave(result.nativeSave);
+        if (!routed) setError('Could not load that BS Football save.');
+        return;
+      }
+      releaseUploadUrl();
+      setImportedTeams(result.league);
+      setActiveUrl(result.url);
+      setImportUrl('');
+      setUploadedFileName(file.name);
+      // A Football GM league is usually exported to keep playing it, so go
+      // straight to the regular season rather than our re-signing window.
+      setStartMode('regular');
+      requestAnimationFrame(() => document.getElementById('team-picker')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    } catch (err) {
+      setError(err instanceof LeagueFileUploadError ? err.message : 'Could not read that file. Export your league again from Football GM and try once more.');
+    } finally {
+      setImportLoading(false);
+    }
+  }
+
   function handleClearImport() {
+    releaseUploadUrl();
     setImportedTeams(null);
     setActiveUrl(null);
     setImportUrl('');
+    setUploadedFileName(null);
   }
 
   // Use imported teams if available, otherwise default fictional teams
@@ -529,7 +583,7 @@ function TeamPicker() {
 
       {/* Import League File Section — phones: below the team grid, so the first
           thing after the hero is the choice a new GM actually has to make. */}
-      <div className="order-2 sm:order-none mt-4 sm:mt-0 mb-6 max-w-4xl w-full">
+      <div id="league-import" className="order-2 sm:order-none mt-4 sm:mt-0 mb-6 max-w-4xl w-full scroll-mt-6">
         <button
           onClick={() => setShowImport(!showImport)}
           className="flex items-center gap-2 text-sm text-[var(--text-sec)] hover:text-blue-600 transition-colors mx-auto"
@@ -541,8 +595,26 @@ function TeamPicker() {
         </button>
         {showImport && (
           <div className="mt-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] max-w-xl mx-auto">
+            <p className="text-sm font-medium mb-1">Play your Football GM league here</p>
             <p className="text-xs text-[var(--text-sec)] mb-3">
-              Paste a URL to a league file (JSON format) to use custom teams, players, and draft prospects.
+              In Football GM, open Tools &rarr; Export League and download the file, then upload it here.
+              Your teams, players, contracts and depth charts come with it. Nothing to install.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <Button size="sm" onClick={() => uploadInputRef.current?.click()} disabled={importLoading}>
+                {importLoading ? 'Reading file...' : 'Upload Football GM league'}
+              </Button>
+              <span className="text-[11px] text-[var(--text-sec)]">.json or .json.gz</span>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept=".json,.gz,application/json,application/gzip"
+                className="hidden"
+                onChange={handleUploadFile}
+              />
+            </div>
+            <p className="text-xs text-[var(--text-sec)] mb-2">
+              Or paste a URL to a league file (JSON format).
             </p>
             <div className="flex gap-2">
               <input
@@ -560,7 +632,7 @@ function TeamPicker() {
             {importedTeams && (
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-xs text-green-600 font-medium">
-                  ✓ Loaded {importedTeams.teams.length} teams, {importedTeams.players.length} players
+                  ✓ Loaded {uploadedFileName ? `${uploadedFileName}: ` : ''}{importedTeams.teams.length} teams, {importedTeams.players.length} players
                 </span>
                 <button onClick={handleClearImport} className="text-xs text-[var(--text-sec)] hover:text-red-500">
                   Clear & Use Default
@@ -1863,8 +1935,11 @@ import { Suspense } from 'react';
 function HomeContent() {
   const initialized = useGameStore(s => s.initialized);
   const searchParams = useSearchParams();
-  const hasRosterParam = searchParams.get('roster') !== null;
-  return initialized && !hasRosterParam ? <Dashboard /> : <TeamPicker />;
+  // ?roster= and ?import=fbgm (a Football GM upload, e.g. handed off from /live)
+  // open the team picker even for a player with a saved league; picking a team
+  // backs that league up to a free save slot first (handlePick).
+  const forcePicker = searchParams.get('roster') !== null || searchParams.get('import') === 'fbgm';
+  return initialized && !forcePicker ? <Dashboard /> : <TeamPicker />;
 }
 
 export default function Home() {

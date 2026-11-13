@@ -1,5 +1,5 @@
 import type { GameResult, Player, PlayerRatings, PlayerStats, Position, Team } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed, DEFAULT_LEAGUE_SETTINGS } from '@/types';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from '@/lib/engine/salary';
 import { LEAGUE_TEAMS } from './teams';
 import { realHeadCoachesFromFile, type RealHeadCoachEntry } from './realHeadCoaches';
@@ -76,6 +76,20 @@ interface FbgmTeam {
   abbrev: string;
   colors?: string[];
   imgURL?: string;
+  /** FBGM depth chart: position key (QB, RB, …, K, P, KR, PR) → pids in
+   *  depth order. Real exports list the whole roster under every key. */
+  depth?: Record<string, number[]>;
+}
+
+/** One entry of the current FBGM `contracts` history (exports since 2026):
+ *  a deal starting in `start` with one salary per season in `amounts`
+ *  (thousands). Older files used a single `contract: { amount, exp }`. */
+interface FbgmContractEntry {
+  start?: number;
+  amounts?: number[];
+  amount?: number;
+  exp?: number;
+  type?: string;
 }
 
 interface FbgmPlayer {
@@ -90,6 +104,7 @@ interface FbgmPlayer {
   born?: { year?: number };
   draft?: { year?: number; pick?: number; round?: number; tid?: number; originalTid?: number };
   contract?: { amount?: number; exp?: number };
+  contracts?: FbgmContractEntry[];
   injury?: { type?: string | { description?: string; name?: string; abbreviation?: string }; gamesRemaining?: number };
   ratings?: FbgmRating[];
   /** Set of every team-id the player has accumulated stats for (career history). */
@@ -144,6 +159,8 @@ interface FbgmLeagueFile {
     season?: number;
     confs?: Array<{ cid: number; name: string }>;
     divs?: Array<{ did: number; cid: number; name: string }>;
+    /** FBGM's cap in thousands (default 200000 = $200M). */
+    salaryCap?: number;
   };
   draftPicks?: FbgmDraftPick[];
   schedule?: FbgmScheduledGame[];
@@ -151,6 +168,11 @@ interface FbgmLeagueFile {
   /** BS-only: the real current head coach per team, keyed by the file's team
    *  abbreviation (written weekly by scripts/weekly_roster_update.py). */
   bsCoaches?: Record<string, RealHeadCoachEntry>;
+  /** BS-only: set to 'upload' by readUploadedLeagueFile for a file the player
+   *  brought from their own Football GM league. Uploaded leagues keep the
+   *  player's FBGM depth chart; our curated roster files keep the ratings-
+   *  sorted depth they've always used. */
+  bsSource?: 'upload';
 }
 
 function clamp(value: number, min = 20, max = 99): number {
@@ -179,6 +201,67 @@ function colorLuminance(hex: string): number {
   const g = parseInt(m[1].slice(2, 4), 16) / 255;
   const b = parseInt(m[1].slice(4, 6), 16) / 255;
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Conference name → BS conference. Real FBGM exports name them "American
+ *  Conference" / "National Conference"; NFL roster files use "AFC" / "NFC".
+ *  Anything else (custom names) falls back to order: first conf AC, rest NC. */
+export function mapConference(name: string | undefined, index: number): Team['conference'] {
+  const n = (name ?? '').trim().toLowerCase();
+  if (n === 'nfc' || n.startsWith('national') || n === 'nc') return 'NC';
+  if (n === 'afc' || n.startsWith('american') || n === 'ac') return 'AC';
+  return index === 0 ? 'AC' : 'NC';
+}
+
+/** The player's contract for `season` as `{ amount, exp }` (thousands; exp =
+ *  year of free agency). Reads the legacy `contract` object, or the current
+ *  FBGM `contracts` history: the latest deal that started by `season`, paying
+ *  that season's amount and expiring the year after its last paid season. */
+export function fbgmContract(
+  player: Pick<FbgmPlayer, 'contract' | 'contracts'>,
+  season: number,
+): { amount?: number; exp?: number } | undefined {
+  if (player.contract) return player.contract;
+  const history = player.contracts;
+  if (!Array.isArray(history) || history.length === 0) return undefined;
+  const started = history.filter(c => (c.start ?? season) <= season);
+  const deal = started.length > 0 ? started[started.length - 1] : history[0];
+  if (Array.isArray(deal.amounts) && deal.amounts.length > 0) {
+    const start = deal.start ?? season;
+    const idx = Math.min(deal.amounts.length - 1, Math.max(0, season - start));
+    return { amount: deal.amounts[idx], exp: start + deal.amounts.length };
+  }
+  return { amount: deal.amount, exp: deal.exp };
+}
+
+/** Only absolute image URLs survive import. FBGM exports use paths relative
+ *  to play.football-gm.com (e.g. /img/logos-primary/BOS.svg) that 404 here. */
+function absoluteImageUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  return /^(https?:)?\/\//i.test(url) || url.startsWith('data:image/') ? url : undefined;
+}
+
+/** Sort a position group by its order in the FBGM depth list (pids), then
+ *  anyone the list doesn't mention by overall. FBGM lists the whole roster
+ *  under every key, so only same-position players are kept here. */
+export function orderByFbgmDepth<T extends { id: string; ratings: { overall: number } }>(
+  group: T[],
+  sourcePids: number[] | undefined,
+): T[] {
+  const byOvr = (a: T, b: T) => b.ratings.overall - a.ratings.overall;
+  if (!Array.isArray(sourcePids) || sourcePids.length === 0) return [...group].sort(byOvr);
+  const rank = new Map<string, number>();
+  sourcePids.forEach((pid, i) => {
+    const id = `player-${pid}`;
+    if (!rank.has(id)) rank.set(id, i);
+  });
+  return [...group].sort((a, b) => {
+    const ra = rank.get(a.id), rb = rank.get(b.id);
+    if (ra != null && rb != null) return ra - rb;
+    if (ra != null) return -1;
+    if (rb != null) return 1;
+    return byOvr(a, b);
+  });
 }
 
 function mapDivision(name: string | undefined): Team['division'] {
@@ -355,9 +438,9 @@ function convertRealSeason(
 export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   const season = league.gameAttributes?.season ?? new Date().getFullYear();
   const confById = new Map<number, Team['conference']>(
-    (league.gameAttributes?.confs ?? []).map((conf) => [
+    (league.gameAttributes?.confs ?? []).map((conf, index) => [
       conf.cid,
-      conf.name === 'NFC' ? 'NC' : 'AC',
+      mapConference(conf.name, index),
     ]),
   );
   const divById = new Map<number, Team['division']>(
@@ -388,7 +471,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       division: divById.get(team.did) ?? template?.division ?? 'East',
       primaryColor,
       secondaryColor,
-      logoUrl: team.imgURL || undefined,
+      logoUrl: absoluteImageUrl(team.imgURL),
       record: emptyRecord(),
       salaryCap: 300,
       totalPayroll: 0,
@@ -398,6 +481,15 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   });
 
   const teamByTid = new Map(league.teams.map((team) => [team.tid, `team-${team.tid}`]));
+
+  // An uploaded Football GM league keeps its own contracts, rescaled from
+  // FBGM's cap (default $200M) to ours ($300M) so cap room and the relative
+  // price of a star carry over. Curated roster files are already in our money.
+  const isUpload = league.bsSource === 'upload';
+  const fbgmCap = league.gameAttributes?.salaryCap;
+  const salaryScale = isUpload && typeof fbgmCap === 'number' && fbgmCap > 0
+    ? (DEFAULT_LEAGUE_SETTINGS.salaryCap * 1000) / fbgmCap
+    : 1;
 
   const players: Player[] = [];
   const expiredFreeAgentIds: string[] = [];
@@ -431,7 +523,11 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     // convention the carve-out is unnecessary — exp <= season is always
     // already-FA. Donovan Wilson (exp=2026, on Cowboys roster in the
     // 2026 source file) lands in FA correctly under this rule.
-    const rawExp = player.contract?.exp;
+    const fileContract = fbgmContract(player, season);
+    const sourceContract = fileContract && salaryScale !== 1 && fileContract.amount != null
+      ? { ...fileContract, amount: Math.max(LEAGUE_MINIMUM_SALARY * 1000, fileContract.amount * salaryScale) }
+      : fileContract;
+    const rawExp = sourceContract?.exp;
     const draftedThisSeason = player.draft?.year === season;
     const isExpiredFA = rawExp != null && rawExp <= season && !draftedThisSeason;
 
@@ -463,7 +559,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
     const contract = (isFA || isFutureDraftProspect)
       ? { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 }
-      : mapContract(player.contract, season, player.draft);
+      : mapContract(sourceContract, season, player.draft);
 
     const playerId = `player-${player.pid}`;
     // Only add current FAs to the freeAgentIds list — NOT future prospects
@@ -520,7 +616,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       ratingHistory: [],
       onIR: false,
       mood: 60 + Math.floor(Math.random() * 30),
-      photoUrl: player.imgURL || undefined,
+      photoUrl: absoluteImageUrl(player.imgURL),
       jerseyNumber: fbgmJerseyNumber(player),
     });
   }
@@ -561,7 +657,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       ratingHistory: [],
       onIR: false,
       mood: 70,
-      photoUrl: player.imgURL || undefined,
+      photoUrl: absoluteImageUrl(player.imgURL),
       jerseyNumber: fbgmJerseyNumber(player),
     });
   }
@@ -573,7 +669,9 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   // without also updating the contract object. This leaves good players on
   // league-minimum deals. Re-price any rostered player whose salary is
   // significantly below what their OVR warrants.
-  for (const p of players) {
+  // Uploaded leagues: the contracts are the player's own league history, not
+  // stale data, so they are never re-priced.
+  for (const p of isUpload ? [] : players) {
     if (!p.teamId || p.experience === 0) continue; // skip FAs and prospects
     const fair = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
     // Flag as stale: on a team, paid near the league minimum, but fair value is much higher
@@ -628,14 +726,25 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     yearsCoveredPerOwner.set(ownerId, yrs);
   }
 
+  // Uploaded FBGM leagues keep the player's own depth chart (their starters),
+  // keyed by team id. Curated roster files keep the ratings sort.
+  const sourceDepthByTeamId = new Map<string, Record<string, number[]>>();
+  if (league.bsSource === 'upload') {
+    for (const t of league.teams) {
+      const id = teamByTid.get(t.tid);
+      if (id && t.depth && typeof t.depth === 'object') sourceDepthByTeamId.set(id, t.depth);
+    }
+  }
+
   const finalizedTeams = teams.map((team) => {
     const rosterIds = rosterByTeamId.get(team.id) ?? [];
     const teamPlayers = players.filter(p => p.teamId === team.id);
+    const sourceDepth = sourceDepthByTeamId.get(team.id);
     const depthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
-      acc[pos] = teamPlayers
-        .filter(p => p.position === pos)
-        .sort((a, b) => b.ratings.overall - a.ratings.overall)
-        .map(p => p.id);
+      acc[pos] = orderByFbgmDepth(
+        teamPlayers.filter(p => p.position === pos),
+        sourceDepth?.[pos],
+      ).map(p => p.id);
       return acc;
     }, {} as Record<Position, string[]>);
 
@@ -823,6 +932,54 @@ export async function loadLeagueFromUrl(url: string): Promise<ImportedLeagueData
       return convertFbgmLeague(raw as FbgmLeagueFile);
     });
   return data;
+}
+
+/** Thrown for an uploaded file that isn't a Football GM league or a BS save. */
+export class LeagueFileUploadError extends Error {}
+
+/** Result of reading a file the player picked on the new-league screen. */
+export type UploadedLeagueFile =
+  | { kind: 'native'; nativeSave: unknown }
+  | { kind: 'fbgm'; league: ImportedLeagueData; url: string };
+
+/** Read a league file the player uploaded: a Football GM export (`.json`, or
+ *  the `.json.gz` FBGM writes by default) or a BS Football save backup.
+ *
+ *  For a Football GM league it returns the converted league plus a blob: URL
+ *  holding the (decompressed, upload-tagged) JSON. newLeague() re-reads the
+ *  league by URL, so the blob URL lets an upload ride the same path as a
+ *  pasted link. The caller owns the URL and should revoke it when replaced. */
+export async function readUploadedLeagueFile(file: Blob): Promise<UploadedLeagueFile> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const isGzip = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+  let text: string;
+  try {
+    text = isGzip
+      ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+      : new TextDecoder().decode(bytes);
+  } catch {
+    throw new LeagueFileUploadError('Could not unzip that file. Try exporting it again from Football GM.');
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new LeagueFileUploadError('That file is not a valid league file.');
+  }
+  if (looksLikeBsfNativeSave(raw)) return { kind: 'native', nativeSave: raw };
+  const obj = raw as Partial<FbgmLeagueFile> | null;
+  if (!obj || !Array.isArray(obj.teams) || !Array.isArray(obj.players) || obj.teams.length < 2) {
+    throw new LeagueFileUploadError(
+      'That doesn’t look like a Football GM league. In Football GM, go to Tools → Export League and upload that file.',
+    );
+  }
+  const tagged: FbgmLeagueFile = { ...(obj as FbgmLeagueFile), bsSource: 'upload' };
+  const league = convertFbgmLeague(tagged);
+  if (league.players.filter(p => p.teamId).length < league.teams.length * 22) {
+    throw new LeagueFileUploadError('That league doesn’t have enough players on its rosters to play games.');
+  }
+  const url = URL.createObjectURL(new Blob([JSON.stringify(tagged)], { type: 'application/json' }));
+  return { kind: 'fbgm', league, url };
 }
 
 /** Light metadata pulled from a native save for the import-success toast. */
