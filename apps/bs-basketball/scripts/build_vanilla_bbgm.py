@@ -20,6 +20,10 @@ This variant starts the 2026-27 season from opening night instead:
     applied to every skill rating (never height) of every rostered player's
     current-season row. 5 games at +10 → +3; 5 games at -4 → -1.
   - the BS-only `bsRealResults` and `bsCoaches` blocks dropped
+  - the trade deadline and All-Star Game markers BBGM expects in the schedule
+    (see add_special_days). Stock BBGM only inserts these when IT generates a
+    schedule; a league file that brings its own schedule gets neither, so the
+    deadline never closes trades and there's no All-Star Game.
 
 Served by the rosters-page "Download JSON" button (used for BBGM). The in-app
 "Start a league with this roster" button keeps the untouched main file.
@@ -49,6 +53,57 @@ SKILLS = ['stre', 'spd', 'jmp', 'endu', 'ins', 'dnk', 'ft', 'fg', 'tp', 'oiq', '
 RECORD_FIELDS = ['won', 'lost', 'wonHome', 'lostHome', 'wonAway', 'lostAway', 'wonDiv', 'lostDiv', 'wonConf', 'lostConf']
 
 
+# Real 2026-27 dates (NBA key dates): deadline Thu Feb 11 2027 (3pm ET, before
+# that night's games), All-Star Game Sun Feb 21 2027 in Phoenix.
+TRADE_DEADLINE_DATE = '2027-02-11'
+ALL_STAR_DATE = '2027-02-21'
+# BBGM's placeholder tids (zengm src/common/specialGames.ts): each marker is a
+# schedule "game" on a day of its own.
+TRADE_DEADLINE_TIDS = (-3, -3)
+ALL_STAR_GAME_TIDS = (-1, -2)
+
+
+def add_special_days(schedule, date_of):
+    """Insert the trade-deadline and All-Star markers on days of their own.
+
+    `schedule` is a dense day-numbered list of {gid, day, homeTid, awayTid};
+    `date_of(game)` returns its real 'YYYY-MM-DD' date. The deadline goes on a
+    new day right before the first game day on/after the deadline date; the
+    All-Star Game on a new day right before the first game day after the ASG
+    date (i.e. in the real All-Star break). Later days shift +1 each.
+    Idempotent: a schedule that already has the markers is returned as-is.
+    """
+    def is_special(g):
+        return g['homeTid'] < 0 or g['awayTid'] < 0
+    if any(is_special(g) for g in schedule):
+        return schedule
+    first_day_on_or_after = {}
+    for g in schedule:
+        dt = date_of(g)
+        if dt is None:
+            continue
+        for key, cutoff, strict in (('deadline', TRADE_DEADLINE_DATE, False), ('asg', ALL_STAR_DATE, True)):
+            if (dt > cutoff) if strict else (dt >= cutoff):
+                cur = first_day_on_or_after.get(key)
+                if cur is None or g['day'] < cur:
+                    first_day_on_or_after[key] = g['day']
+    if 'deadline' not in first_day_on_or_after or 'asg' not in first_day_on_or_after:
+        raise SystemExit('add_special_days: could not place the deadline/All-Star days (missing dates?)')
+    nxt = max(g['gid'] for g in schedule) + 1
+    out = [dict(g) for g in schedule]
+    # Insert the later marker first so the earlier day number stays valid.
+    for key, tids in sorted((('deadline', TRADE_DEADLINE_TIDS), ('asg', ALL_STAR_GAME_TIDS)),
+                            key=lambda kt: -first_day_on_or_after[kt[0]]):
+        day = first_day_on_or_after[key]
+        for g in out:
+            if g['day'] >= day:
+                g['day'] += 1
+        out.append({'gid': nxt, 'day': day, 'homeTid': tids[0], 'awayTid': tids[1]})
+        nxt += 1
+    out.sort(key=lambda g: (g['day'], g['gid']))
+    return out
+
+
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
@@ -71,7 +126,8 @@ def main():
     # 2. Full schedule: played games first (their original day numbers start
     #    at 1), then the remaining games the main file already carries.
     remaining = d.get('schedule', []) or []
-    full = [{'gid': g['gid'], 'day': g['day'], 'homeTid': g['teams'][0]['tid'], 'awayTid': g['teams'][1]['tid']}
+    full = [{'gid': g['gid'], 'day': g['day'], 'homeTid': g['teams'][0]['tid'], 'awayTid': g['teams'][1]['tid'],
+             'date': g.get('date')}
             for g in played if g.get('teams') and len(g['teams']) == 2]
     used = {g['gid'] for g in full}
     nxt = (max(used) + 1) if used else 0
@@ -80,7 +136,8 @@ def main():
         if gid is None or gid in used:
             gid = nxt; nxt += 1
         used.add(gid)
-        full.append({'gid': gid, 'day': g['day'], 'homeTid': g['homeTid'], 'awayTid': g['awayTid']})
+        full.append({'gid': gid, 'day': g['day'], 'homeTid': g['homeTid'], 'awayTid': g['awayTid'],
+                     'date': g.get('date')})
     full.sort(key=lambda g: (g['day'], g['gid']))
     # Renumber days densely from 1 so BBGM's "day" counter is contiguous.
     day_map = {}
@@ -88,6 +145,9 @@ def main():
         day_map.setdefault(g['day'], len(day_map) + 1)
     for g in full:
         g['day'] = day_map[g['day']]
+    full = add_special_days(full, lambda g: g.get('date'))
+    for g in full:
+        g.pop('date', None)
     d['schedule'] = full
 
     # 3. Performance nudge from the real results so far (skipped for the
@@ -137,5 +197,36 @@ def main():
           ', '.join(f'{abbrev[t]} {k:+d}' for t, k in sorted(nudge.items(), key=lambda x: -x[1]) if k))
 
 
+def patch_special_days(path):
+    """One-off: add the deadline/All-Star markers to an already-built file
+    (the frozen opening-night variant, which is never rebuilt). Its schedule has
+    no dates, so each game's date is looked up from the main file by matchup
+    (home, away, nth meeting) — the real slate is the same in both."""
+    main_d = json.load(open(SRC))
+    dated = [(g['teams'][0]['tid'], g['teams'][1]['tid'], g.get('date'), g['day'])
+             for g in (main_d.get('bsRealResults') or []) if len(g.get('teams', [])) == 2]
+    dated += [(g['homeTid'], g['awayTid'], g.get('date'), 1000 + g['day']) for g in main_d.get('schedule', [])]
+    dated.sort(key=lambda x: (x[2] or '', x[3]))
+    by_pair = {}
+    for h, a, dt, _ in dated:
+        by_pair.setdefault((h, a), []).append(dt)
+    d = json.load(open(path))
+    seen = {}
+    dates = {}
+    for g in sorted(d['schedule'], key=lambda g: (g['day'], g['gid'])):
+        k = (g['homeTid'], g['awayTid'])
+        i = seen.get(k, 0)
+        seen[k] = i + 1
+        lst = by_pair.get(k, [])
+        dates[g['gid']] = lst[i] if i < len(lst) else None
+    before = len(d['schedule'])
+    d['schedule'] = add_special_days(d['schedule'], lambda g: dates.get(g['gid']))
+    json.dump(d, open(path, 'w'), ensure_ascii=False, allow_nan=False)
+    print(f'Patched {path}: {before} -> {len(d["schedule"])} schedule entries')
+
+
 if __name__ == '__main__':
-    main()
+    if '--patch-special-days' in sys.argv:
+        patch_special_days(sys.argv[sys.argv.index('--patch-special-days') + 1])
+    else:
+        main()
