@@ -46,11 +46,11 @@ const ROSTERS: RosterEntry[] = [
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     downloadFileName: 'FBGM_NFL_Roster_2026_Vanilla.json',
     week1FileName: 'FBGM_NFL_Roster_2026_Week1.json',
-    lastUpdated: 'November 10, 2026',
+    lastUpdated: 'November 13, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
-    cacheBust: 33,
+    cacheBust: 34,
     caveat:
       'Both downloads are tuned for stock Football GM (play.football-gm.com): the draft classes are aligned so the first draft you reach is the real class, since FBGM indexes drafts by season. Download: Current starts at the current NFL week with real standings and stats; Download: Week 1 Start has the same rosters, contracts, injuries and ratings but every team at 0-0 with the full real 2026 schedule, so you sim the whole season yourself. Play in BS Football handles this automatically and uses the standard file.',
   },
