@@ -3,6 +3,7 @@ import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed, DEFAULT_LEAGUE_
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from '@/lib/engine/salary';
 import { LEAGUE_TEAMS } from './teams';
 import { realHeadCoachesFromFile, type RealHeadCoachEntry } from './realHeadCoaches';
+import type { RealRosterStatus } from '@/lib/engine/rosterTiers';
 
 function uuid(): string {
   return crypto.randomUUID();
@@ -106,6 +107,10 @@ interface FbgmPlayer {
   contract?: { amount?: number; exp?: number };
   contracts?: FbgmContractEntry[];
   injury?: { type?: string | { description?: string; name?: string; abbreviation?: string }; gamesRemaining?: number };
+  /** BS-only: where the player really is when not on the club's active roster
+   *  ('ps' practice squad, 'ir' injured reserve), from ESPN's roster groups
+   *  (written by scripts/weekly_roster_update.py). Absent = active. */
+  bsRosterStatus?: string;
   ratings?: FbgmRating[];
   /** Set of every team-id the player has accumulated stats for (career history). */
   statsTids?: number[];
@@ -381,6 +386,10 @@ export interface ImportedLeagueData {
   realSeason?: RealSeasonState;
   /** Real head coaches keyed by team abbreviation, when the file carries them. */
   realHeadCoaches?: Record<string, RealHeadCoachEntry>;
+  /** Players the file says are really on a club's practice squad or injured
+   *  reserve rather than its active roster, keyed by player id. A league that
+   *  picks up the real season uses it to seat the user's team at 53. */
+  realRosterStatus?: Record<string, RealRosterStatus>;
 }
 
 export interface RealSeasonState {
@@ -493,6 +502,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
   const players: Player[] = [];
   const expiredFreeAgentIds: string[] = [];
+  const realRosterStatus: Record<string, RealRosterStatus> = {};
   for (const player of league.players) {
     // tid=-1 → free agent (or future draft prospect), tid=-3 → retired.
     // Include all tid=-1 players: current FAs go into the free-agent pool,
@@ -564,6 +574,9 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     const playerId = `player-${player.pid}`;
     // Only add current FAs to the freeAgentIds list — NOT future prospects
     if (isFA) expiredFreeAgentIds.push(playerId);
+    else if (!isFutureDraftProspect && (player.bsRosterStatus === 'ps' || player.bsRosterStatus === 'ir')) {
+      realRosterStatus[playerId] = player.bsRosterStatus;
+    }
 
     players.push({
       id: playerId,
@@ -796,7 +809,10 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
   const realHeadCoaches = realHeadCoachesFromFile(league.bsCoaches);
 
-  return { season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds, realSeason, realHeadCoaches };
+  return {
+    season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds, realSeason, realHeadCoaches,
+    realRosterStatus: Object.keys(realRosterStatus).length > 0 ? realRosterStatus : undefined,
+  };
 }
 
 /**

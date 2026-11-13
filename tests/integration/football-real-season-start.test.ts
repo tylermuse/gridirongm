@@ -81,15 +81,53 @@ describe('NFL 2026 real-season start', () => {
     expect(rusher.stats.rushYards).toBe(sum(topRusher.rows, 'rusYds'));
     expect(rusher.careerStats.rushYards).toBe(rusher.stats.rushYards);
 
-    // The 53-man gate still guards the league's first sim even though it
-    // opens past Week 1.
-    vi.stubGlobal('alert', vi.fn());
+    // The file lists every club's 53 + practice squad + IR (69-87 players).
+    // The user's team opens already seated the way the real club is — real IR
+    // on IR, real practice squad on the PS — instead of a 75-man roster to cut.
     const userTeam = s.teams.find(t => t.id === s.userTeamId)!;
-    if (userTeam.roster.length > 53) {
-      useGameStore.getState().simWeek();
-      expect(useGameStore.getState().week).toBe(raw.bsRealSeason.currentWeek);
-      useGameStore.getState().autoCutToRosterLimit(userTeam.id);
+    const byId = new Map(s.players.map(p => [p.id, p]));
+    const ps = userTeam.practiceSquad ?? [];
+    const ir = userTeam.injuredReserve ?? [];
+    expect(userTeam.roster.length).toBeLessThanOrEqual(53);
+    expect(userTeam.roster.length).toBeGreaterThanOrEqual(50);
+    expect(ps.length).toBeGreaterThan(8);
+    expect(ps.length).toBeLessThanOrEqual(16);
+    const fileStatus = new Map((raw.players as Array<{ pid: number; tid: number; bsRosterStatus?: string }>)
+      .map(p => [`player-${p.pid}`, p.bsRosterStatus]));
+    const realIr = s.players.filter(p => p.teamId === userTeam.id && fileStatus.get(p.id) === 'ir' && p.injury);
+    expect(realIr.length).toBeGreaterThan(0);
+    for (const p of realIr) {
+      expect(ir, `${p.firstName} ${p.lastName}`).toContain(p.id);
+      expect(p.onIR).toBe(true);
     }
+    for (const id of ps.filter(pid => fileStatus.get(pid) !== 'ps')) {
+      // Anyone seated on the PS beyond the real practice squad is a legal demotion.
+      expect(byId.get(id)!.ratings.overall).toBeLessThanOrEqual(80);
+    }
+    const offRoster = new Set([...ps, ...ir]);
+    expect(userTeam.roster.some(id => offRoster.has(id))).toBe(false);
+    expect(Object.values(userTeam.depthChart).flat().some(id => offRoster.has(id))).toBe(false);
+    for (const id of offRoster) expect(byId.get(id)!.teamId).toBe(userTeam.id);
+    const activePayroll = userTeam.roster.reduce((sum, id) => sum + byId.get(id)!.contract.salary, 0);
+    expect(userTeam.totalPayroll).toBeCloseTo(activePayroll, 0);
+    // Every AI team is at the limit too.
+    for (const t of s.teams) expect(t.roster.length, t.abbreviation).toBeLessThanOrEqual(53);
+
+    // The 53-man gate still guards the league's first sim even though it
+    // opens past Week 1: push the roster over and the sim is refused.
+    vi.stubGlobal('alert', vi.fn());
+    const extras = s.freeAgents.slice(0, 54 - userTeam.roster.length);
+    useGameStore.setState({
+      teams: s.teams.map(t => (t.id === userTeam.id ? { ...t, roster: [...t.roster, ...extras] } : t)),
+      players: s.players.map(p => (extras.includes(p.id) ? { ...p, teamId: userTeam.id } : p)),
+      freeAgents: s.freeAgents.filter(id => !extras.includes(id)),
+    });
+    useGameStore.getState().simWeek();
+    expect(useGameStore.getState().week).toBe(raw.bsRealSeason.currentWeek);
+    // "Trim to 53" gets back under the limit without the user picking cuts.
+    const trimmed = useGameStore.getState().autoSettleUserRoster();
+    expect(trimmed).not.toBeNull();
+    expect(useGameStore.getState().teams.find(t => t.id === userTeam.id)!.roster).toHaveLength(53);
 
     // Sim the rest of the real slate: every team ends at 17 games.
     for (let guard = 0; guard < 25 && useGameStore.getState().phase === 'regular'; guard++) {

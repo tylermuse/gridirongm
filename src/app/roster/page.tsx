@@ -18,6 +18,7 @@ import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { PositionLink } from '@/components/ui/PositionLink';
 import { LEAGUE_MINIMUM_SALARY, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 import { tradeRequestBadge } from '@/lib/engine/tradeRequests';
+import { settleRosterTiers, describeRosterSettle } from '@/lib/engine/rosterTiers';
 
 function ratingColor(val: number): string {
   if (val >= 85) return 'text-green-600';
@@ -154,7 +155,7 @@ export default function RosterPage() {
     setBaseFormation,
     reorderDepthChart, resetDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
-    autoCutToRosterLimit, renameTeam,
+    autoSettleUserRoster, renameTeam,
     demoteToPracticeSquad, promoteFromPracticeSquad, cutFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
     schedule, playoffBracket,
@@ -262,6 +263,9 @@ export default function RosterPage() {
   const activePsIds = new Set(viewingTeam?.practiceSquad ?? []);
   const roster = players
     .filter(p => p.teamId === activeTeamId && !p.retired && !pendingResignIds.has(p.id) && !activePsIds.has(p.id));
+  // Players on injured reserve stay in the list (tagged IR) but hold no
+  // active-roster slot, so the 53-man count and position counts skip them.
+  const activeCount = roster.filter(p => !p.onIR).length;
 
   // Depth position for each player
   function getDepthLabel(player: Player): string {
@@ -613,17 +617,23 @@ export default function RosterPage() {
               </select>
             </div>
             <div className="flex items-center gap-x-3 gap-y-1 sm:gap-4 text-xs sm:text-sm text-[var(--text-sec)] mt-1.5 sm:mt-1 flex-wrap">
-              <span className={roster.length > 53 ? 'text-red-600 font-bold' : ''}>{roster.length} players</span>
-              {activeTeamId === userTeamId && roster.length > 53 && (leagueSettings?.rosterLimitEnabled !== false) && (
+              <span className={activeCount > 53 ? 'text-red-600 font-bold' : ''}>{activeCount} players</span>
+              {activeTeamId === userTeamId && activeCount > 53 && (leagueSettings?.rosterLimitEnabled !== false) && (
                 <button
                   onClick={() => {
-                    if (window.confirm(`Auto-cut to 53? This will release the ${roster.length - 53} lowest-OVR players on your roster.`)) {
-                      autoCutToRosterLimit(userTeamId);
+                    // Preview the same moves the action makes: IR and the
+                    // practice squad first, releases only for what is left.
+                    const plan = viewingTeam
+                      ? describeRosterSettle(settleRosterTiers(viewingTeam, players, { week, release: true }))
+                      : '';
+                    if (!plan) return;
+                    if (window.confirm(`Trim to 53: ${plan}. Continue?`)) {
+                      autoSettleUserRoster();
                     }
                   }}
                   className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 px-2 py-0.5 rounded border border-red-300 bg-red-50"
                 >
-                  ✂️ Cut to 53
+                  ✂️ Trim to 53
                 </button>
               )}
               {godMode && activeTeamId === userTeamId && (
@@ -717,11 +727,11 @@ export default function RosterPage() {
           <>
             {/* Roster Composition — phones: one line of what's short, tap for the grid */}
             {(() => {
-              const shortPositions = POSITIONS.filter(pos => roster.filter(p => p.position === pos).length < ROSTER_LIMITS[pos].min);
+              const shortPositions = POSITIONS.filter(pos => roster.filter(p => p.position === pos && !p.onIR).length < ROSTER_LIMITS[pos].min);
               const grid = (
                 <div className="grid grid-cols-6 sm:grid-cols-11 gap-2 gap-y-3">
                   {POSITIONS.map(pos => {
-                    const count = roster.filter(p => p.position === pos).length;
+                    const count = roster.filter(p => p.position === pos && !p.onIR).length;
                     const limits = ROSTER_LIMITS[pos];
                     const isBelowMin = count < limits.min;
                     const isAtMin = count === limits.min;
