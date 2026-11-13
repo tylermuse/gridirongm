@@ -28,6 +28,7 @@ import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
 import { broadcastClipLines, teaserEndIndex } from '@/lib/engine/gameBroadcast';
 import { UNLOCK_AUDIO } from '@/lib/engine/unlockAudio';
 import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
+import { useExhibition, isExhibitionGameId, stashUploadForSeason } from '@/lib/engine/exhibition';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { trackEvent } from '@bs/core/analytics/track';
 import { trackFeature } from '@bs/core/analytics/feature';
@@ -714,6 +715,51 @@ function MatchupRankings({ homeTeam, awayTeam, teams, players }: {
   );
 }
 
+/** End of a /live exhibition: replay it, pick another matchup, or start a real
+ *  season with the uploaded league. Rematch and new matchup stay on this page
+ *  load (the league is in memory only); the season reloads into the normal
+ *  new-league flow so the player's own save is restored and backed up first. */
+function ExhibitionNextSteps({ gameId }: { gameId: string }) {
+  const router = useRouter();
+  const [startingSeason, setStartingSeason] = useState(false);
+  const startSeason = async () => {
+    setStartingSeason(true);
+    trackEvent('exhibition_next', { game_id: gameId, choice: 'season' });
+    try { await stashUploadForSeason(); } catch { /* the import panel still opens; they can re-upload */ }
+    window.location.href = '/?import=fbgm';
+  };
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => { trackEvent('exhibition_next', { game_id: gameId, choice: 'rematch' }); router.push('/live?rematch=1'); }}
+        >
+          Run it back
+        </Button>
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={() => { trackEvent('exhibition_next', { game_id: gameId, choice: 'matchup' }); router.push('/live'); }}
+        >
+          New matchup
+        </Button>
+      </div>
+      <div className="pt-3 border-t border-[var(--border)]">
+        <p className="text-sm font-semibold">Like what you saw?</p>
+        <p className="text-xs text-[var(--text-sec)] mb-2">
+          Run this league as GM: draft, trades, free agency and every game in 3D.
+        </p>
+        <Button variant="secondary" size="sm" busy={startingSeason} onClick={startSeason}>
+          Play a full season with this league →
+        </Button>
+      </div>
+      <p className="text-[10px] text-[var(--text-sec)]">Exhibition: not saved to any league.</p>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -739,14 +785,26 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     };
   }
   const isPlayoffGame = !!playoffMatchup || !!playoffBracket?.find(m => m.id === id);
+  // /live exhibition: one game between any two teams of an uploaded league,
+  // played in memory. Never on the schedule and never committed (see exhibition.ts).
+  const exhibition = useExhibition();
+  const isExhibition = !!exhibition && exhibition.id === id;
+  if (!game && isExhibition) {
+    const currentWeek = schedule.find(g => !g.played)?.week ?? 1;
+    game = {
+      id, week: currentWeek, season,
+      homeTeamId: exhibition.homeTeamId, awayTeamId: exhibition.awayTeamId,
+      homeScore: 0, awayScore: 0, played: false, playerStats: {},
+    };
+  }
 
   // Around-the-League scoreboard: pre-sim the week's other games once on mount
   // (regular season only) so their scores can progress alongside the user's
   // live game + surface at halftime. Idempotent per week in the store.
   useEffect(() => {
-    if (phase === 'regular' && !isPlayoffGame) initLiveScoreboard(id);
+    if (phase === 'regular' && !isPlayoffGame && !isExhibition) initLiveScoreboard(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, phase, isPlayoffGame]);
+  }, [id, phase, isPlayoffGame, isExhibition]);
   const homeTeam = game ? teams.find(t => t.id === game.homeTeamId) ?? null : null;
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
   const homePlayers = useMemo(() => {
@@ -786,7 +844,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // held while it's up, so nothing sims behind the modal before Kick Off).
   const pregameSeenKey = `bsfb-pregame-seen-${id}`;
   const PREGAME_AUTO_OFF_KEY = 'bsfb-pregame-auto-off';
-  const [pregameOpen, setPregameOpen] = useState(userInGame && !!game && !game.played);
+  // An exhibition goes straight to kickoff: the whole point of /live is the 3D game.
+  const [pregameOpen, setPregameOpen] = useState(userInGame && !!game && !game.played && !isExhibition);
   const [pregameAutoOff, setPregameAutoOff] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1182,7 +1241,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // 3D live sim access: free for everyone (see SIM3D_FREE_FOR_ALL). /admin/analytics keeps comparing 3D-on vs
   // 3D-off devices (admin_sim3d_cohorts) and the default-on test arms (admin_sim3d_default_test).
   const sim3dAllowed = SIM3D_FREE_FOR_ALL || isPremium;
-  const sim3dOn = sim3dPref && sim3dAllowed;
+  // An exhibition starts in 3D whatever this browser's saved choice; the toggle
+  // still works for the game and leaves the saved choice alone.
+  const [exhibition3d, setExhibition3d] = useState(true);
+  const sim3dOn = (isExhibition ? exhibition3d : sim3dPref) && sim3dAllowed;
+  const toggleSim3d = (on: boolean) => { if (isExhibition) setExhibition3d(on); else setSim3dOn(on); };
 
   // Pregame Show: Marcus + Tony break down the matchup before kickoff. Opens
   // automatically for the user's own games and holds the auto-start until the
@@ -1344,7 +1407,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // read the saved choice directly: the hook's own read lands a render later than this first effect
     // readSim3DPref() first: it assigns the default-on test arm for a qualifying new device, which sim3dTestArm() then reports
     const on = sim3dAllowed && readSim3DPref();
-    trackEvent('sim3d_game_view', { game_id: id, on, allowed: sim3dAllowed, premium: isPremium, arm: sim3dTestArm() });
+    trackEvent('sim3d_game_view', { game_id: id, on, allowed: sim3dAllowed, premium: isPremium, arm: sim3dTestArm(), exhibition: isExhibition });
     if (on) {
       try {
         const n = (parseInt(window.localStorage.getItem(SIM3D_GAMES_KEY) || '0', 10) || 0) + 1;
@@ -1844,7 +1907,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }
 
   const handleCommit = useCallback(async () => {
-    if (!game || committed) return;
+    if (!game || committed || isExhibition) return;
     const gameResult = buildFinalGameResult();
     if (!gameResult) return;
     commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
@@ -1855,7 +1918,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   // Auto-commit when game finishes — no manual "Save & Continue" needed
   useEffect(() => {
-    if (isFinished && game && !committed) {
+    // An exhibition is never written into the season (see exhibition.ts).
+    if (isFinished && game && !committed && !isExhibition) {
       const gameResult = buildFinalGameResult();
       if (!gameResult) return;
       // Safety: if the live engine is active and scores are tied, OT should
@@ -1913,6 +1977,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }, [continueHref, router]);
 
   // Guard conditions
+  // An exhibition only exists for the page load it was started in.
+  if (isExhibitionGameId(id) && !isExhibition) {
+    return (
+      <GameShell>
+        <div className="max-w-2xl mx-auto mt-16 text-center space-y-4">
+          <p className="text-[var(--text-sec)] text-lg">That exhibition has ended.</p>
+          <Link href="/live" className="inline-block font-semibold text-blue-600 hover:underline">Start another one →</Link>
+        </div>
+      </GameShell>
+    );
+  }
   if (phase !== 'regular' && phase !== 'playoffs') {
     return (
       <GameShell>
@@ -2324,6 +2399,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     {won ? 'Victory!' : tied ? 'Tie' : 'Defeat'}
                   </Badge>
                 )}
+                {isExhibition ? (
+                  <ExhibitionNextSteps gameId={id} />
+                ) : (
                 <div>
                   <Button
                     variant="primary"
@@ -2337,6 +2415,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     Game result saved automatically.
                   </p>
                 </div>
+                )}
               </div>
             </>
           );
@@ -2663,7 +2742,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           )}
           {!isFinished && sim3dAllowed && (
             <button
-              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium, arm: sim3dTestArm() }); setSim3dOn(!sim3dOn); }}
+              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium, arm: sim3dTestArm(), exhibition: isExhibition }); toggleSim3d(!sim3dOn); }}
               className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 sim3dOn
                   ? 'bg-blue-600 text-white hover:bg-blue-700'

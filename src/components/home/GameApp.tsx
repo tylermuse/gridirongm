@@ -25,6 +25,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
+import { takeStashedUpload } from '@/lib/engine/exhibition';
 import { type ImportedLeagueData, loadLeagueFromUrl, loadNativeSaveIntoApp, BsfNativeSaveImportError, readUploadedLeagueFile, LeagueFileUploadError } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
@@ -51,6 +52,18 @@ function TeamPicker() {
   // came from a file rather than a URL. Its blob: URL lives in activeUrl.
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  // Coming from a /live exhibition ("Play a full season with this league"):
+  // load the league they just watched, ready to pick a team.
+  useEffect(() => {
+    if (searchParams.get('import') !== 'fbgm') return;
+    let cancelled = false;
+    void takeStashedUpload().then(json => {
+      if (json && !cancelled) void applyUploadedFile(new Blob([json], { type: 'application/json' }), 'your Football GM league');
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // The import panel sits below the hero and team grid; bring it into view
   // when a Football GM player arrives via ?import=fbgm.
   useEffect(() => {
@@ -393,6 +406,10 @@ function TeamPicker() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    await applyUploadedFile(file, file.name);
+  }
+
+  async function applyUploadedFile(file: Blob, fileName: string) {
     setImportLoading(true);
     setError(null);
     try {
@@ -406,7 +423,7 @@ function TeamPicker() {
       setImportedTeams(result.league);
       setActiveUrl(result.url);
       setImportUrl('');
-      setUploadedFileName(file.name);
+      setUploadedFileName(fileName);
       // A Football GM league is usually exported to keep playing it, so go
       // straight to the regular season rather than our re-signing window.
       setStartMode('regular');

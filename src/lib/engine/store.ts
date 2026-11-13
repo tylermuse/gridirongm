@@ -107,6 +107,23 @@ export function continueWithoutSave(): void {
   setSaveLoadStatus('ready');
 }
 
+// Exhibition sandbox (/live): a Football GM upload is loaded into memory to
+// play one game, and must never overwrite the player's saved franchise. Once
+// set, autosaves and flushes are skipped for the rest of this page load; a
+// full reload re-reads the untouched autosave. Kept outside the store so it
+// is never persisted.
+let savesSuspended = false;
+
+/** Stop writing the league to storage for the rest of this page load. */
+export function suspendSavesForExhibition(): void {
+  savesSuspended = true;
+}
+
+/** True while this page load is an in-memory exhibition. */
+export function areSavesSuspended(): boolean {
+  return savesSuspended;
+}
+
 // Module-local dedup so the Week-1 roster-overflow alert can't infinite-loop
 // when simWeek() is invoked repeatedly from a caller (e.g. handleSimSeason
 // looping s.simWeek() up to 30 times — each call would re-fire the native
@@ -172,7 +189,8 @@ interface GameStore extends LeagueState {
    *  Populated only when leagueSettings.devPanels is on. Not persisted to
    *  save storage (runtime only). */
   simTelemetry?: SimTelemetryRecord[];
-  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean) => Promise<void>;
+  /** `source: 'exhibition'` tags the analytics event for a /live exhibition, which loads a league only to play one game. */
+  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean, opts?: { source?: 'exhibition' }) => Promise<void>;
   /**
    * New league that opens at the draft a /mock-draft just ran: starts at the
    * current real week, has the AI run every team (user's included) through the
@@ -2884,7 +2902,7 @@ export const useGameStore = create<GameStore>()(
       initialized: false,
       ...EMPTY_LEAGUE_STATE,
 
-      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean) => {
+      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean, opts?: { source?: 'exhibition' }) => {
         try {
           resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
@@ -3135,8 +3153,9 @@ export const useGameStore = create<GameStore>()(
           // would carry that overage into Week 1 (.akrav 5/10).
           get().initializeFreshLeagueRosters();
           trackEvent('league_created', {
-            source: 'import',
-            roster_file: leagueFileUrl.split('/').pop()?.split('?')[0] ?? null,
+            source: opts?.source ?? 'import',
+            // blob: URLs (uploaded files) carry a random id, not a file name
+            roster_file: leagueFileUrl.startsWith('blob:') ? 'upload' : leagueFileUrl.split('/').pop()?.split('?')[0] ?? null,
             team: isSpectator ? null : userTeam.abbreviation,
             start_mode: isSpectator ? 'spectator' : isRegularStart ? 'regular' : 'offseason',
             season: imported.season,
@@ -10971,7 +10990,7 @@ export const useGameStore = create<GameStore>()(
         // before that (and after a failed load) the store is the empty initial
         // state. Writes are coalesced — see queueWrite.
         setItem: (name, value) => {
-          if (saveLoadStatus === 'ready') queueWrite(name, value, serializeSave);
+          if (saveLoadStatus === 'ready' && !savesSuspended) queueWrite(name, value, serializeSave);
         },
         removeItem: idbRemoveItem,
       },
@@ -11840,8 +11859,9 @@ export const useGameStore = create<GameStore>()(
  * navigation target will rehydrate fresh data.
  */
 export async function flushToStorage(): Promise<void> {
-  // Same rule as the persist storage: never write the empty pre-load state.
-  if (saveLoadStatus !== 'ready') return;
+  // Same rule as the persist storage: never write the empty pre-load state,
+  // nor an exhibition league over the player's real save.
+  if (saveLoadStatus !== 'ready' || savesSuspended) return;
   const { partialize } = useGameStore.persist.getOptions();
   const state = useGameStore.getState();
   const envelope = { state: partialize ? partialize(state) : state, version: SAVE_VERSION };
