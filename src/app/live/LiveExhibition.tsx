@@ -56,9 +56,13 @@ export function LiveExhibition() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Back from a finished exhibition: the league is still in memory.
+  // Rematch runs once: it replaces the current exhibition, which re-runs this effect.
+  const rematchedRef = useRef(false);
   useEffect(() => {
     if (!exhibition || league) return;
     if (searchParams.get('rematch') === '1') {
+      if (rematchedRef.current) return;
+      rematchedRef.current = true;
       const id = rematchExhibition();
       if (id) { router.replace(`/game/${id}`); return; }
     }

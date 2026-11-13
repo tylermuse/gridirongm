@@ -951,7 +951,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // snap and shows the play call menu. Toggleable at any time during the game.
   // Defaults ON only for games the user is actively managing (userTeamSide set);
   // spectator / sim-past-weeks games start OFF so they simulate without pausing.
-  const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null);
+  // A /live exhibition is a watch-first experience: it starts with Live Coach off
+  // so the 3D game never sits waiting on a play call below the fold; one tap turns it on.
+  const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null && !isExhibition);
   const [liveCoachPaused, setLiveCoachPaused] = useState(false);
   // Live Coach engine — generates events one-at-a-time after takeover
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
@@ -3508,6 +3510,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
 
+          {/* An exhibition has no league week around it (see exhibition.ts). */}
+          {!isExhibition && (<>
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
           <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
             {(() => {
@@ -3566,6 +3570,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               });
             })()}
           </div>
+          </>)}
         </div>
       </div>
       </div>
