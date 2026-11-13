@@ -51,6 +51,15 @@ function TeamPicker() {
   // came from a file rather than a URL. Its blob: URL lives in activeUrl.
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  // The import panel sits below the hero and team grid; bring it into view
+  // when a Football GM player arrives via ?import=fbgm.
+  useEffect(() => {
+    if (searchParams.get('import') !== 'fbgm') return;
+    const id = window.setTimeout(() => {
+      document.getElementById('league-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [searchParams]);
   const [importLoading, setImportLoading] = useState(false);
   const [importedTeams, setImportedTeams] = useState<ImportedLeagueData | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
@@ -574,7 +583,7 @@ function TeamPicker() {
 
       {/* Import League File Section — phones: below the team grid, so the first
           thing after the hero is the choice a new GM actually has to make. */}
-      <div className="order-2 sm:order-none mt-4 sm:mt-0 mb-6 max-w-4xl w-full">
+      <div id="league-import" className="order-2 sm:order-none mt-4 sm:mt-0 mb-6 max-w-4xl w-full scroll-mt-6">
         <button
           onClick={() => setShowImport(!showImport)}
           className="flex items-center gap-2 text-sm text-[var(--text-sec)] hover:text-blue-600 transition-colors mx-auto"
