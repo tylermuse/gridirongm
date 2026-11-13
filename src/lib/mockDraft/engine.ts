@@ -372,6 +372,48 @@ export function parseTeamPreselect(
   return { userTids: [team.tid], rounds: hasFirst ? 1 : 3 };
 }
 
+export interface QuickStart {
+  settings: DraftSettings;
+  userPicks: number[];
+  /** Set when the prospect asked for (`pick=`) was gone before the team's first slot. */
+  goneNotice: string | null;
+  prefilled: boolean;
+}
+
+/**
+ * `?team=bears&go=1[&pick=<pid>]` from a team page: skip setup and open the draft
+ * with that team on the clock. With `pick`, the team's first selection is already
+ * that prospect, and the mock runs at least 3 rounds so there's still drafting to do.
+ * If the AI takes the prospect before the team's first slot, the draft opens with
+ * the team on the clock instead and `goneNotice` says who took him.
+ */
+export function parseQuickStart(data: MockDraftData, params: URLSearchParams, seed: number): QuickStart | null {
+  if (params.get('go') !== '1') return null;
+  const preselect = parseTeamPreselect(data, params);
+  if (!preselect) return null;
+  const tid = preselect.userTids[0];
+  const firstSlot = data.order.find((slot) => slot.tid === tid);
+  if (!firstSlot) return null;
+
+  const pid = Number(params.get('pick'));
+  const prospect = Number.isInteger(pid) ? data.prospects.find((p) => p.pid === pid) : undefined;
+  const minRounds = prospect ? Math.max(3, firstSlot.round) : Math.max(preselect.rounds, firstSlot.round);
+  const rounds = ROUND_OPTIONS.find((r) => r >= minRounds) ?? 7;
+  const settings: DraftSettings = { seed, rounds, userTids: [tid] };
+  if (!prospect) return { settings, userPicks: [], goneNotice: null, prefilled: false };
+
+  const withPick = replayDraft(data, settings, [prospect.pid]);
+  if (!withPick.invalid) return { settings, userPicks: [prospect.pid], goneNotice: null, prefilled: true };
+
+  const before = replayDraft(data, settings, []);
+  const takenBy = before.picks.find((p) => p.prospect.pid === prospect.pid);
+  const takerTeam = takenBy ? data.teams.find((t) => t.tid === takenBy.slot.tid) : undefined;
+  const goneNotice = takenBy && takerTeam
+    ? `${prospect.firstName} ${prospect.lastName} went No. ${takenBy.slot.pick} to the ${takerTeam.name} in this mock. You're on the clock.`
+    : `${prospect.firstName} ${prospect.lastName} was gone before your pick in this mock. You're on the clock.`;
+  return { settings, userPicks: [], goneNotice, prefilled: false };
+}
+
 export type NeedReason = 'qb' | 'below-min' | 'weak' | 'thin';
 
 export interface TeamNeed {

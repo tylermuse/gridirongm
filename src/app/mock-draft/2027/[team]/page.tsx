@@ -89,7 +89,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 function CtaButton({ team }: { team: MockTeam }) {
   return (
     <Link
-      href={`/mock-draft?team=${teamSlug(team)}`}
+      href={`/mock-draft?team=${teamSlug(team)}&go=1`}
       prefetch={false}
       className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors"
     >
@@ -116,10 +116,13 @@ function ProspectTable({
   prospects,
   mockByPid,
   teamsById,
+  team,
 }: {
   prospects: MockProspect[];
   mockByPid: Map<number, MadePick>;
   teamsById: Map<number, MockTeam>;
+  /** Adds a "Draft" link per row that opens the mock with this prospect as the team's first pick. */
+  team?: MockTeam;
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
@@ -133,6 +136,11 @@ function ProspectTable({
             <th scope="col" className="px-3 py-2 whitespace-nowrap">Ht / Wt</th>
             <th scope="col" className="px-3 py-2">Tier</th>
             <th scope="col" className="px-3 py-2 whitespace-nowrap">In our mock</th>
+            {team && (
+              <th scope="col" className="px-3 py-2">
+                <span className="sr-only">Draft</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -150,6 +158,17 @@ function ProspectTable({
                 <td className="px-3 py-2 whitespace-nowrap tabular-nums">
                   {mocked && mockTeam ? `No. ${mocked.slot.pick}, ${mockTeam.abbrev}` : 'Undrafted'}
                 </td>
+                {team && (
+                  <td className="px-3 py-2 text-right">
+                    <Link
+                      href={`/mock-draft?team=${teamSlug(team)}&go=1&pick=${p.pid}`}
+                      prefetch={false}
+                      className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+                    >
+                      Draft →
+                    </Link>
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -364,7 +383,7 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
             {prospectsByNeed.map(({ need, prospects }) => (
               <div key={need.pos}>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">{need.pos}</h3>
-                <ProspectTable prospects={prospects} mockByPid={mockByPid} teamsById={teamsById} />
+                <ProspectTable prospects={prospects} mockByPid={mockByPid} teamsById={teamsById} team={team} />
               </div>
             ))}
           </div>
@@ -375,9 +394,10 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
         <section className="mt-10">
           <h2 className="text-2xl font-bold text-gray-900 mb-1">Who could be there at No. {firstPick.pick}</h2>
           <p className="text-sm text-gray-500 mb-4">
-            Prospects ranked near the {team.name}&apos; first pick on our {data.draftYear} big board.
+            Prospects ranked near the {team.name}&apos; first pick on our {data.draftYear} big board. Hit Draft to take
+            one at No. {firstPick.pick} and run the rest of the mock from there.
           </p>
-          <ProspectTable prospects={inRange} mockByPid={mockByPid} teamsById={teamsById} />
+          <ProspectTable prospects={inRange} mockByPid={mockByPid} teamsById={teamsById} team={team} />
         </section>
       )}
 
