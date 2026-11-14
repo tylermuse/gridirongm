@@ -45,6 +45,7 @@ import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { trackEvent } from '@bs/core/analytics/track';
 import { trackFeature } from '@bs/core/analytics/feature';
 import { parseSave, serializeSave } from './saveStatCompaction';
+import { repairSaveCareerStats } from './careerStatsRepair';
 import { isDraftPickSpent, resolvePickOnClock } from './draftPicks';
 import { makeRookieTest } from './rookies';
 import { settleRosterTiers, describeRosterSettle, type SettleRosterResult } from './rosterTiers';
@@ -10654,11 +10655,13 @@ export const useGameStore = create<GameStore>()(
             tickedPlayers = decrementInjuryWeeks(tickedPlayers, injuryWeeksToTick);
           }
 
-          // Update player stats on top of any injury decrements
+          // Update player stats on top of any injury decrements. A watched
+          // playoff game goes on the season line, so it goes on the career
+          // line with it: a career total is never below its seasons.
           const newPlayers = tickedPlayers.map(p => {
             const playerStats = result.playerStats?.[p.id];
             if (!playerStats) return p;
-            return { ...p, stats: addStats(p.stats, playerStats) };
+            return { ...p, stats: addStats(p.stats, playerStats), careerStats: addStats(p.careerStats, playerStats) };
           });
 
           // Re-injury rolls for any player who played through their injury
@@ -10695,11 +10698,11 @@ export const useGameStore = create<GameStore>()(
               },
             };
           });
-          // Update player stats
+          // Update player stats: season and career, as the weekly sim does.
           const newPlayers = state.players.map(p => {
             const playerStats = result.playerStats?.[p.id];
             if (!playerStats) return p;
-            return { ...p, stats: addStats(p.stats, playerStats) };
+            return { ...p, stats: addStats(p.stats, playerStats), careerStats: addStats(p.careerStats, playerStats) };
           });
           // P1 diagnostic — yo46363 passing stats bug. Remove when resolved.
           const qbWithStats = newPlayers.find(p => p.position === 'QB' && (result.playerStats?.[p.id]?.passAttempts ?? 0) > 0);
@@ -11065,7 +11068,9 @@ export const useGameStore = create<GameStore>()(
           // The save on disk leaves zero-valued stat fields out; parseSave
           // puts them back before migrate (which reads stats) or anything
           // else sees the state. See saveStatCompaction.ts.
-          return raw === null ? null : parseSave(raw);
+          // Then bring any career total that fell behind its own seasons
+          // back up to them (careerStatsRepair.ts).
+          return raw === null ? null : repairSaveCareerStats(parseSave(raw));
         },
         // Nothing in memory is worth saving until the league has loaded:
         // before that (and after a failed load) the store is the empty initial
