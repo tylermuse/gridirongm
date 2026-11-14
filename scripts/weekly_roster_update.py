@@ -20,6 +20,11 @@ Then runs build_midseason_start.py (real schedule, records, stats and
 performance-based ratings) and build_vanilla_fbgm.py, and appends the biggest
 rating moves to the changelog.
 Idempotent-ish: re-running against the same ESPN state yields the same result.
+
+Every run also tags each player ESPN lists on a practice squad or injured reserve
+(`bsRosterStatus`: 'ps' / 'ir'; untagged = active roster), so a league that picks
+up the real season seats the user's team at 53 instead of asking them to cut 22.
+`--status-only` refreshes just those tags (no moves, injuries or rating changes).
 """
 import json, re, sys, subprocess, datetime, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -274,7 +279,21 @@ def gpos(p):
     r=p.get('ratings') or []; return r[-1].get('pos') if r else None
 NICK={('pat','patrick'),('mike','michael'),('rob','robert'),('chris','christopher'),('will','william'),('nate','nathaniel'),('joe','joseph'),('greg','gregory'),('cam','cameron'),('dax','daxton'),('kam','kamren'),('kenny','kenneth'),('josh','joshua'),('jake','jacob')}
 
-def reconcile(d, espn, ok):
+def roster_status(ep):
+    """'ps' / 'ir' for a player ESPN lists off the active roster, else None."""
+    u=ep.get('unit')
+    if u=='ps': return 'ps'
+    if u=='ir':
+        # ESPN's group is "injured reserve OR out": a player who is only Out this
+        # week is still on the 53.
+        s=(ep.get('injStatus') or ep.get('status') or '').strip().lower()
+        return None if s in ('out','doubtful','questionable') else 'ir'
+    return None
+
+def reconcile(d, espn, ok, status_only=False):
+    """Match ESPN's rosters to the file and apply them. status_only: change no
+    team, jersey or contract — only (re)write the bsRosterStatus tags, and only
+    for players the file already has on the team ESPN lists them with."""
     P=d['players']; recs={}; gindex=defaultdict(list); by_last=defaultdict(list)
     for p in P:
         r={'pid':p['pid'],'tid':p.get('tid'),'pos':gpos(p),'ovr':latest_ovr(p),
@@ -288,7 +307,7 @@ def reconcile(d, espn, ok):
     def urank(u):
         try: return order.index(u)
         except: return 9
-    jersey_by_pid={}
+    jersey_by_pid={}; status_by_pid={}
     for tid in range(32):
         for ep in sorted(espn[tid]['players'], key=lambda x: urank(x.get('unit'))):
             ej=ep.get('jersey') or ''; eg=grp(ep.get('pos'))
@@ -303,6 +322,7 @@ def reconcile(d, espn, ok):
             def st(c): return (3 if ej and c['jersey']==ej else 0)+(2 if eg and grp(c['pos'])==eg else 0)+(2 if c['tid']==tid else 0)
             ch=max(elig,key=lambda c:(st(c),c['ovr'],1 if c['pid'] in exact else 0))
             claimed.add(ch['pid']); assign[ch['pid']]=tid
+            status_by_pid[ch['pid']]=roster_status(ep)
             if ej: jersey_by_pid[ch['pid']]=ej
     # dedup-swap: keep higher-rated of same-person duplicates on a team
     def same(a,b):
@@ -316,11 +336,17 @@ def reconcile(d, espn, ok):
         ln=lastn(p.get('firstName'),p.get('lastName'))
         for yp in sorted(abt.get((xt,ln),[]),key=lambda q:recs[q]['ovr']):
             if yp!=xp and same(xp,yp) and recs[xp]['ovr']>recs[yp]['ovr']:
-                assign[xp]=xt; del assign[yp]; abt[(xt,ln)].remove(yp); abt[(xt,ln)].append(xp); break
+                assign[xp]=xt; del assign[yp]; abt[(xt,ln)].remove(yp); abt[(xt,ln)].append(xp)
+                status_by_pid[xp]=status_by_pid.pop(yp,None); break
     # apply: assigned -> team (un-retire if needed); on-team-not-assigned & ovr<65 -> FA
     moves=0; unret=0; cuts=0; jset=0
     for p in P:
         pid=p['pid']; cur=p.get('tid')
+        p.pop('bsRosterStatus',None)
+        if status_only:
+            if assign.get(pid)==cur and status_by_pid.get(pid): p['bsRosterStatus']=status_by_pid[pid]
+            continue
+        if pid in assign and status_by_pid.get(pid): p['bsRosterStatus']=status_by_pid[pid]
         if pid in assign:
             nt=assign[pid]
             if cur!=nt:
@@ -441,9 +467,30 @@ def coaches_only():
     subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)
     print(json.dumps({"coaches":n,"sample":dict(list((d.get('bsCoaches') or {}).items())[:5])}))
 
+def status_only():
+    """Refresh only the practice-squad / IR tags from ESPN's current rosters."""
+    week, teams, injured, ok = fetch_espn()
+    if len(ok)<30:
+        print(json.dumps({"error":f"only {len(ok)}/32 team rosters fetched; aborting"})); sys.exit(1)
+    d=json.load(open(ROSTER))
+    n0=len(d['players'])
+    reconcile(d, teams, ok, status_only=True)
+    assert len(d['players'])==n0
+    json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
+    # the rosters page serves the file with ?v=cacheBust: bump it or nobody gets the tags
+    s=open(PAGE,encoding='utf-8').read()
+    a=s.index("id: 'nfl-2026-updated'"); b=s.index("id: 'nfl-1994-montana-era'"); seg=s[a:b]
+    cb=int(re.search(r'cacheBust: (\d+),', seg).group(1))+1
+    seg=re.sub(r'cacheBust: \d+,', f'cacheBust: {cb},', seg, count=1)
+    open(PAGE,'w',encoding='utf-8').write(s[:a]+seg+s[b:])
+    tags=Counter(p.get('bsRosterStatus') for p in d['players'] if p.get('bsRosterStatus'))
+    print(json.dumps({"week":week,"tagged":dict(tags),"cacheBust":cb}))
+
 def main():
     if '--coaches-only' in sys.argv:
         coaches_only(); return
+    if '--status-only' in sys.argv:
+        status_only(); return
     today=datetime.date.today()
     week, teams, injured, ok = fetch_espn()
     if len(ok)<30:
