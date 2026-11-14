@@ -25,6 +25,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
+import type { PickerTeam } from '@/lib/data/leagueImport';
 import { takeStashedUpload } from '@/lib/engine/exhibition';
 import { type ImportedLeagueData, loadLeagueFromUrl, loadNativeSaveIntoApp, BsfNativeSaveImportError, readUploadedLeagueFile, LeagueFileUploadError } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -38,7 +39,10 @@ import OwnerMeter from '@/components/OwnerMeter';
 import { ProgressRing } from '@/components/shared/ProgressRing';
 import { AdSlot } from '@/components/AdSlot';
 
-function TeamPicker() {
+/** The real 2026 NFL file the picker's default "real season" choice plays. */
+const REAL_SEASON_ROSTER_URL = '/rosters/FBGM_NFL_Roster_2026_Updated.json';
+
+function TeamPicker({ realTeams = [] }: { realTeams?: PickerTeam[] }) {
   const { newLeague } = useGameStore();
   const { user } = useSubscription();
   const searchParams = useSearchParams();
@@ -88,6 +92,12 @@ function TeamPicker() {
     searchParams.get('startMode') === 'regular' ? 'regular' : 'offseason'
   );
   const [teamSearch, setTeamSearch] = useState('');
+  // What "Pick your team" starts when no league file is loaded. Real-roster
+  // leagues converted far better than the fictional offseason start (65% vs
+  // 44% of new players simmed a week, Tyler 11/14), so the real 2026 season is
+  // the default; both choices go straight to games, no offseason first.
+  const [leagueChoice, setLeagueChoice] = useState<'real' | 'fictional'>(realTeams.length ? 'real' : 'fictional');
+  const playingReal = !activeUrl && leagueChoice === 'real' && realTeams.length > 0;
   // ?team=ABBR (from the /mock-draft CTA) puts that team first and highlights it.
   // It doesn't start the league: picking a team is still the user's click.
   const preselectedTeam = searchParams.get('team')?.toUpperCase() ?? null;
@@ -333,7 +343,13 @@ function TeamPicker() {
       return;
     }
     try {
-      await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined, spectator);
+      if (activeUrl) {
+        await newLeague(abbr, activeUrl, startMode, spectator);
+      } else if (playingReal) {
+        await newLeague(abbr, REAL_SEASON_ROSTER_URL, 'regular', spectator, { entry: 'home_real' });
+      } else {
+        await newLeague(abbr, undefined, 'regular', spectator, { entry: 'home_fictional' });
+      }
       // Clear ?roster= from the URL so HomeContent stops forcing TeamPicker.
       // Without this, users who arrived via /rosters "Play in BS Football"
       // would stay stuck on the picker even after initializing a new league.
@@ -443,10 +459,10 @@ function TeamPicker() {
     setUploadedFileName(null);
   }
 
-  // Use imported teams if available, otherwise default fictional teams
-  const displayTeams: { city: string; name: string; abbreviation: string; primaryColor: string; secondaryColor: string; logoUrl?: string }[] = importedTeams
+  // Imported teams if a file is loaded, else the real 2026 teams or the fictional league
+  const displayTeams: { city: string; name: string; abbreviation: string; primaryColor: string; secondaryColor: string; logoUrl?: string; record?: string }[] = importedTeams
     ? importedTeams.teams.map(t => ({ city: t.city, name: t.name, abbreviation: t.abbreviation, primaryColor: t.primaryColor, secondaryColor: t.secondaryColor ?? '#FFFFFF', logoUrl: t.logoUrl }))
-    : LEAGUE_TEAMS;
+    : playingReal ? realTeams : LEAGUE_TEAMS;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
@@ -733,6 +749,31 @@ function TeamPicker() {
           );
         })()}
 
+        {/* League choice — only when no league file is loaded. */}
+        {!activeUrl && !mockParam && realTeams.length > 0 && (
+          <div className="w-full max-w-4xl mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Which league to play">
+            {([
+              { key: 'real', title: 'Real 2026 NFL season', sub: 'Real rosters and records. Pick up the season where it is right now.' },
+              { key: 'fictional', title: 'Fictional league', sub: 'Made-up teams and players. A fresh season from Week 1.' },
+            ] as const).map(opt => (
+              <button
+                key={opt.key}
+                role="radio"
+                aria-checked={leagueChoice === opt.key}
+                onClick={() => setLeagueChoice(opt.key)}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  leagueChoice === opt.key
+                    ? 'border-blue-600 bg-blue-50 shadow-md shadow-blue-600/10'
+                    : 'border-[var(--border)] bg-[var(--surface)] hover:border-blue-400'
+                }`}
+              >
+                <div className={`text-base font-bold ${leagueChoice === opt.key ? 'text-blue-700' : ''}`}>{opt.title}</div>
+                <div className="text-xs text-[var(--text-sec)] mt-0.5">{opt.sub}</div>
+              </button>
+            ))}
+          </div>
+        )}
+
         <input
           id="team-picker"
           type="text"
@@ -778,7 +819,7 @@ function TeamPicker() {
               <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
               <div className="min-w-0">
                 <div className="text-sm font-bold truncate">{team.city}</div>
-                <div className="text-xs text-[var(--text-sec)] truncate">{team.name}</div>
+                <div className="text-xs text-[var(--text-sec)] truncate">{team.name}{team.record ? ` · ${team.record}` : ''}</div>
                 {team.abbreviation === preselectedTeam && (
                   <div className="text-xs font-semibold text-blue-600 truncate">
                     {mockPlan ? `Starts at the ${mockPlan.draftYear} draft` : 'Your mock draft team'}
@@ -1949,20 +1990,20 @@ function DiscordBanner() {
 
 import { Suspense } from 'react';
 
-function HomeContent() {
+function HomeContent({ realTeams }: { realTeams?: PickerTeam[] }) {
   const initialized = useGameStore(s => s.initialized);
   const searchParams = useSearchParams();
   // ?roster= and ?import=fbgm (a Football GM upload, e.g. handed off from /live)
   // open the team picker even for a player with a saved league; picking a team
   // backs that league up to a free save slot first (handlePick).
   const forcePicker = searchParams.get('roster') !== null || searchParams.get('import') === 'fbgm';
-  return initialized && !forcePicker ? <Dashboard /> : <TeamPicker />;
+  return initialized && !forcePicker ? <Dashboard /> : <TeamPicker realTeams={realTeams} />;
 }
 
-export default function Home() {
+export default function Home({ realTeams }: { realTeams?: PickerTeam[] }) {
   return (
     <Suspense>
-      <HomeContent />
+      <HomeContent realTeams={realTeams} />
     </Suspense>
   );
 }
