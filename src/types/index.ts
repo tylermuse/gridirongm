@@ -581,7 +581,12 @@ export interface Player {
   potential: number;
   /** Season-end OVR snapshots recorded each offseason before development runs. */
   ratingHistory: { season: number; overall: number }[];
+  /** The season being played: regular-season games only. Playoff games,
+   *  simmed or watched live, are not added (their box scores are in
+   *  `schedule`). Seasons logged before that rule can include the playoff
+   *  games the user watched. */
   stats: PlayerStats;
+  /** Running career total of the same games; never below the seasons. */
   careerStats: PlayerStats;
   contract: Contract;
   teamId: string | null;

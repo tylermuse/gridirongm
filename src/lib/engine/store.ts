@@ -45,6 +45,7 @@ import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 import { trackEvent } from '@bs/core/analytics/track';
 import { trackFeature } from '@bs/core/analytics/feature';
 import { parseSave, serializeSave } from './saveStatCompaction';
+import { repairSaveCareerStats } from './careerStatsRepair';
 import { isDraftPickSpent, resolvePickOnClock } from './draftPicks';
 import { makeRookieTest } from './rookies';
 import { settleRosterTiers, describeRosterSettle, type SettleRosterResult } from './rosterTiers';
@@ -10654,20 +10655,20 @@ export const useGameStore = create<GameStore>()(
             tickedPlayers = decrementInjuryWeeks(tickedPlayers, injuryWeeksToTick);
           }
 
-          // Update player stats on top of any injury decrements
-          const newPlayers = tickedPlayers.map(p => {
-            const playerStats = result.playerStats?.[p.id];
-            if (!playerStats) return p;
-            return { ...p, stats: addStats(p.stats, playerStats) };
-          });
+          // No player stats here. `stats` and `careerStats` are regular-season
+          // lines: the playoff sims (simPlayoffGame, simPlayoffRound,
+          // simAllPlayoffGames) write none, so a watched playoff game writes
+          // none either. Otherwise the user's team alone would carry up to
+          // four extra games into the season awards, the stat leaders and the
+          // season log. The box score stays in `schedule` (above).
 
           // Re-injury rolls for any player who played through their injury
           const gameTeamIds = new Set([result.homeTeamId, result.awayTeamId]);
-          const playedIds = new Set(newPlayers.filter(p => p.teamId && gameTeamIds.has(p.teamId)).map(p => p.id));
+          const playedIds = new Set(tickedPlayers.filter(p => p.teamId && gameTeamIds.has(p.teamId)).map(p => p.id));
           const ht = state.teams.find(t => t.id === result.homeTeamId);
           const at = state.teams.find(t => t.id === result.awayTeamId);
           const gameLabel = `${at?.city ?? 'AWY'} at ${ht?.city ?? 'HOM'}`;
-          const reInj = rollReInjuries(newPlayers, playedIds, gameLabel, state.season, 100 + playedRound, state.userTeamId);
+          const reInj = rollReInjuries(tickedPlayers, playedIds, gameLabel, state.season, 100 + playedRound, state.userTeamId);
 
           const newInjuryRound = injuryWeeksToTick > 0 ? targetRound : lastInjuryRound;
           set({ playoffBracket: bracket, champions, newsItems: [...newsItems, ...reInj.news], finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: reInj.players, playoffInjuryRound: newInjuryRound });
@@ -10695,11 +10696,11 @@ export const useGameStore = create<GameStore>()(
               },
             };
           });
-          // Update player stats
+          // Update player stats: season and career, as the weekly sim does.
           const newPlayers = state.players.map(p => {
             const playerStats = result.playerStats?.[p.id];
             if (!playerStats) return p;
-            return { ...p, stats: addStats(p.stats, playerStats) };
+            return { ...p, stats: addStats(p.stats, playerStats), careerStats: addStats(p.careerStats, playerStats) };
           });
           // P1 diagnostic — yo46363 passing stats bug. Remove when resolved.
           const qbWithStats = newPlayers.find(p => p.position === 'QB' && (result.playerStats?.[p.id]?.passAttempts ?? 0) > 0);
@@ -11065,7 +11066,9 @@ export const useGameStore = create<GameStore>()(
           // The save on disk leaves zero-valued stat fields out; parseSave
           // puts them back before migrate (which reads stats) or anything
           // else sees the state. See saveStatCompaction.ts.
-          return raw === null ? null : parseSave(raw);
+          // Then bring any career total that fell behind its own seasons
+          // back up to them (careerStatsRepair.ts).
+          return raw === null ? null : repairSaveCareerStats(parseSave(raw));
         },
         // Nothing in memory is worth saving until the league has loaded:
         // before that (and after a failed load) the store is the empty initial
