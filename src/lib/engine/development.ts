@@ -402,11 +402,15 @@ export function developPlayers(
  */
 export function potentialLabel(potential: number, experience: number): string {
   if (experience >= 3) return String(potential);
-  if (potential >= 85) return 'Elite';
-  if (potential >= 75) return 'High';
+  // Tiers mirror the scouting tierLabel() scale (scoutingReport.ts /
+  // personnelReport.ts) so a prospect's potential reads consistently with
+  // their scouting grade: Elite ≥90, Above Average ≥80, Average ≥65,
+  // Below Average ≥50, Poor otherwise.
+  if (potential >= 90) return 'Elite';
+  if (potential >= 80) return 'Above Average';
   if (potential >= 65) return 'Average';
-  if (potential >= 55) return 'Low';
-  return '?';
+  if (potential >= 50) return 'Below Average';
+  return 'Poor';
 }
 
 /**
