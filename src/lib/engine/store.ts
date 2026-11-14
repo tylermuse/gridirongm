@@ -48,6 +48,7 @@ import { parseSave, serializeSave } from './saveStatCompaction';
 import { repairSaveCareerStats } from './careerStatsRepair';
 import { isDraftPickSpent, resolvePickOnClock } from './draftPicks';
 import { makeRookieTest } from './rookies';
+import { settleRosterTiers, describeRosterSettle, type SettleRosterResult } from './rosterTiers';
 
 const SAVE_VERSION = 37;
 const AUTOSAVE_KEY = 'gridiron-gm-autosave';
@@ -273,6 +274,11 @@ interface GameStore extends LeagueState {
    *  managing the "user team" slot. Idempotent — re-running no-ops on
    *  already-trimmed teams. */
   initializeFreshLeagueRosters: () => void;
+  /** Get the user's team to the 53-man limit without throwing players away:
+   *  long-term injured go to IR, the bottom of the roster fills open
+   *  practice-squad slots, and only what is still over gets released.
+   *  Returns what moved (null when there was nothing to do). */
+  autoSettleUserRoster: () => Pick<SettleRosterResult, 'toIR' | 'toPracticeSquad' | 'released'> | null;
   restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => boolean;
   extendPlayer: (playerId: string, salary: number, years: number) => { success: boolean; reason?: string };
   placeOnIR: (playerId: string) => void;
@@ -3089,6 +3095,30 @@ export const useGameStore = create<GameStore>()(
           );
 
           const startWeek = realSeason?.currentWeek ?? 1;
+          // Picking up the real season: the file lists everyone under contract
+          // with a club (53 + practice squad + IR, 69-87 players). Seat the
+          // user's team the way the real club already is — real IR to IR, real
+          // practice squad to the PS — so the league opens on a legal 53
+          // instead of a 75-man roster the user has to cut before the first
+          // sim (Tyler 11/13). AI teams have no PS / IR tiers and are trimmed
+          // by initializeFreshLeagueRosters below.
+          const seated = realSeason && !isSpectator
+            ? settleRosterTiers(
+                teamsWithApproval.find(t => t.id === userTeam.id)!,
+                allImportedPlayers,
+                { week: startWeek, realStatus: imported.realRosterStatus, release: true },
+              )
+            : null;
+          const seatedMoves = seated ? describeRosterSettle(seated) : '';
+          const seatedTeams = seated
+            ? teamsWithApproval.map(t => (t.id === userTeam.id ? seated.team : t))
+            : teamsWithApproval;
+          const seatedPlayers = seated && seated.playerPatches.size > 0
+            ? allImportedPlayers.map(p => {
+                const patch = seated.playerPatches.get(p.id);
+                return patch ? { ...p, ...patch } : p;
+              })
+            : allImportedPlayers;
           set({
             initialized: true,
             season: imported.season,
@@ -3098,8 +3128,8 @@ export const useGameStore = create<GameStore>()(
             phase: isSpectator || isRegularStart ? 'regular' : 'resigning',
             userTeamId: userTeam.id,
             isSpectator: !!isSpectator,
-            teams: teamsWithApproval,
-            players: reconcileJerseys(allImportedPlayers, teamsWithApproval),
+            teams: seatedTeams,
+            players: reconcileJerseys(seatedPlayers, seatedTeams),
             schedule,
             draftOrder: [],
             draftResults: [],
@@ -3114,7 +3144,7 @@ export const useGameStore = create<GameStore>()(
             // Duplicate ids → duplicate React keys on the FA table → the list
             // stopped responding to the position / affordable filters for
             // the whole first season of a /rosters-loaded league (Tyler 10/28).
-            freeAgents: Array.from(new Set([...fbgmFAs.map(p => p.id), ...imported.freeAgentIds, ...leftoverProspectIds])),
+            freeAgents: Array.from(new Set([...fbgmFAs.map(p => p.id), ...imported.freeAgentIds, ...leftoverProspectIds, ...(seated?.released ?? [])])),
             faDay: 0,
             faRefusals: [],
             playoffBracket: null,
@@ -3123,7 +3153,7 @@ export const useGameStore = create<GameStore>()(
             newsItems: realSeason ? [makeNews({
               season: imported.season, week: startWeek, type: 'system',
               headline: `Picking up the real ${imported.season} season at Week ${startWeek}`,
-              body: `Records, results and player stats are real${realSeason.asOf ? ` as of ${realSeason.asOf}` : ''}, and ratings reflect how players have actually performed. Every team plays its real remaining schedule.`,
+              body: `Records, results and player stats are real${realSeason.asOf ? ` as of ${realSeason.asOf}` : ''}, and ratings reflect how players have actually performed. Every team plays its real remaining schedule.${seatedMoves ? ` Your roster is set at ${seatedTeams.find(t => t.id === userTeam.id)!.roster.length}: ${seatedMoves}.` : ''}`,
               isUserTeam: true,
             })] : [],
             newsLastReadWeek: 0,
@@ -3538,7 +3568,7 @@ export const useGameStore = create<GameStore>()(
                 now - last.at > 5000;
               if (shouldShow) {
                 __week1RosterGateLastShown = { week: state.week, length: userTeam.roster.length, at: now };
-                alert(`You can't start the regular season until your active roster is at 53.\n\nCurrent: ${userTeam.roster.length} players (cut or demote ${over} more).\n\nGo to /roster — there's an "Auto-cut to 53" button next to the roster count that will release the ${over} lowest-OVR players for you, or use the Demote-to-PS / Release actions to choose yourself.`);
+                alert(`You can't start the regular season until your active roster is at 53.\n\nCurrent: ${userTeam.roster.length} players (cut or demote ${over} more).\n\nGo to /roster — the "Trim to 53" button next to the roster count does it for you (long-term injured to IR, then the practice squad, releasing only who is left over), or use the Demote-to-PS / Release actions to choose yourself.`);
               }
             }
             console.warn('[simWeek] blocked: user roster over 53 going into Week 1', userTeam.roster.length);
@@ -6747,6 +6777,40 @@ export const useGameStore = create<GameStore>()(
         });
 
         if (teamId) markSubop(targetTeams[0]?.abbreviation ?? teamId, 'end');
+      },
+
+      autoSettleUserRoster: () => {
+        const state = get();
+        if (!state.userTeamId || state.isSpectator) return null;
+        if ((state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled === false) return null;
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team) return null;
+        const result = settleRosterTiers(team, state.players, { week: state.week, release: true });
+        const moved = result.toIR.length + result.toPracticeSquad.length + result.released.length;
+        if (moved === 0) return null;
+        const nameOf = (id: string) => {
+          const p = state.players.find(pl => pl.id === id);
+          return p ? `${p.firstName} ${p.lastName}` : '';
+        };
+        set({
+          teams: state.teams.map(t => (t.id === team.id ? result.team : t)),
+          players: state.players.map(p => {
+            const patch = result.playerPatches.get(p.id);
+            return patch ? { ...p, ...patch } : p;
+          }),
+          freeAgents: [...state.freeAgents, ...result.released.filter(id => !state.freeAgents.includes(id))],
+          newsItems: [...state.newsItems, makeNews({
+            season: state.season,
+            week: state.week,
+            type: 'release',
+            teamId: team.id,
+            playerIds: [...result.toIR, ...result.toPracticeSquad, ...result.released],
+            headline: `You trimmed the roster to ${result.team.roster.length}: ${describeRosterSettle(result)}.`,
+            body: result.released.length > 0 ? `Released: ${result.released.map(nameOf).filter(Boolean).join(', ')}.` : undefined,
+            isUserTeam: true,
+          })],
+        });
+        return { toIR: result.toIR, toPracticeSquad: result.toPracticeSquad, released: result.released };
       },
 
       initializeFreshLeagueRosters: () => {

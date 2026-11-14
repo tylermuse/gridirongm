@@ -336,7 +336,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 {rosterOverBy > 0 && (
                   <span
                     className="hidden sm:inline text-[11px] font-semibold text-red-600 whitespace-nowrap"
-                    title="The active roster must be at 53 before the regular season starts. Use Auto-cut to 53 on the Roster page, or release / demote players to the practice squad."
+                    title="The active roster must be at 53 before you can sim. Use Trim to 53 on the Roster page (IR and practice squad first), or release / demote players yourself."
                   >
                     Roster {53 + rosterOverBy}/53 · cut {rosterOverBy} to sim
                   </span>
