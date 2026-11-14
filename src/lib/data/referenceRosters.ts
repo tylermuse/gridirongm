@@ -8,6 +8,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fbgmPickerTeam, type PickerTeam } from './leagueImport';
 
 export interface EraMeta {
   slug: string;
@@ -152,4 +153,11 @@ export function formatContract(amountThousands: number): string {
   if (!amountThousands) return '—';
   const millions = amountThousands / 1000;
   return `$${millions.toFixed(1)}M`;
+}
+
+/** The real 2026 teams as homepage picker tiles (names, colors, logos, current records). */
+export function getPickerTeams(era: string): PickerTeam[] {
+  const raw = loadEra(era);
+  if (!raw) return [];
+  return raw.teams.filter((t) => !t.disabled && t.tid >= 0).map(fbgmPickerTeam);
 }
