@@ -174,7 +174,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17s'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17t'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -774,9 +774,9 @@ function setupFormation(kind){
       O.slot.x=-8.3; O.slot.z=z0-1.5; O.wrR.x=8.3; O.wrR.z=z0-1.5; [O.slot,O.wrR].forEach(a=>{ a.face=0; a.stance='two'; });
       O.qb.x=-.6; O.qb.z=z0-6.85; O.qb.face=Math.PI/2; O.qb.stance='hold'; O.qb.hold=true;            // holder: kneels on the plant-foot side of the spot (the captured kick is right-footed, the approach comes from the left), square to the sideline
       { const d0=clipHips('football_kick',0), d1=clipHips('football_kick',1.1), f=FG_APPROACH, k=FG_STRIDE*(O.rb.model.scale.x/1.158)/86;   /* kicker: his mark is where the captured approach starts, so the plant lands at the spot */
-        /* soccer-style set-up: lined up on the ball, three steps back and two over (a right-footer sets up to the left), so the approach comes in on an angle — not straight down the line of the kick */
+        /* soccer-style set-up: lined up on the ball, three steps back and two over (a right-footer sets up to his left, the side away from the holder), so the approach comes in on an angle — not straight down the line of the kick */
         if(d0&&d1){ const fz=(d1[2]-d0[2])*k, fx=(d1[0]-d0[0])*k; O.rb.x = .35 - (Math.sin(f)*fz+Math.cos(f)*fx); O.rb.z = (z0-6.8) - (Math.cos(f)*fz-Math.sin(f)*fx);
-          O.rb.face = Math.atan2(.35-O.rb.x, (z0-6.8)-O.rb.z); } else { O.rb.x=-1.6; O.rb.z=z0-9.0; O.rb.face=f; } O.rb.stance=''; }
+          O.rb.face = Math.atan2(.35-O.rb.x, (z0-6.8)-O.rb.z); } else { O.rb.x=1.8; O.rb.z=z0-8.6; O.rb.face=f; } O.rb.stance=''; }
       D.cbL.x=-9.6; D.cbL.z=z0+1.2; D.cbR.x=9.6; D.cbR.z=z0+1.2; D.sL.x=-2.6; D.sL.z=z0+5.5; D.sR.x=2.6; D.sR.z=z0+5.5;
       [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>{ a.face=Math.PI; a.stance='two'; });
       O.refs = [makeRef(-3.9, 62.4, Math.PI), makeRef(3.9, 62.4, Math.PI)];   // officials under each upright, facing the kick
@@ -1818,7 +1818,7 @@ function footballMotion(a,name,time,weight=1,heading=0,originT=null,holdRootAfte
   return true;
 }
 // Any captured action on a live player (catch, punt catch, kick, hold): blends in/out over .15 s around [start,end]; the clip owns every joint while active.
-const FG_APPROACH = .5, FG_STRIDE = 1.12;   /* place-kick run-up: ~29° on top of the capture's own ~7° drift ≈ 36° in, and a touch longer than the capture so the mark sits ~3 steps back, ~2 over */
+const FG_APPROACH = -.83, FG_STRIDE = 1.12;   /* place-kick run-up: a right-footer sets up to his LEFT (+x; -x is his right, where the holder kneels) and steps into the kick. -0.83 rad less the capture's own ~7° drift ≈ 40° in; stride a touch longer than the capture so the mark sits ~2 yds back, ~1.5 over */
 function clipHips(name,t){ const c=BOT.animations.find(c=>c.name===name); if(!c) return null; const tr=c.tracks.find(x=>x.name.endsWith('Hips.position')); const v=tr.createInterpolant().evaluate(clamp(t,0,c.duration)); return [v[0],v[1],v[2]]; }   /* cm, model-local */
 function mocapAct(a,t){ const m=a.mocapAct; if(!m) return false; const ct=m.start+(t-m.t0);
   if(ct<m.start-.15) return false; if(ct>m.end+.15){ a.mocapAct=null; return false; }
