@@ -2,6 +2,7 @@ import type { Player, PlayerStats, GameResult, Team } from '@/types';
 import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
 import { fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
+import { DEEP_PICK_SHARE, resolveReturn, returnNote, returnSpotLabel, rollPickAirYards, rollReturn, type ReturnOutcome } from './returns';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,9 +51,13 @@ export interface PlayEvent {
   homeScore: number;
   awayScore: number;
   isScoring: boolean;
-  /** Interception only: the intercepting team's yard line (1-99, from its own goal line) where the return ended and
-   *  its drive starts. The 3D sim runs the return to this spot instead of making one up (it used to picture pick-sixes
-   *  the engine never scored). Optional: older saved games don't carry it. */
+  /** A return (interception, lost fumble, punt, kickoff), as spotted by returns.ts, all in the RETURNING team's yard
+   *  lines (from its own goal line): `returnFrom` where it got the ball (0 = in its own end zone), `returnYards` what
+   *  the return gained, `returnTo` where the return ended and its drive starts (1-99; 100 = returned for a touchdown,
+   *  and the event is `isScoring`). returnTo === returnFrom + returnYards except on a touchback. The play's line and
+   *  the 3D sim tell the same return. Optional: older saved games carry only `returnTo` on picks, or none of them. */
+  returnFrom?: number;
+  returnYards?: number;
   returnTo?: number;
   /** The part of `description` that credits a defender with the tackle or the pass breakup (" Tackled by T. Diggs."),
    *  exactly as it appears there. Code that finds the ball carrier by name cuts it out first, so a defender who shares
@@ -601,8 +606,8 @@ function keptRecoverer(carrier: Player | null, pool: Player[]): Player | null {
 
 function descPunt(yards: number): string {
   return pick([
-    `Punt — ${yards} yards net.`,
-    `Kicks it ${yards} yards. The offense takes over.`,
+    `Punt — ${yards} yards.`,
+    `Kicks it ${yards} yards.`,
     `Booming ${yards}-yard punt flips the field.`,
   ]);
 }
@@ -977,6 +982,39 @@ export function simulatePlayByPlay(
     state.yardsToGo = 10;
   }
 
+  /** A return that reached the end zone: 7 to the team that did NOT have the ball when the play was logged (the same
+   *  convention as every return touchdown here: the try is taken as good), and that team then kicks off. */
+  function scoreReturnTouchdown(ev: PlayEvent) {
+    if (state.possession === 'home') state.awayScore += 7;
+    else state.homeScore += 7;
+    ev.isScoring = true;
+    ev.homeScore = state.homeScore;   // the play's line shows the score it made
+    ev.awayScore = state.awayScore;
+    shiftMomentum(-25);
+    switchPossession(35);
+    doKickoff();
+  }
+
+  /** Stamp a return on the event that tells it, then hand the ball over at the spot returns.ts gave — or score it. */
+  function applyReturn(ev: PlayEvent, out: ReturnOutcome) {
+    ev.returnFrom = out.from;
+    ev.returnYards = out.returnYards;
+    ev.returnTo = out.fieldPos;
+    if (out.result === 'touchdown') {
+      scoreReturnTouchdown(ev);
+      return;
+    }
+    switchPossession(clamp(out.fieldPos, 1, 99));
+  }
+
+  /** A turnover at `spot` (the offense's yard line where the ball was caught / recovered): rolls the return, tells it
+   *  in the event's own line, and changes possession where the return ended. */
+  function turnoverReturn(kind: 'interception' | 'fumble', ev: PlayEvent, spot: number) {
+    const out = rollReturn(kind, spot);
+    ev.description += returnNote(kind, out);
+    applyReturn(ev, out);
+  }
+
   function doKickoff() {
     if (mcafeeMode) {
       // Onside kick check: if kicking team is trailing in Q4 with < 5 min
@@ -1005,15 +1043,12 @@ export function simulatePlayByPlay(
 
       // 1% kick return TD chance
       if (Math.random() < 0.01) {
-        addEvent('kickoff', 'Kick return TOUCHDOWN! Taken all the way back!', 100, true);
-        if (state.possession === 'home') state.awayScore += 7;
-        else state.homeScore += 7;
-        doKickoff(); // re-kick after TD
+        applyReturn(addEvent('kickoff', 'Kick return TOUCHDOWN! Taken all the way back!', 100, true), resolveReturn({ spot: 100, returnYards: 100 }));
         return;
       }
 
-      addEvent('kickoff', `Kicking team lines up — kickoff. Returned to the ${returnYards}.`, 0, false);
-      switchPossession(returnYards);
+      // Fielded at the goal line and run out to the spot.
+      applyReturn(addEvent('kickoff', `Kicking team lines up — kickoff. Returned to the ${returnYards}.`, 0, false), resolveReturn({ spot: 100, returnYards }));
       advanceClock(10);
       return;
     }
@@ -1033,15 +1068,12 @@ export function simulatePlayByPlay(
 
     // Rare kick return TD (~0.5%).
     if (Math.random() < 0.005) {
-      addEvent('kickoff', 'Kick return TOUCHDOWN! Taken all the way back!', 100, true);
-      if (state.possession === 'home') state.awayScore += 7;
-      else state.homeScore += 7;
-      doKickoff(); // re-kick after the return TD
+      applyReturn(addEvent('kickoff', 'Kick return TOUCHDOWN! Taken all the way back!', 100, true), resolveReturn({ spot: 100, returnYards: 100 }));
       return;
     }
 
-    addEvent('kickoff', `${descKickoff()} Kick returned to the ${returnYards}.`, 0, false, returnYards);
-    switchPossession(returnYards);
+    // Fielded at the goal line and run out to the spot.
+    applyReturn(addEvent('kickoff', `${descKickoff()} Kick returned to the ${returnYards}.`, 0, false, returnYards), resolveReturn({ spot: 100, returnYards }));
   }
 
   function shiftMomentum(amount: number) {
@@ -1133,42 +1165,31 @@ export function simulatePlayByPlay(
   }
 
   function doPunt() {
-    const puntYards = clamp(Math.round(gaussian(43, 7)), 25, 65);
-    // New field pos for receiving team: 100 - (100 - state.fieldPos - puntYards) but clamped
-    const returnTeamFieldPos = clamp(100 - state.fieldPos - puntYards, 5, 50);
-    addEvent('punt', descPunt(puntYards), puntYards, false);
+    let puntYards = clamp(Math.round(gaussian(43, 7)), 25, 65);
+    const toGoal = 100 - state.fieldPos;
+    // A punt that would reach the end zone: half are touchbacks, the rest are dropped inside the 10.
+    const touchback = puntYards >= toGoal && Math.random() < 0.5;
+    if (puntYards >= toGoal) puntYards = touchback ? toGoal : Math.max(1, toGoal - (3 + Math.floor(Math.random() * 7)));
+    const landing = state.fieldPos + puntYards;   // the punting team's yard line where the ball comes down
 
-    if (mcafeeMode) {
-      // 1.5% muffed punt — turnover, punting team keeps the ball
-      if (Math.random() < 0.015) {
-        addEvent('punt', 'Muffed punt! The kicking team recovers!', 0, false);
-        state.fieldPos = clamp(100 - returnTeamFieldPos, 20, 90);
-        state.down = 1;
-        state.yardsToGo = 10;
-        return;
-      }
-
-      // 0.5% punt return TD
-      if (Math.random() < 0.005) {
-        addEvent('punt', 'Punt return TOUCHDOWN! He takes it all the way!', 100, true);
-        if (state.possession === 'home') state.awayScore += 7;
-        else state.homeScore += 7;
-        switchPossession(25); // set up for kickoff position
-        doKickoff();
-        return;
-      }
-
-      // Normal punt return: 0-15 yards
-      const returnYds = Math.floor(Math.random() * 16);
-      const adjustedFieldPos = clamp(returnTeamFieldPos + returnYds, 5, 75);
-      if (returnYds > 0) {
-        addEvent('punt', `Punt returned ${returnYds} yards.`, returnYds, false);
-      }
-      switchPossession(adjustedFieldPos);
+    if (mcafeeMode && !touchback && Math.random() < 0.015) {
+      // 1.5% muffed punt — the punting team keeps the ball where it was dropped
+      addEvent('punt', descPunt(puntYards), puntYards, false);
+      addEvent('punt', 'Muffed punt! The kicking team recovers!', 0, false);
+      state.fieldPos = clamp(landing, 1, 99);
+      state.down = 1;
+      state.yardsToGo = 10;
       return;
     }
 
-    switchPossession(returnTeamFieldPos);
+    // Fair catch, a short return, or (rarely) all the way back: one event tells the kick and the return together.
+    const out = rollReturn('punt', landing);
+    const at = returnSpotLabel(out.from).replace('his own', 'their own');
+    const tail = out.result === 'touchback' ? ' Into the end zone — touchback.'
+      : out.result === 'touchdown' ? ` Fielded at ${at} — punt return TOUCHDOWN! He takes it all the way!`
+      : out.returnYards > 0 ? ` Fielded at ${at}, returned ${out.returnYards} yard${out.returnYards === 1 ? '' : 's'} to ${returnSpotLabel(out.fieldPos).replace('his own', 'their own')}.`
+      : ` Fair catch at ${at}.`;
+    applyReturn(addEvent('punt', descPunt(puntYards) + tail, puntYards, false), out);
   }
 
   function applyPenalty(): boolean {
@@ -1545,10 +1566,9 @@ export function simulatePlayByPlay(
       if (lostFumble) {
         if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
         const desc2 = descFumble(ok.qb, tackle.tackler ?? dk.lb1);
-        addEvent('fumble', desc2, 0, false);
+        const fumbleEv = addEvent('fumble', desc2, 0, false);
         shiftMomentum(-20);
-        const newPos = clamp(100 - state.fieldPos, 15, 75);
-        switchPossession(newPos);
+        turnoverReturn('fumble', fumbleEv, state.fieldPos);
         return true;
       }
     } else {
@@ -1601,11 +1621,10 @@ export function simulatePlayByPlay(
       if (lostFumble) {
         if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
         const desc2 = descFumble(rusher, tackle.tackler ?? dk.lb1);
-        addEvent('fumble', desc2, 0, false);
+        const fumbleEv = addEvent('fumble', desc2, 0, false);
         if (rusher) creditRusher(ob, rusher.id, { fumbles: 1 });
         shiftMomentum(-20); // turnover momentum
-        const newPos = clamp(100 - state.fieldPos, 15, 75);
-        switchPossession(newPos);
+        turnoverReturn('fumble', fumbleEv, state.fieldPos);
         return true;
       }
 
@@ -1698,10 +1717,10 @@ export function simulatePlayByPlay(
 
         if (stripLost) {
           const recoverer = pickSacker(dk.dls.filter(p => p !== sacker), dk.lbs.filter(p => p !== sacker)) ?? sacker;
-          addEvent('fumble', descStripSack(ok.qb, sacker, recoverer), 0, false);
+          const fumbleEv = addEvent('fumble', descStripSack(ok.qb, sacker, recoverer), 0, false);
           if (ok.qb) creditRusher(ob, ok.qb.id, { fumbles: 1 });
           shiftMomentum(-20);
-          switchPossession(clamp(100 - state.fieldPos, 1, 99));
+          turnoverReturn('fumble', fumbleEv, state.fieldPos);
           return true;
         }
 
@@ -1715,16 +1734,16 @@ export function simulatePlayByPlay(
         if (interceptor) db.perInterceptor[interceptor.id] = (db.perInterceptor[interceptor.id] ?? 0) + 1;
 
         const desc = descInterception(ok.qb, interceptor);
-        // The defense takes over about where the pass was thrown from (mirror of the line of scrimmage, give or take the
-        // throw and the return). The old cap at its own 60 moved a pick thrown from deep in the offense's end out to the
-        // offense's 40, so the spot never matched where the pick was pictured.
-        const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 97);
-        addEvent('interception', desc, 0, false);
-        events[events.length - 1].returnTo = returnPos;
+        // The pick is caught where the pass came down (line of scrimmage + air yards), and the defense's drive starts
+        // where the return from THERE ended (returns.ts). It used to be one number rolled around the mirror of the line
+        // of scrimmage, with no catch spot and no return, so the spot never matched the play that was shown.
+        const pickDepth = /tipped at the line/i.test(desc) ? 'tipped' : Math.random() < DEEP_PICK_SHARE ? 'deep' : 'short';
+        const pickSpot = state.fieldPos + rollPickAirYards(pickDepth, 100 - state.fieldPos);
+        const pickEv = addEvent('interception', desc, 0, false);
         shiftMomentum(-20); // big momentum shift to defense
-
-        switchPossession(returnPos);
         advanceClock(5);
+        turnoverReturn('interception', pickEv, pickSpot);
+        return true;
 
       } else if (roll < sackChance + intChance + (1 - sackChance - intChance) * compBase) {
         // COMPLETION — yards per completion targeting NFL avg ~10.5
@@ -1789,10 +1808,10 @@ export function simulatePlayByPlay(
         if (catchLost) {
           if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
           const recoverer = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.lb1;
-          addEvent('fumble', descCatchFumble(receiver, recoverer), 0, false);
+          const fumbleEv = addEvent('fumble', descCatchFumble(receiver, recoverer), 0, false);
           if (receiver) creditRusher(ob, receiver.id, { fumbles: 1 });
           shiftMomentum(-20);
-          switchPossession(clamp(100 - state.fieldPos, 1, 99));
+          turnoverReturn('fumble', fumbleEv, state.fieldPos);
           return true;
         }
 
@@ -2188,24 +2207,35 @@ export function deriveScoringPlaysFromEvents(
   // back to the current event). This guarantees the derived points always
   // reconcile to the final score — the previous version diffed only on the
   // scoring event itself and therefore recorded nothing for live games.
+  //
+  // A return touchdown (returns.ts: pick-six, scoop-and-score, punt / kick return) is the exception: its event already
+  // carries the 7 it put up, for the team that did NOT have the ball. It can share an event with points still pending
+  // from the play before (a field goal, then the kickoff is run back), so each side's delta is itemized on its own.
   let pending: PlayEvent | null = null;
   for (const ev of events) {
-    const homeDelta = ev.homeScore - prevHome;
-    const awayDelta = ev.awayScore - prevAway;
-    const points = homeDelta + awayDelta;
-    if (points > 0) {
-      const src = pending ?? ev;
-      const teamId = homeDelta > 0 ? homeTeamId : awayTeamId;
-      out.push({
-        quarter: src.quarter,
-        timeLeft: src.timeStr,
-        teamId,
-        points,
-        description: src.description,
-        score: [ev.awayScore, ev.homeScore],
-      });
+    const delta = { home: ev.homeScore - prevHome, away: ev.awayScore - prevAway };
+    const returnSide = ev.isScoring && ev.returnTo === 100 ? (ev.possession === 'home' ? 'away' : 'home') : null;
+    const push = (src: PlayEvent, side: 'home' | 'away', points: number) => out.push({
+      quarter: src.quarter,
+      timeLeft: src.timeStr,
+      teamId: side === 'home' ? homeTeamId : awayTeamId,
+      points,
+      description: src.description,
+      score: [ev.awayScore, ev.homeScore],
+    });
+    // the points the earlier play was waiting on come first, then this event's own return
+    for (const side of (returnSide === 'home' ? ['away', 'home'] : ['home', 'away']) as ('home' | 'away')[]) {
+      let points = delta[side];
+      if (points <= 0) continue;
+      if (side === returnSide) {
+        push(ev, side, Math.min(7, points));
+        points -= 7;
+        if (points <= 0) continue;
+      }
+      push(pending ?? ev, side, points);
       pending = null;
-    } else if (ev.isScoring) {
+    }
+    if (delta.home + delta.away <= 0 && ev.isScoring) {
       // Remember the play that will bump the score on a following event.
       pending = ev;
     }

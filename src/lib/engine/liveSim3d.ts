@@ -31,7 +31,8 @@ export interface SimPlayResult {
   /** extra point (kind 'fg'): worth 1, called an extra point, no change of possession */
   xp?: boolean;
   /** punt: the receiving team's yard line where the returner fields it, and where he's brought down (= catchAt on a fair catch).
-   *  int: endAt is the intercepting team's yard line where the return ends (the engine's spot); the sim never scores a pick-six on its own */
+   *  int: catchAt is the intercepting team's yard line where the ball is picked off, endAt where the return ends (both the
+   *  engine's: returns.ts). td: the engine scored the return — the sim never scores a pick-six on its own */
   catchAt?: number;
   endAt?: number;
   touchback?: boolean;
@@ -128,10 +129,20 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
     case 'sack':
       return { kind: 'sack', yards: y };
     case 'interception': {
-      // the engine already spotted the ball after the return: the sim runs the return to that spot
-      const end = e.returnTo != null ? { endAt: Math.max(1, Math.min(99, Math.round(e.returnTo))) } : {};
+      // the engine already spotted the catch and the end of the return: the sim throws the pick there and runs the return to that spot
+      const yl = (n: number) => Math.max(1, Math.min(99, Math.round(n)));
+      const from = e.returnFrom;
+      const touchback = from != null && e.returnYards === 0 && e.returnTo !== from;   // downed in the end zone: no return to run
+      const pickSix = e.isScoring && e.returnTo === 100;
+      const end = {
+        ...(from != null ? { catchAt: yl(from) } : {}),
+        ...(e.returnTo != null ? { endAt: touchback ? yl(from!) : yl(e.returnTo) } : {}),
+        ...(pickSix ? { td: true } : {}),
+      };
       if (BATTED_RE.test(e.description)) return { kind: 'int', depth: 'short', batted: true, ...end };
-      return { kind: 'int', depth: /deep|downfield|long/i.test(e.description) ? 'deep' : 'short', ...end };
+      // deep or short from where the engine says it was caught (older events: from the words)
+      const deep = from != null ? toGoal - from >= 15 : /deep|downfield|long/i.test(e.description);
+      return { kind: 'int', depth: deep ? 'deep' : 'short', ...end };
     }
     case 'field_goal_good':
       return { kind: 'fg', good: true };
@@ -140,6 +151,11 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
     case 'punt': {
       // muffs / return TDs have no choreography yet: the 2D field shows them
       if (/muff|touchdown/i.test(e.description)) return null;
+      // the engine's own catch spot and end of the return (returns.ts); a touchback has nothing to field
+      if (e.returnFrom != null && e.returnTo != null) {
+        if (e.returnFrom <= 0) return null;
+        return { kind: 'punt', catchAt: e.returnFrom, endAt: Math.max(e.returnFrom, Math.min(99, e.returnTo)) };
+      }
       // Live Coach: "fields at their own 5, returns to the 9" / ", fair catch". playByPlay only logs net yards.
       const f = /fields at their own (\d{1,2})/i.exec(e.description);
       const r = /returns to the (\d{1,2})/i.exec(e.description);
@@ -165,10 +181,14 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
   }
 }
 
-/** Points this event put on the board, so the sim can show the pre-snap score. */
+/** A return the engine scored (returns.ts): 7 to the team that did NOT have the ball, already in the event's score. */
+const isReturnTouchdown = (e: PlayEvent) => e.isScoring && e.returnTo === 100;
+
+/** Points this event put on the board for the team in possession, so the sim can show the pre-snap score. */
 function pointsScored(e: PlayEvent): number {
+  if (isReturnTouchdown(e)) return 0;   // the other team's points: see toSimPlay
   if (e.type === 'field_goal_good') return 3;
-  if (e.type === 'kickoff' || e.type === 'punt') return 0;   // a return TD is credited to the other team after the event is logged
+  if (e.type === 'kickoff' || e.type === 'punt') return 0;   // older events: a return TD was credited to the other team after the event was logged
   if (e.type === 'extra_point') return /GOOD/.test(e.description) && !/no good/i.test(e.description) ? 1 : 0;
   if (TWO_POINT_RE.test(e.description) && e.isScoring) return 2;
   if (e.type === 'touchdown' || e.isScoring) return 6;   // the XP is its own event
@@ -192,6 +212,7 @@ export function toSimPlay(
   const offense = rosters ? (e.possession === 'home' ? rosters.home : rosters.away) : [];
   const keptRec = keptAt >= 0 ? namesIn(e.description.slice(keptAt), offense).pop()?.p : undefined;
   const pts = pointsScored(e);
+  const retPts = isReturnTouchdown(e) ? 7 : 0;
   return {
     type: 'bsgm:play',
     id: e.id,
@@ -202,8 +223,8 @@ export function toSimPlay(
       toGo: e.yardsToGo,
       quarter: e.quarter,
       clock: clockSeconds(e.timeStr),
-      homeScore: e.homeScore - (e.possession === 'home' ? pts : 0),
-      awayScore: e.awayScore - (e.possession === 'away' ? pts : 0),
+      homeScore: e.homeScore - (e.possession === 'home' ? pts : retPts),
+      awayScore: e.awayScore - (e.possession === 'away' ? pts : retPts),
     },
     res,
     ...(e.defLook ?? e.userDefCall ? { look: e.defLook ?? e.userDefCall } : {}),

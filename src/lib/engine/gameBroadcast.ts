@@ -192,8 +192,16 @@ function playByPlayLine(ev: PlayEvent, prev: PlayEvent | undefined, next: PlayEv
       return `${pick(["Here's the kick.", 'The kick is away.', "Here's the kickoff."], ev.id)} ${rest}`.trim();
     }
     case 'punt': {
-      if (/return/i.test(bare)) return bare.replace(/^Punt — /, 'Punt, ');
       const yards = bare.match(/(\d+)[- ]yard/)?.[1];
+      // The engine's own return (returns.ts): say the kick, then exactly what the return did.
+      if (yards && ev.returnFrom != null && ev.returnTo != null && !/muff/i.test(bare)) {
+        const ret = ev.returnYards ?? 0;
+        const tail = ev.returnTo === 100 ? ' And it is returned all the way for a touchdown!'
+          : ev.returnFrom <= 0 ? ' Into the end zone for a touchback.'
+          : ret > 0 ? ` Returned ${ret} ${ret === 1 ? 'yard' : 'yards'}.` : ' Fair catch.';
+        return `${teamOf(ev.possession, s)} punts it away, ${yards} yards.${tail}`;
+      }
+      if (/return/i.test(bare)) return bare.replace(/^Punt — /, 'Punt, ');
       return yards ? `${teamOf(ev.possession, s)} punts it away, ${yards} yards.` : bare;
     }
     case 'penalty':

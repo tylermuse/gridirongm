@@ -174,7 +174,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17t'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b17u'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1201,6 +1201,7 @@ function choreograph(res){
     /* a fumble after the catch only counts once he has it secured and is a runner: catch it short of the spot, then a few strides
        (4+ yards, ~0.6 s+) before the hit that punches it out — anything sooner is an incompletion, not a fumble (Tyler) */
     if(res.fumble && res.kind==='complete' && !td) Yc = Math.max(scn? Yc : -1.5, Math.min(Yc, Y - (deep? 6 : 4)));
+    if(res.kind==='int' && res.catchAt!=null && !bat) Yc = clamp(toGoal - res.catchAt - (deep? .6 : .9), 1, toGoal + 7.5);   /* the game says where the pick was caught (res.catchAt: the intercepting team's yard line) — the return to res.endAt starts there, so its length is the engine's too */
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc;
     /* Comeback / hitch (reference: DAL @ IND on FOX, #88 at the Colts 40, Tyler 11/8): he pushes upfield, plants, comes back to the
        ball facing the QB, and the corner who was on top of him drives down and wraps him at the catch — no run after it */
@@ -1521,7 +1522,7 @@ function choreograph(res){
     const hit = ()=>{ // head-on hits put the carrier on his back; hits from behind drive him forward
       const hx=carrier.x-tackler.x, hz=carrier.z-tackler.z;
       const gap=Math.hypot(hx,hz);
-      if(gap > .95 && playT < tackleT+6){ // not there yet: no phantom tackles — the carrier keeps running and the chaser has to actually catch him; the whistle waits
+      if(gap > .95 && playT < tackleT+((res.lock && res.kind==='int' && res.endAt!=null)? .35 : 6)){ // (a return the game already spotted goes down within a stride or two of that spot: the next drive starts there) not there yet: no phantom tackles — the carrier keeps running and the chaser has to actually catch him; the whistle waits
         const want = gap > 2.5 ? 6.3 : 7.0;   /* a runner being chased from well behind is picking his way, not flat-out; the pursuer (8.7) closes at 2+ yd/s */
         if(carrier.behav?.type!=='run'){ const cs=Math.hypot(carrier.vx||0,carrier.vz||0)||1; carrier.behav={type:'run', vx:(carrier.vx||0)/cs*want, vz:(carrier.vz||0)/cs*want}; }
         else { const b=carrier.behav, cs=Math.hypot(b.vx,b.vz)||1; b.vx=b.vx/cs*want; b.vz=b.vz/cs*want; }
@@ -1679,7 +1680,7 @@ function choreograph(res){
   // everyone else pursues after the ball carrier changes hands (runs)
   if(isRun && carrier){ ev(snap+.9, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d) && !climbed.has(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
   play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, holdOn, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal};
-  if(tackler && carrier){ play.tackler = tackler; play.tackleAt = tackleAtFn; }
+  if(tackler && carrier){ play.tackler = tackler; play.tackleAt = (res.lock && res.kind==='int' && res.endAt!=null)? null : tackleAtFn; }   /* a return the game already spotted (res.endAt) is tackled at the planned spot only: armed early (the intended receiver is standing right at the pick) the returner broke free and ran until the 6 s cap, ending yards short of or past where the next drive starts */
   cameraTarget = null;
 }
 
