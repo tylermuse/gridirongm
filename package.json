@@ -13,7 +13,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "check:help-sheet": "node scripts/check-help-sheet.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
