@@ -180,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b18c'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b18d'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -2137,6 +2137,9 @@ function stepActor(a, t, dt){
   a.basePose.forEach(o=>{o.p.copy(o.b.position);o.q.copy(o.b.quaternion);o.s.copy(o.b.scale);});
   // procedural layer on top of the clip
   const B = a.bones;
+  if(MOTION2 && dt>0){   /* stride bounce: the captured runs bob ~15 cm top to bottom; a footballer runs low and level. Keep slow hip changes (crouch, get-up), damp the per-stride oscillation (Tyler 11/15: "too much jumping up and down") */
+    const hy=B.Hips.position.y; a._hyb = (a._hyb==null)? hy : a._hyb + (hy-a._hyb)*Math.min(1, dt*3.5);
+    B.Hips.position.y = a._hyb + (hy-a._hyb)*(window.__bobK ?? .4); }
   const st = (window.__stanceTune||STANCE)[a.stance];
   const w = st ? (running ? clamp(1-(t-.3)/.22, 0, 1) : 1) : 0;   /* (was unclamped: for the first .3 s after the snap the stance was applied 1-2.4x over, folding everyone into the turf) */
   if(w>0){
