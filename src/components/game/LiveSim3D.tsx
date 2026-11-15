@@ -36,8 +36,22 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b17t';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
-export const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
+const SIM_BUILD = 'b18a';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+/** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used as-is by the scoring-play replay. */
+export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&v=${SIM_BUILD}`;
+/** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.
+ *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=fp27` (the previous player), `?simMotion=0`. */
+function simSrc(): string {
+  if (typeof window === 'undefined') return SIM_URL;
+  const q = new URLSearchParams(window.location.search);
+  let src = SIM_URL;
+  if (q.get('simModel') === 'fp27') src = src.replace('model=mh2', 'model=fp27');
+  if (q.get('simMotion') === '0') src = src.replace('&motion=2', '');
+  const look = q.get('simLook');
+  const desktop = window.matchMedia?.('(pointer: fine)').matches && window.innerWidth >= 900;
+  if (look === '2' || (look !== '0' && desktop)) src += '&look=2';
+  return src;
+}
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
 
@@ -307,7 +321,7 @@ export function LiveSim3D({
     <div ref={boxRef} className="absolute inset-0 z-30 overflow-hidden rounded-lg bg-black">
       <iframe
         ref={frameRef}
-        src={SIM_URL}
+        src={simSrc()}
         title="3D live sim"
         allow="autoplay"
         className="h-full w-full border-0"

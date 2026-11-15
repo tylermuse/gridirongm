@@ -135,6 +135,8 @@ select{font:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px 
         <button data-cam="low" class="on">Chase</button><button data-cam="wide">Wide</button><button data-cam="broadcast">Broadcast</button><button data-cam="high">High</button>
         <span style="display:inline-block;width:10px"></span><button data-light="day" class="on">Day</button><button data-light="night">Night</button>
         <span style="display:inline-block;width:10px"></span><button id="postBtn" class="on">FX on</button>
+        <button id="lookBtn" title="Lighting + materials pass (reloads the page with ?look=2)">New look off</button>
+        <button id="mhBtn" title="New player model (reloads the page with ?model=mh1)">New player off</button>
       </div>
       <h2>Play log</h2>
       <ol class="log" id="log"></ol>
@@ -154,9 +156,13 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 window.THREE = THREE;
 (() => {
-let modelChoice = 'fp27';   /* public build: only the CC BY model ships (the licensed TurboSquid player stays private) */
+const LOOK2 = new URLSearchParams(location.search).get('look')==='2';
+const MOTION2 = new URLSearchParams(location.search).get('motion')==='2';   /* ?motion=2 — motion pass: heads track the ball, lean into acceleration, bank through cuts, per-player stride (see motionLayer) */   /* ?look=2 — the lighting + materials pass (reflections, clear-coated helmets, ambient occlusion, sharper shadows, grass detail, longer lens); off = the shipped look, untouched */
+let modelChoice = ({mh1:'mh1', mh2:'mh2'})[new URLSearchParams(location.search).get('model')] || 'fp27';   /* ?model=mh1 — the playerlab build: MakeHuman body + generated pads and uniform on the same skeleton and clips (see player-mh1.js) */
+const MH = modelChoice==='mh1' || modelChoice==='mh2', MH2 = modelChoice==='mh2';   /* mh2: + face, draped jersey with painted trim, body-type morphs, gloves/sleeves as kit */
+//   /* public build: only the CC BY model ships (the licensed TurboSquid player stays private) */
 const modelSelect = document.getElementById('modelSelect');
-{ const mc=document.getElementById('modelCredit'); if(mc) mc.hidden = modelChoice!=='fp27'; }
+{ const mc=document.getElementById('modelCredit'); if(mc) mc.hidden = modelChoice!=='fp27' && !MH; }
 if(modelSelect){ modelSelect.value = modelChoice; modelSelect.addEventListener('change',()=>{ try{ localStorage.setItem('chaseModel', modelSelect.value); }catch(e){} const url=new URL(location.href); if(url.searchParams.get('model')){ url.searchParams.set('model',modelSelect.value); location.href=url.href; } else location.reload(); }); }
 // ---------- Teams (fictional palettes; production would read team colors) ----------
 const REF = {id:'REF', name:'Officials', jersey:'#f4f4f4', num:'#222222', pants:'#1a1a1a', helmet:'#f4f4f4', stripe:'#d9d9d9'};   // officials: white top, black pants, white cap
@@ -174,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b17t'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b18a'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -228,7 +234,7 @@ const canvasTex = (c)=>{ const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .96;   /* filmic response: takes the saturated, flat 'cartoon' edge off the greens and the crowd */
-const scene = new THREE.Scene();
+const scene = new THREE.Scene(); window.__scene = scene;   /* console/QA access */
 scene.background = new THREE.Color('#9cc3e6');
 scene.fog = new THREE.Fog(new THREE.Color('#c7d6e4'), 120, 300);
 // sky: a gradient dome (deep blue overhead, pale haze at the horizon) instead of a flat colour
@@ -238,12 +244,33 @@ function paintSky(topHex, horHex){ const top=new THREE.Color(topHex), hor=new TH
   for(let i=0;i<p.count;i++){ const t=clampSky(p.getY(i)/380); const c=hor.clone().lerp(top, t); col.setXYZ(i,c.r,c.g,c.b); } col.needsUpdate=true; }
 paintSky('#5d93cc','#dfe8f0');
 function clampSky(y){ return Math.pow(Math.max(0,Math.min(1,(y+.05)/.7)), .6); }
-const camera = new THREE.PerspectiveCamera(48, 16/9, 0.1, 400);
+const camera = new THREE.PerspectiveCamera(48, 16/9, 0.1, 400); camera.layers.enable(1);   /* layer 1: the skinned players (see the look=2 AO prepass) */
 
 const LIGHT = window.__light || {hemi:.5, sun:1.05};   /* tuned under the old legacy light units */
 const LEGACY_K = Math.PI;   /* legacy mode scaled hemisphere / directional light by π internally: same look in physical units */
 const hemi = new THREE.HemisphereLight('#d6e3f2', '#2f4726', LIGHT.hemi * LEGACY_K); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff1d6', LIGHT.sun * LEGACY_K);
+/* ---------- look=2: image-based lighting ----------
+   The PBR player materials had no environment to reflect, so a helmet read as matte plastic. A stand-in stadium as seen from
+   midfield — sky, bowl, turf, canopy, the canopy light strip and the floodlight banks — is baked into a prefiltered cube, once per
+   lighting mode. Only the MeshStandard / MeshPhysical materials (players, ball, the look=2 turf) sample it; the Lambert stands are unchanged. */
+let envRT = null;
+function bakeEnv(night){ if(!LOOK2) return;
+  const es = new THREE.Scene(), EY = 1.5;   /* the cube is shot from the origin: drop the stadium so the eye is helmet-high */
+  const B = (hex,k)=>new THREE.MeshBasicMaterial({color:new THREE.Color(hex).multiplyScalar(k), side:THREE.DoubleSide, fog:false});
+  { const g=new THREE.SphereGeometry(300,32,16), p=g.attributes.position, col=new Float32Array(p.count*3);
+    const top=new THREE.Color(night?'#04060d':'#5d93cc').multiplyScalar(night?1:.75), hor=new THREE.Color(night?'#121a29':'#dfe8f0').multiplyScalar(night?1:1.05);
+    for(let i=0;i<p.count;i++){ const c=hor.clone().lerp(top, clampSky(p.getY(i)/300)); col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(col,3)); es.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({vertexColors:true, side:THREE.BackSide, fog:false}))); }
+  const add=(geo,mat,y,rx)=>{ const m=new THREE.Mesh(geo,mat); m.position.y=y-EY; if(rx) m.rotation.x=rx; es.add(m); return m; };
+  add(new THREE.CircleGeometry(70,40), B('#3d7a36', night?.55:.5), 0, -Math.PI/2);                              // turf (lit by the floods at night)
+  add(new THREE.CylinderGeometry(62,34,43,48,1,true), B('#6a655f', night?.07:.42), 22.8);                       // the bowl: crowd + concrete
+  add(new THREE.RingGeometry(46,64,48), B('#d9dde2', night?.22:.6), 45, Math.PI/2);                             // canopy underside
+  add(new THREE.CylinderGeometry(46,46,.9,64,1,true), B('#fffbe8', night?26:2.2), 43.6);                        // canopy light strip
+  for(let i=0;i<10;i++){ const a=i/10*Math.PI*2+.31, f=add(new THREE.PlaneGeometry(5,2.2), B('#fff6d8', night?80:3), 42.2); f.position.x=Math.sin(a)*45; f.position.z=Math.cos(a)*45; f.lookAt(0,0,0); }   // floodlight banks
+  const pm=new THREE.PMREMGenerator(renderer), rt=pm.fromScene(es, 0, .1, 600); pm.dispose();
+  scene.environment = rt.texture; if(envRT) envRT.dispose(); envRT = rt;
+  es.traverse(o=>{ if(o.isMesh){ o.geometry.dispose(); o.material.dispose(); } }); }
 // day / night: night is a floodlit stadium — cool white light from high above, dark sky, the boards and floodlights carry the glow
 let lightMode='day', sunOff=[-25,60,-30];
 window.setLighting = setLighting;
@@ -260,11 +287,14 @@ function setLighting(mode){ lightMode=mode; const night = mode==='night';
   concreteMeshes.forEach(m=>m.material.color.set(night?'#555b68':'#ffffff'));
   structMats.forEach(m=>m.color.copy(m.userData.day).multiplyScalar(night?.5:1));
   hemi.intensity = (night? .42 : LIGHT.hemi) * LEGACY_K; sun.intensity = (night? 1.5 : LIGHT.sun) * LEGACY_K;   /* night: a dim, cool fill for the bowl; the 'sun' is the floodlight key on the field */
+  bakeEnv(night);
   document.querySelectorAll('[data-light]').forEach(b=>b.classList.toggle('on', b.dataset.light===mode)); }
 sun.position.set(-30, 60, -20); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = .02; sun.shadow.radius = 2;
+const SHADOW_RES = LOOK2? 4096 : 2048;   /* look=2: twice the texels over the same 60 yd box — a limb casts a limb, not a smear */
+sun.shadow.mapSize.set(SHADOW_RES, SHADOW_RES); sun.shadow.bias = -0.0004; sun.shadow.normalBias = .02; sun.shadow.radius = 2;
 Object.assign(sun.shadow.camera, {left:-30, right:30, top:30, bottom:-30, near:1, far:150}); sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun); scene.add(sun.target);
+bakeEnv(false);
 
 // Field texture (1 unit = 1 yard). Field runs along z: -60..60, x: -26.67..26.67
 function fieldTexture(home){
@@ -298,7 +328,23 @@ function fieldTexture(home){
   g.strokeStyle='#fff'; g.lineWidth=6; g.strokeRect(3,3,W-6,H-6);
   const t = canvasTex(c); t.anisotropy = 8; return t;
 }
-const fieldMat = new THREE.MeshLambertMaterial();
+/* look=2 turf: a PBR surface instead of flat Lambert — a tiling blade/clump normal map so the grass breaks up the light near the camera, a faint
+   grazing sheen, and mower stripes that brighten or darken with the viewing direction (blades lean with the mower), not just two painted greens */
+const grassNormalTex = LOOK2 ? (()=>{ const N=256, h=new Float32Array(N*N); let seed=19; const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
+  for(let i=0;i<N*N;i++) h[i]=rnd();
+  const blur=(src,r)=>{ const o=new Float32Array(N*N); for(let y=0;y<N;y++) for(let x=0;x<N;x++){ let a=0; for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++) a+=src[((y+dy+N)%N)*N+((x+dx+N)%N)]; o[y*N+x]=a/((2*r+1)*(2*r+1)); } return o; };
+  const lo=blur(h,3), H=(x,y)=>{ const i=((y+N)%N)*N+((x+N)%N); return lo[i]*2.4 + h[i]*.3; };
+  const c=document.createElement('canvas'); c.width=c.height=N; const g=c.getContext('2d'), img=g.createImageData(N,N), d=img.data;
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){ const dx=(H(x+1,y)-H(x-1,y))*2.2, dy=(H(x,y+1)-H(x,y-1))*2.2, l=Math.hypot(dx,dy,1), i=(y*N+x)*4;
+    d[i]=(-dx/l*.5+.5)*255; d[i+1]=(-dy/l*.5+.5)*255; d[i+2]=(1/l*.5+.5)*255; d[i+3]=255; }
+  g.putImageData(img,0,0); const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(53.333/1.4,120/1.4); t.anisotropy=8; return t; })() : null;
+const fieldMat = LOOK2 ? new THREE.MeshStandardMaterial({roughness:.88, metalness:0, normalMap:grassNormalTex, normalScale:new THREE.Vector2(.7,.7), envMapIntensity:.3}) : new THREE.MeshLambertMaterial();
+if(LOOK2){ fieldMat.onBeforeCompile = sh=>{ sh.uniforms.uStripe = {value: window.__stripeK ?? .16};
+  sh.fragmentShader = 'uniform float uStripe;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    { float band = mod(floor((1.0 - vMapUv.y) * 24.0), 2.0) < 0.5 ? 1.0 : -1.0;   // the 5 yd mower bands painted in the field texture
+      vec3 toCam = (vec4(normalize(vViewPosition), 0.0) * viewMatrix).xyz;         // world-space direction from the turf to the camera
+      float inPlay = step(1.0/12.0, vMapUv.y) * step(vMapUv.y, 11.0/12.0);         // not the painted end zones
+      diffuseColor.rgb *= 1.0 + uStripe * band * clamp(toCam.z * -1.6, -1.0, 1.0) * inPlay; }`); }; }
 const field = new THREE.Mesh(new THREE.PlaneGeometry(53.333,120), fieldMat);
 field.rotation.x = -Math.PI/2; field.receiveShadow = true; scene.add(field);
 // close-range grain: a small tiling noise multiplied over the whole turf, so the grass still has texture when the camera is 10 yd away
@@ -484,23 +530,38 @@ let BOT = null;
 // toward the chosen skin tone instead. Reference means measured from the source maps.
 const KEYREF = { torso:[[.69,.08,.09],[.96,.94,.94]], pants:[[.58,.11,.10],[.90,.89,.89]], helmet:[[.59,.06,.06],[.85,.83,.82]], shoe:[[.64,.11,.10],[.88,.85,.84]] };
 const SKINBASE = { head:[.645,.425,.334], hand:[.78,.49,.40] };
-function teamMaterial(src, part, t, skin){
-  const m = src.clone(); m.skinning = true; m.envMapIntensity = 1;
+function teamMaterial(src, part, t, skin, kit={}){
+  /* look=2: the shell and the visor are clear-coated paint / polished plastic (MeshPhysical); everything else keeps the standard material but takes less of the
+     environment's diffuse light (the hemisphere light already is the ambient term — full strength would wash the uniforms out) */
+  const coat = LOOK2 && (part==='helmetSolid' || part==='visor');
+  const m = coat ? (()=>{ const pm=new THREE.MeshPhysicalMaterial(); THREE.MeshStandardMaterial.prototype.copy.call(pm, src); pm.defines={STANDARD:'',PHYSICAL:''}; return pm; })() : src.clone();
+  m.skinning = true; m.envMapIntensity = LOOK2? .5 : 1;
   const C = c=>new THREE.Color(c); const U = { uA:{value:new THREE.Color(1,1,1)}, uB:{value:new THREE.Color(1,1,1)}, uRef:{value:new THREE.Vector3(1,1,1)}, uRefW:{value:new THREE.Vector3(1,1,1)}, uMode:{value:0} };
   const lin = v => Math.pow(v, 2.2);
-  if(part==='head' || part==='hand'){ const b=(modelChoice==='fp27'? [.72,.52,.42] : SKINBASE[part]).map(lin); U.uA.value.copy(C(skin)); U.uRef.value.setScalar(b[0]*.3+b[1]*.59+b[2]*.11); U.uMode.value = 1; m.roughness = modelChoice==='fp27'? .75 : .62; }
-  else if(part==='helmetSolid'){ m.color.set(t.helmet); m.metalness=.55; m.roughness=.3; U.uMode.value=3; }
-  else if(part==='mask'){ m.color.set(t.stripe); m.metalness=.15; m.roughness=.45; U.uMode.value=3; }
+  const darkSkin = MH2 && (part==='head' || part==='mhHand') && skinLum(skin) < (window.__darkSkinL ?? .1);   /* deep tones: the dark-skinned MakeHuman texture, scaled to the tone */
+  if(darkSkin && window.__PLAYER_TEXMAP?.mh_skin_dark){ m.map = window.__PLAYER_TEXMAP.mh_skin_dark; }
+  if(part==='mhHand' && kit.gloves){ m.map=null; m.color.set(kit.gloveCol); m.roughness=.55; m.envMapIntensity=.4; U.uMode.value=3; }
+  else if(part==='mhKeep'){ U.uMode.value=3; }
+  else if(part==='mhSleeve'){ m.color.set(kit.sleeveCol||'#111318'); m.roughness=.7; m.envMapIntensity=.4; U.uMode.value=3; }
+  else if(MH && (part==='head' || part==='mhHand')){ U.uA.value.copy(C(skin)); U.uRef.value.fromArray((darkSkin? BOT.userData.skinRefDark : BOT.userData.skinRef)||[.74,.4,.25]); U.uMode.value = 5; m.roughness = .58; }
+  else if(MH && part==='head'){ U.uA.value.copy(C(skin)); U.uRef.value.fromArray((BOT.userData.skinRef)||[.74,.4,.25]); U.uMode.value = 5; m.roughness = .58; }   /* photographic skin: scale it to the player's tone, keeping lips, shading and stubble */
+  else if(part==='head' || part==='hand'){ const b=(modelChoice==='fp27'? [.72,.52,.42] : SKINBASE[part]).map(lin); U.uA.value.copy(C(skin)); U.uRef.value.setScalar(b[0]*.3+b[1]*.59+b[2]*.11); U.uMode.value = 1; m.roughness = modelChoice==='fp27'? .75 : .62; }
+  else if(part==='helmetSolid'){ m.color.set(t.helmet); m.metalness=.55; m.roughness=.3; U.uMode.value=3;
+    if(LOOK2){ m.metalness=.3; m.roughness=.42; m.clearcoat=1; m.clearcoatRoughness=.07; m.envMapIntensity=1.25; } }   /* painted shell under a gloss coat: a broad coloured sheen plus a sharp reflection of the sky and the lights */
+  else if(part==='mask'){ m.color.set(t.stripe); m.metalness=.15; m.roughness=.45; U.uMode.value=3; if(LOOK2){ m.metalness=.55; m.roughness=.36; m.envMapIntensity=1; } }
   else if(part==='trim'){ m.color.set(t.jersey); U.uMode.value=3; }
-  else if(part==='visor'){ m.color.set('#141a22'); m.metalness=.5; m.roughness=.12; U.uMode.value=3; }
+  else if(part==='visor'){ m.color.set('#141a22'); m.metalness=.5; m.roughness=.12; U.uMode.value=3; if(LOOK2){ m.metalness=.85; m.roughness=.06; m.clearcoat=1; m.clearcoatRoughness=.03; m.envMapIntensity=1.5; } }
   else if(part==='plain'){ U.uMode.value=3; }
-  else if(t.id==='REF' && part==='torso'){ U.uMode.value = 4; U.uRef.value.setScalar(lin(.93)); m.roughness=.9; m.roughnessMap=null; if(m.normalMap) m.normalScale.setScalar(.3); m.envMapIntensity=.3; }   // official: 1" black/white vertical stripes cut from the bind-space x of the shirt
+  else if(part==='mhJersey' && t.id!=='REF'){ m.color.set(t.jersey); m.roughness=.88; m.envMapIntensity=.3; U.uMode.value=3; }
+  else if(part==='mhPants'){ m.color.set(t.id==='REF'? '#17181c' : t.pants); m.roughness=.6; m.envMapIntensity=.35; U.uMode.value=3; }
+  else if(part==='mhSocks'){ m.color.set(t.id==='REF'? '#17181c' : '#f1f1f1'); m.roughness=.9; m.envMapIntensity=.3; U.uMode.value=3; }
+  else if(t.id==='REF' && (part==='torso' || part==='mhJersey')){ m.color.set('#ffffff'); U.uMode.value = 4; U.uRef.value.setScalar(lin(.93)); m.roughness=.9; m.roughnessMap=null; if(m.normalMap) m.normalScale.setScalar(.3); m.envMapIntensity=.3; }   // official: 1" black/white vertical stripes cut from the bind-space x of the shirt
   else if(t.id==='REF' && part==='shoe'){ U.uMode.value = 3; m.color.set('#1d1f23'); }
-  else if(modelChoice==='fp27'){ // white uniform with navy trim: white -> colour A, navy -> colour B, gold trim keeps its baked colour
+  else if(modelChoice==='fp27' || MH){ // white uniform with navy trim: white -> colour A, navy -> colour B, gold trim keeps its baked colour
     const AB = { torso:[t.jersey, t.num], pants:[t.pants, t.stripe], shoe:[null,null] }[part]||[null,null];
-    if(part==='torso' && m.normalMap && (window.__shirtNormal ?? false)===false){ m.normalMap = null; }   /* the shirt's normal map carries the source model's embossed "27": on a white jersey it read as a ghost number behind the real one */
+    if(part==='torso' && m.normalMap && !MH2 && (window.__shirtNormal ?? false)===false){ m.normalMap = null; }   /* the shirt's normal map carries the source model's embossed "27": on a white jersey it read as a ghost number behind the real one */
     if(AB[0]){ U.uA.value.copy(C(AB[0])); U.uB.value.copy(C(AB[1])); U.uRefW.value.setScalar(lin(.93)); U.uRef.value.setScalar(lin(.16)); U.uMode.value = 2; } else U.uMode.value = 3;
-    if(part==='torso' || part==='pants'){ m.roughnessMap=null; m.roughness=.9; if(m.normalMap) m.normalScale.setScalar(.4); m.envMapIntensity=.3; } }   /* cloth: the baked roughness map + full-strength normal map sparkle into white specks at distance (specular aliasing the bloom then amplifies) */
+    if(part==='torso' || part==='pants'){ m.roughnessMap=null; m.roughness=.9; if(m.normalMap) m.normalScale.setScalar(MH2? 1 : .4); m.envMapIntensity=.3; } }   /* cloth: the baked roughness map + full-strength normal map sparkle into white specks at distance (specular aliasing the bloom then amplifies) */
   else { const r=KEYREF[part]; U.uRef.value.fromArray(r[0].map(lin)); U.uRefW.value.fromArray(r[1].map(lin));
     const AB = { torso:[t.jersey, t.num], pants:[t.stripe, t.pants], helmet:[t.helmet, t.stripe], shoe:[t.helmet, '#f2f2f2'] }[part];
     U.uA.value.copy(C(AB[0])); U.uB.value.copy(C(AB[1])); }
@@ -509,7 +570,8 @@ function teamMaterial(src, part, t, skin){
     sh.vertexShader = 'varying vec3 vBind;\n' + sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n vBind = position;');
     sh.fragmentShader = 'uniform vec3 uA, uB, uRef, uRefW; uniform float uMode; varying vec3 vBind;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       { vec3 c = diffuseColor.rgb;
-        if (uMode > 3.5) { float mx = max(c.r, max(c.g, c.b)); float shade = clamp(0.3 + 0.7 * mx / uRef.r, 0.0, 1.05);
+        if (uMode > 4.5) { diffuseColor.rgb = clamp(c * uA / uRef, 0.0, 1.0); }
+        else if (uMode > 3.5) { float mx = max(c.r, max(c.g, c.b)); float shade = clamp(0.3 + 0.7 * mx / uRef.r, 0.0, 1.05);
           float st = step(0.5, fract(vBind.x / 0.054)); float w = fwidth(vBind.x / 0.054) * 1.5; st = mix(st, 0.5, clamp(w - 0.25, 0.0, 1.0));   // stripes fade to grey when they alias at distance
           diffuseColor.rgb = mix(vec3(0.03), vec3(0.92), st) * shade; }
         else if (uMode > 2.5) { }
@@ -532,7 +594,8 @@ function teamMaterial(src, part, t, skin){
   m.customProgramCacheKey = () => 'teamKey'; 
   return m;
 }
-const PART = { 'shirt_0':'torso', 'pants':'pants', 'sepatu_keyobj':'shoe', 'Bodymat':'head', 'Mat3':'helmetSolid', 'mask':'mask', 'trim':'trim', 'frosted_glass':'visor', 'plain':'plain',
+const skinLum = c => { const k=new THREE.Color(c); return k.r*.3+k.g*.59+k.b*.11; };
+const PART = { 'MH_HANDS':'mhHand', 'MH_EYES':'mhKeep', 'MH_BROWS':'mhKeep', 'MH_LASHES':'mhKeep', 'MH_ARMSLEEVE':'mhSleeve', 'MH_SKIN':'head', 'MH_JERSEY':'mhJersey', 'MH_PANTS':'mhPants', 'MH_SOCKS':'mhSocks', 'shirt_0':'torso', 'pants':'pants', 'sepatu_keyobj':'shoe', 'Bodymat':'head', 'Mat3':'helmetSolid', 'mask':'mask', 'trim':'trim', 'frosted_glass':'visor', 'plain':'plain',
   'LEFT_GLOVE':'shoe', 'RIGHT_GLOVE':'shoe', 'BELT':'shoe', 'CLEATS':'shoe', 'EYES':'shoe', 'MOUTH':'shoe', 'FACEMASK':'shoe', 'CHINSTRAP':'helmet', 'HELMET_STRIPE':'helmet', 'HEAD':'head', 'HELMET':'helmet', 'LEFT_HAND':'hand', 'RIGHT_HAND':'hand', 'PANT':'pants', 'SHOE':'shoe', 'SHOE001':'shoe', 'TORSO':'torso' };
 const _v = new THREE.Vector3();
 function attach(bone, mesh, pos, rootScale){ // add a world-sized mesh to a bone (bones live in cm under a 0.01 armature)
@@ -544,7 +607,7 @@ function makePlayer(t, number, big, opts={}){
   const skin = opts.skin ? '#'+[1,3,5].map(i=>Math.round(parseInt(opts.skin.slice(i,i+2),16)*(window.__skinK ?? .65)).toString(16).padStart(2,'0')).join('') : SKIN[(number*3+1)%SKIN.length];   /* in-game: the player's own tone, read from his headshot */
   // per-player kit: deterministic from number + team so a man looks the same every play — size, visor, gloves, towel
   const hsh = ((number*2654435761) ^ (t.id.charCodeAt(0)*97 + t.id.charCodeAt(1)*31)) >>> 0;
-  const kit = opts.ref? {} : { size: 1 + ((((hsh>>>7)%9)-4)*.009), visor: !big && (hsh%100)<35, gloves: big? ((hsh>>>3)%100)<30 : ((hsh>>>3)%100)<65, gloveCol: ((hsh>>>11)%3)===0? t.jersey : '#f1f1f1', towel: !big && ((hsh>>>5)%100)<30 };
+  const kit = opts.ref? {} : { size: 1 + ((((hsh>>>7)%9)-4)*.009), visor: !big && (hsh%100)<35, gloves: big? ((hsh>>>3)%100)<30 : ((hsh>>>3)%100)<65, gloveCol: ((hsh>>>11)%3)===0? t.jersey : '#f1f1f1', towel: !big && ((hsh>>>5)%100)<30, sleeve: ((hsh>>>13)%100) < (big? 25 : 45), sleeveCol: ['#111318','#f1f1f1',t.jersey][(hsh>>>17)%3] };
   const model = skeletonClone(BOT.scene);
   // Heights include helmet/cleats. Native mesh units are meters; field units are yards.
   // Width/depth differences are baked morphs, never non-uniform bone scaling.
@@ -557,14 +620,17 @@ function makePlayer(t, number, big, opts={}){
   const bones = {};
   model.traverse(o=>{
     if(o.isBone) bones[o.name.replace('mixamorig','')] = o;
-    if(o.isSkinnedMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
-      const part = PART[o.name.replace(/[^A-Za-z0-9]/g,'_').replace('SHOE_001','SHOE001')] || 'torso';
-      if(opts.ref && (['helmetSolid','mask','trim','visor'].includes(part) || /HELMET|FACEMASK|CHINSTRAP/.test(o.name))){ o.visible=false; return; }
+    if(o.isSkinnedMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; if(LOOK2) o.layers.set(1);   /* look=2: players on their own layer for the AO prepass */
+      let part = PART[o.name.replace(/[^A-Za-z0-9]/g,'_').replace('SHOE_001','SHOE001')] || 'torso';
+      if(MH2 && part==='mhJersey') part='torso'; if(MH2 && part==='mhPants') part='pants';   /* mh2's uniform is a painted white/navy texture: the keyed team-colour path */
+      if(part==='mhSleeve' && (opts.ref || !kit.sleeve)){ o.visible=false; return; }
+      if(opts.ref && (['helmetSolid','mask','trim','visor'].includes(part) || (MH && part==='plain') || /HELMET|FACEMASK|CHINSTRAP/.test(o.name))){ o.visible=false; return; }
       if(opts.ref && modelChoice==='fp27' && part==='plain'){ // this group mixes helmet shell pieces with socks and pads: keep only the triangles not bound to the Head bone
         const g=o.geometry.clone(), hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)), si=g.attributes.skinIndex.array, idx=g.index.array, keep=[];
         const py=g.attributes.position; for(let i=0;i<idx.length;i+=3){ let head=false; for(let k=0;k<3;k++){ if(si[idx[i+k]*4]===hi || py.getY(idx[i+k])>1.58) head=true; } if(!head) keep.push(idx[i],idx[i+1],idx[i+2]); }
         g.setIndex(keep); o.geometry=g; }
-      o.material = teamMaterial(o.material, part, t, part==='hand' && kit.gloves ? kit.gloveCol : skin); }
+      o.material = teamMaterial(o.material, part, t, part==='hand' && kit.gloves ? kit.gloveCol : skin, kit);
+      if(MH2 && o.morphTargetInfluences && o.morphTargetInfluences.length>2){ const L=skinLum(skin); o.morphTargetInfluences[2] = clamp((.16 - L)/.1, 0, 1)*(window.__faceK ?? .85); } }   /* deeper tones: African-ancestry facial structure (MakeHuman target), scaled with the tone */
   });
   if(opts.ref){ // official's cap: crown + band + brim on the Head bone, seated from the measured top of the head (bind space)
     let top=-1e9, headY=0; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; const hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)); if(hi<0) return; headY=new THREE.Vector3().setFromMatrixPosition(o.skeleton.boneInverses[hi].clone().invert()).y; const pos=o.geometry.attributes.position, si=o.geometry.attributes.skinIndex.array;
@@ -579,14 +645,17 @@ function makePlayer(t, number, big, opts={}){
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
   if(!opts.ref){
-  const NO = modelChoice==='fp27'? (window.__numOff||{back:[0,-13,-13.5], front:[0,-9,14.5], sb:1.0, sf:.85, tilt:-.12}) : {back:[0,-8.5,-16.3], front:[0,-11.5,16.6], sb:1.05, sf:.85, tilt:-.18};
+  const NO = MH2? (()=>{ const o=BOT.userData.numOff||{}, k=build.morph, mix=(side)=>{ const s=o.skill?.[side]??0; return s + k[0]*((o.line?.[side]??s)-s) + k[1]*((o.power?.[side]??s)-s); };
+      return window.__numOff||{back:[0,-13,mix('back')-.9], front:[0,-9,mix('front')+1.0], sb:1.0, sf:.85, tilt:-.1}; })() : MH? (window.__numOff||{back:[0,-13,-6.2], front:[0,-9,24.6], sb:1.0, sf:.85, tilt:-.1}) : modelChoice==='fp27'? (window.__numOff||{back:[0,-13,-13.5], front:[0,-9,14.5], sb:1.0, sf:.85, tilt:-.12}) : {back:[0,-8.5,-16.3], front:[0,-11.5,16.6], sb:1.05, sf:.85, tilt:-.18};
   const numBack = new THREE.Mesh(GEO.num, numMat(number,t)); numBack.scale.set(NO.sb,NO.sb,1); attach(bones.Spine2, numBack, new THREE.Vector3(...NO.back), sc).rotation.y = Math.PI;
   const numFront = new THREE.Mesh(GEO.num, numMat(number,t)); numFront.scale.set(NO.sf,NO.sf,1); const nf = attach(bones.Spine2, numFront, new THREE.Vector3(...NO.front), sc); nf.rotation.x = NO.tilt; }
-  if(kit.visor && modelChoice!=='fp27'){ const vis=new THREE.Mesh(new THREE.CylinderGeometry(.104,.104,.052,24,1,true,Math.PI*.62,Math.PI*.76), new THREE.MeshStandardMaterial({color:'#0d1218', transparent:true, opacity:.82, roughness:.08, metalness:.55, side:THREE.DoubleSide})); vis.rotation.y=Math.PI; attach(bones.Head, vis, new THREE.Vector3(0,9.5,-.5), sc); }
+  if(kit.visor && modelChoice!=='fp27' && !MH){ const vis=new THREE.Mesh(new THREE.CylinderGeometry(.104,.104,.052,24,1,true,Math.PI*.62,Math.PI*.76), new THREE.MeshStandardMaterial({color:'#0d1218', transparent:true, opacity:.82, roughness:.08, metalness:.55, side:THREE.DoubleSide})); vis.rotation.y=Math.PI; attach(bones.Head, vis, new THREE.Vector3(0,9.5,-.5), sc); }
   if(kit.towel){ const tw=new THREE.Mesh(new THREE.PlaneGeometry(.085,.23), new THREE.MeshLambertMaterial({color:'#ececec', side:THREE.DoubleSide})); attach(bones.Hips, tw, new THREE.Vector3(-11,-15,8.5), sc).rotation.set(.1,.25,.1); }
   const mixer = new THREE.AnimationMixer(model);
   const clip = n => BOT.animations.find(a=>a.name===n);
   const act = { idle: mixer.clipAction(clip('idle')), walk: mixer.clipAction(clip('walk')), run: mixer.clipAction(clip('run')) };
+  if(MOTION2 && clip('cc_jog')){ const add2=(k,n)=>{ const c=clip(n); if(c) act[k]=mixer.clipAction(c); };   /* motion pass: captured jog / run / backpedal / shuffles / slides */
+    add2('jog','cc_jog'); add2('run2','cc_run'); add2('back','cc_back'); add2('sl','cc_strafe_l'); add2('sr','cc_strafe_r'); add2('dsl','cc_slide_l'); add2('dsr','cc_slide_r'); add2('idle2','cc_idle_long'); }
   Object.values(act).forEach(a=>{ a.play(); a.setEffectiveWeight(0); }); act.idle.setEffectiveWeight(1);
   mixer.update(Math.random()*2);
   // Keep the clip pose separate from the procedural layer, including paused/frozen clips.
@@ -628,6 +697,7 @@ const P = (...k)=>({type:'path', k});
 const F = (target, start, speed, off=[0,0], reach=0.9)=>({type:'follow', target, start, speed, off, reach});
 
 let preSnap=false, actors=[], O={}, D={}, T0=0, playT=0, events=[], ballPlan=[], cameraTarget=null, play=null, running=false;
+window.__simDbg = ()=>({actors, O, D, playT, running});   /* console/QA access */
 
 function clearPlayers(){ actors.forEach(a=>scene.remove(a.root)); actors=[]; refObjs.forEach(r=>scene.remove(r.root)); refObjs=[]; }
 let refObjs = [];
@@ -752,7 +822,7 @@ function setupFormation(kind){
     const ov = PLAY_OVR.find(o=>o.side===side && o.key===key && (o.i||0)===(i||0)); if(ov) return ov.man;   /* this play's ball carrier / target / sacker / picker */
     const L=t.lineup, v=L && L[key]; const e=Array.isArray(v)? v[i||0] : v; return e && e.n!=null? e : null; };
   const add=(t,n,big,x,z,face,opts,key,i)=>{ const e=key? who(t,key,i) : null; const o={...(opts||{})}; if(e){ n=+e.n; if(e.s) o.skin=e.s; }
-    const a=makePlayer(t,n,big,o); a.x=x; a.z=z; a.face=face; a.num=n; a.skinTone=o.skin||null; a.teamId=t.id; actors.push(a); return a; };
+    const a=makePlayer(t,n,big,o); a.x=x; a.z=z; a.face=face; a.num=n; a.skinTone=o.skin||null; a.teamId=t.id; a.roleKey=key||null; actors.push(a); return a; };
   const rbKey = (kind==='fg' || kind==='kickoff')? 'k' : kind==='punt'? 'p' : 'rb';   /* the kicker / punter stands in the back's spot on special teams */
   O = { ol:[-5.1,-2.55,0,2.55,5.1].map((x,i)=>add(to,[72,66,55,61,78][i],true,x,z0-.75,0,null,'ol',i)),
         te: add(to,87,false,6.2,z0-1,0,{profile:'power'},'te'), wrL: add(to,11,false,-20,z0-.9,0,null,'wr',1), slot: add(to,15,false,-11.5,z0-1.1,0,null,'wr',2),
@@ -1201,6 +1271,7 @@ function choreograph(res){
     /* a fumble after the catch only counts once he has it secured and is a runner: catch it short of the spot, then a few strides
        (4+ yards, ~0.6 s+) before the hit that punches it out — anything sooner is an incompletion, not a fumble (Tyler) */
     if(res.fumble && res.kind==='complete' && !td) Yc = Math.max(scn? Yc : -1.5, Math.min(Yc, Y - (deep? 6 : 4)));
+    if(res.kind==='int' && res.catchAt!=null && !bat) Yc = clamp(toGoal - res.catchAt - (deep? .6 : .9), 1, toGoal + 7.5);   /* the game says where the pick was caught (res.catchAt: the intercepting team's yard line) — the return to res.endAt starts there, so its length is the engine's too */
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc;
     /* Comeback / hitch (reference: DAL @ IND on FOX, #88 at the Colts 40, Tyler 11/8): he pushes upfield, plants, comes back to the
        ball facing the QB, and the corner who was on top of him drives down and wraps him at the catch — no run after it */
@@ -1521,7 +1592,7 @@ function choreograph(res){
     const hit = ()=>{ // head-on hits put the carrier on his back; hits from behind drive him forward
       const hx=carrier.x-tackler.x, hz=carrier.z-tackler.z;
       const gap=Math.hypot(hx,hz);
-      if(gap > .95 && playT < tackleT+6){ // not there yet: no phantom tackles — the carrier keeps running and the chaser has to actually catch him; the whistle waits
+      if(gap > .95 && playT < tackleT+((res.lock && res.kind==='int' && res.endAt!=null)? .35 : 6)){ // (a return the game already spotted goes down within a stride or two of that spot: the next drive starts there) not there yet: no phantom tackles — the carrier keeps running and the chaser has to actually catch him; the whistle waits
         const want = gap > 2.5 ? 6.3 : 7.0;   /* a runner being chased from well behind is picking his way, not flat-out; the pursuer (8.7) closes at 2+ yd/s */
         if(carrier.behav?.type!=='run'){ const cs=Math.hypot(carrier.vx||0,carrier.vz||0)||1; carrier.behav={type:'run', vx:(carrier.vx||0)/cs*want, vz:(carrier.vz||0)/cs*want}; }
         else { const b=carrier.behav, cs=Math.hypot(b.vx,b.vz)||1; b.vx=b.vx/cs*want; b.vz=b.vz/cs*want; }
@@ -1679,13 +1750,23 @@ function choreograph(res){
   // everyone else pursues after the ball carrier changes hands (runs)
   if(isRun && carrier){ ev(snap+.9, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d) && !climbed.has(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
   play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, holdOn, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal};
-  if(tackler && carrier){ play.tackler = tackler; play.tackleAt = tackleAtFn; }
+  if(tackler && carrier){ play.tackler = tackler; play.tackleAt = (res.lock && res.kind==='int' && res.endAt!=null)? null : tackleAtFn; }   /* a return the game already spotted (res.endAt) is tackled at the planned spot only: armed early (the intended receiver is standing right at the pick) the returner broke free and ran until the 6 s cap, ending yards short of or past where the next drive starts */
   cameraTarget = null;
 }
 
 // ---------- Animation loop ----------
 let last = performance.now(); let preT = 0;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+/* look=2 lens: the same framing at the look point, shot from up to 20% further back on a longer lens — less wide-angle stretch, and the far players and the
+   bowl sit larger behind the play. Render-only: camPos and camera.fov keep their tuned values for the camera logic (the fov is put back after the frame is drawn).
+   The pull-back is capped at 5 yd and never backs a camera on the field out past the goalposts. */
+const LENS = { k: window.__lensK ?? 1.2, fov0:null }, _lensV = new THREE.Vector3();
+function applyLens(){ if(!LOOK2) return; const d=_lensV.subVectors(camPos, camLook), dist=d.length(); if(dist<1e-3) return;
+  let k = Math.min(LENS.k, 1 + 5/dist);
+  if(Math.abs(camPos.z) > 59.3) k = 1; else if(Math.abs(d.z) > 1e-3){ const kz=((d.z<0? -59.3 : 59.3) - camLook.z)/d.z; if(kz>=1) k=Math.min(k,kz); }
+  camera.position.copy(camLook).addScaledVector(d,k); camera.lookAt(camLook);
+  LENS.fov0 = camera.fov; camera.fov = 2*THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))/k)); camera.updateProjectionMatrix(); LENS.focus = dist*k; }
+function restoreLens(){ if(LENS.fov0!=null){ camera.fov = LENS.fov0; LENS.fov0 = null; } }
 let camZoom=0;
 const PUNT_BACK = 9;
 function overviewBack(cp){return Math.max(cp.back,28.5/(Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect));}
@@ -1907,6 +1988,72 @@ function fallingArms(a,t,fr){
   }
 }
 
+/* ---------- motion pass (?motion=2) ----------
+   Small, physical layers on top of the clips. Lean: the torso pitches into acceleration and rocks back when he brakes. Bank: the whole body tilts
+   into a turn in proportion to speed x turn rate (a cut at full speed leans hard, a jog barely). Look: the head and neck turn to the ball (the runner
+   looks where he is going), with a per-player reaction lag, within what a neck can do. */
+const _mq=new THREE.Quaternion(), _mq2=new THREE.Quaternion(), _mwq=new THREE.Quaternion(), _mpq=new THREE.Quaternion(), _mv=new THREE.Vector3(), _mf=new THREE.Vector3(), _mUp=new THREE.Vector3(0,1,0);
+function ensureGait(a){ if(a.gait) return; const r=Math.random; a.gait = { rate: .93+r()*.14, lean: .75+r()*.5, bank: .8+r()*.4, look: .7+r()*.3, ph: r()*6.28, react: .12+r()*.18 }; }
+function squareFacing(a, sp){
+  if(!running || !play || !O || !O.qb) return null;
+  const r=a.roleKey, qbHolds = O.qb.carrying;
+  if(r==='qb' && a===O.qb && a.throwT0==null && sp<4.5 && qbHolds) return 0;            // drop: eyes and shoulders downfield, feet backpedal
+  if(!qbHolds || a.carrying) return null;
+  if((r==='lb' || r==='cb' || r==='s') && sp<5.2) return Math.PI;                        // coverage / flow: square to the QB until he has to turn and run
+  if(r==='ol' && sp<3.5) return 0;                                                        // pass set: kick-slide back, chest to the rusher
+  return null;
+}
+function motionBlend(a, sp, vx, vz, hold, fz){
+  const A=a.act, g=a.gait, CS=(BOT.userData.clipSpeed)||{}, v=Math.hypot(vx,vz), sf=Math.sin(a.face), cf=Math.cos(a.face);
+  let lf=1, ll=0; if(v>.05){ lf=(sf*vx+cf*vz)/v; ll=(cf*vx-sf*vz)/v; }
+  const k=.25; a._lf=(a._lf ?? 1)+(lf-(a._lf ?? 1))*k; a._ll=(a._ll ?? 0)+(ll-(a._ll ?? 0))*k;
+  const move = hold? 0 : clamp((sp-.3)/.7, 0, 1);
+  let wf=Math.max(0,a._lf), wb=Math.max(0,-a._lf), ws=Math.abs(a._ll); const n=(wf+wb+ws)||1; wf/=n; wb/=n; ws/=n;
+  const wWalk=clamp(1-(sp-1.6)/1.0, 0, 1), wRun=clamp((sp-3.4)/1.4, 0, 1), wJog=clamp(1-wWalk-wRun, 0, 1);
+  if(g.style==null){ g.style = Math.random()<.5? 1 : 0; g.idleAlt = Math.random()<.4; }
+  const def = a.roleKey==='lb' || a.roleKey==='cb' || a.roleKey==='s';
+  const keep=1-fz, W={}; for(const key in A) W[key]=0;
+  W[g.idleAlt && A.idle2? 'idle2' : 'idle'] = (1-move)*keep + fz;
+  W.walk = move*wf*wWalk*keep; W.jog = move*wf*wJog*keep; W[g.style && A.run2? 'run2' : 'run'] = move*wf*wRun*keep;
+  W.back = move*wb*keep;
+  const right = a._ll>0; W[right? (def&&A.dsr? 'dsr':'sr') : (def&&A.dsl? 'dsl':'sl')] = move*ws*keep;
+  for(const key in A) A[key].setEffectiveWeight(W[key]||0);
+  const ts=(clipName, lo=.55, hi=1.7)=> clamp(sp/Math.max(.3, CS[clipName]||sp||1), lo, hi)*g.rate;   /* stride rate matched to ground speed: no skating */
+  A.run.timeScale = clamp(sp/6.2, .7, 1.45)*g.rate; A.walk.timeScale = clamp(sp/1.6, .7, 1.8)*g.rate;
+  if(A.jog) A.jog.timeScale=ts('cc_jog'); if(A.run2) A.run2.timeScale=ts('cc_run',.7,1.5); if(A.back) A.back.timeScale=ts('cc_back');
+  if(A.sl) A.sl.timeScale=ts('cc_strafe_l'); if(A.sr) A.sr.timeScale=ts('cc_strafe_r'); if(A.dsl) A.dsl.timeScale=ts('cc_slide_l',.6,2.2); if(A.dsr) A.dsr.timeScale=ts('cc_slide_r',.6,2.2);
+}
+function motionLean(a, sp, back, dt, stanceW){
+  if(a.down!=null || a.mocapActive || dt<=0){ a.body.rotation.z=0; a._spPrev=sp; a._facePrev=a.face; return; }
+  const g=a.gait, acc=(sp-(a._spPrev ?? sp))/dt; a._spPrev=sp;
+  a._acc = (a._acc||0) + (clamp(acc,-14,14)-(a._acc||0))*Math.min(1, dt*6);
+  let dyaw=Math.atan2(Math.sin(a.face-(a._facePrev ?? a.face)), Math.cos(a.face-(a._facePrev ?? a.face)))/dt; a._facePrev=a.face;
+  a._yr = (a._yr||0) + (clamp(dyaw,-6,6)-(a._yr||0))*Math.min(1, dt*8);
+  const free = 1-stanceW, fwd = back>0? 1 : -1;
+  a.bones.Spine.rotation.x += free*g.lean*clamp(a._acc*.018*fwd, -.12, .2);                  // drive phase: chest over the feet; braking: sit back
+  a.body.rotation.z = free*clamp(-a._yr*sp*.011*g.bank, -.32, .32);                           // bank into the cut
+}
+function motionLook(a, t, dt, sp){
+  const B=a.bones; if(!B.Head || !B.Neck) return;
+  const busy = a.down!=null || a.mocapActive || a.mocapThrow || (a.celebrate!=null && a.celebrate!==false) || (a.throwT0!=null && t>=a.throwT0-.1);
+  a.model.updateMatrixWorld(true); B.Head.getWorldPosition(_mv);
+  let yaw=0, pitch=0;
+  if(!busy){
+    if(a.carrying && sp>1.2){ yaw = 0; pitch = -.08; }                                       // ball carrier: eyes upfield, where he is going
+    else { const dx=ball.position.x-_mv.x, dz=ball.position.z-_mv.z, dy=ball.position.y-_mv.y, d=Math.hypot(dx,dz);
+      yaw = Math.atan2(Math.sin(Math.atan2(dx,dz)-a.face), Math.cos(Math.atan2(dx,dz)-a.face)); pitch = Math.atan2(dy, Math.max(d,.3));
+      const lim=1.25; if(Math.abs(yaw)>1.9) yaw=0;                                            // ball behind him: no owl turns, he keeps his eyes front
+      yaw=clamp(yaw,-lim,lim); pitch=clamp(pitch,-.55,.45); } }
+  const g=a.gait, k=Math.min(1, dt/(g.react||.2));
+  a._ly = (a._ly||0) + (yaw*g.look - (a._ly||0))*k; a._lp = (a._lp||0) + (pitch*g.look - (a._lp||0))*k;
+  if(Math.abs(a._ly)<1e-3 && Math.abs(a._lp)<1e-3) return;
+  _mf.set(Math.sin(a.face),0,Math.cos(a.face));
+  const right=_mv.set(Math.cos(a.face),0,-Math.sin(a.face));
+  [[B.Neck,.4],[B.Head,.6]].forEach(([bone,share])=>{
+    _mq.setFromAxisAngle(_mUp, a._ly*share); _mq2.setFromAxisAngle(right, -a._lp*share); _mq.multiply(_mq2);
+    bone.getWorldQuaternion(_mwq); bone.parent.getWorldQuaternion(_mpq);
+    bone.quaternion.copy(_mpq.invert().multiply(_mq.multiply(_mwq))); bone.updateMatrixWorld(true); });
+}
 function stepActor(a, t, dt){
   const b = a.behav; let nx=a.x, nz=a.z;
   if(b){
@@ -1966,6 +2113,7 @@ function stepActor(a, t, dt){
     let target=null;
     if(a.wrap) target = Math.atan2(a.wrap.x-a.x, a.wrap.z-a.z);
     else if(a.faceLock && t < a.faceLock.until) target = a.faceLock.angle;
+    else if(MOTION2 && (a._sq = squareFacing(a, sp)) != null) target = a._sq;   /* motion pass: stays square to the play and backpedals / slides instead of turning his back */
     else if(sp>.6 && Math.hypot(vx,vz)>.3){ const drivenBack = a.carrying && sp < 2.4 && vx*Math.sin(a.face)+vz*Math.cos(a.face) < 0 && actors.some(o=>o.wrap===a); if(!drivenBack) target = Math.atan2(vx,vz); }   /* a ball carrier driven backwards keeps facing the way he was going; nobody turns his back to the tackler */
     else if(b && b.type==='coast') target = Math.atan2(ball.position.x-a.x, ball.position.z-a.z);
     else if(a.celebrate!=null && a.celebrate!==false && ['hop','point','dance','heisman','flexes'].includes(a.celebStyle)){ if(a.celebFace0==null) a.celebFace0=a.face; target = a.celebFace0 + clamp((t-a.celebrate-.3)/1.3, 0, 1)*2.6; }
@@ -1979,8 +2127,11 @@ function stepActor(a, t, dt){
   if(thrWin){ wI=1; wW=0; wR=0; }
   const frozen = a.down!=null && (a.fall>=1 || a.mocapFall);
   const fz = a.down!=null ? clamp(a.fall,0,1) : 0;   /* going down: settle onto the straight-legged idle so the body lies flat instead of freezing mid-stride */
-  a.act.idle.setEffectiveWeight(wI*(1-fz)+fz); a.act.walk.setEffectiveWeight(wW*(1-fz)); a.act.run.setEffectiveWeight(wR*(1-fz));
-  a.act.run.timeScale = back * clamp(sp/6.2, .7, 1.45); a.act.walk.timeScale = back * clamp(sp/1.6, .7, 1.8);
+  if(MOTION2) ensureGait(a);
+  if(MOTION2 && a.act.jog) motionBlend(a, sp, vx, vz, thrWin, fz);
+  else { a.act.idle.setEffectiveWeight(wI*(1-fz)+fz); a.act.walk.setEffectiveWeight(wW*(1-fz)); a.act.run.setEffectiveWeight(wR*(1-fz)); }
+  const gr = MOTION2? a.gait.rate : 1;   /* each man has his own cadence: 22 players no longer stride in lock-step */
+  if(!(MOTION2 && a.act.jog)){ a.act.run.timeScale = back * clamp(sp/6.2, .7, 1.45) * gr; a.act.walk.timeScale = back * clamp(sp/1.6, .7, 1.8) * gr; }
   a.basePose.forEach(o=>{o.b.position.copy(o.p);o.b.quaternion.copy(o.q);o.b.scale.copy(o.s);});
   a.mixer.update(frozen? 0 : dt);
   a.basePose.forEach(o=>{o.p.copy(o.b.position);o.q.copy(o.b.quaternion);o.s.copy(o.b.scale);});
@@ -1999,6 +2150,7 @@ function stepActor(a, t, dt){
   }
   if(sp>2 && back>0) B.Spine.rotation.x += Math.min(.22, sp*.025);
   if(a.truckT!=null){ const k=(t-(a.truckT-.15))/.55; if(k>0 && k<1) B.Spine.rotation.x += .4*Math.sin(Math.PI*k); }
+  if(MOTION2) motionLean(a, sp, back, dt, w);
   place(a); // Current root transform is needed by the planted-foot solve and falling arm frame.
   if(a.mocapThrow)a.body.position.y=0;
   a.mocapThrow=false;
@@ -2094,6 +2246,7 @@ function stepActor(a, t, dt){
   if(a.hold && a.down==null && !(a.mocapActive && a.mocapAct)){ const B2=a.bones; const T=window.__holdTune||[44,.1,1.6,1.5,1.5]; B2.Hips.position.y -= T[0]; B2.RightUpLeg.rotation.x += T[1]; B2.RightLeg.rotation.x += T[2]; B2.LeftUpLeg.rotation.x -= T[3]; B2.LeftLeg.rotation.x += T[4]; B2.Spine.rotation.x += .45; B2.Head.rotation.x += .2; if(!running || playT < .85){ B2.Spine.rotation.y += .6; B2.Head.rotation.y += .5; }   /* eyes on the snapper until the ball arrives */ a.model.updateMatrixWorld(true);
       if(running && playT > .85){ const sg=ballPlan.find(s=>s.hold); if(sg){ a._hv = a._hv || new THREE.Vector3(); a._hv.set(sg.hold[0], .55, sg.hold[1]); armsAt(a, a._hv, a._hv, 1, .1); } } }
 
+  if(MOTION2) motionLook(a, t, dt, sp);
   place(a);
   if(a.mocapThrow || (a.mocapCeleb && a.celebStyle!=='mocapLoop') || (a.mocapActive && a.mocapAct) || a.down!=null || (a.celebrate!==false && a.celebStyle==='nap')){
     a.root.updateMatrixWorld(true); let low=Infinity;
@@ -2196,18 +2349,22 @@ function frame(now){
   const inFlight = running && !!(ballPlan.find(sg=>playT>=sg.t0 && playT<sg.t1)||{}).flight;
   const k = 1-Math.pow(inFlight ? .08 : longK>0? .0004 : .02, dtReal); // glide through a pass, keep up with a sprinting ball carrier
   camPos.lerp(wantPos, k); camLook.lerp(wantLook, k);
-  camera.position.copy(camPos); camera.lookAt(camLook);
+  camera.position.copy(camPos); camera.lookAt(camLook); applyLens();
   { /* shadow box follows the camera, snapped to whole shadow-map texels in the light's view: a sub-texel slide re-rasterises every shadow each frame,
        which flickers on a man lying on top of another (the pile 'blink') */
-    const d=_sunD.set(-sunOff[0],-sunOff[1],-sunOff[2]).normalize(), r=_sunR.crossVectors(d,_UPY).normalize(), u=_sunU.crossVectors(r,d), T=60/2048;
+    const d=_sunD.set(-sunOff[0],-sunOff[1],-sunOff[2]).normalize(), r=_sunR.crossVectors(d,_UPY).normalize(), u=_sunU.crossVectors(r,d), T=60/SHADOW_RES;
     const a=camLook.dot(r), b=camLook.dot(u), sa=Math.round(a/T)*T-a, sb=Math.round(b/T)*T-b;
     _sunC.copy(camLook).addScaledVector(r,sa).addScaledVector(u,sb);
     sun.position.set(_sunC.x+sunOff[0], _sunC.y+sunOff[1], _sunC.z+sunOff[2]); sun.target.position.copy(_sunC); }
   const _p1 = performance.now();
   if(POST.on) POST.composer.render(); else renderer.render(scene, camera);
+  if(window.__rec && window.__rec.n>0){ const r=window.__rec; r.n--; const nm=r.prefix+'_'+String(r.k++).padStart(4,'0')+'_'+(running? playT : -1).toFixed(3); fetch((window.__shotSink||'http://127.0.0.1:8801/')+'?name='+encodeURIComponent(nm), {method:'POST', body: renderer.domElement.toDataURL('image/jpeg', .85)}).catch(()=>{}); }   /* QA: frame recorder (window.__rec={prefix,n}) */
+  if(window.__shotName){ const n=window.__shotName; window.__shotName=null; fetch((window.__shotSink||'http://127.0.0.1:8801/')+'?name='+encodeURIComponent(n), {method:'POST', body: renderer.domElement.toDataURL('image/jpeg', .92)}).catch(()=>{}); }   /* QA: window.__shotName='x' saves the next frame to a local shot receiver */
+  restoreLens();
   const _p2 = performance.now(); const _k=.08; PERF.sim+= (_p1-_p0-PERF.sim)*_k; PERF.render+=(_p2-_p1-PERF.render)*_k; PERF.frame+=(_p2-_p0-PERF.frame)*_k; PERF.fps+=((1/Math.max(dtRaw,1e-3))-PERF.fps)*_k; PERF.n++;
-  requestAnimationFrame(frame);
+  if(!window.__manualClock) requestAnimationFrame(frame);
 }
+window.__advance = (n, dt=1/30) => { window.__manualClock = true; for(let i=0;i<n;i++) frame(last + dt*1000); };   /* QA: step the sim on a fixed clock (frame-exact captures, works in a hidden tab) */
 
 function resize(){ const w=stage.clientWidth, h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; window.__narrow = clamp((1.78 - w/h)/.8, 0, 1); camera.fov = 48 + window.__narrow*(window.__narrowFov ?? 10); camera.userData.baseFov = camera.fov;   /* narrow frames (the phone embed is square): a little more lens, and the camera climbs and backs off (in the camera update) so the play still fits side to side without filling the frame with stands */ camera.updateProjectionMatrix(); const pr=renderer.getPixelRatio(); POST.composer.setSize(w*pr,h*pr); POST.bloom.setSize(w*pr,h*pr); }
 // ---------- post-processing: MSAA render target -> soft bloom (boards, lights, highlights) -> vignette/grade -> tone map + sRGB ----------
@@ -2222,6 +2379,43 @@ const POST = { on: new URLSearchParams(location.search).get('fx')!=='0' };   /* 
       void main(){ vec4 c=texture2D(tDiffuse,vUv); float l=dot(c.rgb,vec3(.2126,.7152,.0722)); c.rgb=mix(vec3(l),c.rgb,uSat); c.rgb=(c.rgb-.5*l*.0)*uContrast; 
         vec2 d=vUv-.5; float v=1.0-uVig*dot(d,d)*1.6; c.rgb*=v; gl_FragColor=c; }` });
   POST.composer.addPass(POST.grade); POST.composer.addPass(new OutputPass()); window.POST=POST; }
+/* look=2 post: screen-space ambient occlusion (players sit ON the turf and against each other instead of floating over it) and a far-field depth of field
+   (the long-lens falloff: the play stays sharp, the far bowl softens). Both ride the SSAO pass's normal+depth prepass; loaded on demand so the shipped look pays nothing. */
+if(LOOK2 && POST.on) import('three/addons/postprocessing/SSAOPass.js').then(({SSAOPass})=>{
+  const sz=renderer.getSize(new THREE.Vector2()).multiplyScalar(renderer.getPixelRatio()), half=()=> renderer.getPixelRatio()>1? .5 : 1;   /* retina: AO at half resolution */
+  const ao=new SSAOPass(scene, camera, Math.max(2,sz.x*half()), Math.max(2,sz.y*half()), 16);
+  ao.kernelRadius = window.__aoR ?? .42; ao.minDistance = window.__aoMin ?? .00012; ao.maxDistance = window.__aoMax ?? .0028;   /* yards; depths are fractions of the 400 yd far plane */
+  const setSize0=ao.setSize.bind(ao); ao.setSize=(w,h)=>setSize0(Math.max(2,Math.round(w*half())), Math.max(2,Math.round(h*half())));
+  const render0=ao.render.bind(ao), U=ao.ssaoMaterial.uniforms;
+  ao.render=(...a)=>{ U.cameraProjectionMatrix.value.copy(camera.projectionMatrix); U.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);   /* the lens changes every frame */
+    const au=renderer.shadowMap.autoUpdate; renderer.shadowMap.autoUpdate=false; render0(...a); renderer.shadowMap.autoUpdate=au; };   /* the prepass is a second renderer.render(): without this it re-rendered the whole shadow map too */
+  /* the prepass skips what cannot matter to it: the 180k crowd instances (the concrete tier under them still writes depth for the focus blur), the sky, the turf grain overlay.
+     (Stock SSAOPass walks the whole scene graph twice a frame to hide points/lines; this scene has none.) */
+  const skip=[crowd.seats, crowd.torsos, crowd.heads, sky, grain].filter(Boolean), was=[];
+  /* One override material drawn on skinned and unskinned meshes alike makes three.js re-resolve its shader program every time the draw list flips between the two
+     (hundreds of times a frame here: ~20 ms of CPU). Players live on layer 1, so the prepass draws the stadium and the players in two sweeps, each with its own material. */
+  const nmSkin=ao.normalMaterial.clone(), ro0=ao.renderOverride.bind(ao);
+  ao.renderOverride=(r, m, target, cc, ca)=>{ if(m!==ao.normalMaterial) return ro0(r, m, target, cc, ca);
+    const mask=camera.layers.mask; camera.layers.set(0); ro0(r, m, target, cc, ca); camera.layers.set(1); ro0(r, nmSkin, target, null, null); camera.layers.mask=mask; };
+  ao.overrideVisibility=()=>{ skip.forEach((o,i)=>{ was[i]=o.visible; o.visible=false; }); }; ao.restoreVisibility=()=>{ skip.forEach((o,i)=>{ o.visible=was[i]; }); };
+  POST.ao=ao; POST.composer.insertPass(ao, 1);
+  POST.dof=new ShaderPass({ uniforms:{ tDiffuse:{value:null}, tDepth:{value:ao.normalRenderTarget.depthTexture}, uPx:{value:new THREE.Vector2(1/sz.x,1/sz.y)}, uNear:{value:camera.near}, uFar:{value:camera.far}, uFocus:{value:20}, uMax:{value:6}, uK:{value: window.__dofK ?? 1} },
+    vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader:`uniform sampler2D tDiffuse, tDepth; uniform vec2 uPx; uniform float uNear, uFar, uFocus, uMax, uK; varying vec2 vUv;
+      float coc(vec2 uv){ float z = (uNear*uFar)/(uFar - texture2D(tDepth,uv).x*(uFar-uNear)); return uK*clamp((z - uFocus*1.6 - 14.0)/80.0, 0.0, 1.0); }   // only what is well behind the play blurs
+      void main(){ vec4 base=texture2D(tDiffuse,vUv); float c=coc(vUv); if(c<0.03){ gl_FragColor=base; return; }
+        vec3 acc=base.rgb; float ws=1.0;
+        for(int i=0;i<16;i++){ float fi=float(i)+0.5, r=sqrt(fi/16.0), a=fi*2.39996; vec2 uv=vUv+vec2(cos(a),sin(a))*r*c*uMax*uPx;
+          float w=smoothstep(0.0,0.12,coc(uv)); acc+=texture2D(tDiffuse,uv).rgb*w; ws+=w; }   // sharp (in-focus) neighbours do not bleed into the blur
+        gl_FragColor=vec4(acc/ws, base.a); }` });
+  const dofRender0=POST.dof.render.bind(POST.dof);
+  POST.dof.render=(...a)=>{ const s=renderer.getSize(new THREE.Vector2()).multiplyScalar(renderer.getPixelRatio()), u=POST.dof.uniforms; u.uPx.value.set(1/s.x,1/s.y); u.uMax.value=s.y*(window.__dofMax ?? .0055); u.uFocus.value=LENS.focus||20; dofRender0(...a); };
+  POST.composer.insertPass(POST.dof, 2);
+}).catch(e=>console.warn('look=2 post chain unavailable', e));
+document.getElementById('lookBtn')?.addEventListener('click',()=>{ const u=new URL(location.href); if(LOOK2) u.searchParams.delete('look'); else u.searchParams.set('look','2'); location.href=u.toString(); });
+document.getElementById('mhBtn')?.addEventListener('click',()=>{ const u=new URL(location.href); u.searchParams.set('model', MH? 'fp27' : 'mh1'); location.href=u.toString(); });
+{ const mb=document.getElementById('mhBtn'); if(mb){ mb.textContent = MH? 'New player on' : 'New player off'; mb.classList.toggle('on', MH); } }
+{ const lb=document.getElementById('lookBtn'); if(lb){ lb.textContent = LOOK2? 'New look on' : 'New look off'; lb.classList.toggle('on', LOOK2); } }
 document.getElementById('postBtn')?.addEventListener('click',()=>{ POST.on=!POST.on; document.getElementById('postBtn').textContent=POST.on?'FX on':'FX off'; document.getElementById('postBtn').classList.toggle('on',POST.on); });
 new ResizeObserver(resize).observe(stage);
 
@@ -2468,11 +2662,11 @@ selA.addEventListener('change', retheme); selB.addEventListener('change', rethem
 // boot: draw once fonts are ready so canvas text uses the display face
 $('hint').textContent='Loading players…';
 const botReady = new Promise((res,rej)=>{
-  const sc=document.createElement('script'); sc.src=({repaired:'player.js',fp27:'player-fp27.js',procedural:'player-procedural.js',original:'player-original.js'})[modelChoice] || 'player.js'; sc.onerror=rej; document.head.appendChild(sc);
+  const sc=document.createElement('script'); sc.src=({repaired:'player.js',fp27:'player-fp27.js',mh1:'player-mh1.js',mh2:'player-mh2.js',procedural:'player-procedural.js',original:'player-original.js'})[modelChoice] || 'player.js'; sc.onerror=rej; document.head.appendChild(sc);
   const b64 = str => { const bin=atob(str), buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); return buf; };
   sc.onload=async()=>{ try {
     // textures are decoded from bytes (no image fetches, which the hosted page's policy may block) and attached by material name
-    const TEX = {}; for(const [n,b] of Object.entries(window.PLAYER_TEX)){ const bmp = await createImageBitmap(new Blob([b64(b)],{type:'image/jpeg'})); const t=new THREE.CanvasTexture(bmp); t.flipY=false; t.colorSpace = /Normal|Roughness|ao_met/.test(n) ? THREE.NoColorSpace : THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; t.needsUpdate=true; TEX[n]=t; }
+    const TEX = {}; for(const [n,b] of Object.entries(window.PLAYER_TEX)){ const bmp = await createImageBitmap(new Blob([b64(b)],{type:'image/jpeg'})); const t=new THREE.CanvasTexture(bmp); t.flipY=false; t.colorSpace = /Normal|Roughness|ao_met/.test(n) ? THREE.NoColorSpace : THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; t.needsUpdate=true; TEX[n]=t; } window.__PLAYER_TEXMAP = TEX;
     new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', g=>{ BOT=g; BOT.userData=window.PLAYER_INFO||{};
       g.scene.traverse(o=>{ if(o.isMesh){ const e=window.PLAYER_MAT[o.material.name]||{}; const m=o.material; if(e.map) m.map=TEX[e.map]; if(e.normal) m.normalMap=TEX[e.normal]; if(e.rough){ m.roughnessMap=TEX[e.rough]; m.metalnessMap=TEX[e.rough]; } m.needsUpdate=true; } });
       res(); }, rej);

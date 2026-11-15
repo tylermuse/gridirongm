@@ -5,6 +5,8 @@
  *    is never taken: the offense throws for the end zone instead. A kick that DOES tie or win still goes up.
  *  - The 3D sim made up its own interception return and could run it into the end zone ("Pick six!") while the engine
  *    only spotted the ball. Interception events now carry the engine's return spot and the sim is told to end there.
+ *    (11/15: the engine now rolls the catch spot and the return itself and can score a pick-six — see
+ *    football-return-spots.test.ts. The sim still only pictures one the engine scored.)
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -86,23 +88,34 @@ describe('CPU end-of-game field goals', () => {
 });
 
 describe('interception returns', () => {
-  it('the event carries the spot the engine gave the defense, and the engine never scores on it', () => {
+  it('the event carries the spot the engine gave the defense, and the sim pictures a pick-six only when the engine scored one', () => {
     // deep shots are picked ~6% of the time: keep snapping fresh drives until one is
     let seen = 0;
-    for (let i = 0; i < 3000 && seen < 20; i++) {
+    for (let i = 0; i < 6000 && seen < 40; i++) {
       const engine = engineIn(lateState({ quarter: 2, timeSecs: 600, possession: 'home', fieldPos: 20 + (i % 60), homeScore: 7, awayScore: 7 }));
       const events = engine.runOnePlay('pass_deep');
       const pick = events.find(e => e.type === 'interception');
       if (!pick) continue;
       seen++;
       const after = engine.getState();
+      expect(after.homeScore).toBe(7);
+      if (pick.isScoring) {
+        // the engine ran it back (returns.ts): 7 for the defense, a kickoff, and the sim is told it scored
+        expect(pick.returnTo).toBe(100);
+        expect(after.awayScore).toBe(14);
+        expect(events.some(e => e.type === 'kickoff')).toBe(true);
+        expect(toSimResult(pick)).toMatchObject({ kind: 'int', td: true });
+        continue;
+      }
       expect(after.possession).toBe('away');
       expect(pick.returnTo).toBe(after.fieldPos);
-      expect(pick.isScoring).toBe(false);
-      expect(after.homeScore).toBe(7);
       expect(after.awayScore).toBe(7);
       // …and the 3D sim is told to end the return there, so it can't picture a pick-six the game didn't score
-      expect(toSimResult(pick)).toMatchObject({ kind: 'int', endAt: after.fieldPos });
+      const sim = toSimResult(pick)!;
+      expect(sim.td).toBeUndefined();
+      // (a pick downed in the end zone has no return to run: the sim stays at the catch and the ball comes out to the 20)
+      const touchback = pick.returnFrom === 0 && pick.returnYards === 0;
+      expect(sim).toMatchObject({ kind: 'int', endAt: touchback ? 1 : after.fieldPos });
     }
     expect(seen).toBeGreaterThan(0);
   });

@@ -7,8 +7,8 @@
  * user's own team. The weekly sim adds a game to both.
  *
  * What must hold:
- *  - a live regular-season game moves the season line and the career line by
- *    its box score; a live playoff game moves neither, like a simmed one;
+ *  - a live game moves the season line and the career line by its box score,
+ *    in the regular season and in the playoffs;
  *  - a league that mixes simmed and live games ends up with career totals no
  *    lower than the seasons they are made of;
  *  - a save written while the bug was live gets its career lines brought back
@@ -145,8 +145,7 @@ describe('a game committed from the live game page', () => {
     for (const p of played) expect(p.careerStats).toEqual(p.stats);
   });
 
-  it('keeps a playoff box score off both lines, as the playoff sims do', () => {
-    // More in football-playoff-stats-consistency.test.ts.
+  it('adds a playoff box score to the season line and the career line', () => {
     if (game().phase === 'regular') game().advanceToPlayoffs();
     const s = game();
     const matchup = s.playoffBracket!.find(m => m.homeTeamId && m.awayTeamId && !m.winnerId)!;
@@ -161,11 +160,7 @@ describe('a game committed from the live game page', () => {
 
     const winner = result.homeScore > result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
     expect(game().playoffBracket!.find(m => m.id === matchup.id)!.winnerId).toBe(winner);
-    expect(Object.keys(result.playerStats).length).toBeGreaterThan(30);
-    for (const p of game().players) {
-      expect(p.stats).toEqual(before.get(p.id)!.stats);
-      expect(p.careerStats).toEqual(before.get(p.id)!.careerStats);
-    }
+    expectBoxScoreApplied(before, result);
   });
 
   it('leaves every career total at or above its seasons once the season is in the log', () => {
