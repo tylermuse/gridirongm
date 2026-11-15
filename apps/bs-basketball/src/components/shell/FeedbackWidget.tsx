@@ -29,7 +29,7 @@ export function FeedbackWidget() {
           <span>Feedback</span>
         </button>
       )}
-      <FeedbackModal appName="BS Hoops" discordUrl={DISCORD_URL} />
+      <FeedbackModal appName="BS Hoops" discordUrl={DISCORD_URL} instantAnswers />
     </>
   );
 }
