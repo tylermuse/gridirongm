@@ -91,6 +91,10 @@ interface FeedbackItem {
   kind?: string | null;
   contact?: string | null;
   context?: Record<string, unknown> | null;
+  /** Instant answer (see @bs/core/feedback/server): what the model read it as, what it said, and whether the player said it helped. */
+  ai_kind?: string | null;
+  ai_answer?: string | null;
+  ai_helpful?: boolean | null;
 }
 
 const FEEDBACK_KIND: Record<string, { label: string; className: string }> = {
@@ -325,6 +329,9 @@ export default function AdminAnalyticsPage() {
                           {fb.kind && FEEDBACK_KIND[fb.kind] && (
                             <span className={`font-semibold px-1.5 py-0.5 rounded ${FEEDBACK_KIND[fb.kind].className}`}>{FEEDBACK_KIND[fb.kind].label}</span>
                           )}
+                          {fb.ai_kind && fb.ai_kind !== fb.kind && FEEDBACK_KIND[fb.ai_kind] && (
+                            <span className="text-gray-500" title="What the instant-answer model read this as">reads as {FEEDBACK_KIND[fb.ai_kind].label.toLowerCase()}</span>
+                          )}
                           {fb.app === 'bs-hoops' && <span className="font-semibold text-orange-600">Hoops</span>}
                           {fb.page && <span className="font-mono">{fb.page}</span>}
                           {fb.context?.season != null && (
@@ -337,6 +344,17 @@ export default function AdminAnalyticsPage() {
                             </a>
                           )}
                         </div>
+                        {fb.ai_answer && (
+                          <div className="mt-2 rounded-md bg-gray-50 border border-gray-100 px-3 py-2">
+                            <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500">
+                              <span>Auto-answered</span>
+                              {fb.ai_helpful === true && <span className="text-emerald-700">· player said it helped</span>}
+                              {fb.ai_helpful === false && <span className="text-red-700">· player said it did not help</span>}
+                              {fb.ai_helpful == null && <span className="font-normal text-gray-400">· no rating</span>}
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{fb.ai_answer}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
