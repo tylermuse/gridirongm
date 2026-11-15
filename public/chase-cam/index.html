@@ -180,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b18b'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b18c'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -655,7 +655,7 @@ function makePlayer(t, number, big, opts={}){
   const clip = n => BOT.animations.find(a=>a.name===n);
   const act = { idle: mixer.clipAction(clip('idle')), walk: mixer.clipAction(clip('walk')), run: mixer.clipAction(clip('run')) };
   if(MOTION2 && clip('cc_jog')){ const add2=(k,n)=>{ const c=clip(n); if(c) act[k]=mixer.clipAction(c); };   /* motion pass: captured jog / run / backpedal / shuffles / slides */
-    add2('jog','cc_jog'); add2('run2','cc_run'); add2('back','cc_back'); add2('sl','cc_strafe_l'); add2('sr','cc_strafe_r'); add2('dsl','cc_slide_l'); add2('dsr','cc_slide_r'); add2('idle2','cc_idle_long'); }
+    add2('jog','cc_jog'); add2('run2','cc_run'); add2('back','cc_back'); add2('sl','cc_strafe_l'); add2('sr','cc_strafe_r'); add2('dsl','cc_slide_l'); add2('dsr','cc_slide_r'); }   /* (no alternate idle: the captured basketball idle has hops that lifted linemen off the turf in their stance, Tyler 11/15) */
   Object.values(act).forEach(a=>{ a.play(); a.setEffectiveWeight(0); }); act.idle.setEffectiveWeight(1);
   mixer.update(Math.random()*2);
   // Keep the clip pose separate from the procedural layer, including paused/frozen clips.
