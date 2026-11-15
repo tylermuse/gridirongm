@@ -32,7 +32,7 @@ ROSTER LIMIT
 
 CUTTING / RELEASING PLAYERS
 - To release a player: open "Roster & Lineup", click "Actions ▾" at the right end of his row ("⋯" on phones), then "Release". Or click his name to open his "Player Card" and press "Release Player".
-- A "Release {name}" window opens. If he has guaranteed money left you choose "Waive" (each remaining year stays on your cap as dead money in its own season) or "Waive & stretch" (the total is spread evenly over twice the remaining years plus one), then "Confirm release". With no guaranteed money left it is a clean release with no dead cap.
+- A release window with his name opens. If he has guaranteed money left you choose "Waive" (each remaining year stays on your cap as dead money in its own season) or "Waive & stretch" (the total is spread evenly over twice the remaining years plus one), then "Confirm release". With no guaranteed money left it is a clean release with no dead cap.
 - Dead cap counts against the salary cap. The released player goes straight to free agency, where any team can sign him.
 - Not in the game: a waiver wire or claim period, buyouts, contract restructures, and an undo for a release.
 
@@ -56,7 +56,7 @@ DURING A LIVE GAME
 - Why: games are simulated before you watch them. "Watch Live" sims the league up to your game and then replays it play by play, so the result is already decided.
 - To watch your game: the red "Watch Live" button in the top bar, or "▶ Watch Live" on the Dashboard's next-game card (the one that works on phones). The Playoffs page has its own "▶ Watch Live". Your games open with a pregame show: press "🏀 Tip Off".
 - Live controls: "⏸ Pause" / "▶ Play", speeds "1×", "2×", "5×" and "Max", "Next quarter ⏭", "Skip to final →" and "Exit". At halftime press "Start the 2nd half ▶". At the end, "Box Score →".
-- A finished game's box score page has "▶ Watch Replay".
+- A finished game's box score page has a "▶ Replay" button (with "Watch" in front of it on wider screens) that replays the game.
 
 SIMMING AND ADVANCING
 - Regular season buttons in the top bar: "Sim Day", "Sim Week" (7 days), "Sim to All-Star Break", "Sim to Trade Deadline" and "Sim Rest of Season" (stops at the end of the regular season).
