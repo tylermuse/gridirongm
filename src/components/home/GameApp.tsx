@@ -1709,7 +1709,7 @@ function Dashboard() {
                   <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${userTeam.salaryCap}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${capSpace < 10 ? 'text-red-600' : 'text-green-600'}`}>${capSpace}M</span></div>
                   <div className="hidden sm:flex justify-between"><span className="text-[var(--text-sec)]">Player Dead Cap</span><span className="font-bold text-amber-600">${playerDeadCap}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Roster</span><span className="font-bold">{roster.length} / 53</span></div>
+                  <div className="flex justify-between items-center"><span className="text-[var(--text-sec)]">Roster</span><span className="flex items-center gap-2"><span className="font-bold">{roster.length} / 53</span><Link href="/roster" className="text-xs text-blue-600 hover:underline">Manage →</Link></span></div>
                 </div>
               );
             })()}
