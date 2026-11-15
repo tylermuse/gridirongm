@@ -10,6 +10,9 @@ import { SpotlightShowPlayer } from '@/components/game/SpotlightShowPlayer';
 import { episodeLabelFor } from '@/components/game/SpotlightShowPoster';
 import { buildGameTopics, gameTopicsForMoment } from '@/lib/spotlight/showGame';
 import { computeShowStatLine } from '@/lib/spotlight/teamStats';
+import { computeOffseasonOutlook, offseasonPreviewTopic, OFFSEASON_PREVIEW_HEADLINE } from '@/lib/spotlight/offseasonOutlook';
+import { seasonWrapFor, wrapShowFrozen, wrapTextFrozen, type SeasonWrapEpisode } from '@/lib/spotlight/seasonWrap';
+import { SHOW_MAX_STORYLINES } from '@/lib/spotlight/showScript';
 import { useAiCommentary } from '@/components/providers/useAiCommentary';
 
 import { useGameStore, computeLuxuryTax, whenSaveLoadSettles, retrySaveLoad, flushToStorage, type MockDraftStartPlan, type MockDraftStartStage } from '@/lib/engine/store';
@@ -31,7 +34,7 @@ import { type ImportedLeagueData, loadLeagueFromUrl, loadNativeSaveIntoApp, BsfN
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
-import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
+import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarrativeMoment, type AiSpotlightTopic } from '@/lib/engine/aiSpotlight';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { formatRecord, findRivalry } from '@/types';
@@ -849,7 +852,7 @@ function TeamSpotlightSection({
   ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
-  const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore, schedule } = useGameStore();
+  const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore, schedule, seasonWrapEpisode, saveSeasonWrapEpisode } = useGameStore();
   const aiCommentary = useAiCommentary();
 
   // Filter news to this season's re-injury items so the spotlight can surface
@@ -893,10 +896,29 @@ function TeamSpotlightSection({
     const phase = ctx?.phase ?? 'regular';
     const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
     return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id, playoffSeeds);
-  }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
+  }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, playoffSeeds, team.id]);
   // At the deadline the episode is about needs and targets; the last game
   // shrinks to one quick topic.
   const showGameForMoment = React.useMemo(() => gameTopicsForMoment(showGame, currentNarrative), [showGame, currentNarrative]);
+
+  // The season wrap: the one episode for the end of the season, from the
+  // moment the team's season is over until the preseason (see seasonWrap.ts).
+  // It closes on the offseason ahead; once the season moves on to
+  // re-signing, the draft and free agency, they replay the saved episode
+  // instead of making another one that re-recaps the same last game.
+  const phase = ctx?.phase ?? 'regular';
+  const isWrap = currentNarrative === 'seasonOver';
+  const savedWrap = isWrap ? seasonWrapFor(seasonWrapEpisode, season, team.id) : null;
+  const textFrozen = wrapTextFrozen(savedWrap, phase);
+  const showFrozen = wrapShowFrozen(savedWrap, phase);
+  // Built only while the season is ending (an offseason-start league's
+  // offseason report has its own re-signing / draft / FA topics).
+  const wrapClosing = React.useMemo(
+    () => (isWrap && !showFrozen && (phase === 'playoffs' || phase === 'regular')
+      ? [offseasonPreviewTopic(team, computeOffseasonOutlook(team, allTeams, allPlayers, phase))]
+      : []),
+    [isWrap, showFrozen, phase, team, allTeams, allPlayers],
+  );
 
   // 5/22 stale-opponent fix (Marcus Cole / Tony Blaze hallucinating PHI when
   // next opponent was actually NE). Compute three pieces of bracket state
@@ -918,7 +940,9 @@ function TeamSpotlightSection({
     }
     const userGames = playoffBracket.filter(m =>
       m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
-    const eliminated = userGames.some(m => m.winnerId && m.winnerId !== team.id);
+    // Missed the playoffs: their season is already over, nothing to wait on.
+    const missed = !!playoffSeeds && ![...(playoffSeeds.AC ?? []), ...(playoffSeeds.NC ?? [])].includes(team.id);
+    const eliminated = missed || userGames.some(m => m.winnerId && m.winnerId !== team.id);
     const championship = playoffBracket.find(m => m.id === 'championship');
     const championshipDone = !!championship?.winnerId;
     const nextGame = playoffBracket.find(m =>
@@ -934,7 +958,7 @@ function TeamSpotlightSection({
     // exists in the bracket but home/away aren't filled in yet.
     const bracketReady = eliminated || championshipDone || nextOpponentId !== null;
     return { nextOpponentId, eliminated, bracketReady, championshipDone };
-  }, [ctx?.phase, playoffBracket, team.id]);
+  }, [ctx?.phase, playoffBracket, playoffSeeds, team.id]);
 
   // If AI is enabled and this is a special narrative moment, trigger AI fetch.
   // Regular weeks use templates only. fetchAiSpotlight handles cache key comparison internally.
@@ -944,6 +968,8 @@ function TeamSpotlightSection({
   // confidently name the just-defeated opponent (5/22 bug).
   React.useEffect(() => {
     if (!aiCommentary || currentNarrative === 'weekly') return;
+    // The offseason replays the saved season wrap: nothing new to write.
+    if (textFrozen) return;
     const phase = ctx?.phase ?? 'regular';
     if (phase === 'playoffs' && !playoffsState.bracketReady) return;
     fetchAiSpotlight({
@@ -957,13 +983,45 @@ function TeamSpotlightSection({
         : undefined,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase, playoffsState.bracketReady, playoffsState.nextOpponentId]);
+  }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase, playoffsState.bracketReady, playoffsState.nextOpponentId, textFrozen]);
 
   // Always show templates immediately. If AI topics arrive, they replace templates.
   // Never show a loading spinner — templates are the instant fallback.
   const hasAiTopics = aiState.topics && aiState.topics.length > 0;
   const aiLoading = false; // never block rendering
-  const topics = hasAiTopics ? aiState.topics! : templateTopics;
+  const liveTopics: AiSpotlightTopic[] = hasAiTopics ? aiState.topics! : templateTopics;
+  const topics = textFrozen && savedWrap ? savedWrap.topics : liveTopics;
+
+  // What the video airs. The season wrap's closing offseason preview stands
+  // in for the template's own copy of it.
+  const liveShowTopics = React.useMemo(
+    () => (wrapClosing.length ? liveTopics.filter(t => t.headline !== OFFSEASON_PREVIEW_HEADLINE) : liveTopics).slice(0, SHOW_MAX_STORYLINES),
+    [liveTopics, wrapClosing],
+  );
+  // Stable identity so the show's request (and its cache key) only changes with the moment.
+  const showMoment = React.useMemo(() => ({ phase, narrative: currentNarrative }), [phase, currentNarrative]);
+  const savedMoment = React.useMemo(
+    () => (savedWrap ? { phase: savedWrap.phase, narrative: savedWrap.narrative } : null),
+    [savedWrap],
+  );
+  const show = showFrozen && savedWrap && savedMoment
+    ? { topics: savedWrap.showTopics, game: savedWrap.game, closing: savedWrap.closing, stats: savedWrap.stats, label: savedWrap.label, moment: savedMoment }
+    : { topics: liveShowTopics, game: showGameForMoment, closing: wrapClosing, stats: showStats, label: episodeLabelFor(currentNarrative, phase, week), moment: showMoment };
+
+  // Save the season wrap as it's made (and keep it in step while the AI
+  // topics stream in), so the offseason can replay it.
+  const wrapToSave: SeasonWrapEpisode | null = isWrap && !textFrozen && topics.length > 0
+    ? { season, teamId: team.id, phase, narrative: currentNarrative, watched: savedWrap?.watched, label: show.label, topics, showTopics: show.topics, game: show.game, closing: show.closing, stats: show.stats }
+    : null;
+  React.useEffect(() => {
+    if (wrapToSave) saveSeasonWrapEpisode(wrapToSave);
+  });
+  const onShowOpen = isWrap
+    ? () => {
+      const base = wrapToSave ?? savedWrap;
+      if (base) saveSeasonWrapEpisode({ ...base, watched: true });
+    }
+    : undefined;
 
 
   // Delay podcast button 8s so AI has a chance to replace templates first
@@ -988,9 +1046,6 @@ function TeamSpotlightSection({
   // prevent the 5/22 stale-opponent regression. AI topics generated for the
   // prior round still live in cache.topics until cache key advances; render
   // a transition placeholder instead.
-  const phase = ctx?.phase ?? 'regular';
-  // Stable identity so the show's request (and its cache key) only changes with the moment.
-  const showMoment = React.useMemo(() => ({ phase, narrative: currentNarrative }), [phase, currentNarrative]);
   if (phase === 'playoffs' && !playoffsState.bracketReady) {
     return (
       <div className="mt-6">
@@ -1101,17 +1156,19 @@ function TeamSpotlightSection({
           {topics.length > 0 && (
             <div className="mb-4">
               <SpotlightShowPlayer
-                topics={topics}
-                game={showGameForMoment}
+                topics={show.topics}
+                game={show.game}
+                closing={show.closing}
+                onOpen={onShowOpen}
                 teamName={`${team.city} ${team.name}`}
-                stats={showStats}
+                stats={show.stats}
                 team={team}
                 teams={allTeams}
                 players={allPlayers}
                 schedule={schedule}
                 season={season}
-                poster={{ episodeLabel: episodeLabelFor(currentNarrative, phase, week), ready: podcastReady }}
-                moment={showMoment}
+                poster={{ episodeLabel: show.label, ready: podcastReady || showFrozen }}
+                moment={show.moment}
               />
             </div>
           )}
@@ -1159,7 +1216,7 @@ function TeamSpotlightSection({
               );
             })}
           </div>
-          <SpotlightCallIn episode={topics} />
+          <SpotlightCallIn episode={topics} narrative={currentNarrative} />
         </div>
       </Card>
     </div>

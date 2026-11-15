@@ -12,6 +12,7 @@
  */
 
 import type { RecapSegmentData, Team, Player, Position, PlayoffMatchup, DraftSelection, PlayerStats } from '@/types';
+import { computeOffseasonOutlook, offseasonPreviewTopic, OFFSEASON_PREVIEW_HEADLINE } from '@/lib/spotlight/offseasonOutlook';
 
 /* ─── Types ─── */
 
@@ -1571,8 +1572,8 @@ export function generateTeamSpotlight(
           playerIds: [],
         });
       }
-    } else if (!madePlayoffs && phase !== 'playoffs') {
-      // Missed playoffs — offseason
+    } else if (!madePlayoffs && seeds) {
+      // Missed playoffs — the season wrap
       topics.unshift({
         headline: 'Missed the Playoffs',
         icon: '😞',
@@ -1584,6 +1585,13 @@ export function generateTeamSpotlight(
         teamIds: [team.id],
         playerIds: [],
       });
+    }
+
+    // The season wrap is the season's last episode (the offseason doesn't
+    // get its own), so it closes on the offseason ahead.
+    const seasonDone = champWon || !!champLost || (madePlayoffs && userLosses > 0) || (!madePlayoffs && !!seeds);
+    if (phase === 'playoffs' && seasonDone) {
+      topics.push(offseasonPreviewTopic(team, computeOffseasonOutlook(team, allTeams, allPlayers, phase)));
     }
   }
 
@@ -1683,7 +1691,7 @@ export function generateTeamSpotlight(
   // ─── Cap topics to 3, prioritizing key storylines ───
   const MAX_TOPICS = 3;
   if (topics.length > MAX_TOPICS) {
-    const priority = ['Trade Deadline', 'QB', 'Draft', 'Playoff'];
+    const priority = [OFFSEASON_PREVIEW_HEADLINE, 'Trade Deadline', 'QB', 'Draft', 'Playoff'];
     const first = topics[0];
     const rest = topics.slice(1).sort((a, b) => {
       const aScore = priority.findIndex(p => a.headline.includes(p));
@@ -1693,6 +1701,9 @@ export function generateTeamSpotlight(
     topics.length = 0;
     topics.push(first, ...rest.slice(0, MAX_TOPICS - 1));
   }
+  // The offseason preview always closes the season wrap.
+  const previewIdx = topics.findIndex(t => t.headline === OFFSEASON_PREVIEW_HEADLINE);
+  if (previewIdx >= 0 && previewIdx < topics.length - 1) topics.push(...topics.splice(previewIdx, 1));
 
   // ─── Add fan reactions and player social media posts to topics ───
   const FAN_REACTIONS = [
@@ -1708,6 +1719,8 @@ export function generateTeamSpotlight(
   ];
 
   for (const topic of topics) {
+    // The reactions are about this season's games ("they need a win").
+    if (topic.headline === OFFSEASON_PREVIEW_HEADLINE) continue;
     if (rng() < 0.6) {
       const fanText = pick(FAN_REACTIONS, rng)(team, winPct);
       topic.exchanges.push({ speakerId: 'fans', text: fanText });

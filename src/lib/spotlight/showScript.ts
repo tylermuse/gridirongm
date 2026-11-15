@@ -130,11 +130,15 @@ export interface ShowTopicInput {
 export const SHOW_MAX_STORYLINES = 3;
 
 /** The game breakdown (deep topics, which lead) and the first other topics.
- *  A prefix, so the player's topic indexes match the server's. */
-export function capShowTopics<T extends { depth?: 'deep' }>(topics: T[]): T[] {
+ *  A prefix (plus any closing topics), and capping it again changes nothing,
+ *  so the player's topic indexes match the server's. */
+export function capShowTopics<T extends { depth?: 'deep' }>(topics: T[], closing: T[] = []): T[] {
+  // A closing topic (the season wrap's offseason preview) takes one of the
+  // storyline slots, so the episode runs no longer, and always airs last.
+  const max = Math.max(0, SHOW_MAX_STORYLINES - closing.filter(t => t.depth !== 'deep').length);
   let stories = 0;
-  const end = topics.findIndex(t => t.depth !== 'deep' && ++stories > SHOW_MAX_STORYLINES);
-  return end < 0 ? topics : topics.slice(0, end);
+  const end = topics.findIndex(t => t.depth !== 'deep' && ++stories > max);
+  return [...(end < 0 ? topics : topics.slice(0, end)), ...closing];
 }
 
 /** A pre-recorded two-shot of both hosts as an on-screen segment. */

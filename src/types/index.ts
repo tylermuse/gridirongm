@@ -1475,6 +1475,9 @@ export interface LeagueState {
   leagueSettings: LeagueSettings;
   /** Suppress trade proposal popup notifications */
   suppressTradePopups: boolean;
+  /** The end-of-season Team Spotlight episode as it was made, so the
+   *  offseason replays it instead of making another. Cleared each new season. */
+  seasonWrapEpisode?: import('@/lib/spotlight/seasonWrap').SeasonWrapEpisode | null;
   /** Weekly recap show data generated after each sim week */
   weeklyRecaps: WeeklyRecapData[];
   /** Unlocked achievements */

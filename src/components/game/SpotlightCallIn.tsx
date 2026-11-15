@@ -508,12 +508,12 @@ export function BoothPanel({ fetchOpts, episode, weekKey, open, onClose, onAir, 
  * Dashboard entry point, where the old accordion was. Hands the rendered
  * episode to the Booth so the hosts stay consistent with it, then opens it.
  */
-export function SpotlightCallIn({ episode }: { episode: BoothEpisodeTopic[] }) {
+export function SpotlightCallIn({ episode, narrative }: { episode: BoothEpisodeTopic[]; narrative?: string }) {
   const setEpisode = useBoothStore(s => s.setEpisode);
   const setOpen = useBoothStore(s => s.setOpen);
   const open = useBoothStore(s => s.open);
   const { season, week, phase, playoffBracket, userTeamId } = useGameStore();
-  const episodeFor = boothEpisodeKey(season, week, phase, playoffBracket, userTeamId);
+  const episodeFor = boothEpisodeKey(season, week, phase, playoffBracket, userTeamId, narrative);
 
   useEffect(() => { setEpisode(episode, episodeFor); }, [episode, episodeFor, setEpisode]);
 

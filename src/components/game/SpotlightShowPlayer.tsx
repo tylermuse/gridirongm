@@ -62,6 +62,10 @@ interface SpotlightShowPlayerProps {
   topics: ShowTopic[];
   /** The postgame breakdown of the team's last game (goes first). */
   game?: GameTopic[];
+  /** Topics the episode always ends on (the season wrap's offseason preview). */
+  closing?: ShowTopic[];
+  /** Called when the viewer opens the episode (presses play). */
+  onOpen?: () => void;
   teamName: string;
   /** Real numbers for on-screen graphics; null before any games are played. */
   stats?: ShowStatLine | null;
@@ -142,7 +146,7 @@ function toneClass(st: ShowStat) {
   return t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-red-600' : 'text-slate-500';
 }
 
-export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [], schedule = [], season, poster, moment }: SpotlightShowPlayerProps) {
+export function SpotlightShowPlayer({ topics: storyTopics, game, closing, onOpen, teamName, stats, team, teams = [], players = [], schedule = [], season, poster, moment }: SpotlightShowPlayerProps) {
   const sub = useSubscription();
   const access = listenState({
     loading: sub.loading,
@@ -150,8 +154,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     premium: sub.hasFeature('podcast_credits'),
     remaining: sub.podcastCredits.remaining,
   });
-  // The episode: the last game broken down first, then the storylines.
-  const topics: ShowTopic[] = useMemo(() => capShowTopics([...(game ?? []), ...storyTopics]), [game, storyTopics]);
+  // The episode: the last game broken down first, then the storylines, then
+  // any closing topic.
+  const topics: ShowTopic[] = useMemo(() => capShowTopics([...(game ?? []), ...storyTopics], closing), [game, storyTopics, closing]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [segments, setSegments] = useState<TimedShowSegment[]>([]);
   /** The request (topics + stats) the loaded episode was made for. */
@@ -809,6 +814,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
 
   // ── Controls ───────────────────────────────────────────────────────
   async function handleOpen() {
+    onOpen?.();
     // The player stays mounted on the dashboard across sims: reuse the
     // loaded episode only if it's for this same Spotlight (and didn't break off).
     if (segmentsRef.current.length && loadedFor.current === requestBody && streamError.current == null) { setPhase('ready'); return; }

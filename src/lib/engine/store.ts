@@ -223,6 +223,8 @@ interface GameStore extends LeagueState {
   renameTeam: (teamId: string, config: { city: string; name: string; abbreviation: string; primaryColor: string; secondaryColor: string }) => string;
   /** Generate the draft class preview if it doesn't already exist for the current season. */
   ensureDraftClassPreview: () => void;
+  /** Save the end-of-season Team Spotlight episode (see seasonWrap.ts). */
+  saveSeasonWrapEpisode: (episode: import('@/lib/spotlight/seasonWrap').SeasonWrapEpisode) => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
   simPreseasonWeek: () => void;
@@ -2162,6 +2164,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
   suppressTradePopups: false,
   weeklyRecaps: [],
+  seasonWrapEpisode: null,
   achievements: [],
   tradeRumors: [],
   socialPosts: [],
@@ -3171,6 +3174,7 @@ export const useGameStore = create<GameStore>()(
             leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
             suppressTradePopups: false,
             weeklyRecaps: [],
+            seasonWrapEpisode: null,
             achievements: [],
             tradeRumors: [],
             socialPosts: [],
@@ -3367,6 +3371,7 @@ export const useGameStore = create<GameStore>()(
           leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
           suppressTradePopups: false,
           weeklyRecaps: [],
+          seasonWrapEpisode: null,
           achievements: [],
           tradeRumors: [],
           socialPosts: [],
@@ -3544,6 +3549,20 @@ export const useGameStore = create<GameStore>()(
         const targetYear = state.draftResults.length > 0 ? state.season + 1 : state.season;
         if (state.draftClassPreview && state.draftClassPreview.season === targetYear) return;
         set({ draftClassPreview: generateDraftClassPreview(targetYear) });
+      },
+
+      saveSeasonWrapEpisode: (episode) => {
+        // Only for the league as it is now.
+        const state = get();
+        if (episode.season !== state.season || episode.teamId !== state.userTeamId) return;
+        const prev = state.seasonWrapEpisode;
+        // Once watched, the video stays exactly what the viewer saw; only
+        // the written recap can still fill in.
+        const next = prev && prev.season === episode.season && prev.teamId === episode.teamId && prev.watched
+          ? { ...episode, watched: true, phase: prev.phase, narrative: prev.narrative, label: prev.label, showTopics: prev.showTopics, game: prev.game, closing: prev.closing, stats: prev.stats }
+          : episode;
+        if (prev && JSON.stringify(prev) === JSON.stringify(next)) return;
+        set({ seasonWrapEpisode: next });
       },
 
       simWeek: () => {
@@ -10228,6 +10247,7 @@ export const useGameStore = create<GameStore>()(
           draftScoutingData: {},
           finalsMvpPlayerId: null, allStarGame: null,
           weeklyRecaps: [],
+          seasonWrapEpisode: null,
           tradeRumors: [],
           socialPosts: (state.socialPosts ?? []).filter(p => state.season - p.timestamp.season <= 2),
           rivalries: decayRivalries(state.rivalries ?? []),

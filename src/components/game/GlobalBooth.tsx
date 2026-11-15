@@ -7,6 +7,7 @@ import { useBoothStore, boothEpisodeKey } from '@/lib/engine/boothStore';
 import { detectNarrativeMoment, type FetchOptions, type NarrativeMoment } from '@/lib/engine/aiSpotlight';
 import { generateTeamSpotlight } from '@/lib/engine/debate';
 import { shouldShowSpotlightPopup } from '@/lib/engine/spotlightAccess';
+import { seasonWrapFor } from '@/lib/spotlight/seasonWrap';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { Avatar, BoothPanel, type OnAirInfo } from './SpotlightCallIn';
 
@@ -28,7 +29,7 @@ const MOMENT_LABEL: Record<NarrativeMoment, string | null> = {
   preseason: 'Season preview',
   tradeDeadline: 'Trade deadline',
   playoffsStart: 'Playoffs',
-  seasonOver: 'Season review',
+  seasonOver: 'Season wrap & offseason preview',
   weekly: null,
 };
 
@@ -47,7 +48,7 @@ export function GlobalBooth() {
 
   const {
     teams, players, userTeamId, season, week, phase, newsItems, draftResults,
-    playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, freeAgents, faDay, leagueSettings,
+    playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, freeAgents, faDay, leagueSettings, seasonWrapEpisode,
   } = useGameStore();
   const team = teams.find(t => t.id === userTeamId);
 
@@ -60,7 +61,7 @@ export function GlobalBooth() {
   const narrative = team
     ? detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id, playoffSeeds)
     : 'weekly';
-  const episodeKey = boothEpisodeKey(season, week, phase, playoffBracket, userTeamId);
+  const episodeKey = boothEpisodeKey(season, week, phase, playoffBracket, userTeamId, narrative);
   const momentKey = shouldShowSpotlightPopup(narrative) ? episodeKey : null;
 
   // The episode: whatever the dashboard last rendered for this exact state
@@ -80,7 +81,9 @@ export function GlobalBooth() {
   // Same inputs the dashboard keys its spotlight on.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team?.id, roster, season, week, phase, faDay, draftResults?.length, playoffBracket?.filter(m => m.winnerId).length]);
-  const episode = (publishedFor === episodeKey && publishedEpisode) || templateTopics;
+  // In the offseason that's the saved season wrap (the season's last episode).
+  const savedWrap = narrative === 'seasonOver' && team ? seasonWrapFor(seasonWrapEpisode, season, team.id) : null;
+  const episode = (publishedFor === episodeKey && publishedEpisode) || savedWrap?.topics || templateTopics;
 
   // Same bracket gating as the dashboard spotlight: only name a playoff
   // opponent once their matchup is fully populated.

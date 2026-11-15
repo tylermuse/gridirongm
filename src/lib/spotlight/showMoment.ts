@@ -3,6 +3,8 @@
  * offseason episode must never talk about "the rest of the way"), and the
  * cold-open title line is built from it.
  */
+import { OFFSEASON_PREVIEW_HEADLINE } from './offseasonOutlook';
+
 export interface EpisodeMoment {
   phase: 'preseason' | 'regular' | 'playoffs' | 'resigning' | 'draft' | 'freeAgency';
   narrative: 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
@@ -47,7 +49,7 @@ export function hookLine(teamName: string, record?: string | null, m?: EpisodeMo
   if (m.phase === 'preseason') return `A brand new season, and a lot to sort out. ${today}`;
   if (m.narrative === 'tradeDeadline') return r ? `${cap(r)} at the trade deadline. Buy, sell, or sit tight? ${today}` : `It's trade deadline week. ${today}`;
   if (m.narrative === 'playoffsStart') return r ? `${cap(r)}, and now it's win or go home. ${today}` : `It's win or go home. ${today}`;
-  if (m.narrative === 'seasonOver') return r ? `The season's in the books at ${r}. ${today}` : `The season's in the books. ${today}`;
+  if (m.narrative === 'seasonOver') return r ? `The season's in the books at ${r}, and the offseason starts now. ${today}` : `The season's in the books, and the offseason starts now. ${today}`;
   if (m.narrative === 'preseason') return `Week one is done. ${today}`;
   return r ? `Sitting at ${r}. ${today}` : `And today we're breaking down the ${teamName}.`;
 }
@@ -61,8 +63,13 @@ export function momentNote(m: EpisodeMoment | undefined, record?: string | null)
     return `OFFSEASON — ${step}. The${rec} record is LAST season's final mark; no games are left and none are scheduled yet. Never talk about the rest of the season, playoff races, games back, streaks, injuries that affect upcoming games, or an upcoming opponent. Talk about the season that ended and the decisions now (re-signings, the draft, free agency, the roster for next year).`;
   }
   if (m.phase === 'preseason') return 'PRESEASON — no games have been played yet this season. Talk about expectations and questions, not results.';
-  if (m.phase === 'playoffs') return m.narrative === 'seasonOver' ? `PLAYOFFS — the team's season just ended (eliminated, or won it all — see the notes). Final record${rec}.` : `PLAYOFFS — the team is still alive; the next game is win or go home. Record${rec}.`;
-  if (m.narrative === 'seasonOver') return `END OF REGULAR SEASON — the team missed the playoffs. Final record${rec}.`;
+  if (m.narrative === 'seasonOver') {
+    const how = m.phase === 'playoffs'
+      ? "PLAYOFFS — the team's season just ended (knocked out, won it all, or missed the playoffs — see the notes)"
+      : 'END OF REGULAR SEASON — the team missed the playoffs';
+    return `${how}. Final record${rec}. This is the season's last episode; there is no separate offseason show. Break down the game that ended the season, then the season, and close on the "${OFFSEASON_PREVIEW_HEADLINE}" topic: the re-signing calls, the draft and free agency, with each host naming the one move he'd make. No games are left: never talk about an upcoming opponent or the rest of the season.`;
+  }
+  if (m.phase === 'playoffs') return `PLAYOFFS — the team is still alive; the next game is win or go home. Record${rec}.`;
   if (m.narrative === 'tradeDeadline') return `REGULAR SEASON — trade deadline week. Record so far${rec}. This episode is about what the team needs and who to go get: the holes in the roster, the kind of player that fills each one, specific targets, the price. The last game gets one quick topic and is not mentioned again — every other topic is needs and moves.`;
   return `REGULAR SEASON. Record so far${rec}.`;
 }

@@ -41,6 +41,11 @@ const MAX_LOGS = 4;
 /**
  * One Spotlight episode per in-game state — the same key the old corner
  * popup used, so each playoff game counts as a new episode.
+ *
+ * The end of the season is one episode: from the moment the user's season is
+ * over (knocked out, champion, or missed the playoffs) through re-signing,
+ * the draft and free agency, the key stays the same, so the offseason never
+ * drops a second episode that re-recaps the same last game.
  */
 export function boothEpisodeKey(
   season: number,
@@ -48,7 +53,9 @@ export function boothEpisodeKey(
   phase: string,
   playoffBracket: { winnerId?: string | null; homeTeamId?: string | null; awayTeamId?: string | null }[] | null | undefined,
   userTeamId: string | null | undefined,
+  narrative?: string,
 ): string {
+  if (narrative === 'seasonOver') return `s${season}-wrap-${userTeamId ?? ''}`;
   const playoffGamesPlayed = playoffBracket && userTeamId
     ? playoffBracket.filter(m => m.winnerId && (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId)).length
     : 0;

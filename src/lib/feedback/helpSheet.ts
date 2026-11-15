@@ -11,7 +11,7 @@
  * - Leave out anything you are not sure of. The model returns no answer for
  *   what the sheet does not cover, and the developer answers it by hand.
  *
- * Last checked against the code: 2026-11-14.
+ * Last checked against the code: 2026-11-15.
  */
 
 const IN_SEASON = `
@@ -155,6 +155,7 @@ OTHER PAGES
 - "Rankings": "Power Rankings", "Award Race" and "GM Rankings" (an online leaderboard of signed-in players; set your name in Settings, "Display Name").
 - "Stats": league leaders and team stats. "Player Search" finds any player. "News" has league news and the weekly recap.
 - Team Spotlight is the show on the Dashboard where two hosts talk about your team. "The Booth" button at the bottom-right of in-game screens lets you ask them questions.
+- New Team Spotlight episodes come out at the start of the season, at the trade deadline and after each of your playoff games. When your season ends (knocked out, champion, or missed the playoffs) there is one episode: it recaps the game that ended your season and previews the offseason, and it stays on the Dashboard through re-signing, the draft and free agency. There is no separate offseason episode.
 - Not in the game: a changelog or "what's new" page. Updates are announced in the Discord: https://discord.gg/RMtusS2GKW
 `;
 

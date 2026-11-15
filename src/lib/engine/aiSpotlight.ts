@@ -9,11 +9,13 @@
  *  - preseason: offseason recap (draft picks, FA signings, trades)
  *  - tradeDeadline: midseason assessment, trade suggestions
  *  - playoffsStart: end-of-regular-season playoffs preview
- *  - seasonOver: elimination or championship wrap-up
+ *  - seasonOver: elimination or championship wrap-up plus the offseason
+ *    ahead — one episode from the end of the team's season to the preseason
  *  - weekly: standard weekly analysis (default)
  */
 
 import { computeTradeNeeds } from '@/lib/spotlight/tradeNeeds';
+import { computeOffseasonOutlook } from '@/lib/spotlight/offseasonOutlook';
 import type { Team, Player, NewsItem, PlayoffMatchup, DraftSelection } from '@/types';
 
 export type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
@@ -514,6 +516,20 @@ export function buildSpotlightTeamData(opts: FetchOptions): Record<string, unkno
       .filter(n => n.isUserTeam && n.type === 'trade' && n.season === season)
       .map(n => n.headline);
     teamData.tradesThisSeason = seasonTrades;
+
+    // The offseason ahead: this is the season's last episode (no separate
+    // offseason show), so it closes on the decisions coming up.
+    const o = computeOffseasonOutlook(team, allTeams, allPlayers, phase);
+    teamData.offseasonOutlook = {
+      expiringContracts: o.expiring.map(p => ({ name: p.name, pos: p.pos, ovr: p.ovr, age: p.age, salary: `$${p.salary}M` })),
+      expiringCount: o.expiringCount,
+      ...(o.capCountsExpiring ? { moneyComingOffBooks: `$${o.expiringSalary}M` } : {}),
+      capSpace: o.capCountsExpiring ? `$${o.capSpace}M now` : `$${o.capSpace}M before any re-signing`,
+      upcomingDraft: o.draft,
+      biggestHoles: o.needs.map(n => ({ pos: n.pos, starterRank: `${n.rank} of ${n.of}`, weakestStarter: `${n.weakest.name} (${n.weakest.ovr} OVR)` })),
+      youngCore: o.youngCore.map(p => ({ name: p.name, pos: p.pos, age: p.age })),
+      agingStarters: o.agingStarters.map(p => ({ name: p.name, pos: p.pos, age: p.age })),
+    };
   }
   return teamData;
 }
