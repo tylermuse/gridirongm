@@ -193,7 +193,9 @@ export default function FinancesPage() {
 
         {/* Dead Money */}
         {(() => {
-          const deadCapEntries = userTeam.deadCap ?? [];
+          // Player dead cap only — coaching buyouts are owner-budget expenses
+          // (shown under Expenses → Coaching dead cap), not cap hits.
+          const deadCapEntries = (userTeam.deadCap ?? []).filter(dc => !dc.isCoaching);
           const totalDeadCap = deadCapEntries.reduce((sum, dc) => sum + dc.amount, 0);
 
           // Calculate future dead money risk from restructured contracts

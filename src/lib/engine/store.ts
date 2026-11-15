@@ -1283,13 +1283,15 @@ function marketSalary(p: Player, teamCap: number): number {
  * Recalculate a team's totalPayroll from scratch using actual roster contracts + dead cap.
  * Prevents payroll drift from incremental tracking errors.
  */
-function recalculateTeamPayroll(team: Team, allPlayers: Player[]): number {
+export function recalculateTeamPayroll(team: Team, allPlayers: Player[]): number {
   const rosterPayroll = team.roster.reduce((sum, pid) => {
     const p = allPlayers.find(pl => pl.id === pid);
     if (!p || p.retired) return sum;
     return sum + getCapHit(p.contract);
   }, 0);
-  const deadCapTotal = (team.deadCap ?? []).reduce((sum, dc) => sum + dc.amount, 0);
+  // Coaching buyouts (isCoaching) are owner-budget expenses, not cap hits —
+  // like the real NFL, coach pay never counts against the salary cap.
+  const deadCapTotal = (team.deadCap ?? []).filter(dc => !dc.isCoaching).reduce((sum, dc) => sum + dc.amount, 0);
   return Math.round((rosterPayroll + deadCapTotal) * 10) / 10;
 }
 
