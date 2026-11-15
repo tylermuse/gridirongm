@@ -1,3 +1,4 @@
+import { DEEP_PICK_SHARE, rollPickAirYards, rollReturn } from './returns';
 import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine } from '@/types';
 import { pushSimTelemetryRecord, meanStarterOvr } from './simTelemetry';
 
@@ -290,6 +291,9 @@ type PlayResult = {
   turnover: boolean;
   /** the ball came out but the offense fell on it: a fumble in the box score, no change of possession */
   fumbleKept?: boolean;
+  /** a turnover: yards the defense returned it, and whether the return scored (returns.ts) */
+  returnYards?: number;
+  returnTouchdown?: boolean;
   passer?: Player;
   rusher?: Player;
   receiver?: Player;
@@ -745,6 +749,9 @@ interface DriveResult {
   /** True when the offense was tackled/pinned in their own end zone — the
    *  DEFENSE scores 2, not the offense. `points` stays 0 for the offense. */
   safety?: boolean;
+  /** True when the drive ended in a turnover the DEFENSE ran back for a touchdown (pick-six, scoop-and-score): the
+   *  defense scores 7 (the try is taken as good, like the live engines' return TDs) and a kickoff follows. */
+  returnTouchdown?: boolean;
   /** Field position (yards from the offense's own end zone, 0-100) when the
    *  drive ended. The game loop uses this to start the next team's drive from
    *  the spot of a non-punt change of possession (turnover, missed FG, loss on
@@ -816,9 +823,20 @@ function simulateDrive(
     if (play.turnover) {
       // A strip-sack or a fumble after the catch changes hands where the ball
       // came out, after the sack loss / the catch-and-run.
-      const at = play.type === 'sack' || play.type === 'pass'
-        ? clamp(fieldPosition + play.yards, 1, 99) : fieldPosition;
-      return { points: 0, plays, finalFieldPosition: at };
+      // A pick changes hands where the pass came down (line of scrimmage + air yards).
+      const at = play.type === 'interception'
+        ? fieldPosition + rollPickAirYards(Math.random() < DEEP_PICK_SHARE ? 'deep' : 'short', 100 - fieldPosition)
+        : play.type === 'sack' || play.type === 'pass'
+          ? clamp(fieldPosition + play.yards, 1, 99) : fieldPosition;
+      // ...and the next drive starts where the RETURN ended (returns.ts, shared with the live engines), not at the spot
+      // of the turnover: the return yards used to be dropped, and a pick-six could never be scored.
+      const ret = rollReturn(play.type === 'interception' ? 'interception' : 'fumble', at);
+      play.returnYards = ret.returnYards;
+      if (ret.result === 'touchdown') {
+        play.returnTouchdown = true;
+        return { points: 0, plays, returnTouchdown: true, finalFieldPosition: 0 };
+      }
+      return { points: 0, plays, finalFieldPosition: 100 - ret.fieldPos };
     }
 
     if (play.type === 'sack') {
@@ -1039,10 +1057,10 @@ export function simulateGame(
 
   /** Record a safety — 2 points to the team on DEFENSE (i.e. NOT the team
    *  that was pinned in its own end zone). */
-  function recordSafety(defenseTeamId: string, quarter: number, runningAway: number, runningHome: number): { away: number; home: number } {
+  function recordSafety(defenseTeamId: string, quarter: number, runningAway: number, runningHome: number, points = 2, description = 'Safety'): { away: number; home: number } {
     const isHomeDefense = defenseTeamId === game.homeTeamId;
-    const runAway = isHomeDefense ? runningAway : runningAway + 2;
-    const runHome = isHomeDefense ? runningHome + 2 : runningHome;
+    const runAway = isHomeDefense ? runningAway : runningAway + points;
+    const runHome = isHomeDefense ? runningHome + points : runningHome;
 
     quarterScoringIndex[quarter] = (quarterScoringIndex[quarter] ?? 0) + 1;
     const idx = quarterScoringIndex[quarter];
@@ -1055,12 +1073,20 @@ export function simulateGame(
       quarter,
       timeLeft,
       teamId: defenseTeamId,
-      points: 2,
-      description: 'Safety',
+      points,
+      description,
       score: [runAway, runHome],
     });
 
     return { away: runAway, home: runHome };
+  }
+
+  /** The scoring-summary line for a turnover the defense ran back (the drive's last play). */
+  function describeReturnTouchdown(drive: DriveResult): string {
+    const play = drive.plays[drive.plays.length - 1];
+    const yds = play?.returnYards ?? 0;
+    const by = play?.type === 'interception' && play.interceptor ? `${play.interceptor.firstName[0]}. ${play.interceptor.lastName} ` : '';
+    return `${by}${yds} yd ${play?.type === 'interception' ? 'interception' : 'fumble'} return (XP good)`;
   }
 
   let runAway = 0;
@@ -1073,7 +1099,7 @@ export function simulateGame(
   // return ≈ the fresh start) all reset to undefined => NFL-average fresh start.
   let nextStart: number | undefined = undefined;
   const carryOver = (drive: DriveResult): number | undefined => {
-    if (drive.points !== 0 || drive.safety) return undefined;
+    if (drive.points !== 0 || drive.safety || drive.returnTouchdown) return undefined;
     const last = drive.plays[drive.plays.length - 1];
     if (last && last.type === 'punt') return undefined;
     return Math.max(1, Math.min(99, 100 - drive.finalFieldPosition));
@@ -1117,6 +1143,12 @@ export function simulateGame(
       const afterSafety = recordSafety(game.awayTeamId, quarter, runAway, runHome);
       runAway = afterSafety.away;
       runHome = afterSafety.home;
+    } else if (homeDrive.returnTouchdown) {
+      // Pick-six / scoop-and-score: the DEFENSE scores, then kicks off.
+      awayScore += 7;
+      const afterReturn = recordSafety(game.awayTeamId, quarter, runAway, runHome, 7, describeReturnTouchdown(homeDrive));
+      runAway = afterReturn.away;
+      runHome = afterReturn.home;
     } else {
       const afterHome = describeScoring({ ...homeDrive, points: homePoints }, game.homeTeamId, quarter, runAway, runHome);
       runAway = afterHome.away;
@@ -1137,6 +1169,12 @@ export function simulateGame(
       const afterSafety = recordSafety(game.homeTeamId, quarter, runAway, runHome);
       runAway = afterSafety.away;
       runHome = afterSafety.home;
+    } else if (awayDrive.returnTouchdown) {
+      // Pick-six / scoop-and-score: the DEFENSE scores, then kicks off.
+      homeScore += 7;
+      const afterReturn = recordSafety(game.homeTeamId, quarter, runAway, runHome, 7, describeReturnTouchdown(awayDrive));
+      runAway = afterReturn.away;
+      runHome = afterReturn.home;
     } else {
       const afterAway = describeScoring({ ...awayDrive, points: awayPoints }, game.awayTeamId, quarter, runAway, runHome);
       runAway = afterAway.away;
