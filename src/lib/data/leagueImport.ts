@@ -246,6 +246,54 @@ function absoluteImageUrl(url: string | undefined): string | undefined {
   return /^(https?:)?\/\//i.test(url) || url.startsWith('data:image/') ? url : undefined;
 }
 
+/** Display colors for a Football GM team, made safe to render on light UI. */
+export function fbgmTeamColors(team: { abbrev: string; colors?: string[] }): { primaryColor: string; secondaryColor: string } {
+  const template = LEAGUE_TEAMS.find((t) => t.abbreviation === team.abbrev);
+  let primaryColor = normalizeHexColor(team.colors?.[0], template?.primaryColor ?? '#1E3A8A');
+  let secondaryColor = normalizeHexColor(team.colors?.[1], template?.secondaryColor ?? '#E5E7EB');
+  // Some FBGM rosters list white (#ffffff) as the primary color for teams
+  // like the Colts or Dolphins. White-on-white rendering hides the entire
+  // home side of the scoreboard. If primary is too light (luminance > 0.85),
+  // swap with secondary so both render visibly.
+  if (colorLuminance(primaryColor) > 0.85 && colorLuminance(secondaryColor) < 0.85) {
+    [primaryColor, secondaryColor] = [secondaryColor, primaryColor];
+  } else if (colorLuminance(primaryColor) > 0.85) {
+    // Both colors too light — fall back to the BS Football template.
+    primaryColor = template?.primaryColor ?? '#1E3A8A';
+  }
+  return { primaryColor, secondaryColor };
+}
+
+/** A team tile for the homepage picker, built from a Football GM file on the server. */
+export interface PickerTeam {
+  city: string;
+  name: string;
+  abbreviation: string;
+  primaryColor: string;
+  secondaryColor: string;
+  logoUrl?: string;
+  /** Current real record, e.g. "6-4". */
+  record?: string;
+}
+
+export function fbgmPickerTeam(team: {
+  region?: string; name?: string; abbrev: string; colors?: string[]; imgURL?: string;
+  seasons?: { won?: number; lost?: number; tied?: number }[];
+}): PickerTeam {
+  const last = team.seasons?.[team.seasons.length - 1];
+  const record = last && typeof last.won === 'number' && typeof last.lost === 'number' && last.won + last.lost + (last.tied ?? 0) > 0
+    ? `${last.won}-${last.lost}${last.tied ? `-${last.tied}` : ''}`
+    : undefined;
+  return {
+    city: team.region ?? '',
+    name: team.name ?? '',
+    abbreviation: team.abbrev,
+    ...fbgmTeamColors(team),
+    logoUrl: absoluteImageUrl(team.imgURL),
+    record,
+  };
+}
+
 /** Sort a position group by its order in the FBGM depth list (pids), then
  *  anyone the list doesn't mention by overall. FBGM lists the whole roster
  *  under every key, so only same-position players are kept here. */
@@ -458,19 +506,8 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   const templateByAbbrev = new Map(LEAGUE_TEAMS.map((team) => [team.abbreviation, team]));
 
   const teams = league.teams.map((team) => {
+    const { primaryColor, secondaryColor } = fbgmTeamColors(team);
     const template = templateByAbbrev.get(team.abbrev);
-    let primaryColor = normalizeHexColor(team.colors?.[0], template?.primaryColor ?? '#1E3A8A');
-    let secondaryColor = normalizeHexColor(team.colors?.[1], template?.secondaryColor ?? '#E5E7EB');
-    // Some FBGM rosters list white (#ffffff) as the primary color for teams
-    // like the Colts or Dolphins. White-on-white rendering hides the entire
-    // home side of the scoreboard. If primary is too light (luminance > 0.85),
-    // swap with secondary so both render visibly.
-    if (colorLuminance(primaryColor) > 0.85 && colorLuminance(secondaryColor) < 0.85) {
-      [primaryColor, secondaryColor] = [secondaryColor, primaryColor];
-    } else if (colorLuminance(primaryColor) > 0.85) {
-      // Both colors too light — fall back to the BS Football template.
-      primaryColor = template?.primaryColor ?? '#1E3A8A';
-    }
     return {
       id: `team-${team.tid}`,
       city: team.region,

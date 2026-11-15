@@ -140,7 +140,7 @@ export default function ReSignPage() {
       }
       return sum + p.contract.salary;
     }, 0);
-    const deadCap = (userTeam.deadCap ?? []).reduce((sum, dc) => sum + dc.amount, 0);
+    const deadCap = (userTeam.deadCap ?? []).filter(dc => !dc.isCoaching).reduce((sum, dc) => sum + dc.amount, 0);
     return Math.round((rosterPayroll + deadCap) * 10) / 10;
   })() : 0;
   const capSpace = userTeam ? Math.round((userTeam.salaryCap - actualPayroll) * 10) / 10 : 0;

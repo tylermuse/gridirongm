@@ -331,7 +331,7 @@ export default function RosterPage() {
     ...irPlayers.filter(p => !roster.includes(p)),
   ];
   const capSpace = viewingTeam ? Math.round((viewingTeam.salaryCap - viewingTeam.totalPayroll) * 10) / 10 : 0;
-  const deadCapTotal = (userTeam?.deadCap ?? []).reduce((sum, dc) => sum + dc.amount, 0);
+  const deadCapTotal = (userTeam?.deadCap ?? []).filter(dc => !dc.isCoaching).reduce((sum, dc) => sum + dc.amount, 0);
 
   // Depth chart helpers
   function getDepthGroup(position: Position): Player[] {

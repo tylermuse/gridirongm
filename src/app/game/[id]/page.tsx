@@ -2890,6 +2890,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </button>
           )}
           </div>
+          {/* How-to hint: players can't manually sub mid-game; lineups come
+              from the depth chart automatically. Answers the recurring
+              "how do I change players during a game?" question. */}
+          {!isFinished && (
+            <p className="text-[11px] leading-snug text-[var(--text-sec)] px-1">
+              🔄 You don&apos;t sub players by hand during a game — the sim sets each lineup from your depth chart automatically and rotates in fresh backups as starters tire (when Auto-subs is on). To change who plays, edit your depth chart on the <Link href="/roster" className="underline hover:text-[var(--text)]">Roster</Link> page before kickoff.
+            </p>
+          )}
         </div>
         {broadcastOn && broadcast.status === 'blocked' && (
           <button

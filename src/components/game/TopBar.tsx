@@ -6,7 +6,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { useBusyAction } from '@/components/ui/useBusyAction';
-import { GamePlanModal } from './GamePlanModal';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
@@ -43,9 +42,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
-  const [showGamePlanModal, setShowGamePlanModal] = useState(false);
-  const nextGamePlan = useGameStore(s => s.nextGamePlan);
-  const setNextGamePlan = useGameStore(s => s.setNextGamePlan);
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const isFired = useGameStore(s => !!s.firedState?.fired);
   const stablePhaseRef = useRef<string | null>(null);
@@ -299,20 +295,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Link>
                   </span>
                 )}
-                {!isSpectator && (
-                  <span title={nextGamePlan
-                    ? `Plan: ${100 - nextGamePlan.passRate}R/${nextGamePlan.passRate}P · ${nextGamePlan.aggressiveness} · RZ ${nextGamePlan.redZoneStrategy}${nextGamePlan.blitzRate !== undefined ? ` · Blitz ${nextGamePlan.blitzRate}%` : ''}${nextGamePlan.coverage ? ` · ${nextGamePlan.coverage}` : ''}`
-                    : 'Set a default game plan that applies to every simmed game'}>
-                    <Button
-                      onClick={() => setShowGamePlanModal(true)}
-                      variant="secondary"
-                      size="sm"
-                      className="active:scale-95 transition-transform"
-                    >
-                      📋 Plan{nextGamePlan ? ' ✓' : ''}
-                    </Button>
-                  </span>
-                )}
                 {/* 5/25 (tofftanaut 5/8 msg 1502199098504253492): Watch Live
                     entry point in the TopBar score row when the user team
                     has an unplayed game this week. Sibling button on /roster
@@ -329,7 +311,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       className="active:scale-95 transition-transform bg-red-600 hover:bg-red-700 text-white"
                     >
                       <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse mr-1.5 align-middle" />
-                      Watch Live
+                      <span className="hidden sm:inline">Watch Live</span>
+                      <span className="sm:hidden">Live</span>
                     </Button>
                   );
                 })()}
@@ -341,18 +324,18 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     Roster {53 + rosterOverBy}/53 · cut {rosterOverBy} to sim
                   </span>
                 )}
-                {/* Phones get Sim Week + Sim Season in the thumb bar below. */}
-                <span className="hidden sm:inline-flex">
-                  <Button
-                    onClick={() => runSim('sim-week', handleSimWeek)}
-                    size="sm"
-                    className="active:scale-95 transition-transform"
-                    busy={simBusy === 'sim-week'}
-                    disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
-                  >
-                    Sim Week {week}
-                  </Button>
-                </span>
+                {/* Same three sim actions as the phone thumb bar below:
+                    Sim Week · To Deadline · Sim Season. */}
+                <Button
+                  onClick={() => runSim('sim-week', handleSimWeek)}
+                  size="sm"
+                  className="active:scale-95 transition-transform"
+                  busy={simBusy === 'sim-week'}
+                  disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
+                >
+                  <span className="hidden sm:inline">Sim Week {week}</span>
+                  <span className="sm:hidden">Sim Wk {week}</span>
+                </Button>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
                   <Button
                     onClick={() => runSim('sim-deadline', handleSimToDeadline)}
@@ -363,21 +346,19 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     className="active:scale-95 transition-transform"
                   >
                     <span className="hidden sm:inline">Sim to Deadline</span>
-                    <span className="sm:hidden">Deadline</span>
+                    <span className="sm:hidden">To Deadline</span>
                   </Button>
                 )}
-                <span className="hidden sm:inline-flex">
-                  <Button
-                    onClick={() => runSim('sim-season', handleSimSeason)}
-                    variant="secondary"
-                    size="sm"
-                    busy={simBusy === 'sim-season'}
-                    disabled={!!simProgress || rosterOverBy > 0 || !!simBusy}
-                    className="active:scale-95 transition-transform"
-                  >
-                    {simProgress ? `Week ${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
-                  </Button>
-                </span>
+                <Button
+                  onClick={() => runSim('sim-season', handleSimSeason)}
+                  variant="secondary"
+                  size="sm"
+                  busy={simBusy === 'sim-season'}
+                  disabled={!!simProgress || rosterOverBy > 0 || !!simBusy}
+                  className="active:scale-95 transition-transform"
+                >
+                  {simProgress ? `Week ${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
+                </Button>
               </>
             )}
             {phase === 'playoffs' && (
@@ -623,8 +604,20 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             busy={simBusy === 'sim-week'}
             disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
           >
-            {simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Week ${week}`}
+            {simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Wk ${week}`}
           </Button>
+          {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
+            <Button
+              onClick={() => runSim('sim-deadline', handleSimToDeadline)}
+              size="sm"
+              variant="secondary"
+              className="flex-1 active:scale-95 transition-transform"
+              busy={simBusy === 'sim-deadline'}
+              disabled={!!simBusy || !!simProgress}
+            >
+              To Deadline
+            </Button>
+          )}
           <Button
             onClick={() => runSim('sim-season', handleSimSeason)}
             size="sm"
@@ -638,7 +631,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           {pendingTradeCount > 0 && !pathname.startsWith('/trades') && (
             <Link href="/trades">
               <Button size="sm" variant="secondary">
-                Trades ({pendingTradeCount})
+                Trades {pendingTradeCount}
               </Button>
             </Link>
           )}
@@ -647,25 +640,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
       {/* Trade proposal popup — disabled, user prefers inline notifications */}
 
-      {/* Game Plan modal — set the persistent default that simmed games use */}
-      {showGamePlanModal && (
-        <GamePlanModal
-          opponentName={(() => {
-            // Show next opponent if there is one, otherwise just "Default"
-            const userTeam = teams.find(t => t.id === userTeamId);
-            const next = schedule.find(g => !g.played && g.week >= week && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
-            if (!next || !userTeam) return 'Default';
-            const oppId = next.homeTeamId === userTeamId ? next.awayTeamId : next.homeTeamId;
-            const opp = teams.find(t => t.id === oppId);
-            return opp ? `${opp.city} ${opp.name}` : 'Default';
-          })()}
-          onConfirm={(plan) => {
-            setNextGamePlan(plan);
-            setShowGamePlanModal(false);
-          }}
-          onCancel={() => setShowGamePlanModal(false)}
-        />
-      )}
     </>
   );
 }

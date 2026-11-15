@@ -192,7 +192,7 @@ interface GameStore extends LeagueState {
    *  save storage (runtime only). */
   simTelemetry?: SimTelemetryRecord[];
   /** `source: 'exhibition'` tags the analytics event for a /live exhibition, which loads a league only to play one game. */
-  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean, opts?: { source?: 'exhibition' }) => Promise<void>;
+  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean, opts?: { source?: 'exhibition'; entry?: 'home_real' | 'home_fictional' }) => Promise<void>;
   /**
    * New league that opens at the draft a /mock-draft just ran: starts at the
    * current real week, has the AI run every team (user's included) through the
@@ -1283,13 +1283,15 @@ function marketSalary(p: Player, teamCap: number): number {
  * Recalculate a team's totalPayroll from scratch using actual roster contracts + dead cap.
  * Prevents payroll drift from incremental tracking errors.
  */
-function recalculateTeamPayroll(team: Team, allPlayers: Player[]): number {
+export function recalculateTeamPayroll(team: Team, allPlayers: Player[]): number {
   const rosterPayroll = team.roster.reduce((sum, pid) => {
     const p = allPlayers.find(pl => pl.id === pid);
     if (!p || p.retired) return sum;
     return sum + getCapHit(p.contract);
   }, 0);
-  const deadCapTotal = (team.deadCap ?? []).reduce((sum, dc) => sum + dc.amount, 0);
+  // Coaching buyouts (isCoaching) are owner-budget expenses, not cap hits —
+  // like the real NFL, coach pay never counts against the salary cap.
+  const deadCapTotal = (team.deadCap ?? []).filter(dc => !dc.isCoaching).reduce((sum, dc) => sum + dc.amount, 0);
   return Math.round((rosterPayroll + deadCapTotal) * 10) / 10;
 }
 
@@ -2909,7 +2911,7 @@ export const useGameStore = create<GameStore>()(
       initialized: false,
       ...EMPTY_LEAGUE_STATE,
 
-      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean, opts?: { source?: 'exhibition' }) => {
+      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean, opts?: { source?: 'exhibition'; entry?: 'home_real' | 'home_fictional' }) => {
         try {
           resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
@@ -3190,6 +3192,7 @@ export const useGameStore = create<GameStore>()(
             team: isSpectator ? null : userTeam.abbreviation,
             start_mode: isSpectator ? 'spectator' : isRegularStart ? 'regular' : 'offseason',
             season: imported.season,
+            entry: opts?.entry ?? null,
           });
           return;
         } catch (error) {
@@ -3302,7 +3305,23 @@ export const useGameStore = create<GameStore>()(
         }
         allPlayers.push(...initialFAs);
 
-        // Start in re-signing phase (offseason)
+        // Week 1 start (spectator, or the homepage's fictional-league default):
+        // skip the offseason entirely. The fake 2025 records above only exist
+        // to seed the 2026 draft order, which a Week 1 league never runs, so
+        // reset every record to 0-0 and drop the unused 2026 picks (the next
+        // offseason drafts with 2027 picks, same as an imported Week 1 start).
+        // New players who started in the re-signing phase had to get through
+        // re-signings, free agency and the draft before seeing a game; 56% of
+        // them never simmed a week (Tyler 11/14).
+        const genRegularStart = !!isSpectator || startMode === 'regular';
+        if (genRegularStart) {
+          for (const t of teams) {
+            t.record = emptyRecord();
+            t.draftPicks = t.draftPicks.filter(pk => pk.year > 2026);
+          }
+        }
+
+        // Otherwise start in re-signing phase (offseason)
         const genExpiring = allPlayers.filter(
           p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
         );
@@ -3320,7 +3339,7 @@ export const useGameStore = create<GameStore>()(
           initialized: true,
           season: 2026,
           week: 1,
-          phase: isSpectator ? 'regular' : 'resigning',
+          phase: genRegularStart ? 'regular' : 'resigning',
           userTeamId: userTeam.id,
           isSpectator: !!isSpectator,
           teams: genTeamsWithApproval,
@@ -3339,7 +3358,7 @@ export const useGameStore = create<GameStore>()(
           newsLastReadSeason: 0,
           seasonHistory: [],
           saveVersion: SAVE_VERSION,
-          resigningPlayers: genResigningEntries,
+          resigningPlayers: genRegularStart ? [] : genResigningEntries,
           holdoutDemands: [],
           tradeProposals: [],
           scoutingLevel: 2,
@@ -3368,8 +3387,9 @@ export const useGameStore = create<GameStore>()(
           import_failed: !!leagueFileUrl,
           roster_file: leagueFileUrl?.split('/').pop()?.split('?')[0] ?? null,
           team: isSpectator ? null : userTeam.abbreviation,
-          start_mode: isSpectator ? 'spectator' : 'offseason',
+          start_mode: isSpectator ? 'spectator' : genRegularStart ? 'regular' : 'offseason',
           season: 2026,
+          entry: opts?.entry ?? null,
         });
       },
 
@@ -10666,11 +10686,11 @@ export const useGameStore = create<GameStore>()(
 
           // Re-injury rolls for any player who played through their injury
           const gameTeamIds = new Set([result.homeTeamId, result.awayTeamId]);
-          const playedIds = new Set(newPlayers.filter(p => p.teamId && gameTeamIds.has(p.teamId)).map(p => p.id));
+          const playedIds = new Set(tickedPlayers.filter(p => p.teamId && gameTeamIds.has(p.teamId)).map(p => p.id));
           const ht = state.teams.find(t => t.id === result.homeTeamId);
           const at = state.teams.find(t => t.id === result.awayTeamId);
           const gameLabel = `${at?.city ?? 'AWY'} at ${ht?.city ?? 'HOM'}`;
-          const reInj = rollReInjuries(newPlayers, playedIds, gameLabel, state.season, 100 + playedRound, state.userTeamId);
+          const reInj = rollReInjuries(tickedPlayers, playedIds, gameLabel, state.season, 100 + playedRound, state.userTeamId);
 
           const newInjuryRound = injuryWeeksToTick > 0 ? targetRound : lastInjuryRound;
           set({ playoffBracket: bracket, champions, newsItems: [...newsItems, ...reInj.news], finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: reInj.players, playoffInjuryRound: newInjuryRound });
