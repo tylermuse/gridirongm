@@ -10675,12 +10675,14 @@ export const useGameStore = create<GameStore>()(
             tickedPlayers = decrementInjuryWeeks(tickedPlayers, injuryWeeksToTick);
           }
 
-          // No player stats here. `stats` and `careerStats` are regular-season
-          // lines: the playoff sims (simPlayoffGame, simPlayoffRound,
-          // simAllPlayoffGames) write none, so a watched playoff game writes
-          // none either. Otherwise the user's team alone would carry up to
-          // four extra games into the season awards, the stat leaders and the
-          // season log. The box score stays in `schedule` (above).
+          // Update player stats on top of any injury decrements. A watched
+          // playoff game goes on the season line, so it goes on the career
+          // line with it: a career total is never below its seasons.
+          const newPlayers = tickedPlayers.map(p => {
+            const playerStats = result.playerStats?.[p.id];
+            if (!playerStats) return p;
+            return { ...p, stats: addStats(p.stats, playerStats), careerStats: addStats(p.careerStats, playerStats) };
+          });
 
           // Re-injury rolls for any player who played through their injury
           const gameTeamIds = new Set([result.homeTeamId, result.awayTeamId]);
