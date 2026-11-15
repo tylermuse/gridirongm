@@ -658,13 +658,13 @@ function makePlayer(t, number, big, opts={}){
   if(opts.ref){ // official's cap: crown + band + brim on the Head bone, seated from the measured top of the head (bind space)
     let top=-1e9, headY=0; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; const hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)); if(hi<0) return; headY=new THREE.Vector3().setFromMatrixPosition(o.skeleton.boneInverses[hi].clone().invert()).y; const pos=o.geometry.attributes.position, si=o.geometry.attributes.skinIndex.array;
       for(let i=0;i<pos.count;i++){ if(si[i*4]===hi) top=Math.max(top, pos.getY(i)); } });
-    const capY = top>-1e8? (top-headY)*100-8.7 : 13.5;
+    const capY = top>-1e8? (top-headY)*100-(MH? 9.5 : 8.7) : 13.5;
     const capMat=new THREE.MeshLambertMaterial({color:opts.cap||'#f4f4f4'}); const cap=new THREE.Group();
-    const crown=new THREE.Mesh(new THREE.SphereGeometry(.124,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.85,1.04); cap.add(crown); cap.scale.setScalar(window.__capS??1.15);
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(.124,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.85,1.04); cap.add(crown); cap.scale.setScalar(window.__capS ?? (MH? .98 : 1.15));   /* mh2's head is a real skull: the fp27-sized cap came down over the eyes (Tyler 11/15) */
     const band=new THREE.Mesh(new THREE.CylinderGeometry(.124,.12,.04,20,1,true), capMat); band.position.y=-.018; cap.add(band);
     const brim=new THREE.Mesh(new THREE.SphereGeometry(.13,20,6,Math.PI/2-1.15,2.3,Math.PI*.44,Math.PI*.12), capMat); brim.scale.set(1.0,.35,1.05); brim.position.set(0,-.03,.03);   /* front arc only: a full ring reads as a bowler's rim */ cap.add(brim);
     cap.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.material.side=THREE.DoubleSide; } });
-    attach(bones.Head, cap, new THREE.Vector3(0,capY-(window.__capDown??-.2),(window.__capFwd??2.0)), sc); cap.rotation.x=(window.__capTilt??0); }   /* seated forward and down on the brow (it sat on the back of the head and read as a backwards cap) */
+    attach(bones.Head, cap, new THREE.Vector3(0,capY-(window.__capDown??-.2),(window.__capFwd ?? (MH? 1.2 : 2.0))), sc); cap.rotation.x=(window.__capTilt??0); }   /* seated forward and down on the brow (it sat on the back of the head and read as a backwards cap) */
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
   if(!opts.ref){
