@@ -47,6 +47,12 @@ jobs:
           echo "$CHANGED"
           echo "$CHANGED" | xargs npx eslint
 
+      - name: Check feedback help sheet labels
+        # The feedback modal answers players' how-to questions from
+        # src/lib/feedback/helpSheet.ts. Fails if a button or page name the
+        # sheet quotes no longer exists, so the same PR can fix the sheet.
+        run: node scripts/check-help-sheet.mjs
+
       - name: Build
         run: npm run build
         env:

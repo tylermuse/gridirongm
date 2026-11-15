@@ -18,6 +18,7 @@ import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickTackler, pic
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
+import { resolveReturn, returnNote, returnSpotLabel, rollPickAirYards, rollReturn, type ReturnOutcome } from './returns';
 import type { DefensiveScheme } from '@/types';
 import {
   lookModifier, pickDefensiveLook, pickOffensiveSet, NO_LOOK, TENDENCY_WINDOW, LOOK_INFO,
@@ -440,12 +441,10 @@ export function createLiveCoachEngine(
     if (Math.random() < 0.005) {
       // Return TD: logged on the kicking team's possession (the 3D sim credits
       // the other side), then the scoring team kicks off.
-      const scorer = state.possession === 'home' ? 'away' : 'home';
       const returner = getBestReturner(receivingRoster);
-      events.push(makeEvent('kickoff', `Kick return TOUCHDOWN! ${nameOrFallback(returner, 'The returner')} takes it all the way back!`, 100, true));
-      if (scorer === 'home') state.homeScore += 7; else state.awayScore += 7;
-      switchPossession(35);
-      doKickoffEvents(events);
+      const ev = makeEvent('kickoff', `Kick return TOUCHDOWN! ${nameOrFallback(returner, 'The returner')} takes it all the way back!`, 100, true);
+      events.push(ev);
+      applyReturn(events, ev, resolveReturn({ spot: 100, returnYards: 100 }));
       return;
     }
     if (Math.random() < 0.30) {
@@ -460,8 +459,44 @@ export function createLiveCoachEngine(
     const baseReturn = 18 + Math.floor(Math.random() * 11); // 18–28
     const ratingBonus = Math.round(Math.max(0, (returnerRating - 50) / 50) * 7 * Math.random());
     const spot = Math.min(35, baseReturn + ratingBonus);
-    events.push(makeEvent('kickoff', `Kickoff returned to the ${spot}${returner ? ` by ${nameOrFallback(returner, '')}` : ''}.`, 0, false, spot));
-    switchPossession(spot);
+    // Fielded at the goal line and run out to the spot.
+    const ev = makeEvent('kickoff', `Kickoff returned to the ${spot}${returner ? ` by ${nameOrFallback(returner, '')}` : ''}.`, 0, false, spot);
+    events.push(ev);
+    applyReturn(events, ev, resolveReturn({ spot: 100, returnYards: spot }));
+  }
+
+  /** A return that reached the end zone: 7 to the team that did NOT have the ball when the play was logged (the same
+   *  convention as every return touchdown here: the try is taken as good), and that team then kicks off. */
+  function scoreReturnTouchdown(events: PlayEvent[], ev: PlayEvent) {
+    if (state.possession === 'home') state.awayScore += 7; else state.homeScore += 7;
+    ev.isScoring = true;
+    ev.homeScore = state.homeScore;   // the play's line shows the score it made
+    ev.awayScore = state.awayScore;
+    switchPossession(35);
+    doKickoffEvents(events);
+  }
+
+  /** Stamp a return on the event that tells it, then hand the ball over at the spot returns.ts gave — or score it. */
+  function applyReturn(events: PlayEvent[], ev: PlayEvent, out: ReturnOutcome) {
+    ev.returnFrom = out.from;
+    ev.returnYards = out.returnYards;
+    ev.returnTo = out.fieldPos;
+    if (out.result === 'touchdown') {
+      scoreReturnTouchdown(events, ev);
+      return;
+    }
+    switchPossession(clamp(out.fieldPos, 1, 99));
+  }
+
+  /** A turnover at `spot` (the offense's yard line where the ball was caught / recovered): rolls the return, tells it
+   *  in the event's own line, and changes possession where the return ended. On a two-point try the ball is dead:
+   *  the try just fails (the caller logs it and kicks off) and nothing changes hands. */
+  function turnoverReturn(events: PlayEvent[], kind: 'interception' | 'fumble', ev: PlayEvent, spot: number) {
+    if (twoPointTry) return;
+    if (state.overtime) state.otPlayRunThisPossession = true;
+    const out = rollReturn(kind, spot);
+    ev.description += returnNote(kind, out);
+    applyReturn(events, ev, out);
   }
 
   function checkTwoMinWarning(events: PlayEvent[]) {
@@ -484,11 +519,11 @@ export function createLiveCoachEngine(
    *  after the play (the same shape the watch-live engine uses, which is what
    *  the 3D sim and the booth key on), then the defense takes over there. */
   function loseFumble(events: PlayEvent[], desc: string, carrier: Player | null, forcer: Player | null) {
-    events.push(makeEvent('fumble', desc, 0, false));
+    const ev = makeEvent('fumble', desc, 0, false);
+    events.push(ev);
     bump(carrier, { fumbles: 1 });
     bump(forcer, { forcedFumbles: 1 });
-    if (state.overtime) state.otPlayRunThisPossession = true;
-    switchPossession(clamp(100 - state.fieldPos, 1, 99));
+    turnoverReturn(events, 'fumble', ev, state.fieldPos);
     advancePlayClock(6, 0);
   }
 
@@ -616,20 +651,18 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const interceptor = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.cb1;
       const cbName = nameOrFallback(interceptor, 'the corner');
-      // The defense takes over about where the pass was thrown from (mirror of the line of scrimmage, give or take the
-      // throw and the return). The old cap at its own 60 moved a pick thrown from deep in the offense's end out to the
-      // offense's 40, so the spot never matched where the pick was pictured.
-      const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 97);
-      events.push({ ...makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false), returnTo: returnPos });
+      // The pick is caught where the called pass came down (line of scrimmage + air yards), and the defense's drive
+      // starts where the return from THERE ended (returns.ts). It used to be one number rolled around the mirror of
+      // the line of scrimmage, with no catch spot and no return, so the spot never matched the play that was shown.
+      const pickSpot = state.fieldPos + rollPickAirYards(depth, 100 - state.fieldPos);
+      const ev = makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false);
+      events.push(ev);
       bump(ok.qb, { passAttempts: 1, interceptions: 1 });
       bump(interceptor, { defensiveINTs: 1 });
-      // In OT, the possession that just threw the INT actually ran a play, so
-      // mark it before switching — otherwise otPossessionsCompleted never counts
-      // this turn and the OT end check can't fire after the opponent scores.
-      // (crypticer. bug: game continued after the opponent scored following a
-      // user interception in OT.)
-      if (state.overtime) state.otPlayRunThisPossession = true;
-      switchPossession(returnPos);
+      // In OT, the possession that just threw the INT actually ran a play: turnoverReturn marks it before switching —
+      // otherwise otPossessionsCompleted never counts this turn and the OT end check can't fire after the opponent
+      // scores. (crypticer. bug: game continued after the opponent scored following a user interception in OT.)
+      turnoverReturn(events, 'interception', ev, pickSpot);
       advancePlayClock(8, 0);
       return;
     }
@@ -852,13 +885,20 @@ export function createLiveCoachEngine(
   }
 
   function runPunt(events: PlayEvent[]) {
-    const puntYards = clamp(Math.round(gaussian(43, 7)), 25, 65);
-    const returnPos = clamp(100 - state.fieldPos - puntYards, 5, 50);
+    let puntYards = clamp(Math.round(gaussian(43, 7)), 25, 65);
+    const toGoal = 100 - state.fieldPos;
+    // A punt that would reach the end zone: half are touchbacks, the rest are dropped inside the 10.
+    const touchback = puntYards >= toGoal && Math.random() < 0.5;
+    if (puntYards >= toGoal) puntYards = touchback ? toGoal : Math.max(1, toGoal - (3 + Math.floor(Math.random() * 7)));
     const receivingAbbr = state.possession === 'home' ? awayTeam.abbreviation : homeTeam.abbreviation;
-    const returnYds = Math.floor(Math.random() * 8);
-    const finalPos = Math.min(returnPos + returnYds, 50);
-    events.push(makeEvent('punt', `🥾 Punt — ${puntYards} yards, ${receivingAbbr} fields at their own ${returnPos}${returnYds > 0 ? `, returns to the ${finalPos}` : ', fair catch'}.`, puntYards, false));
-    switchPossession(finalPos);
+    // Fair catch, a short return, or (rarely) all the way back. The wording is what liveSim3d.ts reads for the 3D sim.
+    const out = rollReturn('punt', state.fieldPos + puntYards);
+    const tail = out.result === 'touchback' ? `into the end zone, touchback. ${receivingAbbr} ball at the ${out.fieldPos}.`
+      : out.result === 'touchdown' ? `${receivingAbbr} fields at their own ${out.from} — punt return TOUCHDOWN!`
+      : `${receivingAbbr} fields at their own ${out.from}${out.returnYards > 0 ? `, returns to ${returnSpotLabel(out.fieldPos).replace('his own', 'the')}` : ', fair catch'}.`;
+    const ev = makeEvent('punt', `🥾 Punt — ${puntYards} yards, ${tail}`, puntYards, false);
+    events.push(ev);
+    applyReturn(events, ev, out);
     advancePlayClock(15, 0);
   }
 

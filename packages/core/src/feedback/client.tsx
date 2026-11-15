@@ -12,6 +12,10 @@
  * reply email, and light context (page, season/phase, screen size). It's
  * anonymous unless the player ticks "include my account".
  *
+ * If the app's route answers how-to questions on the spot (see `answer` in
+ * ./server), the response carries { id, answer } and the sent screen shows it
+ * with a "did that answer it?" yes/no, which PATCHes back against that id.
+ *
  * Styled with the theme tokens both apps define (--surface, --surface-2,
  * --border, --text, --text-sec, --accent).
  */
@@ -68,15 +72,20 @@ export interface FeedbackModalProps {
   appName: string;
   /** Discord invite shown as the "rather chat?" option. */
   discordUrl?: string;
+  /** This app's route answers how-to questions on the spot, so say so when "Ask a question" is picked. */
+  instantAnswers?: boolean;
 }
 
-export function FeedbackModal({ appName, discordUrl }: FeedbackModalProps) {
+export function FeedbackModal({ appName, discordUrl, instantAnswers }: FeedbackModalProps) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<FeedbackKind>('bug');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
   const [includeAccount, setIncludeAccount] = useState(false);
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  // Instant answer for this message, if the server had one, and the player's verdict on it.
+  const [reply, setReply] = useState<{ id: string; answer: string } | null>(null);
+  const [helped, setHelped] = useState<boolean | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const reset = useCallback(() => {
@@ -84,6 +93,8 @@ export function FeedbackModal({ appName, discordUrl }: FeedbackModalProps) {
     setEmail('');
     setIncludeAccount(false);
     setStatus('idle');
+    setReply(null);
+    setHelped(null);
   }, []);
 
   useEffect(() => {
@@ -137,10 +148,26 @@ export function FeedbackModal({ appName, discordUrl }: FeedbackModalProps) {
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json().catch(() => null) as { id?: unknown; answer?: unknown } | null;
+      setReply(json && typeof json.id === 'string' && typeof json.answer === 'string' && json.answer.trim()
+        ? { id: json.id, answer: json.answer.trim() }
+        : null);
+      setHelped(null);
       setStatus('sent');
     } catch {
       setStatus('error');
     }
+  }
+
+  function rate(helpful: boolean) {
+    if (!reply || helped !== null) return;
+    setHelped(helpful);
+    // Best-effort: the answer is already on screen, a lost rating costs nothing.
+    void fetch('/api/feedback', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: reply.id, helpful }),
+    }).catch(() => {});
   }
 
   if (!open) return null;
@@ -173,7 +200,50 @@ export function FeedbackModal({ appName, discordUrl }: FeedbackModalProps) {
           </button>
         </div>
 
-        {status === 'sent' ? (
+        {status === 'sent' && reply ? (
+          <div className="px-5 pb-6 pt-1">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>Quick answer</p>
+              <p className="text-sm mt-1.5 whitespace-pre-wrap">{reply.answer}</p>
+            </div>
+            <p className="text-[11px] text-[var(--text-sec)] mt-2">
+              That&apos;s an automatic answer from the game guide. Your message still went to the developer
+              {email.trim() ? ', who will reply by email if there is more to add.' : '.'}
+            </p>
+
+            <div className="mt-4 min-h-9 flex items-center gap-2" aria-live="polite">
+              {helped === null ? (
+                <>
+                  <span className="text-xs font-semibold mr-1">Did that answer it?</span>
+                  <button onClick={() => rate(true)} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border)] hover:bg-[var(--surface-2)]">
+                    Yes
+                  </button>
+                  <button onClick={() => rate(false)} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border)] hover:bg-[var(--surface-2)]">
+                    No
+                  </button>
+                </>
+              ) : helped ? (
+                <span className="text-xs text-[var(--text-sec)]">Glad that helped.</span>
+              ) : (
+                <span className="text-xs text-[var(--text-sec)]">
+                  Thanks, the developer will take a closer look.
+                  {discordUrl && (
+                    <> For a faster answer, <a href={discordUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: 'var(--accent)' }}>ask in the Discord</a>.</>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end mt-4">
+              <button onClick={reset} className="px-4 py-2 text-xs font-semibold rounded-lg border border-[var(--border)] hover:bg-[var(--surface-2)]">
+                Send another
+              </button>
+              <button onClick={() => setOpen(false)} className="px-4 py-2 text-xs font-semibold rounded-lg text-white hover:brightness-110" style={{ background: 'var(--accent)' }}>
+                Back to the game
+              </button>
+            </div>
+          </div>
+        ) : status === 'sent' ? (
           <div className="px-5 pb-6 pt-4 text-center">
             <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center text-xl text-white" style={{ background: 'var(--accent)' }}>✓</div>
             <p className="text-sm font-semibold mt-3">Got it. Thank you!</p>
@@ -258,7 +328,11 @@ export function FeedbackModal({ appName, discordUrl }: FeedbackModalProps) {
 
             <div className="flex items-center justify-between gap-3 pt-1">
               <span className="text-[10px] text-[var(--text-sec)]">
-                {message.length > 0 ? `${message.length}/2000` : 'Sends the page you’re on and your league’s season.'}
+                {message.length > 0
+                  ? `${message.length}/2000`
+                  : instantAnswers && kind === 'question'
+                    ? 'Most how-to questions get an answer right here.'
+                    : 'Sends the page you’re on and your league’s season.'}
               </span>
               <button
                 onClick={() => void submit()}
