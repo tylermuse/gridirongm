@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseAnswer } from '../src/lib/feedback/answer';
 import { HELP_SHEET } from '../src/lib/feedback/helpSheet';
+import { HELP_SHEET as HOOPS_HELP_SHEET } from '../apps/bs-basketball/src/lib/feedback/helpSheet';
 
 describe('feedback instant answers: parseAnswer', () => {
   it('reads a question with an answer', () => {
@@ -35,5 +36,10 @@ describe('feedback instant answers: help sheet', () => {
     expect(HELP_SHEET.length).toBeGreaterThan(2000);
     // ~4 chars per token: keep the sheet under roughly 6K tokens.
     expect(HELP_SHEET.length).toBeLessThan(24000);
+  });
+
+  it('keeps the BS Hoops sheet within the same budget', () => {
+    expect(HOOPS_HELP_SHEET.length).toBeGreaterThan(2000);
+    expect(HOOPS_HELP_SHEET.length).toBeLessThan(24000);
   });
 });
