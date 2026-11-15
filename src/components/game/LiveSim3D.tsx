@@ -36,7 +36,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b18d';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b18e';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 /** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used as-is by the scoring-play replay. */
 export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&v=${SIM_BUILD}`;
 /** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.

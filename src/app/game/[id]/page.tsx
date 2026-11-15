@@ -15,7 +15,7 @@ import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { LiveSim3D, useSim3DMode, readSim3DPref, sim3dTestArm } from '@/components/game/LiveSim3D';
 import { nextSnapSituation } from '@/lib/engine/scorebugSituation';
-import { clockSeconds } from '@/lib/engine/liveSim3d';
+import { clockSeconds, scoreBeforeTry } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { buildMatchupMetrics, rankForMetric } from '@/lib/engine/matchupRanks';
@@ -2342,6 +2342,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // The CPU's 4th-down kick is the next play: once the last play is over, the idle 3D sim lines up the punt / kick unit instead of the shotgun offense
   const kickNext = !xpPending && !kickoffPending && !!afterPlay && !!nextEvForSim
     ? (nextEvForSim.type === 'punt' ? 'punt' as const : nextEvForSim.type === 'field_goal_good' || nextEvForSim.type === 'field_goal_miss' ? 'fg' as const : null) : null;
+  // While a try lines up, the 3D scorebug shows the touchdown's points but not the try's: anchored on the try event, because the
+  // touchdown event's own score can be the pre-TD score (the precomputed engine adds the 6 after logging it)
+  const simLineupScore = !engineSnapshot && nextEvForSim?.type === 'extra_point' && !sim3dActive
+    ? scoreBeforeTry(nextEvForSim) : { homeScore: liveHomeScore, awayScore: liveAwayScore };
   const kickTeam: 'home' | 'away' = engineSnapshot?.awaitingKickoffChoice ? engineSnapshot.possession : (nextEvForSim?.possession ?? livePoss);
   const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? liveEngineState?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
   const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? liveEngineState?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
@@ -2528,7 +2532,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             awayPlayers={awayPlayers}
             clock={{ secs: clockSeconds(tickingTime), quarter: liveQuarter }}
             state={{ possession: kickoffPending ? kickTeam : livePoss, fieldPos: xpPending ? 85 : kickoffPending ? 35 : liveFieldPos, down: xpPending || kickoffPending ? 1 : liveDown, toGo: xpPending ? 15 : kickoffPending ? 10 : liveYtg, quarter: liveQuarter,
-              clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore,
+              clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), ...simLineupScore,
               ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : kickNext ? { form: kickNext } : {}),
               // the look the CPU defense is showing while the user picks a play: the 3D defense lines up in it
               ...(engineSnapshot?.defLook && !xpPending && !kickoffPending ? { look: engineSnapshot.defLook } : {}) }}
