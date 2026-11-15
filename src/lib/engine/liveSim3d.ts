@@ -189,10 +189,20 @@ function pointsScored(e: PlayEvent): number {
   if (isReturnTouchdown(e)) return 0;   // the other team's points: see toSimPlay
   if (e.type === 'field_goal_good') return 3;
   if (e.type === 'kickoff' || e.type === 'punt') return 0;   // older events: a return TD was credited to the other team after the event was logged
-  if (e.type === 'extra_point') return /GOOD/.test(e.description) && !/no good/i.test(e.description) ? 1 : 0;
+  if (e.type === 'extra_point') {
+    const good = /GOOD/.test(e.description) && !/no good/i.test(e.description);
+    return good ? (TWO_POINT_RE.test(e.description) ? 2 : 1) : 0;   // "Two-point conversion is GOOD!" is an extra_point event too
+  }
   if (TWO_POINT_RE.test(e.description) && e.isScoring) return 2;
   if (e.type === 'touchdown' || e.isScoring) return 6;   // the XP is its own event
   return 0;
+}
+
+/** The score on the board while the try (XP / two-point) lines up: the try event's score minus whatever the try added.
+ *  The engines differ on whether a touchdown event's own score already includes its 6, so the try event is the reliable anchor. */
+export function scoreBeforeTry(tryEv: PlayEvent): { homeScore: number; awayScore: number } {
+  const pts = pointsScored(tryEv);
+  return { homeScore: tryEv.homeScore - (tryEv.possession === 'home' ? pts : 0), awayScore: tryEv.awayScore - (tryEv.possession === 'away' ? pts : 0) };
 }
 
 export function toSimPlay(
@@ -213,6 +223,11 @@ export function toSimPlay(
   const keptRec = keptAt >= 0 ? namesIn(e.description.slice(keptAt), offense).pop()?.p : undefined;
   const pts = pointsScored(e);
   const retPts = isReturnTouchdown(e) ? 7 : 0;
+  // A scrimmage touchdown followed by its try: anchor on the try (the precomputed engine logs the TD before adding its 6, so
+  // "event score - 6" showed the offense 6 short through the TD and the XP line-up)
+  const anchor = pts === 6 && next?.type === 'extra_point' && next.possession === e.possession ? scoreBeforeTry(next) : null;
+  const preHome = anchor ? anchor.homeScore - (e.possession === 'home' ? 6 : 0) : e.homeScore - (e.possession === 'home' ? pts : retPts);
+  const preAway = anchor ? anchor.awayScore - (e.possession === 'away' ? 6 : 0) : e.awayScore - (e.possession === 'away' ? pts : retPts);
   return {
     type: 'bsgm:play',
     id: e.id,
@@ -223,8 +238,8 @@ export function toSimPlay(
       toGo: e.yardsToGo,
       quarter: e.quarter,
       clock: clockSeconds(e.timeStr),
-      homeScore: e.homeScore - (e.possession === 'home' ? pts : retPts),
-      awayScore: e.awayScore - (e.possession === 'away' ? pts : retPts),
+      homeScore: preHome,
+      awayScore: preAway,
     },
     res,
     ...(e.defLook ?? e.userDefCall ? { look: e.defLook ?? e.userDefCall } : {}),

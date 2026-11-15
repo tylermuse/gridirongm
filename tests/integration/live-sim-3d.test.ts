@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSimResult, toSimPlay, toSimTeam, clockSeconds, toSimLineup, skinToneFor, whoMadeThePlay } from '@/lib/engine/liveSim3d';
+import { toSimResult, toSimPlay, toSimTeam, clockSeconds, toSimLineup, skinToneFor, whoMadeThePlay, scoreBeforeTry } from '@/lib/engine/liveSim3d';
 import portraitSkin from '@/lib/portraits/portraitSkin.json';
 import { portraitFileFor } from '@/lib/portraits/portraitPool';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
@@ -290,5 +290,19 @@ describe('team pants', () => {
     expect(toSimTeam(dal, 'away').pants).toBe('#8a97a4');
     // the fictional default-league SF club keeps its own kit
     expect(toSimTeam({ ...sf, name: 'Fog' }, 'away').pants).toBe('#f4f1ea');
+  });
+});
+
+describe('score around a touchdown and its try', () => {
+  // the precomputed engine logs the TD with the pre-TD score, then adds the 6; the try event carries the full score
+  const td = ev({ type: 'touchdown', description: 'runs it in', fieldPos: 95, yardsGained: 5, homeScore: 10, awayScore: 3, possession: 'home', isScoring: true });
+  const xp = ev({ id: 2, type: 'extra_point', description: 'Extra point is GOOD.', homeScore: 17, awayScore: 3, possession: 'home' });
+  it('the touchdown snap shows the score before the TD', () => {
+    expect(toSimPlay(td, undefined, xp)!.pre).toMatchObject({ homeScore: 10, awayScore: 3 });
+  });
+  it('the try line-up shows the TD but not the try', () => {
+    expect(scoreBeforeTry(xp)).toEqual({ homeScore: 16, awayScore: 3 });
+    expect(scoreBeforeTry(ev({ type: 'extra_point', description: 'Extra point is no good!', homeScore: 16, awayScore: 3, possession: 'home' }))).toEqual({ homeScore: 16, awayScore: 3 });
+    expect(scoreBeforeTry(ev({ type: 'extra_point', description: 'Two-point conversion is GOOD! HAR goes for two and gets it!', homeScore: 18, awayScore: 3, possession: 'home' }))).toEqual({ homeScore: 16, awayScore: 3 });
   });
 });

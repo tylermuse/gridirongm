@@ -180,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b18d'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b18e'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -697,7 +697,7 @@ const P = (...k)=>({type:'path', k});
 const F = (target, start, speed, off=[0,0], reach=0.9)=>({type:'follow', target, start, speed, off, reach});
 
 let preSnap=false, actors=[], O={}, D={}, T0=0, playT=0, events=[], ballPlan=[], cameraTarget=null, play=null, running=false;
-window.__simDbg = ()=>({actors, O, D, playT, running});   /* console/QA access */
+window.__simDbg = ()=>({actors, O, D, playT, running, setupFormation, play, G});   /* console/QA access */
 
 function clearPlayers(){ actors.forEach(a=>scene.remove(a.root)); actors=[]; refObjs.forEach(r=>scene.remove(r.root)); refObjs=[]; }
 let refObjs = [];
@@ -1259,7 +1259,7 @@ function choreograph(res){
     O.rb.behav = P([snap,1.6,z0-6.6],[snap+.55,2.6,z0-5.2],[snap+.95,3.4,z0-5],[snap+1.9,9.5,z0-2.5],[snap+3.6,17,z0+5.5]);   // check, then release to the flat
     let rec, catchX, Yc, routeKeys;
     let Y = res.yards||0; td = res.kind==='complete' && Y>=toGoal; if(td) Y = toGoal;
-    if(deep){ rec = res.recKey==='wrL'? O.wrL : res.recKey==='wrR'? O.wrR : Math.random()<.5 ? O.wrL : O.wrR; Yc = res.kind==='complete'? Math.max(12, Math.min(Y, Y-R(1,6), 24+R(0,4))) : R(18,27); if(td) Yc=Math.min(Yc, toGoal+R(0,6));
+    if(deep){ rec = res.recKey==='wrL'? O.wrL : res.recKey==='wrR'? O.wrR : Math.random()<.5 ? O.wrL : O.wrR; Yc = res.kind==='complete'? Math.max(12, Math.min(Y, Y-R(1,6), 24+R(0,4))) : R(18,27); if(td) Yc=Math.max(Math.min(Yc, toGoal+R(0,6)), toGoal+R(.8,3));   /* a deep TD is caught IN the end zone: the leaping catch has no run after it, so a catch short of the line left him celebrating at the 1 (Tyler 11/15) */
       Yc = Math.min(Yc, toGoal + 7.5);   // catch point stays inside the end zone
       catchX = rec===O.wrL ? -17.5 : 17.5; }
     else if(scn){ // screen: the back slips out behind the rush and takes a soft throw 2 yd behind the line, blockers out in front
