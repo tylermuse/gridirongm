@@ -180,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b18g'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b18h'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1717,6 +1717,22 @@ function choreograph(res){
         a.behav = P([playT, a.x, a.z], [Math.max(playT+.15, t), p3[0]-ux*back, p3[1]-uz*back]);
         ev(t, ()=>{ if(a.down!=null) return; a.face=Math.atan2(p3[0]-a.x, p3[1]-a.z); a.down=playT; a.fallDir=1; a.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side}; sndThump(.45,.3); }); };
       const angOf = a => Math.atan2(p3[0]-a.x, p3[1]-a.z);
+      const fret = !kept && !selfKeep && !selfRec && res.fumbleRet ? res.fumbleRet : null;   /* the defense picks it up and runs (the engine's "Returned N yards", or a scoop-and-score) */
+      if(fret){
+        /* scoop on the run, then up the field the other way: the offense's own end zone is at -z; a TD finishes 2 yd deep in it */
+        const zEnd = fret.td? -52.5 : Math.max(-49.5, p3[1] - Math.max(1, fret.yards)), xEnd = cx(p3[0]*.55 + R(-3,3)), runT = Math.hypot(xEnd-p3[0], zEnd-p3[1]) / Math.min(8.4, MAX_SPRINT*.98);   /* within the sim's sprint cap, so he really gets there */
+        rc.engage=null; rc.wrap=null; rc.faceLock=null; rc.truck=null; rc.whiff=true;
+        rc.behav = P([playT, rc.x, rc.z], [tLand-.05, p3[0]+R(-.3,.3), p3[1]+.4], [tLand+runT, xEnd, zEnd]);
+        ev(tLand-.05, ()=>{ ballPlan.forEach(sg=>{ if(sg.t1>1e8) sg.t1 = playT; }); ballPlan.push({t0:playT, t1:1e9, held:rc}); });   /* scooped, no dive */
+        const escort = D.all.filter(a=>a!==rc && a.down==null && !bigD.includes(a)).sort(byDist(p3)).slice(0,2);
+        escort.forEach((a,i)=>{ a.engage=null; a.wrap=null; a.faceLock=null; a.behav={type:'follow', target:rc, off:[i? 2.2 : -2.2, 1.2], speed:8.6, start:tLand}; });
+        O.all.filter(a=>a!==carrier && a.down==null).sort(byDist(p3)).slice(0,3).forEach(a=>{ a.engage=null; a.wrap=null; a.faceLock=null; a.behav={type:'follow', target:rc, off:[0,0], speed:7.6, start:tLand+.25}; });   /* the offense chases and loses ground */
+        const tStop = tLand + runT;
+        if(fret.td) ev(tStop, ()=>{ rc.behav=null; rc.celebrate=playT; rc.celebStyle = window.__tdStyle || pickTdStyle(); sndRoar(.9,.4,2.5,4,'roar'); });
+        else ev(tStop, ()=>{ if(rc.down==null){ rc.down=playT; rc.fallDir=1; rc.behav=null; sndThump(.6,.3); } });
+        res.fumbleZ = zEnd; play.fumbleRec = rc; play.fumbleTd = !!fret.td;
+        play.tEnd = Math.max(play.tEnd, tStop + (fret.td? 2.4 : 1.2)); play.whistleT = Math.max(play.whistleT ?? 0, tStop + (fret.td? .3 : .2));
+        return; }
       if(!selfRec && !selfKeep) dive(rc, tDive, 1.25, 1, angOf(rc));
       ev(tLand+.05, ()=>{ ballPlan.forEach(sg=>{ if(sg.t1>1e8) sg.t1 = playT; }); ballPlan.push({t0:playT, t1:1e9, held:rc, off:[0,.22,.3]}); });   /* he's on it */
       /* make it obvious whose ball it is (Tyler: it looked like the offense fell on it): only DEFENDERS pile on, after the man
@@ -2632,6 +2648,7 @@ function finishPlay(){
   } else if(r.fumble && play.fumbled && !r.kept){
     const rn = play.fumbleRec && play.fumbleRec.num!=null? `#${play.fumbleRec.num} ` : '';
     text= `${r.kind==='sack'? 'Strip-sack!' : 'Fumble!'} ${rn}recovers · ${team(1-G.off).id} ball`; cls='big';
+    if(play.fumbleTd){ text = `Scoop and score! ${rn}${team(1-G.off).id} touchdown`; G.score[1-G.off] += EMBED? 6 : 7; }   /* in-game the try is its own play */
     const at = Math.round(G.fieldPos + ((r.fumbleZ ?? (G.fieldPos-50)) - (G.fieldPos-50)));   /* spot of the recovery, offense yards */
     const newFP = Math.max(1, Math.min(99, 100 - at));
     log(`${t.id}: ${r.kind==='sack'? 'strip-sack, fumble' : r.kind==='complete'? 'fumble after the catch,' : 'fumble,'} recovered by ${team(1-G.off).id} at the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);

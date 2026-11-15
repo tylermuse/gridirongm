@@ -24,6 +24,8 @@ export interface SimPlayResult {
   /** the play ends in a lost fumble (the engine logs it as the next event): a run or a catch stripped at the tackle, or a
    *  strip-sack — the ball squirts loose and the defense falls on it */
   fumble?: boolean;
+  /** with fumble: the defense ran it back (the fumble line says "Returned N yards …"); td: a scoop-and-score */
+  fumbleRet?: { yards: number; td?: boolean };
   /** with fumble: the OFFENSE fell on it (told in the play's own line, "… FUMBLE! … falls on it. Offense keeps it.") — no turnover */
   kept?: boolean;
   /** kickoff: the receiving team's yard line where the return ended / a touchback / a return touchdown */
@@ -217,7 +219,12 @@ export function toSimPlay(
   // The engine logs a lost fumble as its own event right after the run / sack / catch ("Fumble! X loses the ball — recovered
   // by Y"): picture both as one play — it ends with the strip and the defense on the ball.
   const fumbleNext = !!next && next.type === 'fumble' && (res.kind === 'run' || res.kind === 'sack' || res.kind === 'complete') && !e.isScoring;
-  if (fumbleNext) res.fumble = true;
+  if (fumbleNext) {
+    res.fumble = true;
+    const ret = /Returned (\d+) yards?/i.exec(next!.description);
+    const td = /SCOOP AND SCORE|for a TOUCHDOWN/i.test(next!.description) || !!next!.isScoring;
+    if (ret || td) res.fumbleRet = { yards: ret ? parseInt(ret[1], 10) : 0, ...(td ? { td: true } : {}) };   // Tyler: a scoop-and-score was shown as a man falling on it
+  }
   // …or the ball came out and the offense fell on it: same picture, but the offense recovers and keeps the ball.
   const keptAt = !fumbleNext && !e.isScoring && (res.kind === 'run' || res.kind === 'sack' || res.kind === 'complete') ? e.description.search(KEPT_FUMBLE_RE) : -1;
   if (keptAt >= 0) { res.fumble = true; res.kept = true; }
