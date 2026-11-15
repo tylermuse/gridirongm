@@ -313,3 +313,15 @@ describe('a called screen that is picked off', () => {
     expect(r).toMatchObject({ kind: 'int', style: 'screen', depth: 'short' });
   });
 });
+
+describe('fumble returns', () => {
+  const run = ev({ type: 'run', description: 'D. Singletary runs for 3 yards.', yardsGained: 3, fieldPos: 71, possession: 'home' });
+  it('a scoop-and-score is run back, not fallen on', () => {
+    const f = ev({ id: 2, type: 'fumble', description: 'Fumble! D. Singletary has it punched out — recovered by C. Wisniewski! SCOOP AND SCORE! Returned 36 yards for a TOUCHDOWN!', possession: 'home', isScoring: true });
+    expect(toSimPlay(run, undefined, f)!.res).toMatchObject({ fumble: true, fumbleRet: { yards: 36, td: true } });
+  });
+  it('a plain recovery stays a recovery', () => {
+    const f = ev({ id: 2, type: 'fumble', description: 'Fumble! D. Singletary loses the ball — recovered by C. Wisniewski.', possession: 'home' });
+    expect(toSimPlay(run, undefined, f)!.res.fumbleRet).toBeUndefined();
+  });
+});
