@@ -1141,7 +1141,7 @@ export function generateTeamSpotlight(
 
   // ─── 4. Cap Situation ───
   const expiringContracts = activeRoster.filter(p => p.contract.yearsLeft <= 1).length;
-  const deadCapTotal = team.deadCap?.reduce((s, d) => s + d.amount, 0) ?? 0;
+  const deadCapTotal = team.deadCap?.filter(d => !d.isCoaching).reduce((s, d) => s + d.amount, 0) ?? 0;
   const capTemplates: (() => DebateExchange[])[] = capSpace > 30 ? [
     () => [
       { speakerId: 'stats' as const, text: `Cap situation: $${capSpace}M in space on a $${team.salaryCap}M cap (${capPct}% used). That's significant flexibility. ${expiringContracts} contracts expiring${deadCapTotal > 0 ? `, $${Math.round(deadCapTotal * 10) / 10}M in dead cap` : ''}.` },
