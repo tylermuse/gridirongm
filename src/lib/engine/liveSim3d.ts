@@ -140,6 +140,8 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
         ...(pickSix ? { td: true } : {}),
       };
       if (BATTED_RE.test(e.description)) return { kind: 'int', depth: 'short', batted: true, ...end };
+      // a called screen that was picked: the throw to the back in the flat is jumped (Tyler: "I called a screen, but he threw a short pass and it was picked")
+      if (SCREEN_RE.test(e.description)) return { kind: 'int', depth: 'short', style: 'screen', ...end };
       // deep or short from where the engine says it was caught (older events: from the words)
       const deep = from != null ? toGoal - from >= 15 : /deep|downfield|long/i.test(e.description);
       return { kind: 'int', depth: deep ? 'deep' : 'short', ...end };

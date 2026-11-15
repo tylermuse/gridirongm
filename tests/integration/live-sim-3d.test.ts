@@ -306,3 +306,10 @@ describe('score around a touchdown and its try', () => {
     expect(scoreBeforeTry(ev({ type: 'extra_point', description: 'Two-point conversion is GOOD! HAR goes for two and gets it!', homeScore: 18, awayScore: 3, possession: 'home' }))).toEqual({ homeScore: 16, awayScore: 3 });
   });
 });
+
+describe('a called screen that is picked off', () => {
+  it('stays a screen in the sim', () => {
+    const r = toSimResult(ev({ type: 'interception', description: '🛡️ Screen — INTERCEPTED! J. Smith picks off D. Prescott.', returnFrom: 70, returnTo: 75, returnYards: 5 }));
+    expect(r).toMatchObject({ kind: 'int', style: 'screen', depth: 'short' });
+  });
+});
