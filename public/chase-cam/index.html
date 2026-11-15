@@ -180,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b18f'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b18g'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -283,7 +283,7 @@ function setLighting(mode){ lightMode=mode; const night = mode==='night';
   sun.color.set(night?'#eef3ff':'#fff1d6'); sunOff = night? [-10,78,-14] : [-25,60,-30];
   renderer.toneMappingExposure = night? 1.05 : .96;
   (window.__floods||[]).forEach(f=>{ f.material.color.set(night?'#ffffff':'#fff6d8'); });
-  [crowd.seats,crowd.torsos,crowd.heads].forEach(m=>m.material.color.set(night?'#6c707b':'#c4c4c4'));   /* the stands catch only the floodlights' spill */
+  [crowd.seats,crowd.torsos,crowd.heads,crowd.hair].forEach(m=>m.material.color.set(night?'#6c707b':'#c4c4c4'));   /* the stands catch only the floodlights' spill */
   concreteMeshes.forEach(m=>m.material.color.set(night?'#555b68':'#ffffff'));
   structMats.forEach(m=>m.color.copy(m.userData.day).multiplyScalar(night?.5:1));
   hemi.intensity = (night? .42 : LIGHT.hemi) * LEGACY_K; sun.intensity = (night? 1.5 : LIGHT.sun) * LEGACY_K;   /* night: a dim, cool fill for the bowl; the 'sun' is the floodlight key on the field */
@@ -458,26 +458,49 @@ const crowd = (()=>{
     for(const g of parts){ pos.set(g.attributes.position.array,o*3); nor.set(g.attributes.normal.array,o*3); o+=g.attributes.position.count; } const out=new THREE.BufferGeometry(); out.setAttribute('position',new THREE.BufferAttribute(pos,3)); out.setAttribute('normal',new THREE.BufferAttribute(nor,3)); return out; };
   const bx=(w,h,d,x,y,z)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
   const seatGeo=mergeGeo([bx(.42,.07,.38,0,.42,.04), bx(.42,.4,.06,0,.65,-.17)]);
-  const torsoGeo=mergeGeo([bx(.42,.56,.25,0,.74,-.02), bx(.34,.12,.4,0,.5,.1)]);
-  const headGeo=new THREE.IcosahedronGeometry(.115,1).scale(1,1.12,1).translate(0,1.17,0);
-  const MAXN=60000; const seats=new THREE.InstancedMesh(seatGeo,new THREE.MeshLambertMaterial(),MAXN), torsos=new THREE.InstancedMesh(torsoGeo,crowdMat(),MAXN), heads=new THREE.InstancedMesh(headGeo,crowdMat(),MAXN);
-  const aPhase=new THREE.InstancedBufferAttribute(new Float32Array(MAXN),1); torsoGeo.setAttribute('aPhase',aPhase); headGeo.setAttribute('aPhase',aPhase);
+  /* fans: a tapered torso with shoulders, arms resting toward the lap and a lap (not one box), a low-poly head and a hair / cap shell. The torso
+     carries a baked top-to-bottom shading ramp, so rows read as people in shadow under the canopy rather than flat coloured blocks (Tyler 11/15: "why does the crowd look so fake?") */
+  const arm=(sx)=>new THREE.BoxGeometry(.085,.36,.1).rotateX(-.55).rotateZ(sx*.12).translate(sx*.205,.68,.07);
+  const torsoGeo=mergeGeo([new THREE.CylinderGeometry(.2,.155,.5,6,1,false).scale(1,1,.62).translate(0,.77,-.02), arm(1), arm(-1), bx(.33,.11,.38,0,.5,.12)]);
+  { const p=torsoGeo.attributes.position, col=new Float32Array(p.count*3);
+    for(let i=0;i<p.count;i++){ const k=.68+.32*Math.min(1,Math.max(0,(p.getY(i)-.45)/.55)); col[i*3]=col[i*3+1]=col[i*3+2]=k; }
+    torsoGeo.setAttribute('color', new THREE.BufferAttribute(col,3)); }
+  const headGeo=new THREE.IcosahedronGeometry(.105,0).scale(.92,1.12,1).translate(0,1.16,.01);
+  const hairGeo=new THREE.SphereGeometry(.112,6,3,0,Math.PI*2,0,Math.PI*.5).scale(.95,1.0,1.02).translate(0,1.175,-.005);
+  const MAXN=60000; const tMat=crowdMat(); tMat.vertexColors=true;
+  const seats=new THREE.InstancedMesh(seatGeo,new THREE.MeshLambertMaterial(),MAXN), torsos=new THREE.InstancedMesh(torsoGeo,tMat,MAXN), heads=new THREE.InstancedMesh(headGeo,crowdMat(),MAXN), hair=new THREE.InstancedMesh(hairGeo,crowdMat(),MAXN);
+  const aPhase=new THREE.InstancedBufferAttribute(new Float32Array(MAXN),1); torsoGeo.setAttribute('aPhase',aPhase); headGeo.setAttribute('aPhase',aPhase); hairGeo.setAttribute('aPhase',aPhase);
+  const fanCat=new Uint8Array(MAXN), fanShade=new Float32Array(MAXN), fanNeutral=new Uint8Array(MAXN), fanCap=new Uint8Array(MAXN);
   let seed=77; const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
   const shirt=['#1f3a68','#1f3a68','#1f3a68','#1f3a68','#263b5e','#2b2b2b','#333333','#3b3f48','#3b3f48','#6d7f99','#8a5a3c','#d8d3c8','#b8b2a6','#c4561c','#5a5a5a','#1c2a44','#444c5a','#e8b33a','#7a3b6e','#2f5e3b','#2b2b2b','#4a4e58','#2b2b2b','#1f3a68','#5c6370'];
-  const skin=['#f1c7a5','#e0ac85','#c68a62','#9a6440','#6b4129','#3f281b','#1f3a68','#d8d8d4'];
+  const skin=['#f1c7a5','#e0ac85','#c68a62','#9a6440','#6b4129','#3f281b','#d2a07c','#8a5636'];
+  const neutral=['#2b2b2b','#3a3d44','#6a6d74','#8c8f96','#c9c6be','#e6e2d8','#f2f0ea','#3c4d6b','#5b7397','#6b7a4f','#8a3b40','#9a7a58','#c25a2a','#d8b04a'];
+  const hairCol=['#1a1410','#2a1d14','#3b2a1c','#141414','#5a4330','#7a6a58','#20201f'];
   const seatCol=[new THREE.Color('#22386a'), new THREE.Color('#9aa2ac')];
   const tmp=new THREE.Object3D(), c=new THREE.Color(); let nS=0, nF=0;
   const liteCrowd = new URLSearchParams(location.search).get('crowd')==='0';   /* ?crowd=0 — skip the 3D crowd (perf fallback / headless tests) */
   for(const [name,t] of Object.entries(liteCrowd? {} : TIERS)){ for(let r=0;r<t.rows;r++){ const d=t.d0+r*t.depth+t.depth*.5, y=t.y0+(r+1)*t.rise;
     for(const [x,z,th] of perimeter(d,.55)){ const along=(x+z*3.1); if(Math.abs(((along/13)%1+1)%1-.5)<.04) continue;   /* aisles */
       const clump=.5+.5*Math.sin(x*.21+r*.9)*Math.sin(z*.047-r*.31);
-      if(rnd() < .9-clump*.14){ if(nF>=MAXN) continue; const sc=.9+rnd()*.18, stand=rnd()<.05? .4:0;
-        tmp.position.set(x,y+stand,z); tmp.rotation.set(0,th+(rnd()-.5)*.35,0); tmp.scale.set(sc,sc*(.95+rnd()*.12),sc); tmp.updateMatrix(); torsos.setMatrixAt(nF,tmp.matrix); tmp.rotation.set(0,th,0); tmp.scale.setScalar(sc); tmp.updateMatrix(); heads.setMatrixAt(nF,tmp.matrix);
-        c.set(shirt[(rnd()*shirt.length)|0]).multiplyScalar(.55+rnd()*.3); torsos.setColorAt(nF,c); c.set(skin[(rnd()*skin.length)|0]).multiplyScalar(.8); heads.setColorAt(nF,c); aPhase.array[nF]=rnd(); nF++; }
+      if(rnd() < .9-clump*.14){ if(nF>=MAXN) continue; const kid=rnd()<.03, sc=(kid? .72 : .86+rnd()*.26), stand=rnd()<.07? .42:0;
+        const jx=(rnd()-.5)*.14, jz=(rnd()-.5)*.1, yaw=th+(rnd()-.5)*.6, lean=(rnd()-.5)*.22+(rnd()<.15? .18:0);   /* nobody sits on a grid: a shuffle in the seat, a turn to a neighbour, a lean in */
+        tmp.position.set(x+jx,y+stand,z+jz); tmp.rotation.set(lean,yaw,(rnd()-.5)*.08); tmp.scale.set(sc*(.9+rnd()*.22),sc*(.92+rnd()*.14),sc); tmp.updateMatrix(); torsos.setMatrixAt(nF,tmp.matrix);
+        tmp.rotation.set(lean*.6+(rnd()-.5)*.25,yaw+(rnd()-.5)*.5,0); tmp.scale.setScalar(sc); tmp.updateMatrix(); heads.setMatrixAt(nF,tmp.matrix); hair.setMatrixAt(nF,tmp.matrix);
+        const u=rnd(); fanCat[nF]= u<.36? 0 : u<.52? 1 : u<.64? 2 : 3; fanNeutral[nF]=(rnd()*neutral.length)|0; fanShade[nF]=.78+rnd()*.3; fanCap[nF]= rnd()<.16? 1 : 0;
+        c.set(skin[(rnd()*skin.length)|0]).multiplyScalar(.95+rnd()*.12); heads.setColorAt(nF,c);
+        c.set(hairCol[(rnd()*hairCol.length)|0]); hair.setColorAt(nF,c); aPhase.array[nF]=rnd(); nF++; }
       else { if(nS>=MAXN) continue; tmp.position.set(x,y,z); tmp.rotation.set(0,th,0); tmp.scale.setScalar(1); tmp.updateMatrix(); seats.setMatrixAt(nS,tmp.matrix); seats.setColorAt(nS, (name==='lower'? r>25 : r<4)? seatCol[1]:seatCol[0]); nS++; } } } }
-  for(const m of [seats,torsos,heads]){ m.material.color.set('#c4c4c4'); m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true; m.receiveShadow=false; m.castShadow=false; m.frustumCulled=false; scene.add(m); }
-  seats.count=nS; torsos.count=nF; heads.count=nF; window.__crowdCount={seats:nS, fans:nF};
-  return {seats,torsos,heads}; })();
+  for(const m of [seats,torsos,heads,hair]){ m.material.color.set('#c4c4c4'); m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true; m.receiveShadow=false; m.castShadow=false; m.frustumCulled=false; scene.add(m); }
+  seats.count=nS; torsos.count=nF; heads.count=nF; hair.count=nF; window.__crowdCount={seats:nS, fans:nF};
+  /* shirts follow the teams on the field: about half the crowd in the home team's colours, some in its second colour, a visiting section's worth in
+     the away colours, the rest in everyday neutrals (not a rainbow of random colours). Re-run when the teams change. */
+  let colKey='';
+  const recolor=()=>{ const A=team(0), B=team(1), key=[A.jersey,A.num,B.jersey].join('|'); if(key===colKey) return; colKey=key;
+    const pal=[new THREE.Color(A.jersey), new THREE.Color(A.num), new THREE.Color(B.jersey)];
+    for(let i=0;i<nF;i++){ const k=fanCat[i]; if(k<3) c.copy(pal[k]); else c.set(neutral[fanNeutral[i]]); c.multiplyScalar(fanShade[i]); torsos.setColorAt(i,c);
+      if(fanCap[i]){ c.copy(pal[k===2? 2 : 0]).multiplyScalar(.75); hair.setColorAt(i,c); } }
+    torsos.instanceColor.needsUpdate=true; hair.instanceColor.needsUpdate=true; };
+  return {seats,torsos,heads,hair,recolor}; })();
 const boards=[];
 // video boards hanging under the canopy at both ends
 [-1,1].forEach(sz=>{ const vb=new THREE.Mesh(new THREE.BoxGeometry(34,11,1), new THREE.MeshLambertMaterial({color:'#11151c'}));
@@ -485,7 +508,7 @@ const boards=[];
   const bc=document.createElement('canvas'); bc.width=1024; bc.height=300;
   const scr=new THREE.Mesh(new THREE.PlaneGeometry(32,9.4), new THREE.MeshBasicMaterial({map:canvasTex(bc)})); scr.userData.c=bc;
   scr.position.set(0,32,sz*(BOWL.Z+30)-sz*.55); if(sz>0) scr.rotation.y=Math.PI; scene.add(scr); boards.push(scr); });
-function paintBoards(){ for(const b of boards){ const c=b.userData.c, g=c.getContext('2d'); const A=team(0), B=team(1);
+function paintBoards(){ crowd.recolor(); for(const b of boards){ const c=b.userData.c, g=c.getContext('2d'); const A=team(0), B=team(1);
   g.fillStyle='#0b1220'; g.fillRect(0,0,1024,300); const m=Math.floor(G.clock/60), s=String(G.clock%60).padStart(2,'0');
   const panel=(x,t,sc,on)=>{ g.fillStyle=t.jersey; g.fillRect(x,40,300,220); g.fillStyle=t.num; g.font='800 110px "Saira Condensed", Arial'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(t.id, x+150, 110); g.font='800 120px "Saira Condensed", Arial'; g.fillText(String(sc), x+150, 215); if(on){ g.fillStyle='#ffd23f'; g.beginPath(); g.arc(x+270,70,12,0,7); g.fill(); } };
   panel(40, A, G.score[0], G.off===0); panel(684, B, G.score[1], G.off===1);
@@ -2394,7 +2417,7 @@ if(LOOK2 && POST.on) import('three/addons/postprocessing/SSAOPass.js').then(({SS
     const au=renderer.shadowMap.autoUpdate; renderer.shadowMap.autoUpdate=false; render0(...a); renderer.shadowMap.autoUpdate=au; };   /* the prepass is a second renderer.render(): without this it re-rendered the whole shadow map too */
   /* the prepass skips what cannot matter to it: the 180k crowd instances (the concrete tier under them still writes depth for the focus blur), the sky, the turf grain overlay.
      (Stock SSAOPass walks the whole scene graph twice a frame to hide points/lines; this scene has none.) */
-  const skip=[crowd.seats, crowd.torsos, crowd.heads, sky, grain].filter(Boolean), was=[];
+  const skip=[crowd.seats, crowd.torsos, crowd.heads, crowd.hair, sky, grain].filter(Boolean), was=[];
   /* One override material drawn on skinned and unskinned meshes alike makes three.js re-resolve its shader program every time the draw list flips between the two
      (hundreds of times a frame here: ~20 ms of CPU). Players live on layer 1, so the prepass draws the stadium and the players in two sweeps, each with its own material. */
   const nmSkin=ao.normalMaterial.clone(), ro0=ao.renderOverride.bind(ao);
