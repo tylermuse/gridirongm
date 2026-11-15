@@ -180,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b18e'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b18f'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -984,7 +984,7 @@ function choreograph(res){
   let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, holdOn=null, tHole=0, tackleAtFn=null, play_oob=false;
   const climbed = new Set();   /* backers picked up by a climbing blocker on a run: they don't join the pursuit until they shed */
 
-  const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = (res.kind==='complete' || res.kind==='incomplete') && res.style==='screen';   /* an incomplete screen is still thrown to the back in the flat */
+  const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = (res.kind==='complete' || res.kind==='incomplete' || res.kind==='int') && res.style==='screen';   /* an incomplete screen is still thrown to the back in the flat */
   const runBlock = isRun;   /* a QB scramble is blocked like a run: he takes the snap and goes straight at the line, slides to the gap, then upfield */
   // eyes downfield: linemen never turn around, DL stay square while engaged, DBs backpedal before turning to run
   O.ol.forEach(a=>a.faceLock={angle:0, until:99});
@@ -1271,7 +1271,7 @@ function choreograph(res){
     /* a fumble after the catch only counts once he has it secured and is a runner: catch it short of the spot, then a few strides
        (4+ yards, ~0.6 s+) before the hit that punches it out — anything sooner is an incompletion, not a fumble (Tyler) */
     if(res.fumble && res.kind==='complete' && !td) Yc = Math.max(scn? Yc : -1.5, Math.min(Yc, Y - (deep? 6 : 4)));
-    if(res.kind==='int' && res.catchAt!=null && !bat) Yc = clamp(toGoal - res.catchAt - (deep? .6 : .9), 1, toGoal + 7.5);   /* the game says where the pick was caught (res.catchAt: the intercepting team's yard line) — the return to res.endAt starts there, so its length is the engine's too */
+    if(res.kind==='int' && res.catchAt!=null && !bat && !scn) Yc = clamp(toGoal - res.catchAt - (deep? .6 : .9), 1, toGoal + 7.5);   /* the game says where the pick was caught (res.catchAt: the intercepting team's yard line) — the return to res.endAt starts there, so its length is the engine's too */
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc;
     /* Comeback / hitch (reference: DAL @ IND on FOX, #88 at the Colts 40, Tyler 11/8): he pushes upfield, plants, comes back to the
        ball facing the QB, and the corner who was on top of him drives down and wraps him at the catch — no run after it */
@@ -2642,7 +2642,12 @@ function finishPlay(){
     const num = play.carrier? ' by number '+(play.carrier.number||'') : '';
     const words = play.td? (r.kind==='int'? `Pick six! Touchdown, ${team(1-G.off).name}!` : `Touchdown, ${t.name}!`) : r.kind==='fg'? (r.xp? (r.good? `The extra point is good.` : `The extra point is no good.`) : r.good? `The kick is good.` : `The kick is no good.`) : r.kind==='int'? `Pass intercepted by ${team(G.off).name}.` : r.kind==='sack'? `Quarterback sacked.` : r.kind==='incomplete'? `Pass incomplete.` : r.kind==='punt'? `Punt.` : text.replace('·',',').replace('−','minus ').replace('+','gain of ');
     setTimeout(()=>sndSay(words), 500); }
-  setTimeout(()=>{ setupFormation(); setBusy(false); renderBug(); }, EMBED? 700 : 1500/G.speed + 300);
+  /* in-game, a made XP / FG is followed by the scoring team's kickoff: line the kick unit up at its 35 straight away. Lining up a scrimmage
+     formation here showed a fake line-up that the kickoff then replaced (Tyler 11/15: "a fake lineup for the kickoff, then after a pause it reloads") */
+  const koNext = EMBED && r.kind==='fg' && (r.xp || r.good);
+  if(koNext && !r.xp) G.off = 1-G.off;   /* the FG branch above handed the ball over for the standalone page's own flow; the scorer kicks */
+  if(koNext){ G.fieldPos = 35; G.down = 1; G.toGo = 10; }
+  setTimeout(()=>{ setupFormation(koNext? 'kickoff' : undefined); setBusy(false); renderBug(); }, EMBED? 700 : 1500/G.speed + 300);
   function advance(y){
     G.fieldPos = Math.max(1, Math.min(99, G.fieldPos + y)); G.toGo -= y;
     if(G.toGo<=0){ G.down=1; G.toGo=Math.min(10,100-G.fieldPos); return true; }
