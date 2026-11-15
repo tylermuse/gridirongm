@@ -145,8 +145,9 @@ export async function GET(request: NextRequest) {
 
       timed('recentEvents', service.from('analytics_events')
         .select('event, properties, created_at, user_id')
-        // hovers + time-on-page rows would bury everything else in the live feed
-        .not('event', 'in', '(ui_hover,page_engagement)')
+        // hovers + time-on-page rows would bury everything else in the live feed;
+        // instant-answer bookkeeping shows up under "Player feedback" instead
+        .not('event', 'in', '(ui_hover,page_engagement,feedback_ai,feedback_rating)')
         .order('created_at', { ascending: false })
         .limit(50), timings),
 
