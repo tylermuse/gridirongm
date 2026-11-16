@@ -1,5 +1,6 @@
 'use client';
 
+import { simQuarterLabel } from './simQuarterLabel';
 import {
   DEFENSIVE_LOOKS, LOOK_INFO, LOOK_CALL_INFO, SET_INFO,
   type DefensiveLook, type OffensiveSet,
@@ -33,6 +34,8 @@ interface DefenseCallMenuProps {
   /** Stop calling the defense (offensive play calling stays on) */
   onStopCalling: () => void;
   onAutoSimRest: () => void;
+  /** Sim the rest of this quarter (the user's way past play-calling every snap); hidden when not provided */
+  onSimQuarter?: () => void;
 }
 
 const LOOK_COLORS: Record<DefensiveLook, string> = {
@@ -47,7 +50,7 @@ const LOOK_COLORS: Record<DefensiveLook, string> = {
  * The Live Coach menu for a CPU snap when the user is calling the defense: the offense's set is the read, and the
  * five looks are the calls (defensiveLooks.ts, "Calling the defense"). Sits in the same slot as PlayCallMenu.
  */
-export function DefenseCallMenu({ state, offSet, lastRead, timeoutsRemaining, pendingRunoff, onCall, onTimeout, onStopCalling, onAutoSimRest }: DefenseCallMenuProps) {
+export function DefenseCallMenu({ state, offSet, lastRead, timeoutsRemaining, pendingRunoff, onCall, onTimeout, onStopCalling, onAutoSimRest, onSimQuarter }: DefenseCallMenuProps) {
   const ordinals = ['1st', '2nd', '3rd', '4th'];
   const downLabel = state.down >= 1 && state.down <= 4
     ? `${ordinals[state.down - 1]} & ${state.yardsToGo <= 0 || state.fieldPos + state.yardsToGo >= 100 ? 'Goal' : state.yardsToGo}`
@@ -142,12 +145,23 @@ export function DefenseCallMenu({ state, offSet, lastRead, timeoutsRemaining, pe
               </button>
             )}
           </div>
-          <button
-            onClick={onAutoSimRest}
-            className="px-2 py-1 text-[10px] font-bold rounded-lg bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] transition-colors"
-          >
-            Auto-sim to End ⏭
-          </button>
+          <div className="flex items-center gap-1.5">
+            {onSimQuarter && (
+              <button
+                onClick={onSimQuarter}
+                title="Let the coaches call the rest of this quarter, then pick it back up"
+                className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                ⏩ {simQuarterLabel(state.quarter)}
+              </button>
+            )}
+            <button
+              onClick={onAutoSimRest}
+              className="px-2 py-1 text-[10px] font-bold rounded-lg bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+            >
+              Auto-sim to End ⏭
+            </button>
+          </div>
         </div>
       </div>
     </div>

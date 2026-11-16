@@ -31,6 +31,7 @@ import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@
 import { useExhibition, isExhibitionGameId, stashUploadForSeason } from '@/lib/engine/exhibition';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { trackEvent } from '@bs/core/analytics/track';
+import { simQuarterLabel } from '@/components/game/simQuarterLabel';
 import { trackFeature } from '@bs/core/analytics/feature';
 import type { Player, Position, GameResult, Team, PlayerStats } from '@/types';
 
@@ -1777,6 +1778,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (broadcastDrivingRef.current) { if (nextIdx === -1) stopBroadcast(); else seekBroadcast(nextIdx); }
   }, [isFinished, clearNextPlayTimer, revealedCount, allEvents, totalEvents, liveEnginePivotIdx, seekBroadcast, stopBroadcast]);
 
+  // Sim-to-end-of-quarter, from wherever the user found it (Tyler: most players never discovered the old icon-only Skip Qtr and
+  // played through every snap). The hint offers it once per device, after a few plays.
+  const SIM_HINT_KEY = 'bsgm.simQtrHint';
+  const [simHintDone, setSimHintDone] = useState(true);
+  useEffect(() => { try { setSimHintDone(window.localStorage.getItem(SIM_HINT_KEY) === 'done'); } catch { /* storage blocked: never nag */ } }, []);
+  const retireSimHint = useCallback(() => { setSimHintDone(true); try { window.localStorage.setItem(SIM_HINT_KEY, 'done'); } catch { /* storage blocked */ } }, []);
+  const simQuarter = useCallback((source: 'controls' | 'playcall' | 'defense_call' | 'hint') => {
+    trackEvent('sim_quarter_clicked', { game_id: id, source, quarter: allEvents[Math.max(0, revealedCount - 1)]?.quarter ?? 1 });
+    retireSimHint();
+    skipToNextQuarter();
+  }, [id, allEvents, revealedCount, retireSimHint, skipToNextQuarter]);
+
   useEffect(() => {
     if (speed === 'max' && isPlaying && !isFinished && !pregameOpen) {
       clearNextPlayTimer();
@@ -2296,6 +2309,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       onTimeout={callTimeoutFromDefenseMenu}
       onStopCalling={() => { setCallDefenseOn(false, 'menu'); resumeIfNoDefenseCall(); }}
       onAutoSimRest={autoSimRestFromMenu}
+      onSimQuarter={() => simQuarter('defense_call')}
     />
   );
   const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
@@ -2621,6 +2635,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setLiveCoachPaused(false);
                   setIsPlaying(true);
                 }}
+                onSimQuarter={() => simQuarter('playcall')}
                 onAutoSimRest={() => {
                   lcTelemetryRef.current.endedBy = 'auto_sim';
                   trackLiveCoach('live_coach_auto_sim');
@@ -2689,6 +2704,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           />
         </div>
 
+        {/* One-time hint: after a few plays, point at sim-to-end-of-quarter (most players never knew it existed) */}
+        {!simHintDone && !isFinished && revealedCount >= 8 && speed !== 'max' && liveQuarter <= 4 && (
+          <SimQuarterHint quarter={liveQuarter} gameId={id} onSim={() => simQuarter('hint')} onDismiss={retireSimHint} />
+        )}
+
         {/* ================================================================
             CONTROLS BAR (speed + play/pause)
         ================================================================ */}
@@ -2705,15 +2725,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
             </button>
-            {/* Skip Quarter — jump to the start of the next quarter (works in
-                both spectate and Live Coach modes). */}
+            {/* Sim to end of quarter — jump to the start of the next quarter (works in both spectate and Live Coach modes).
+                Labelled and coloured on every screen size: as an icon-only grey button almost nobody found it. */}
             <button
-              onClick={skipToNextQuarter}
+              onClick={() => simQuarter('controls')}
               disabled={isFinished}
-              title="Skip to the start of the next quarter"
-              className="inline-flex items-center h-8 px-2 sm:px-3 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+              title="Sim the rest of this quarter and pick it up at the start of the next one"
+              className="inline-flex items-center min-h-[44px] sm:min-h-0 sm:h-8 px-3 rounded-md text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-all"
             >
-              ⏩<span className="hidden sm:inline ml-1">Skip Qtr</span>
+              ⏩<span className="ml-1 sm:hidden">{simQuarterLabel(liveQuarter, true)}</span><span className="hidden sm:inline ml-1">{simQuarterLabel(liveQuarter)}</span>
             </button>
             <button
               onClick={skipToEnd}
@@ -3476,6 +3496,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setLiveCoachPaused(false);
                   setIsPlaying(true);
                 }}
+                onSimQuarter={() => simQuarter('playcall')}
                 onAutoSimRest={() => {
                   lcTelemetryRef.current.endedBy = 'auto_sim';
                   trackLiveCoach('live_coach_auto_sim');
@@ -3825,5 +3846,23 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         </div>
       )}
     </GameShell>
+  );
+}
+
+/** One-time "moving too slow?" hint pointing at sim-to-end-of-quarter (shown once per device; logs when it is first seen). */
+function SimQuarterHint({ quarter, gameId, onSim, onDismiss }: { quarter: number; gameId: string; onSim: () => void; onDismiss: () => void }) {
+  useEffect(() => { trackEvent('sim_quarter_hint_shown', { game_id: gameId, quarter }); }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- once per mount
+  return (
+    <div role="status" className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-900 px-3 py-2 text-xs">
+      <span className="text-base leading-none" aria-hidden>⏩</span>
+      <span className="flex-1 text-[var(--text)]">
+        <span className="font-semibold">No need to watch every snap.</span>{' '}
+        Sim the rest of the quarter and jump back in at the start of the next one.
+      </span>
+      <button onClick={onSim} className="shrink-0 rounded-md bg-blue-600 px-2.5 py-1.5 font-bold text-white hover:bg-blue-700">
+        {simQuarterLabel(quarter)}
+      </button>
+      <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 px-1 text-[var(--text-sec)] hover:text-[var(--text)]">✕</button>
+    </div>
   );
 }
