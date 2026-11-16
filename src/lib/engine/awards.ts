@@ -201,15 +201,26 @@ export function computeSeasonAwards(state: LeagueState): { award: string; player
   // ROY eligibility must NOT inherit the OVR gate used for the major awards:
   // first-year rookies are almost never 60+ OVR, so sourcing them from an
   // OVR-filtered pool silently emptied OROY/DROY (whole rookie pool filtered
-  // out). Source rookies directly from active players (first season + 10+
-  // games); the OVR gate still applies to MVP / DPOY / OPOY above.
-  const rookies = activePlayers.filter(p => isRookie(p) && p.stats.gamesPlayed >= 10);
-  const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
+  // out). Source rookies directly from active players (first season + the
+  // games gate below); the OVR gate still applies to MVP / DPOY / OPOY above.
+  // ROY games gate lowered 10 -> 6: a top rookie who missed time to injury was
+  // excluded, and if no rookie at a position group cleared 10 games the award
+  // was never pushed, leaving the Awards screen blank. If the 6-game pool is
+  // still empty for a group, fall back to the best first-year player at that
+  // group regardless of games so there is always a winner when rookies exist.
+  const ROOKIE_MIN_GAMES = 6;
+  const allRookies = activePlayers.filter(p => isRookie(p));
+  const gatedRookies = allRookies.filter(p => p.stats.gamesPlayed >= ROOKIE_MIN_GAMES);
+  const rookiesForGroup = (positions: string[]) => {
+    const gated = gatedRookies.filter(p => positions.includes(p.position));
+    return gated.length > 0 ? gated : allRookies.filter(p => positions.includes(p.position));
+  };
+  const offensiveRookies = rookiesForGroup(['QB', 'RB', 'WR', 'TE', 'OL']);
   if (offensiveRookies.length > 0) {
     const oroy = [...offensiveRookies].sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
     awards.push({ award: 'Offensive ROY', playerId: oroy.id, teamId: oroy.teamId! });
   }
-  const defensiveRookies = rookies.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position));
+  const defensiveRookies = rookiesForGroup(['DL', 'LB', 'CB', 'S']);
   if (defensiveRookies.length > 0) {
     const droy = [...defensiveRookies].sort((a, b) => droyScore(b) - droyScore(a))[0];
     awards.push({ award: 'Defensive ROY', playerId: droy.id, teamId: droy.teamId! });
