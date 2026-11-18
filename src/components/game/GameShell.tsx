@@ -6,6 +6,7 @@ import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
 import { GlobalBooth } from './GlobalBooth';
 import { FiredModal } from './FiredModal';
+import { GuestBackupPrompt } from './GuestBackupPrompt';
 import { Button } from '@/components/ui/Button';
 import { useGameStore, flushPendingSave, useSaveLoadStatus, retrySaveLoad, continueWithoutSave } from '@/lib/engine/store';
 import { getTeamColorVars } from '@/lib/teamColors';
@@ -80,6 +81,8 @@ export function GameShell({ children }: { children: React.ReactNode }) {
             <span className="text-xs font-bold text-yellow-600">God Mode Active</span>
           </div>
         )}
+        {/* Returning guests: offer an account so the league is backed up. */}
+        <GuestBackupPrompt />
         <main className="flex-1 p-3 md:p-6 overflow-auto pb-20 sm:pb-6">{children}</main>
       </div>
 

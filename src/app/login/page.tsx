@@ -41,7 +41,10 @@ function LoginContent() {
   const { user } = useSubscription();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  // ?mode=signup opens on "Create your account" (the guest backup prompt sends
+  // people here to make one); ?reason=backup says why they were sent.
+  const [isSignUp, setIsSignUp] = useState(() => searchParams.get('mode') === 'signup');
+  const forBackup = searchParams.get('reason') === 'backup';
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Which OAuth provider we're handing off to. The redirect to Google/Discord
@@ -136,6 +139,11 @@ function LoginContent() {
           <p className="text-[var(--text-sec)] mt-2">
             {isSignUp ? 'Create your account' : 'Sign in to your account'}
           </p>
+          {forBackup && (
+            <p className="text-sm text-[var(--text-sec)] mt-2 px-4">
+              Your franchise will be backed up to your account as soon as you&apos;re signed in. It stays on this device too.
+            </p>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-[var(--border)] p-8">
