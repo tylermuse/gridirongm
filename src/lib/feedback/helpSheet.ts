@@ -136,7 +136,7 @@ SAVES
 - The game saves automatically in this browser. No save button is needed.
 - "Save/Load" at the bottom of the sidebar has 5 save slots, each with "Save", "Load" and delete.
 - Backup file: Settings, "Save Backup", "Export Save" downloads your current league as a file, and "Import Save" loads one (it replaces the league in this browser).
-- Playing on another device: sign in, then turn on Settings, "Cloud Saves", "Sync saves to my account" (off by default). It syncs your current league, not the 5 slots. On the other device, sign in and the start screen offers to load the newer save.
+- Playing on another device: sign in. Your current league is then backed up to your account automatically; Settings, "Cloud Saves", "Sync saves to my account" turns that off or back on. It syncs your current league, not the 5 slots. On the other device, sign in and the start screen offers to load the newer save.
 - If a red bar says "Your league is not being saved.", the browser is refusing the save (its storage is full or blocked). The game keeps running in that tab, but reloading or closing it goes back to the last save. Deleting a slot under "Save/Load" can free room; then click "Try saving again".
 - Clearing your browser data deletes local saves. Only an exported file or the cloud copy can bring a league back.
 - New league: "New League" at the bottom of the sidebar, then "Confirm?". This wipes the current league, so save it to a slot first if you want to keep it.
