@@ -180,7 +180,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b18i'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b19a'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -234,7 +234,12 @@ const canvasTex = (c)=>{ const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .96;   /* filmic response: takes the saturated, flat 'cartoon' edge off the greens and the crowd */
-const scene = new THREE.Scene(); window.__scene = scene;   /* console/QA access */
+const scene = new THREE.Scene(); window.__scene = scene;
+/* PERF 11/17: each mh2 player is 15 skinned meshes (~47k triangles). Only the big shapes cast into the shadow map (the body, jersey, pants, helmet shell, pads:
+   eyes, lashes, facemask, shoes... added ~400 shadow draws a frame for no visible change), and the face details / visor / helmet trim are hidden once the
+   player is small on screen (LODS, swept every frame in frame()). */
+const SHADOW_PARTS = /^(MH_SKIN|MH_JERSEY|MH_PANTS|Mat3|plain)$/;
+const LODS = new Set(); window.__lods = LODS;   /* console/QA access */
 scene.background = new THREE.Color('#9cc3e6');
 scene.fog = new THREE.Fog(new THREE.Color('#c7d6e4'), 120, 300);
 // sky: a gradient dome (deep blue overhead, pale haze at the horizon) instead of a flat colour
@@ -283,7 +288,7 @@ function setLighting(mode){ lightMode=mode; const night = mode==='night';
   sun.color.set(night?'#eef3ff':'#fff1d6'); sunOff = night? [-10,78,-14] : [-25,60,-30];
   renderer.toneMappingExposure = night? 1.05 : .96;
   (window.__floods||[]).forEach(f=>{ f.material.color.set(night?'#ffffff':'#fff6d8'); });
-  [crowd.seats,crowd.torsos,crowd.heads,crowd.hair].forEach(m=>m.material.color.set(night?'#6c707b':'#c4c4c4'));   /* the stands catch only the floodlights' spill */
+  crowd.mats.forEach(m=>m.color.set(night?'#6c707b':'#c4c4c4'));   /* the stands catch only the floodlights' spill */
   concreteMeshes.forEach(m=>m.material.color.set(night?'#555b68':'#ffffff'));
   structMats.forEach(m=>m.color.copy(m.userData.day).multiplyScalar(night?.5:1));
   hemi.intensity = (night? .42 : LIGHT.hemi) * LEGACY_K; sun.intensity = (night? 1.5 : LIGHT.sun) * LEGACY_K;   /* night: a dim, cool fill for the bowl; the 'sun' is the floodlight key on the field */
@@ -467,9 +472,11 @@ const crowd = (()=>{
     torsoGeo.setAttribute('color', new THREE.BufferAttribute(col,3)); }
   const headGeo=new THREE.IcosahedronGeometry(.105,0).scale(.92,1.12,1).translate(0,1.16,.01);
   const hairGeo=new THREE.SphereGeometry(.112,6,3,0,Math.PI*2,0,Math.PI*.5).scale(.95,1.0,1.02).translate(0,1.175,-.005);
-  const MAXN=60000; const tMat=crowdMat(); tMat.vertexColors=true;
-  const seats=new THREE.InstancedMesh(seatGeo,new THREE.MeshLambertMaterial(),MAXN), torsos=new THREE.InstancedMesh(torsoGeo,tMat,MAXN), heads=new THREE.InstancedMesh(headGeo,crowdMat(),MAXN), hair=new THREE.InstancedMesh(hairGeo,crowdMat(),MAXN);
-  const aPhase=new THREE.InstancedBufferAttribute(new Float32Array(MAXN),1); torsoGeo.setAttribute('aPhase',aPhase); headGeo.setAttribute('aPhase',aPhase); hairGeo.setAttribute('aPhase',aPhase);
+  /* PERF (11/17, "3D mode is laggy"): the bowl used to be four 44k-instance meshes drawn whole every frame (~5M triangles, frustum culling off) — the single
+     biggest cost in the sim. Fans are now generated into a list, then split into NSEC wedges around the bowl, each its own set of instanced meshes with a real
+     bounding sphere, so the stands behind the camera are culled; instance order is shuffled within a wedge so crowd.setDensity(f) thins evenly (lower quality tiers). */
+  const MAXN=60000; const tMat=crowdMat(); tMat.vertexColors=true; const seatMat=new THREE.MeshLambertMaterial(), headMat=crowdMat(), hairMat=crowdMat();
+  const fanM=[], fanHeadM=[], fanSkin=[], fanHair=[], fanPh=[], fanXZ=[], seatM=[], seatC=[], seatXZ=[];
   const fanCat=new Uint8Array(MAXN), fanShade=new Float32Array(MAXN), fanNeutral=new Uint8Array(MAXN), fanCap=new Uint8Array(MAXN);
   let seed=77; const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
   const shirt=['#1f3a68','#1f3a68','#1f3a68','#1f3a68','#263b5e','#2b2b2b','#333333','#3b3f48','#3b3f48','#6d7f99','#8a5a3c','#d8d3c8','#b8b2a6','#c4561c','#5a5a5a','#1c2a44','#444c5a','#e8b33a','#7a3b6e','#2f5e3b','#2b2b2b','#4a4e58','#2b2b2b','#1f3a68','#5c6370'];
@@ -484,23 +491,40 @@ const crowd = (()=>{
       const clump=.5+.5*Math.sin(x*.21+r*.9)*Math.sin(z*.047-r*.31);
       if(rnd() < .9-clump*.14){ if(nF>=MAXN) continue; const kid=rnd()<.03, sc=(kid? .72 : .86+rnd()*.26), stand=rnd()<.07? .42:0;
         const jx=(rnd()-.5)*.14, jz=(rnd()-.5)*.1, yaw=th+(rnd()-.5)*.6, lean=(rnd()-.5)*.22+(rnd()<.15? .18:0);   /* nobody sits on a grid: a shuffle in the seat, a turn to a neighbour, a lean in */
-        tmp.position.set(x+jx,y+stand,z+jz); tmp.rotation.set(lean,yaw,(rnd()-.5)*.08); tmp.scale.set(sc*(.9+rnd()*.22),sc*(.92+rnd()*.14),sc); tmp.updateMatrix(); torsos.setMatrixAt(nF,tmp.matrix);
-        tmp.rotation.set(lean*.6+(rnd()-.5)*.25,yaw+(rnd()-.5)*.5,0); tmp.scale.setScalar(sc); tmp.updateMatrix(); heads.setMatrixAt(nF,tmp.matrix); hair.setMatrixAt(nF,tmp.matrix);
+        tmp.position.set(x+jx,y+stand,z+jz); tmp.rotation.set(lean,yaw,(rnd()-.5)*.08); tmp.scale.set(sc*(.9+rnd()*.22),sc*(.92+rnd()*.14),sc); tmp.updateMatrix(); fanM.push(tmp.matrix.clone()); fanXZ.push([x,z]);
+        tmp.rotation.set(lean*.6+(rnd()-.5)*.25,yaw+(rnd()-.5)*.5,0); tmp.scale.setScalar(sc); tmp.updateMatrix(); fanHeadM.push(tmp.matrix.clone());
         const u=rnd(); fanCat[nF]= u<.36? 0 : u<.52? 1 : u<.64? 2 : 3; fanNeutral[nF]=(rnd()*neutral.length)|0; fanShade[nF]=.78+rnd()*.3; fanCap[nF]= rnd()<.16? 1 : 0;
-        c.set(skin[(rnd()*skin.length)|0]).multiplyScalar(.95+rnd()*.12); heads.setColorAt(nF,c);
-        c.set(hairCol[(rnd()*hairCol.length)|0]); hair.setColorAt(nF,c); aPhase.array[nF]=rnd(); nF++; }
-      else { if(nS>=MAXN) continue; tmp.position.set(x,y,z); tmp.rotation.set(0,th,0); tmp.scale.setScalar(1); tmp.updateMatrix(); seats.setMatrixAt(nS,tmp.matrix); seats.setColorAt(nS, (name==='lower'? r>25 : r<4)? seatCol[1]:seatCol[0]); nS++; } } } }
-  for(const m of [seats,torsos,heads,hair]){ m.material.color.set('#c4c4c4'); m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true; m.receiveShadow=false; m.castShadow=false; m.frustumCulled=false; scene.add(m); }
-  seats.count=nS; torsos.count=nF; heads.count=nF; hair.count=nF; window.__crowdCount={seats:nS, fans:nF};
+        fanSkin.push(new THREE.Color(skin[(rnd()*skin.length)|0]).multiplyScalar(.95+rnd()*.12));
+        fanHair.push(new THREE.Color(hairCol[(rnd()*hairCol.length)|0])); fanPh.push(rnd()); nF++; }
+      else { if(nS>=MAXN) continue; tmp.position.set(x,y,z); tmp.rotation.set(0,th,0); tmp.scale.setScalar(1); tmp.updateMatrix(); seatM.push(tmp.matrix.clone()); seatC.push((name==='lower'? r>25 : r<4)? seatCol[1]:seatCol[0]); seatXZ.push([x,z]); nS++; } } } }
+  const NSEC=20, sec=([x,z])=>Math.min(NSEC-1, Math.floor((Math.atan2(x,z)+Math.PI)/(Math.PI*2)*NSEC));
+  const fanIdx=Array.from({length:NSEC},()=>[]), seatIdx=Array.from({length:NSEC},()=>[]);
+  fanXZ.forEach((p,i)=>fanIdx[sec(p)].push(i)); seatXZ.forEach((p,i)=>seatIdx[sec(p)].push(i));
+  let sh=991; const rnd2=()=>{ sh=(sh*1664525+1013904223)>>>0; return sh/4294967296; };
+  fanIdx.forEach(a=>{ for(let i=a.length-1;i>0;i--){ const j=(rnd2()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } });   /* shuffled: the first N of a wedge are an even sample of it */
+  const all=[], sectors=[];
+  const finish=(m)=>{ m.instanceMatrix.needsUpdate=true; if(m.instanceColor) m.instanceColor.needsUpdate=true; m.receiveShadow=false; m.castShadow=false;
+    m.computeBoundingSphere(); m.boundingSphere.radius+=1.2; m.frustumCulled=true; scene.add(m); all.push(m); return m; };   /* +1.2: the idle bob and the touchdown rise happen in the vertex shader */
+  for(let k=0;k<NSEC;k++){ const F=fanIdx[k], S=seatIdx[k], o={fans:F, torsos:null, heads:null, hair:null, seats:null};
+    if(S.length){ const m=new THREE.InstancedMesh(seatGeo, seatMat, S.length); S.forEach((i,j)=>{ m.setMatrixAt(j,seatM[i]); m.setColorAt(j,seatC[i]); }); o.seats=finish(m); }
+    if(F.length){ const ph=new THREE.InstancedBufferAttribute(new Float32Array(F.length),1); F.forEach((i,j)=>{ ph.array[j]=fanPh[i]; });
+      const g=(base)=>{ const gg=base.clone(); gg.setAttribute('aPhase',ph); return gg; };
+      const t=new THREE.InstancedMesh(g(torsoGeo), tMat, F.length), h=new THREE.InstancedMesh(g(headGeo), headMat, F.length), hr=new THREE.InstancedMesh(g(hairGeo), hairMat, F.length);
+      F.forEach((i,j)=>{ t.setMatrixAt(j,fanM[i]); h.setMatrixAt(j,fanHeadM[i]); hr.setMatrixAt(j,fanHeadM[i]); h.setColorAt(j,fanSkin[i]); hr.setColorAt(j,fanHair[i]); t.setColorAt(j,fanSkin[i]); });
+      o.torsos=finish(t); o.heads=finish(h); o.hair=finish(hr); }
+    sectors.push(o); }
+  [seatMat,tMat,headMat,hairMat].forEach(m=>m.color.set('#c4c4c4'));
+  const setDensity=(f)=>{ for(const o of sectors){ if(!o.torsos) continue; const n=Math.max(0, Math.round(o.fans.length*f)); o.torsos.count=o.heads.count=o.hair.count=n; } };
+  window.__crowdCount={seats:nS, fans:nF, sectors:NSEC, meshes:all.length};
   /* shirts follow the teams on the field: about half the crowd in the home team's colours, some in its second colour, a visiting section's worth in
      the away colours, the rest in everyday neutrals (not a rainbow of random colours). Re-run when the teams change. */
   let colKey='';
   const recolor=()=>{ const A=team(0), B=team(1), key=[A.jersey,A.num,B.jersey].join('|'); if(key===colKey) return; colKey=key;
     const pal=[new THREE.Color(A.jersey), new THREE.Color(A.num), new THREE.Color(B.jersey)];
-    for(let i=0;i<nF;i++){ const k=fanCat[i]; if(k<3) c.copy(pal[k]); else c.set(neutral[fanNeutral[i]]); c.multiplyScalar(fanShade[i]); torsos.setColorAt(i,c);
-      if(fanCap[i]){ c.copy(pal[k===2? 2 : 0]).multiplyScalar(.75); hair.setColorAt(i,c); } }
-    torsos.instanceColor.needsUpdate=true; hair.instanceColor.needsUpdate=true; };
-  return {seats,torsos,heads,hair,recolor}; })();
+    for(const o of sectors){ if(!o.torsos) continue; o.fans.forEach((i,j)=>{ const k=fanCat[i]; if(k<3) c.copy(pal[k]); else c.set(neutral[fanNeutral[i]]); c.multiplyScalar(fanShade[i]); o.torsos.setColorAt(j,c);
+      if(fanCap[i]){ c.copy(pal[k===2? 2 : 0]).multiplyScalar(.75); o.hair.setColorAt(j,c); } });
+      o.torsos.instanceColor.needsUpdate=true; o.hair.instanceColor.needsUpdate=true; } };
+  return {all, mats:[seatMat,tMat,headMat,hairMat], setDensity, recolor}; })();
 const boards=[];
 // video boards hanging under the canopy at both ends
 [-1,1].forEach(sz=>{ const vb=new THREE.Mesh(new THREE.BoxGeometry(34,11,1), new THREE.MeshLambertMaterial({color:'#11151c'}));
@@ -643,7 +667,7 @@ function makePlayer(t, number, big, opts={}){
   const bones = {};
   model.traverse(o=>{
     if(o.isBone) bones[o.name.replace('mixamorig','')] = o;
-    if(o.isSkinnedMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; if(LOOK2) o.layers.set(1);   /* look=2: players on their own layer for the AO prepass */
+    if(o.isSkinnedMesh){ o.castShadow = !opts.bench && (!MH2 || SHADOW_PARTS.test(o.name)); o.receiveShadow = true; o.frustumCulled = false; if(LOOK2) o.layers.set(1);   /* look=2: players on their own layer for the AO prepass */
       let part = PART[o.name.replace(/[^A-Za-z0-9]/g,'_').replace('SHOE_001','SHOE001')] || 'torso';
       if(MH2 && part==='mhJersey') part='torso'; if(MH2 && part==='mhPants') part='pants';   /* mh2's uniform is a painted white/navy texture: the keyed team-colour path */
       if(part==='mhSleeve' && (opts.ref || !kit.sleeve)){ o.visible=false; return; }
@@ -674,6 +698,8 @@ function makePlayer(t, number, big, opts={}){
   const numFront = new THREE.Mesh(GEO.num, numMat(number,t)); numFront.scale.set(NO.sf,NO.sf,1); const nf = attach(bones.Spine2, numFront, new THREE.Vector3(...NO.front), sc); nf.rotation.x = NO.tilt; }
   if(kit.visor && modelChoice!=='fp27' && !MH){ const vis=new THREE.Mesh(new THREE.CylinderGeometry(.104,.104,.052,24,1,true,Math.PI*.62,Math.PI*.76), new THREE.MeshStandardMaterial({color:'#0d1218', transparent:true, opacity:.82, roughness:.08, metalness:.55, side:THREE.DoubleSide})); vis.rotation.y=Math.PI; attach(bones.Head, vis, new THREE.Vector3(0,9.5,-.5), sc); }
   if(kit.towel){ const tw=new THREE.Mesh(new THREE.PlaneGeometry(.085,.23), new THREE.MeshLambertMaterial({color:'#ececec', side:THREE.DoubleSide})); attach(bones.Hips, tw, new THREE.Vector3(-11,-15,8.5), sc).rotation.set(.1,.25,.1); }
+  { const face=[], far=[]; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; if(/^MH_(EYES|BROWS|LASHES)$/.test(o.name)) face.push(o); else if(/^(frosted_glass|trim|MH_ARMSLEEVE)$/.test(o.name)) far.push(o); });
+    if(face.length || far.length) LODS.add({root, face, far}); }
   const mixer = new THREE.AnimationMixer(model);
   const clip = n => BOT.animations.find(a=>a.name===n);
   const act = { idle: mixer.clipAction(clip('idle')), walk: mixer.clipAction(clip('walk')), run: mixer.clipAction(clip('run')) };
@@ -739,7 +765,7 @@ function makeRef(x,z,face,opts={}){
   const root=new THREE.Group();root.position.set(x,0,z);root.rotation.y=face;
   const M=c=>new THREE.MeshLambertMaterial({color:c});
   const skin=M(opts.skin || (x<0?'#b67e5d':'#dfab83')),dark=M(opts.pants||'#202126'),shoeMat=M('#15171c'),white=M('#efeee6'),stripes=opts.shirt? M(opts.shirt) : new THREE.MeshLambertMaterial({map:stripeTex});
-  function mesh(g,m,parent,pos){const o=new THREE.Mesh(g,m);o.position.set(...pos);o.castShadow=o.receiveShadow=true;parent.add(o);return o;}
+  function mesh(g,m,parent,pos){const o=new THREE.Mesh(g,m);o.position.set(...pos);o.castShadow=false;o.receiveShadow=true;parent.add(o);return o;}
   function oval(parent,pos,size,m){const o=mesh(new THREE.SphereGeometry(1,16,12),m,parent,pos);o.scale.set(...size);return o;}
   function loft(parent,rings,depth,m,pos=[0,0,0]){const g=new THREE.LatheGeometry(rings.map(([y,r])=>new THREE.Vector2(r,y)),24);const o=mesh(g,m,parent,pos);o.scale.z=depth;return o;}
   function segment(parent,len,top,bottom,m){return mesh(new THREE.CylinderGeometry(top,bottom,len,14),m,parent,[0,-len*.5,0]);}
@@ -815,7 +841,7 @@ function buildSideline(){
     [-13.5,13.5].forEach(z=>{ const tb=new THREE.Mesh(new THREE.BoxGeometry(2.2,.08,.9), M('#d9dde2')); tb.position.set(bx+sx*.3,.9,z); scene.add(tb); sideline.objs.push(tb);
       for(let i=0;i<3;i++){ const cl=new THREE.Mesh(new THREE.CylinderGeometry(.22,.2,.5,12), M(i===1?'#ff6a1a':'#e8e4dc')); cl.position.set(bx+sx*.3-.7+i*.7,1.2,z); scene.add(cl); sideline.objs.push(cl); } });
     // players on the bench line: standing, helmets on, watching the game
-    for(let i=0;i<7;i++){ const z=-9+i*3+(i%2?.6:-.4); const a=makePlayer(t, 40+i*7+(sx>0?3:0), i%3===0, {}); a.x=bx+sx*(i%2?.9:0); a.z=z; a.face=sx<0? Math.PI/2 : -Math.PI/2; a.stance=''; a.y=0; place(a); a.mixer.update(Math.random()*2); sideline.players.push(a); }
+    for(let i=0;i<7;i++){ const z=-9+i*3+(i%2?.6:-.4); const a=makePlayer(t, 40+i*7+(sx>0?3:0), i%3===0, {bench:true}); a.x=bx+sx*(i%2?.9:0); a.z=z; a.face=sx<0? Math.PI/2 : -Math.PI/2; a.stance=''; a.y=0; place(a); a.mixer.update(Math.random()*2); sideline.players.push(a); }
     // coaches: polo in the team colour, dark cap, arms down
     [[-5.5,.1],[3,-.2],[9,.3]].forEach(([z,o],i)=>{ const r=makeRef(bx-sx*(2.4+o), z, sx<0? Math.PI/2 : -Math.PI/2, {shirt:i===1?'#2a2d33':t.jersey, cap:'#1c1e24', pants:'#3a3d44', armsDown:true}); r.root.scale.setScalar(1); sideline.chain.push(r); });
     // photographers kneeling along the apron near the end zones (static, with a camera box)
@@ -2315,11 +2341,11 @@ function frame(now){
     events.forEach(e=>{ if(!e.done && playT>=e.t){ e.done=true; e.fn(); } });
     if(!play.whistled && playT >= (play.whistleT ?? play.tEnd)) blowWhistle();
     actors.forEach(a=>{ if(a.celebAt!=null && playT>=a.celebAt && (a.celebrate==null || a.celebrate===false)){ a.celebrate=playT; a.celebAt=null; a.behav={type:'coast', vx:(a.vx||0)*.5, vz:(a.vz||0)*.5, t0:playT}; } });
-    actors.forEach(a=>stepActor(a, playT, dt)); refObjs.forEach(r=>r.update(playT, dt)); sideline.players.forEach(a=>{ a.mixer.update(dt); });
+    actors.forEach(a=>stepActor(a, playT, dt)); refObjs.forEach(r=>r.update(playT, dt)); if(QUALITY.cur().bench) sideline.players.forEach(a=>{ a.mixer.update(dt); });
     separate();
     updateBall(playT);
     if(playT > play.tEnd + (play.td ? (play.tdHold ?? 3.4) : EMBED? 1.0 : 1.3)){ running=false; finishPlay(); } }
-  } else if(preSnap){ preT += dtReal; actors.forEach(a=>stepActor(a, 0, dtReal)); sideline.players.forEach(a=>{ a.mixer.update(dtReal); });
+  } else if(preSnap){ preT += dtReal; actors.forEach(a=>stepActor(a, 0, dtReal)); if(QUALITY.cur().bench) sideline.players.forEach(a=>{ a.mixer.update(dtReal); });
     if(O.qb){ const B=O.qb.bones; B.Head.rotation.y += .55*Math.sin(preT*1.7); B.Spine1.rotation.y += .12*Math.sin(preT*1.7); O.qb.model.updateMatrixWorld(true); }
     D.dl?.forEach((d,i)=>{ d.body.position.x = .05*Math.sin(preT*2.3+i); });
     [O.wrL,O.wrR].forEach((w,i)=>{ if(w) w.y = Math.max(0, Math.sin(preT*6+i*2))*.03; place(w); }); }
@@ -2403,6 +2429,7 @@ function frame(now){
     _sunC.copy(camLook).addScaledVector(r,sa).addScaledVector(u,sb);
     sun.position.set(_sunC.x+sunOff[0], _sunC.y+sunOff[1], _sunC.z+sunOff[2]); sun.target.position.copy(_sunC); }
   const _p1 = performance.now();
+  lodSweep(); QUALITY.tick(dtRaw);
   if(POST.on) POST.composer.render(); else renderer.render(scene, camera);
   if(window.__rec && window.__rec.n>0){ const r=window.__rec; r.n--; const nm=r.prefix+'_'+String(r.k++).padStart(4,'0')+'_'+(running? playT : -1).toFixed(3); fetch((window.__shotSink||'http://127.0.0.1:8801/')+'?name='+encodeURIComponent(nm), {method:'POST', body: renderer.domElement.toDataURL('image/jpeg', .85)}).catch(()=>{}); }   /* QA: frame recorder (window.__rec={prefix,n}) */
   if(window.__shotName){ const n=window.__shotName; window.__shotName=null; fetch((window.__shotSink||'http://127.0.0.1:8801/')+'?name='+encodeURIComponent(n), {method:'POST', body: renderer.domElement.toDataURL('image/jpeg', .92)}).catch(()=>{}); }   /* QA: window.__shotName='x' saves the next frame to a local shot receiver */
@@ -2412,7 +2439,7 @@ function frame(now){
 }
 window.__advance = (n, dt=1/30) => { window.__manualClock = true; for(let i=0;i<n;i++) frame(last + dt*1000); };   /* QA: step the sim on a fixed clock (frame-exact captures, works in a hidden tab) */
 
-function resize(){ const w=stage.clientWidth, h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; window.__narrow = clamp((1.78 - w/h)/.8, 0, 1); camera.fov = 48 + window.__narrow*(window.__narrowFov ?? 10); camera.userData.baseFov = camera.fov;   /* narrow frames (the phone embed is square): a little more lens, and the camera climbs and backs off (in the camera update) so the play still fits side to side without filling the frame with stands */ camera.updateProjectionMatrix(); const pr=renderer.getPixelRatio(); POST.composer.setSize(w*pr,h*pr); POST.bloom.setSize(w*pr,h*pr); }
+function resize(){ const w=stage.clientWidth, h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; window.__narrow = clamp((1.78 - w/h)/.8, 0, 1); camera.fov = 48 + window.__narrow*(window.__narrowFov ?? 10); camera.userData.baseFov = camera.fov;   /* narrow frames (the phone embed is square): a little more lens, and the camera climbs and backs off (in the camera update) so the play still fits side to side without filling the frame with stands */ camera.updateProjectionMatrix(); POST.composer.setPixelRatio(renderer.getPixelRatio()); POST.composer.setSize(w,h); }   /* PERF 11/17: EffectComposer applies the pixel ratio itself — passing w*pr here rendered retina / phone screens at 4x the width and height (16x the pixels, with 4x MSAA): the main cause of "3D mode is laggy". The composer sizes its passes (bloom, AO) too. */
 // ---------- post-processing: MSAA render target -> soft bloom (boards, lights, highlights) -> vignette/grade -> tone map + sRGB ----------
 const POST = { on: new URLSearchParams(location.search).get('fx')!=='0' };   /* ?fx=0 skips the post chain (bloom/grade) for weak GPUs */
 { const size=renderer.getSize(new THREE.Vector2()).multiplyScalar(renderer.getPixelRatio());
@@ -2437,14 +2464,14 @@ if(LOOK2 && POST.on) import('three/addons/postprocessing/SSAOPass.js').then(({SS
     const au=renderer.shadowMap.autoUpdate; renderer.shadowMap.autoUpdate=false; render0(...a); renderer.shadowMap.autoUpdate=au; };   /* the prepass is a second renderer.render(): without this it re-rendered the whole shadow map too */
   /* the prepass skips what cannot matter to it: the 180k crowd instances (the concrete tier under them still writes depth for the focus blur), the sky, the turf grain overlay.
      (Stock SSAOPass walks the whole scene graph twice a frame to hide points/lines; this scene has none.) */
-  const skip=[crowd.seats, crowd.torsos, crowd.heads, crowd.hair, sky, grain].filter(Boolean), was=[];
+  const skip=[...crowd.all, sky, grain].filter(Boolean), was=[];
   /* One override material drawn on skinned and unskinned meshes alike makes three.js re-resolve its shader program every time the draw list flips between the two
      (hundreds of times a frame here: ~20 ms of CPU). Players live on layer 1, so the prepass draws the stadium and the players in two sweeps, each with its own material. */
   const nmSkin=ao.normalMaterial.clone(), ro0=ao.renderOverride.bind(ao);
   ao.renderOverride=(r, m, target, cc, ca)=>{ if(m!==ao.normalMaterial) return ro0(r, m, target, cc, ca);
     const mask=camera.layers.mask; camera.layers.set(0); ro0(r, m, target, cc, ca); camera.layers.set(1); ro0(r, nmSkin, target, null, null); camera.layers.mask=mask; };
   ao.overrideVisibility=()=>{ skip.forEach((o,i)=>{ was[i]=o.visible; o.visible=false; }); }; ao.restoreVisibility=()=>{ skip.forEach((o,i)=>{ o.visible=was[i]; }); };
-  POST.ao=ao; POST.composer.insertPass(ao, 1);
+  POST.ao=ao; POST.composer.insertPass(ao, 1); ao.enabled = QUALITY.cur().ao;
   POST.dof=new ShaderPass({ uniforms:{ tDiffuse:{value:null}, tDepth:{value:ao.normalRenderTarget.depthTexture}, uPx:{value:new THREE.Vector2(1/sz.x,1/sz.y)}, uNear:{value:camera.near}, uFar:{value:camera.far}, uFocus:{value:20}, uMax:{value:6}, uK:{value: window.__dofK ?? 1} },
     vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
     fragmentShader:`uniform sampler2D tDiffuse, tDepth; uniform vec2 uPx; uniform float uNear, uFar, uFocus, uMax, uK; varying vec2 vUv;
@@ -2464,6 +2491,55 @@ document.getElementById('mhBtn')?.addEventListener('click',()=>{ const u=new URL
 { const mb=document.getElementById('mhBtn'); if(mb){ mb.textContent = MH? 'New player on' : 'New player off'; mb.classList.toggle('on', MH); } }
 { const lb=document.getElementById('lookBtn'); if(lb){ lb.textContent = LOOK2? 'New look on' : 'New look off'; lb.classList.toggle('on', LOOK2); } }
 document.getElementById('postBtn')?.addEventListener('click',()=>{ POST.on=!POST.on; document.getElementById('postBtn').textContent=POST.on?'FX on':'FX off'; document.getElementById('postBtn').classList.toggle('on',POST.on); });
+/* ---------- PERF 11/17: adaptive quality ("3D mode is laggy", Discord) ----------
+   Five tiers, high -> min. The governor watches real frame times; a first visit starts at 'med' (desktop) or 'low' (touch); when a device averages under 45 fps for two seconds it drops a tier (resolution, AO, post,
+   crowd density, bench players, shadow-map size / rate), and climbs a tier (up to 'high', which adds the AO pass: ~12 ms a frame) only after 16 s at the display rate and only if it has not
+   dropped this session. The tier a device settles on is remembered (localStorage) so the next game starts there instead of stuttering through the ladder again.
+   ?q=0..4 pins a tier (QA); window.__q exposes it. Each game reports its frame rate to the page (bsgm:perf) for the sim3d_perf analytics event. */
+const QUALITY = (()=>{
+  const L = [
+    {name:'high',  dpr:2,    ao:true,  post:true,  crowd:1,   bench:true,  shadow:SHADOW_RES, shadowEvery:1},
+    {name:'med',   dpr:1.5,  ao:false, post:true,  crowd:.7,  bench:true,  shadow:2048, shadowEvery:1},
+    {name:'low',   dpr:1.25, ao:false, post:false, crowd:.45, bench:false, shadow:2048, shadowEvery:1},
+    {name:'lower', dpr:1,    ao:false, post:false, crowd:.3,  bench:false, shadow:1024, shadowEvery:2},
+    {name:'min',   dpr:.75,  ao:false, post:false, crowd:.15, bench:false, shadow:1024, shadowEvery:3}];
+  const KEY='bsgm.sim3dQ', qp=new URLSearchParams(location.search).get('q'), pinned = qp!=null && qp!=='' && L[+qp] ? +qp : null, POST_OK = POST.on;
+  const coarse = matchMedia('(pointer:coarse)').matches;
+  let saved=null; try{ const v=localStorage.getItem(KEY); if(v!=null && L[+v]) saved=+v; }catch(e){}
+  let cur = pinned ?? saved ?? (coarse? 2 : 1), startQ = cur, fell = false, sent = false;
+  /* rolling window of real frame intervals (tab switches / long stalls excluded) */
+  let acc=0, n=0, good=0, warm=0, sumAll=0, nAll=0, shadowK=0;
+  function apply(i){ cur=i; const q=L[i];
+    const pr=Math.min(window.devicePixelRatio||1, q.dpr); if(Math.abs(renderer.getPixelRatio()-pr)>.01){ renderer.setPixelRatio(pr); resize(); }
+    POST.on = POST_OK && q.post; if(POST.ao) POST.ao.enabled = q.ao;
+    crowd.setDensity(q.crowd);
+    if(sun.shadow.mapSize.x!==q.shadow){ sun.shadow.mapSize.set(q.shadow,q.shadow); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; } }
+    renderer.shadowMap.autoUpdate = q.shadowEvery===1; renderer.shadowMap.needsUpdate = true;
+    sideline.players.forEach(a=>{ a.root.visible=q.bench; });
+    if(pinned==null) try{ localStorage.setItem(KEY, String(i)); }catch(e){} }
+  function tick(dt){
+    const q=L[cur];
+    if(q.shadowEvery>1 && (++shadowK % q.shadowEvery)===0) renderer.shadowMap.needsUpdate = true;   /* low tiers: the shadow map refreshes every 2nd / 3rd frame */
+    if(!q.bench) sideline.players.forEach(a=>{ if(a.root.visible) a.root.visible=false; });   /* the sideline is rebuilt when the teams change */
+    if(!(dt>0) || dt>.25 || document.hidden || window.__manualClock) return;
+    if(warm<1.5){ warm+=dt; return; }   /* skip load / first-frame shader compiles, and let a tier change settle */
+    sumAll+=dt; nAll++; acc+=dt; n++;
+    if(!sent && nAll>=900 && EMBED){ sent=true; try{ const gl=renderer.getContext(), ext=gl.getExtension('WEBGL_debug_renderer_info');
+      window.parent.postMessage({type:'bsgm:perf', ...api.stats(), gpu: String(ext? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)).slice(0,80), cssW:renderer.domElement.clientWidth, cssH:renderer.domElement.clientHeight, devDpr:window.devicePixelRatio||1, coarse, look2:LOOK2}, '*'); }catch(e){} }   /* one sample per page load, after ~900 measured frames */
+    if(acc<2 || pinned!=null) return;
+    const fps=n/acc; acc=0; n=0;
+    if(fps<45 && cur<L.length-1){ fell=true; good=0; warm=.5; apply(cur+1); }
+    else if(fps>=57 && !fell && cur>0){ good+=2; if(good>=16){ good=0; warm=.5; apply(cur-1); } }   /* a remembered tier may climb while it holds the display rate; after any drop this session it stays put (no oscillation) */
+    else good=0; }
+  apply(cur);
+  const api = { cur:()=>L[cur], level:()=>cur, tick, set:(i)=>apply(i),
+    stats:()=>({q:cur, name:L[cur].name, startQ, fps: nAll? +(nAll/sumAll).toFixed(1) : null, frames:nAll, dpr:renderer.getPixelRatio(), w:renderer.domElement.width, h:renderer.domElement.height}),
+    resetStats:()=>{ sumAll=0; nAll=0; } };
+  window.__q = api; return api; })();
+function lodSweep(){ const cp=camera.position, h=renderer.domElement.clientHeight||700, k=Math.tan(camera.fov*Math.PI/360)*700/h;
+  for(const e of LODS){ if(!e.root.parent){ e.face.forEach(m=>m.visible=true); e.far.forEach(m=>m.visible=true); LODS.delete(e); continue; }
+    const d=cp.distanceTo(e.root.position)*k/.445;   /* metres at the stock 48° lens on a 700 px tall view: a telephoto or a big screen shows the detail further out */
+    const f=d<16, r=d<45; for(const m of e.face) if(m.visible!==f) m.visible=f; for(const m of e.far) if(m.visible!==r) m.visible=r; } }
 new ResizeObserver(resize).observe(stage);
 
 // ---------- Outcome logic (mirrors liveCoachEngine odds) ----------

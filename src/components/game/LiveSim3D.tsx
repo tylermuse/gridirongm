@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
-import { getDeviceId, DEVICE_CREATED_KEY } from '@bs/core/analytics/track';
+import { getDeviceId, DEVICE_CREATED_KEY, trackEvent } from '@bs/core/analytics/track';
 import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimNamedPlayer, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
 /** A defensive call the user just made is shown set for this long before the ball is snapped (ms). */
@@ -36,7 +36,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b18i';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b19a';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 /** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used as-is by the scoring-play replay. */
 export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&v=${SIM_BUILD}`;
 /** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.
@@ -231,6 +231,7 @@ export function LiveSim3D({
       else if (m.type === 'bsgm:dead') { if (m.id != null && m.id === activeIdRef.current) onPlayDead?.(m.id); }
       else if (m.type === 'bsgm:result') { if (m.id != null && m.id === activeIdRef.current) onPlayResult?.(m.id); }
       else if (m.type === 'bsgm:done') { if (m.id === activeIdRef.current) { activeIdRef.current = null; setActiveBoth(false); } }
+      else if (m.type === 'bsgm:perf') { const perf: Record<string, unknown> = { ...m }; delete perf.type; trackEvent('sim3d_perf', perf); }   // frame rate + quality tier the sim settled on (one per page load)
       else if (m.type === 'bsgm:error') { setFailed(m.message || 'failed to load'); setActiveBoth(false); }
     };
     window.addEventListener('message', onMsg);
