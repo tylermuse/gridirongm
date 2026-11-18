@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
+import { afterPaint } from '@/components/ui/useBusyAction';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +26,8 @@ export default function PostDraftCutsPage() {
   } = useGameStore();
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  // Draft-stuck fix: disable + spinner on first tap (see store startNewSeason guard).
+  const [isStartingSeason, setIsStartingSeason] = useState(false);
 
   const userTeam = teams.find(t => t.id === userTeamId);
   if (!userTeam) {
@@ -53,6 +56,10 @@ export default function PostDraftCutsPage() {
   );
 
   async function finish() {
+    if (isStartingSeason) return;
+    setIsStartingSeason(true);
+    try {
+    await afterPaint();
     // 5/16 instrumentation widening (bige08676 + marioalsosa). The inner
     // try/catch in startNewSeason may itself throw on recovery (Zustand
     // set fails, etc.). Outer catch here ensures (a) we get a console
@@ -74,6 +81,9 @@ export default function PostDraftCutsPage() {
     }
     try { await flushToStorage(); } catch (err) { console.error('[post-draft-cuts] flushToStorage failed', err); }
     router.push('/roster');
+    } finally {
+      setIsStartingSeason(false);
+    }
   }
 
   return (
@@ -171,7 +181,7 @@ export default function PostDraftCutsPage() {
           <Button size="sm" variant="secondary" onClick={() => router.push('/draft-recap')}>
             ← Back to Draft Recap
           </Button>
-          <Button size="lg" onClick={finish} disabled={overCount > 0}>
+          <Button size="lg" busy={isStartingSeason} onClick={finish} disabled={overCount > 0}>
             {overCount > 0
               ? `Cut ${overCount} more to continue`
               : 'Start New Season →'}

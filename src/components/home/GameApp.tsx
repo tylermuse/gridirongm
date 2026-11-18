@@ -24,6 +24,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { afterPaint } from '@/components/ui/useBusyAction';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
 import type { PickerTeam } from '@/lib/data/leagueImport';
 import { takeStashedUpload } from '@/lib/engine/exhibition';
@@ -1257,11 +1258,17 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, rivalries } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, draftOrder, startNewSeason, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, rivalries } = useGameStore();
   const isSpectator = useIsSpectator();
   const { isFoundingMember } = useSubscription();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  const router = useRouter();
+  // Draft-stuck fix (football-draft-stuck): when the player lands on the home
+  // dashboard with the draft finished (phase 'draft', draftOrder empty), show a
+  // can't-miss banner to start the new season — the TopBar buttons are cramped
+  // on small iPhones. Shares the disable+spinner pattern with the other CTAs.
+  const [isStartingSeason, setIsStartingSeason] = useState(false);
   const spotlightRef = useRef<HTMLDivElement>(null);
   const userTeam = teams.find(t => t.id === userTeamId)!;
   const roster = players.filter(p => p.teamId === userTeamId);
@@ -1355,6 +1362,52 @@ function Dashboard() {
     <GameShell>
       <div className="max-w-6xl mx-auto flex flex-col gap-4 sm:block sm:space-y-4">
         <SpectatorBanner />
+        {phase === 'draft' && draftOrder.length === 0 && !isSpectator && (
+          <div className="order-first sm:order-none rounded-xl border-2 border-green-500 bg-green-500/10 px-4 py-4 sm:px-5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-black text-green-600">🏈 Draft Complete</div>
+                <div className="text-sm text-[var(--text-sec)] mt-0.5">
+                  Your rookies are in. Start the new season to roll into preseason and roster cuts.
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link href="/draft-recap">
+                  <Button variant="secondary" size="md">View Draft Recap</Button>
+                </Link>
+                <Button
+                  size="lg"
+                  busy={isStartingSeason}
+                  onClick={async () => {
+                    if (isStartingSeason) return;
+                    setIsStartingSeason(true);
+                    try {
+                      // Over the 53-man limit? Route through post-draft-cuts
+                      // (same as the draft-recap CTA) instead of auto-cutting.
+                      const overCap = (userTeam.roster?.length ?? 0) > 53;
+                      if (overCap) { router.push('/post-draft-cuts'); return; }
+                      await afterPaint();
+                      // Outer try/catch + router.push guarantee the user lands
+                      // on /roster even if the synchronous rollover throws; the
+                      // store-side phase guard makes a double-tap a no-op.
+                      try {
+                        startNewSeason();
+                      } catch (err) {
+                        console.error('[dashboard] startNewSeason escaped its own catch:', err);
+                      }
+                      try { await flushToStorage(); } catch (err) { console.error('[dashboard] flushToStorage failed', err); }
+                      router.push('/roster');
+                    } finally {
+                      setIsStartingSeason(false);
+                    }
+                  }}
+                >
+                  Start New Season →
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         {isSpectator ? (
           // Neutral League Overview header for spectator leagues — the user
           // doesn't own a team, so the team-color banner reads as ownership
