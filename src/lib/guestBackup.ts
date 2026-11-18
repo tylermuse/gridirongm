@@ -11,6 +11,9 @@
  * It is never a wall. A guest who dismisses it is left alone for a week, and
  * after MAX_DISMISSALS it stops for good.
  *
+ * Signed-in players get the backup without being asked (see the second half
+ * of this file).
+ *
  * This file holds the rules and the small localStorage record behind them, with
  * no React, so it can be unit tested. The banner is GuestBackupPrompt.tsx.
  */
@@ -161,12 +164,29 @@ export function markDeviceSignedIn(): void {
 }
 
 // ---------------------------------------------------------------------------
-// After sign-in: actually back the league up
+// Signed in: actually back the league up
 //
-// Cloud sync is opt-in per device (Settings > Cloud Saves), so an account on
-// its own protects nothing. A guest who signed up from the prompt asked for a
-// backup, so turn sync on for them and upload the league straight away.
+// Cloud sync is a per-device switch (Settings > Cloud Saves) that used to start
+// off, so an account on its own protected nothing: by 2026-11-17 only about 50
+// of 744 accounts had ever uploaded a save. Now a signed-in player's league is
+// backed up unless they said no:
+//
+//   'prompt'  they signed up from the banner, which promised a backup.
+//   'auto'    any other signed-in player whose device has never chosen.
+//
+// A device where the player turned sync off stays off.
 // ---------------------------------------------------------------------------
+
+export type BackupSource = 'prompt' | 'auto';
+
+/** Whether a signed-in player's league should be backed up now, and why. */
+export function backupSourceFor(
+  state: Pick<GuestBackupState, 'intent'>,
+  syncPreference: 'on' | 'off' | 'unset',
+): BackupSource | null {
+  if (state.intent) return 'prompt';
+  return syncPreference === 'unset' ? 'auto' : null;
+}
 
 export type GuestBackupOutcome =
   /** The league is in the cloud now. */
@@ -193,10 +213,11 @@ export interface GuestBackupDeps {
 }
 
 /**
- * Run once a guest who tapped the prompt is signed in. Clears the intent on
- * every outcome except 'retry-later'. Never overwrites an existing cloud save:
- * someone signing in to an account they already use elsewhere chooses which
- * league to keep themselves.
+ * Run for a signed-in player backupSourceFor says to back up. Clears the
+ * prompt intent on every outcome except 'retry-later'. Never overwrites an
+ * existing cloud save: someone signed in to an account they already use
+ * elsewhere chooses which league to keep themselves (the home page offers to
+ * load the cloud one), and until they do this device stays as it was.
  */
 export async function finishGuestBackup(deps: GuestBackupDeps): Promise<GuestBackupOutcome> {
   if (deps.isSyncEnabled()) {

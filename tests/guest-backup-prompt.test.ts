@@ -5,6 +5,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_DISMISSALS,
+  backupSourceFor,
   SNOOZE_MS,
   dismissGuestBackupPrompt,
   finishGuestBackup,
@@ -16,6 +17,7 @@ import {
   shouldShowGuestBackupPrompt,
   type GuestBackupDeps,
 } from '@/lib/guestBackup';
+import { getCloudSyncPreference, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = new Date(2026, 10, 17, 12, 0, 0).getTime(); // local noon, so +/- hours stay on the day
@@ -120,6 +122,34 @@ describe('when the prompt shows', () => {
     localStorage.setItem('bs-guest-backup', '{not json');
     expect(readGuestBackupState().days).toBe(0);
     expect(recordGuestVisit(T0).days).toBe(1);
+  });
+});
+
+describe('who gets backed up once signed in', () => {
+  it('backs up a player who came from the prompt, whatever the device setting', () => {
+    for (const pref of ['on', 'off', 'unset'] as const) {
+      expect(backupSourceFor({ intent: true }, pref)).toBe('prompt');
+    }
+  });
+
+  it('backs up any other signed-in player whose device has never chosen', () => {
+    expect(backupSourceFor({ intent: false }, 'unset')).toBe('auto');
+  });
+
+  it('never turns sync back on for a player who turned it off', () => {
+    expect(backupSourceFor({ intent: false }, 'off')).toBeNull();
+  });
+
+  it('has nothing to do when sync is already on', () => {
+    expect(backupSourceFor({ intent: false }, 'on')).toBeNull();
+  });
+
+  it('reads the device setting as on, off or never chosen', () => {
+    expect(getCloudSyncPreference()).toBe('unset');
+    setCloudSyncEnabled(true);
+    expect(getCloudSyncPreference()).toBe('on');
+    setCloudSyncEnabled(false);
+    expect(getCloudSyncPreference()).toBe('off');
   });
 });
 
