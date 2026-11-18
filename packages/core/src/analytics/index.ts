@@ -20,7 +20,8 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
-import { trackEvent } from './track';
+import { isNewDevice, trackEvent } from './track';
+import { sessionSourceProps } from './attribution';
 import { setInteractionPage, startInteractionTracking } from './interactions';
 
 export { trackEvent, flushEvents } from './track';
@@ -96,7 +97,9 @@ export function usePageView() {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem('gg_session')) return;
     sessionStorage.setItem('gg_session', '1');
-    trackEvent('session_start');
+    // Source of this session (referrer, landing page, UTM tags), plus whether
+    // it is the device's first, so traffic can be split by where it came from.
+    trackEvent('session_start', { ...sessionSourceProps(), first_visit: isNewDevice() });
   }, []);
 }
 
