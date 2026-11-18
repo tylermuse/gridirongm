@@ -5607,14 +5607,18 @@ export const useGameStore = create<GameStore>()(
         if (state.phase !== 'draft') return;
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
+        // No prospect left: the draft is over (not one empty slot per click
+        // for the rest of the order, and not a released veteran "drafted"
+        // out of the same pool).
+        if (!hasDraftableProspect(state.freeAgents, state.players)) {
+          set({ draftOrder: [] });
+          return;
+        }
         const playerId = autoDraftPlayerId(state, currentPickTeamId);
         if (playerId) {
           get().draftPlayer(playerId);
         } else {
-          // No pick to make. With prospects left, skip this slot; with none,
-          // the draft is over (not one empty slot per click for the rest of
-          // the order).
-          set({ draftOrder: hasDraftableProspect(state.freeAgents, state.players) ? state.draftOrder.slice(1) : [] });
+          set({ draftOrder: state.draftOrder.slice(1) });
         }
       },
 
@@ -5634,7 +5638,7 @@ export const useGameStore = create<GameStore>()(
         const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
-        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && hasDraftableProspect(freeAgentIds, players); guard++) {
           const pickTeam = draftOrder[0];
           if (pickTeam === state.userTeamId) break; // Stop at user's pick
 
@@ -5737,7 +5741,7 @@ export const useGameStore = create<GameStore>()(
         const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
-        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && hasDraftableProspect(freeAgentIds, players); guard++) {
           const pickTeam = draftOrder[0];
           const fakeState = { ...state, draftOrder, freeAgents: freeAgentIds, players, teams } as LeagueState;
           const pid = autoDraftPlayerId(fakeState, pickTeam);

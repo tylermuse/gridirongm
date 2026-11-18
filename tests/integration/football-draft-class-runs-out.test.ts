@@ -93,6 +93,26 @@ describe('draft class smaller than the number of picks', () => {
     expect(st().draftOrder).toEqual([]);
   }, 120_000);
 
+  it('players released during the draft are not drafted once the rookies are gone', async () => {
+    await draftWithShortClass(5);
+    // A release during the draft puts the player in the same pool as the class.
+    const veteran = st().players.find(p => p.teamId === st().userTeamId && p.experience > 0)!;
+    useGameStore.setState({ freeAgents: [...st().freeAgents, veteran.id] });
+
+    st().simToEndDraft({ skipAdvance: true });
+
+    expect(st().draftResults).toHaveLength(5);
+    expect(st().draftResults.some(r => r.playerId === veteran.id)).toBe(false);
+    expect(st().freeAgents).toEqual([veteran.id]);
+    expect(st().draftOrder).toEqual([]);
+
+    // Same for one more "Sim Pick" on a save left with picks on the clock.
+    useGameStore.setState({ draftOrder: ['team-0', 'team-1'] });
+    st().simDraftPick();
+    expect(st().draftResults).toHaveLength(5);
+    expect(st().draftOrder).toEqual([]);
+  }, 120_000);
+
   it('a save already stuck there can start the season, and the leftover order is cleared', async () => {
     await draftWithShortClass(0);
     expect(st().draftOrder).toHaveLength(224);
