@@ -31,6 +31,42 @@ describe('feedback instant answers: parseAnswer', () => {
   });
 });
 
+describe('feedback instant answers: answers must come from the sheet', () => {
+  const SHEET = [
+    '- To cut a player: open "Roster" in the sidebar, click "Actions ▾" at the right end of the row, then "Cut Player".',
+    '- Not in the game: a difficulty setting, and sound or volume settings.',
+    '- "God Mode" (commissioner): adds "Edit Player" on player cards and "+ Create Player" on the Roster page.',
+  ].join('\n');
+  const reply = (sheet_lines: unknown, answer: string) => JSON.stringify({ sheet_lines, kind: 'question', answer });
+
+  it('keeps an answer whose quoted line is in the sheet', () => {
+    const raw = reply(['To cut a player: open "Roster" in the sidebar, click "Actions ▾" at the right end of the row, then "Cut Player".'], 'Open "Roster", then "Actions ▾", then "Cut Player".');
+    expect(parseAnswer(raw, SHEET)?.answer).toBe('Open "Roster", then "Actions ▾", then "Cut Player".');
+  });
+
+  it('still counts a line the model reworded at the start', () => {
+    const raw = reply(['Cutting a player: open "Roster" in the sidebar, click "Actions ▾" at the right end of the row'], 'Open "Roster".');
+    expect(parseAnswer(raw, SHEET)?.answer).toBe('Open "Roster".');
+  });
+
+  it('drops an answer with no quoted line, or a made-up one', () => {
+    expect(parseAnswer(reply([], 'Open the Team Colors page.'), SHEET)).toEqual({ kind: 'question', answer: null });
+    expect(parseAnswer(reply(['Team colors can be changed on the Team Colors page under Settings.'], 'Open the Team Colors page.'), SHEET)).toEqual({ kind: 'question', answer: null });
+  });
+
+  it('drops a "you can\'t" that no quoted line backs up', () => {
+    // The real failure: "can i edit draft" answered "There isn't a way" from a line that never said so.
+    const line = '"God Mode" (commissioner): adds "Edit Player" on player cards and "+ Create Player" on the Roster page.';
+    expect(parseAnswer(reply([line], "There isn't a way to rename a player."), SHEET)).toEqual({ kind: 'question', answer: null });
+    expect(parseAnswer(reply([line], 'You cannot edit the draft once it has started.'), SHEET)).toEqual({ kind: 'question', answer: null });
+  });
+
+  it('keeps a "you can\'t" when the quoted line says so', () => {
+    const raw = reply(['Not in the game: a difficulty setting, and sound or volume settings.'], "There isn't a difficulty setting.");
+    expect(parseAnswer(raw, SHEET)?.answer).toBe("There isn't a difficulty setting.");
+  });
+});
+
 describe('feedback instant answers: help sheet', () => {
   it('stays small enough to ride in every prompt', () => {
     expect(HELP_SHEET.length).toBeGreaterThan(2000);
