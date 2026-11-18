@@ -9268,6 +9268,17 @@ export const useGameStore = create<GameStore>()(
       },
 
       startNewSeason: () => {
+        // Phase guard (football-draft-stuck): startNewSeason is the final
+        // offseason step and is only valid from the 'draft' phase. On slow
+        // mobile Safari a hung first call or a double-tap (no disabled/spinner
+        // feedback) could re-enter and roll the season over twice, or leave the
+        // save wedged in draft. Bail immediately when not in draft so any
+        // re-entry is a harmless no-op.
+        const { phase } = get();
+        if (phase !== 'draft') {
+          console.warn('[startNewSeason] aborted: not in draft phase', phase);
+          return;
+        }
         // §1.7-followup (bige08676 5/8 retest): the prior 5/7 ship
         // claimed a defensive try/catch around offseason rollover but
         // never actually landed on main. Re-shipping it for real.
