@@ -1181,6 +1181,17 @@ export default function DraftPage() {
   }
 
   const [selectedRound, setSelectedRound] = useState(1);
+  // Keep the round tab following the live draft as AI picks advance it to
+  // later rounds. Follow-only: never snaps backward past a round the user is
+  // browsing, so a manual round selection stays put while picks continue.
+  useEffect(() => {
+    if (phase !== 'draft') return;
+    const picks = teams.length || 1;
+    const total = draftPickOrder?.length || picks * 7;
+    const overall = Math.max(1, Math.min(total, total - draftOrder.length + 1));
+    const liveRound = Math.min(7, Math.max(1, Math.ceil(overall / picks)));
+    setSelectedRound(prev => (liveRound > prev ? liveRound : prev));
+  }, [phase, draftOrder.length, draftPickOrder, teams.length]);
   const [draftResultsTeamFilter, setDraftResultsTeamFilter] = useState<string>('ALL');
   const [autoDrafting, setAutoDrafting] = useState(false);
   const [positionFilter, setPositionFilter] = useState<Position | 'ALL'>('ALL');
