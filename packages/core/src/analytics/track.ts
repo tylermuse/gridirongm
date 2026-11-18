@@ -49,6 +49,19 @@ export function getDeviceId(): string | null {
   } catch { return null; }
 }
 
+/**
+ * True on a device's very first page load: no device id yet, or one minted
+ * during this load. `session_start` uses it to mark first visits.
+ */
+export function isNewDevice(): boolean {
+  try {
+    if (!localStorage.getItem(DEVICE_ID_KEY)) return true;
+    const created = Number(localStorage.getItem(DEVICE_CREATED_KEY));
+    // Devices from before DEVICE_CREATED_KEY existed have no timestamp: not new.
+    return created > 0 && created >= performance.timeOrigin - 1000;
+  } catch { return false; }
+}
+
 function send(events: QueuedEvent[], useBeacon: boolean) {
   if (events.length === 0) return;
   const body = JSON.stringify({ events, deviceId: getDeviceId() });

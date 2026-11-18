@@ -11,6 +11,9 @@
  *   3. attributionMetadata() reads the row back at Stripe Checkout so the
  *      subscription carries it.
  *
+ * Separately, sessionSourceProps() puts each browser session's own source on
+ * the `session_start` analytics event, for visitors who never sign up.
+ *
  * Best-effort throughout: failures are logged or ignored, never thrown, so
  * attribution can't break signup, login or checkout.
  *
@@ -105,6 +108,31 @@ export function captureAttribution() {
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   } catch { /* storage unavailable; ignore */ }
+}
+
+/**
+ * Where this browser session came from, sent on the `session_start` event so
+ * every visitor has a source, not only the ones who sign up. Same cleaning as
+ * the signup row: referrer without its query string, our own sites count as
+ * none. Keys with no value are left out.
+ */
+export function sessionSourceProps(): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    if (typeof window === 'undefined') return out;
+    const params = new URLSearchParams(location.search);
+    const pairs: [string, string | null][] = [
+      ['ref', cleanReferrer(document.referrer, location.hostname)],
+      ['landing', clip(location.pathname)],
+      ['utm_source', clip(params.get('utm_source'))],
+      ['utm_medium', clip(params.get('utm_medium'))],
+      ['utm_campaign', clip(params.get('utm_campaign'))],
+    ];
+    for (const [key, value] of pairs) {
+      if (value) out[key] = value;
+    }
+  } catch { /* no location / bad URL; send what we have */ }
+  return out;
 }
 
 function readStored(): StoredAttribution | null {

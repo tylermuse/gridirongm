@@ -12,8 +12,10 @@ import {
   cleanReferrer,
   isNewSignup,
   saveAttribution,
+  sessionSourceProps,
   toStripeMetadata,
 } from '@bs/core/analytics/attribution';
+import { DEVICE_CREATED_KEY, getDeviceId, isNewDevice } from '@bs/core/analytics/track';
 
 const START = Date.parse(ATTRIBUTION_START);
 const MIN = 60_000;
@@ -114,6 +116,56 @@ describe('captureAttribution', () => {
   it('swallows storage errors', () => {
     vi.stubGlobal('localStorage', { ...memoryStorage(), getItem: () => { throw new Error('blocked'); } });
     expect(() => captureAttribution()).not.toThrow();
+  });
+});
+
+describe('sessionSourceProps', () => {
+  it("carries this session's referrer, landing path and UTM tags", () => {
+    visit('/rosters?utm_source=reddit&utm_medium=post&utm_campaign=fbgm-week11&email=a@b.c', 'https://www.reddit.com/r/Football_GM/?x=1');
+    expect(sessionSourceProps()).toEqual({
+      ref: 'https://www.reddit.com/r/Football_GM/',
+      landing: '/rosters',
+      utm_source: 'reddit',
+      utm_medium: 'post',
+      utm_campaign: 'fbgm-week11',
+    });
+  });
+
+  it('leaves out what it does not know, and ignores our own sites as referrers', () => {
+    visit('/mock-draft/2027/packers', 'https://bs-football.com/mock-draft/2027');
+    expect(sessionSourceProps()).toEqual({ landing: '/mock-draft/2027/packers' });
+  });
+
+  it('reads the current session, not the stored first visit', () => {
+    visit('/?utm_source=twitter', 'https://t.co/abc');
+    captureAttribution();
+    visit('/', 'https://www.google.com/');
+    expect(sessionSourceProps()).toEqual({ ref: 'https://www.google.com/', landing: '/' });
+  });
+});
+
+describe('isNewDevice', () => {
+  it('is true before a device id exists and on the load that mints it', () => {
+    expect(isNewDevice()).toBe(true);
+    getDeviceId();
+    expect(isNewDevice()).toBe(true);
+  });
+
+  it('is false for a device minted before this page load', () => {
+    getDeviceId();
+    localStorage.setItem(DEVICE_CREATED_KEY, String(performance.timeOrigin - 60 * MIN));
+    expect(isNewDevice()).toBe(false);
+  });
+
+  it('is false for a device from before the created timestamp existed', () => {
+    getDeviceId();
+    localStorage.removeItem(DEVICE_CREATED_KEY);
+    expect(isNewDevice()).toBe(false);
+  });
+
+  it('is false when storage is blocked', () => {
+    vi.stubGlobal('localStorage', { ...memoryStorage(), getItem: () => { throw new Error('blocked'); } });
+    expect(isNewDevice()).toBe(false);
   });
 });
 
