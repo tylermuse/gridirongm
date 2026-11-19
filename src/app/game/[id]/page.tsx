@@ -1805,7 +1805,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   function addPlayTypeIcon(evt: PlayEvent): string {
     const desc = evt.description;
     // Already has an icon from the Live Coach formatter
-    if (/^[🏃🎯🚀⚡🛡🥾🏹]/.test(desc)) return desc;
+    if (/^[🏃🎯🚀⚡🛡🥾🏹🎭]/.test(desc)) return desc;
     // Add icon based on event type
     const ICONS: Partial<Record<string, string>> = {
       run: '🏃',

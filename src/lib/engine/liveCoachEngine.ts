@@ -21,9 +21,15 @@ import { getBestReturner } from './specialTeams';
 import { resolveReturn, returnNote, returnSpotLabel, rollPickAirYards, rollReturn, type ReturnOutcome } from './returns';
 import type { DefensiveScheme } from '@/types';
 import {
-  lookModifier, pickDefensiveLook, pickOffensiveSet, NO_LOOK, TENDENCY_WINDOW, LOOK_INFO,
+  lookModifier, pickDefensiveLook, pickOffensiveSet, NO_LOOK, TENDENCY_WINDOW, LOOK_INFO, LOOK_PLAYS,
   type CpuPlay, type DefensiveLook, type LookModifier, type LookPlay, type OffensiveSet,
 } from './defensiveLooks';
+
+/** The prefix a user-called snap's line starts with (the 3D sim reads the call from it: liveSim3d.ts). */
+const CALL_LABELS: Record<LookPlay, string> = {
+  run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot',
+  qb_run: '⚡ QB Scramble', screen: '🛡️ Screen', play_action: '🎭 Play Action',
+};
 
 export interface LiveEngineState {
   quarter: number;
@@ -597,7 +603,9 @@ export function createLiveCoachEngine(
     }
   }
 
-  function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' = 'short', callPrefix = '', mod: LookModifier = NO_LOOK) {
+  /** 'play_action': a pass off a run fake. Thrown between a short pass and a deep shot; the QB turns his back to sell
+   *  the fake, so he holds it longer (more sacks than a short pass). Its edge comes from the look (defensiveLooks.ts). */
+  function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' | 'play_action' = 'short', callPrefix = '', mod: LookModifier = NO_LOOK) {
     const ok = offKey();
     const dk = defKey();
     const target = depth === 'screen'
@@ -605,8 +613,9 @@ export function createLiveCoachEngine(
       : (pickReceiver(ok.wrs, ok.tes, ok.rbs) ?? ok.wr1);
 
     // Sack chance based on depth and pass rush
-    const sackChance = (depth === 'deep' ? 0.10 : depth === 'short' ? 0.05 : 0.02) * mod.sackMult;
+    const sackChance = (depth === 'deep' ? 0.10 : depth === 'play_action' ? 0.08 : depth === 'short' ? 0.05 : 0.02) * mod.sackMult;
     const prefix = callPrefix ? `${callPrefix} — ` : '';
+    const pa = depth === 'play_action';
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 5));
       const qbName = nameOrFallback(ok.qb, 'the QB');
@@ -619,7 +628,7 @@ export function createLiveCoachEngine(
       // live-coached box scores stay consistent.
       const sacker = pickSacker(dk.dls, dk.lbs) ?? dk.dl1;
       const sackedBy = sacker ? ` by ${nameOrFallback(sacker, 'the rusher')}` : '';
-      events.push(makeEvent('sack', `${prefix}${qbName} is sacked${sackedBy} for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
+      events.push(makeEvent('sack', `${prefix}${qbName}${pa ? ' comes out of the fake and' : ''} is sacked${sackedBy} for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
       bump(sacker, { sacks: 1 });
       state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
       state.yardsToGo -= sackYards;
@@ -646,7 +655,7 @@ export function createLiveCoachEngine(
     }
 
     // INT chance — higher for deep shots
-    const intChance = (depth === 'deep' ? 0.06 : depth === 'short' ? 0.025 : 0.015) * mod.intMult;
+    const intChance = (depth === 'deep' ? 0.06 : depth === 'play_action' ? 0.035 : depth === 'short' ? 0.025 : 0.015) * mod.intMult;
     if (Math.random() < intChance) {
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const interceptor = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.cb1;
@@ -668,12 +677,13 @@ export function createLiveCoachEngine(
     }
 
     // Completion check
-    const compRate = clamp((depth === 'deep' ? 0.45 : depth === 'short' ? 0.70 : 0.78) + mod.comp, 0.05, 0.95);
+    const compRate = clamp((depth === 'deep' ? 0.45 : depth === 'play_action' ? 0.58 : depth === 'short' ? 0.70 : 0.78) + mod.comp, 0.05, 0.95);
     const isComplete = Math.random() < compRate;
 
     if (isComplete) {
       let yards: number;
       if (depth === 'deep') yards = Math.round(15 + gaussian(8, 6) + mod.yards);
+      else if (pa) yards = Math.round(11 + gaussian(3, 4) + mod.yards);
       else if (depth === 'short') yards = Math.round(7 + gaussian(2, 3) + mod.yards);
       else yards = Math.round(4 + gaussian(2, 2) + mod.yards); // screen
       yards = clamp(yards, 1, 75);
@@ -687,11 +697,14 @@ export function createLiveCoachEngine(
 
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const recName = nameOrFallback(target, 'the receiver');
+      const fake = pa ? ' sells the fake and' : '';
       const desc = isTD
-        ? `${prefix}${qbName} hits ${recName} for a ${finalYards}-yard TOUCHDOWN!`
+        ? `${prefix}${qbName}${fake} hits ${recName} for a ${finalYards}-yard TOUCHDOWN!`
         : finalYards >= 20
-          ? `${prefix}${qbName} fires deep to ${recName} — ${finalYards} yards!`
-          : `${prefix}${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
+          ? `${prefix}${qbName}${fake} fires deep to ${recName} — ${finalYards} yards!`
+          : pa
+            ? `${prefix}${qbName} sells the fake and finds ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`
+            : `${prefix}${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
 
       // Receiver brought down short of the end zone — name the tackler and credit him.
       const tackler = isTD ? null : pickTackler(dk, 'pass');
@@ -731,7 +744,7 @@ export function createLiveCoachEngine(
       const bName = nameOrFallback(breaker, 'the defender');
       const breakLine = !breaker ? '' : Math.random() < 0.5 ? ` is broken up by ${bName}.` : ` is knocked away by ${bName}.`;
       events.push({
-        ...makeEvent('pass_incomplete', `${prefix}${qbName}'s pass to ${recName}${breakLine || ' falls incomplete.'}`, 0, false),
+        ...makeEvent('pass_incomplete', `${prefix}${pa ? `${qbName} fakes the handoff, but his` : `${qbName}'s`} pass to ${recName}${breakLine || ' falls incomplete.'}`, 0, false),
         ...(breakLine ? { defNote: breakLine } : {}),
       });
       bump(ok.qb, { passAttempts: 1 });
@@ -811,13 +824,14 @@ export function createLiveCoachEngine(
   function runTwoPointPlay(events: PlayEvent[], userCall: PlayCallType | undefined) {
     state.awaitingTwoPointCall = false;
     twoPointTry = true; twoPointResolved = false;
-    const call: PlayCallType = (userCall && ['run', 'pass_short', 'pass_deep', 'qb_run', 'screen'].includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
-    const prefix = '2-PT — ' + ({ run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot', qb_run: '⚡ QB Scramble', screen: '🛡️ Screen' } as Record<string, string>)[call];
+    const call: PlayCallType = (userCall && (LOOK_PLAYS as string[]).includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
+    const prefix = '2-PT — ' + CALL_LABELS[call as LookPlay];
     const clockBefore = state.timeSecs;
     if (call === 'run') runRunPlay(events, 'rb', prefix);
     else if (call === 'qb_run') runRunPlay(events, 'qb', prefix);
     else if (call === 'pass_deep') runPassPlay(events, 'deep', prefix);
     else if (call === 'screen') runPassPlay(events, 'screen', prefix);
+    else if (call === 'play_action') runPassPlay(events, 'play_action', prefix);
     else runPassPlay(events, 'short', prefix);
     state.timeSecs = clockBefore; state.pendingRunoff = 0;   // a try is untimed
     if (!twoPointResolved) {
@@ -1227,12 +1241,8 @@ export function createLiveCoachEngine(
     }
 
     // Determine play type
-    let playType: 'run' | 'pass_short' | 'pass_deep' | 'qb_run' | 'screen';
-    if (userCall === 'run') playType = 'run';
-    else if (userCall === 'pass_short') playType = 'pass_short';
-    else if (userCall === 'pass_deep') playType = 'pass_deep';
-    else if (userCall === 'qb_run') playType = 'qb_run';
-    else if (userCall === 'screen') playType = 'screen';
+    let playType: LookPlay;
+    if (userCall && (LOOK_PLAYS as string[]).includes(userCall)) playType = userCall as LookPlay;
     else if (userCall === 'go_for_it') playType = 'pass_short'; // default for 'go for it'
     else {
       // No user call — pick by down/distance. A CPU snap the user is calling the defense on was chosen when its set
@@ -1241,15 +1251,10 @@ export function createLiveCoachEngine(
       playType = shown ?? pickAutoPlay(state.timeSecs);
     }
 
-    // Play-call-aware icon prefixes for descriptions
-    const CALL_ICONS: Record<string, string> = {
-      run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot',
-      qb_run: '⚡ QB Scramble', screen: '🛡️ Screen',
-    };
     // The user's defensive call counts on a CPU scrimmage snap only
     const calledLook = !userCall && defCall && state.possession !== userSide ? defCall : null;
     const shownSet = calledLook ? (state.offSet ?? null) : null;
-    const callPrefix = userCall ? (CALL_ICONS[playType] ?? '')
+    const callPrefix = userCall ? (CALL_LABELS[playType] ?? '')
       : calledLook ? `${LOOK_INFO[calledLook].icon} vs ${LOOK_INFO[calledLook].label}` : '';
 
     // Execute the play
@@ -1263,6 +1268,7 @@ export function createLiveCoachEngine(
     else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix, mod);
     else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix, mod);
     else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix, mod);
+    else if (playType === 'play_action') runPassPlay(events, 'play_action', callPrefix, mod);
     else runPassPlay(events, 'screen', callPrefix, mod);
     if (look && events[snapIdx]) { events[snapIdx].defLook = look; events[snapIdx].lookEdge = mod.edge; }
     if (calledLook && events[snapIdx]) {
