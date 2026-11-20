@@ -15,7 +15,7 @@ import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { LiveSim3D, useSim3DMode, readSim3DPref, sim3dTestArm } from '@/components/game/LiveSim3D';
 import { nextSnapSituation } from '@/lib/engine/scorebugSituation';
-import { clockSeconds, scoreBeforeTry } from '@/lib/engine/liveSim3d';
+import { clockSeconds, formationForSet, scoreBeforeTry } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { buildMatchupMetrics, rankForMetric } from '@/lib/engine/matchupRanks';
@@ -2549,7 +2549,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), ...simLineupScore,
               ...(xpPending ? { form: 'xp' as const } : kickoffPending ? { form: 'kickoff' as const } : kickNext ? { form: kickNext } : {}),
               // the look the CPU defense is showing while the user picks a play: the 3D defense lines up in it
-              ...(engineSnapshot?.defLook && !xpPending && !kickoffPending ? { look: engineSnapshot.defLook } : {}) }}
+              ...(engineSnapshot?.defLook && !xpPending && !kickoffPending ? { look: engineSnapshot.defLook } : {}),
+              // the set the CPU offense shows while the user calls the defense ("Heavy", "Spread"…): the 3D offense lines up in it
+              ...(engineSnapshot?.offSet && !xpPending && !kickoffPending && !kickNext ? { formation: formationForSet(engineSnapshot.offSet) } : {}) }}
             onActiveChange={setSim3dActive}
             onPlayDead={setSim3dDeadId}
             onPlayResult={setSim3dResultId}
