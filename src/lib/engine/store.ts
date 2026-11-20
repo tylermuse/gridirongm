@@ -6693,6 +6693,11 @@ export const useGameStore = create<GameStore>()(
           return {
             ...t,
             roster: t.roster.filter(id => id !== playerId),
+            // A released player must also leave the practice squad — otherwise
+            // a cut PS player lingers as a ghost (can't be cut, blocks a PS
+            // slot, ghost-promotes). Mirrors the roster/depthChart prune above
+            // and the PS filters already used elsewhere in this store.
+            practiceSquad: (t.practiceSquad ?? []).filter(id => id !== playerId),
             totalPayroll: Math.max(0, t.totalPayroll - actualSavings),
             depthChart: chart,
             deadCap: newDeadCap,
@@ -9288,6 +9293,17 @@ export const useGameStore = create<GameStore>()(
       },
 
       startNewSeason: () => {
+        // Phase guard (football-draft-stuck): startNewSeason is the final
+        // offseason step and is only valid from the 'draft' phase. On slow
+        // mobile Safari a hung first call or a double-tap (no disabled/spinner
+        // feedback) could re-enter and roll the season over twice, or leave the
+        // save wedged in draft. Bail immediately when not in draft so any
+        // re-entry is a harmless no-op.
+        const { phase } = get();
+        if (phase !== 'draft') {
+          console.warn('[startNewSeason] aborted: not in draft phase', phase);
+          return;
+        }
         // §1.7-followup (bige08676 5/8 retest): the prior 5/7 ship
         // claimed a defensive try/catch around offseason rollover but
         // never actually landed on main. Re-shipping it for real.

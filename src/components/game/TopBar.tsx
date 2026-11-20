@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { isDraftOver } from '@/lib/engine/draftStatus';
 import { Button } from '@/components/ui/Button';
-import { useBusyAction } from '@/components/ui/useBusyAction';
+import { useBusyAction, afterPaint } from '@/components/ui/useBusyAction';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
@@ -43,6 +43,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
+  // Draft-stuck fix: disables the Start-New-Season button + shows a spinner on
+  // first tap so a slow mobile Safari main thread can't register a double-tap.
+  const [isStartingSeason, setIsStartingSeason] = useState(false);
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const isFired = useGameStore(s => !!s.firedState?.fired);
   // Over when every pick is made or the class has run out with picks left (a
@@ -558,7 +561,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                         Draft Recap
                       </Button>
                     </Link>
-                    <Button size="sm" onClick={async () => {
+                    <Button size="sm" busy={isStartingSeason} onClick={async () => {
+                      if (isStartingSeason) return;
+                      setIsStartingSeason(true);
+                      try {
+                      await afterPaint();
                       // 5/16 instrumentation widening (bige08676 + marioalsosa
                       // cross-tester). Outer try/catch + router.push guarantee
                       // even on startNewSeason crash.
@@ -577,6 +584,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       }
                       try { await flushToStorage(); } catch (err) { console.error('[TopBar] flushToStorage failed', err); }
                       router.push('/roster');
+                      } finally {
+                        setIsStartingSeason(false);
+                      }
                     }}>
                       <span className="hidden sm:inline">Start New Season</span>
                       <span className="sm:hidden">New Season</span>

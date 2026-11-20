@@ -3,7 +3,7 @@
  *
  * Additive layer over the existing IndexedDB persistence (@bs/core/storage).
  * IndexedDB stays the local source of truth + offline cache; when a user is
- * signed in AND has opted into sync, the serialized save blob is mirrored to a
+ * signed in AND sync is on for the device, the serialized save blob is mirrored to a
  * Supabase `cloud_saves` row (RLS-scoped to the user) so a league started on
  * one device can be pulled on another.
  *
@@ -154,6 +154,21 @@ export function isCloudSyncEnabled(): boolean {
     return localStorage.getItem(SYNC_ENABLED_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+/**
+ * What this device has decided about sync. 'unset' means nobody has chosen
+ * yet: the Settings toggle writes 'on' or 'off', and a cloud restore writes
+ * 'on'. Football turns sync on for a signed-in player who is still 'unset'
+ * (see src/lib/guestBackup.ts); an explicit 'off' is never overridden.
+ */
+export function getCloudSyncPreference(): 'on' | 'off' | 'unset' {
+  try {
+    const v = localStorage.getItem(SYNC_ENABLED_KEY);
+    return v === '1' ? 'on' : v === '0' ? 'off' : 'unset';
+  } catch {
+    return 'unset';
   }
 }
 

@@ -11,7 +11,7 @@
  * - Leave out anything you are not sure of. The model returns no answer for
  *   what the sheet does not cover, and the developer answers it by hand.
  *
- * Last checked against the code: 2026-11-14.
+ * Last checked against the code: 2026-11-14 (award winners, create player, draft class and spectating lines added 2026-11-17 from player questions).
  */
 
 const IN_SEASON = `
@@ -113,6 +113,7 @@ DRAFT
 - The draft ends after the last pick, or sooner if the prospects run out first (an imported league with more than 32 teams has more picks than prospects). Either way the top bar then shows "Draft Recap" and "Start New Season →".
 - Scouting: click "Scout" on a prospect to spend 1 scout point and unlock his full report. "Scout Pts" shows what you have left, and "Auto-scout" spends the rest. Free accounts get 10 points per draft, Premium 30.
 - "Draft Preview" in the sidebar shows the upcoming class. It unlocks after the trade deadline.
+- Editing or replacing the draft class: on the "Draft" page, "📥 Import Draft Class" loads your own class from a file, and "📤 Export Current Class" downloads the current one so you can edit it and import it back. With "God Mode" on you can also use "Edit Player" on any player's card.
 - A drafted rookie is slotted into your depth chart by overall rating, so he starts right away if he is your best player at the position. Rookies get a 4-year contract.
 - Not in the game: scouting tiers such as "pro-level scouting". There is one "Scout" action.
 
@@ -126,6 +127,7 @@ COACHES
 
 SETTINGS
 - "Settings" in the sidebar. League options save with "Save Changes".
+- Creating a player: yes, with "God Mode". Turn on "God Mode" in Settings, then use "+ Create Player" at the top of the Roster page.
 - "God Mode" (commissioner): adds "Edit Player" on player cards and "+ Create Player" on the Roster page, and can force trades. Turning it on permanently marks the league as modified and removes it from GM Rankings.
 - "Switch Team" lets you take over a different team; the AI runs your old one.
 - "Dark Mode" is under "Appearance".
@@ -135,12 +137,13 @@ SAVES
 - The game saves automatically in this browser. No save button is needed.
 - "Save/Load" at the bottom of the sidebar has 5 save slots, each with "Save", "Load" and delete.
 - Backup file: Settings, "Save Backup", "Export Save" downloads your current league as a file, and "Import Save" loads one (it replaces the league in this browser).
-- Playing on another device: sign in, then turn on Settings, "Cloud Saves", "Sync saves to my account" (off by default). It syncs your current league, not the 5 slots. On the other device, sign in and the start screen offers to load the newer save.
+- Playing on another device: sign in. Your current league is then backed up to your account automatically; Settings, "Cloud Saves", "Sync saves to my account" turns that off or back on. It syncs your current league, not the 5 slots. On the other device, sign in and the start screen offers to load the newer save.
 - Clearing your browser data deletes local saves. Only an exported file or the cloud copy can bring a league back.
 - New league: "New League" at the bottom of the sidebar, then "Confirm?". This wipes the current league, so save it to a slot first if you want to keep it.
 
 STARTING A LEAGUE
 - The start screen offers "Real 2026 NFL season" (real rosters and records, picking up at the current week) or "Fictional league" (made-up teams and players from Week 1), then you pick a team. "Spectator (no team)" lets you watch an all-AI league.
+- Just watching (spectating): choose "Spectator (no team)" on the start screen when you start a league. A league you are already running as a GM cannot be switched to spectator, so start a new one with "New League".
 - Historic rosters (1994, 1999 and 2007 seasons): go to bs-football.com/rosters and click "Play in BS Football →".
 - Your own roster or league file: on the start screen open "Import League File" and upload a Football GM league file or paste its link.
 - Expansion teams: "Expansion" appears in the sidebar during the offseason. It only works with "God Mode" turned on.
@@ -152,7 +155,7 @@ ACCOUNT AND PREMIUM
 - One Premium subscription covers both BS Football and BS Hoops.
 
 OTHER PAGES
-- "History": past champions, awards, stat leaders, retired players and records.
+- Past award winners and champions: "History" in the sidebar, "Seasons" tab. Pick a season to see its champion, award winners, stat leaders and retired players. The "Records" tab has career and single-season records.
 - "Rankings": "Power Rankings", "Award Race" and "GM Rankings" (an online leaderboard of signed-in players; set your name in Settings, "Display Name").
 - "Stats": league leaders and team stats. "Player Search" finds any player. "News" has league news and the weekly recap.
 - Team Spotlight is the show on the Dashboard where two hosts talk about your team. "The Booth" button at the bottom-right of in-game screens lets you ask them questions.

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
+import { afterPaint } from '@/components/ui/useBusyAction';
 import { Button } from '@/components/ui/Button';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -72,6 +73,8 @@ export default function DraftRecapPage() {
   const { draftResults, players, teams, userTeamId, season, phase, startNewSeason, nflMockDraft } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  // Draft-stuck fix: disable + spinner on first tap (see store startNewSeason guard).
+  const [isStartingSeason, setIsStartingSeason] = useState(false);
 
   const playerMap = useMemo(() => new Map(players.map(p => [p.id, p])), [players]);
   const teamMap = useMemo(() => new Map(teams.map(t => [t.id, t])), [teams]);
@@ -470,11 +473,16 @@ export default function DraftRecapPage() {
                 </p>
               )}
               <Button
+                busy={isStartingSeason}
                 onClick={async () => {
+                  if (isStartingSeason) return;
+                  setIsStartingSeason(true);
+                  try {
                   if (overCap) {
                     router.push('/post-draft-cuts');
                     return;
                   }
+                  await afterPaint();
                   // 5/16 instrumentation widening (bige08676 + marioalsosa).
                   // See post-draft-cuts/page.tsx for the rationale — outer
                   // try/catch + router.push guarantee even on startNewSeason
@@ -494,6 +502,9 @@ export default function DraftRecapPage() {
                   }
                   try { await flushToStorage(); } catch (err) { console.error('[draft-recap] flushToStorage failed', err); }
                   router.push('/roster');
+                  } finally {
+                    setIsStartingSeason(false);
+                  }
                 }}
                 size="lg"
               >
