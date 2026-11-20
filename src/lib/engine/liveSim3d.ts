@@ -19,8 +19,9 @@ export interface SimPlayResult {
   yards?: number;
   depth?: 'short' | 'deep';
   good?: boolean;
-  /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front */
-  style?: 'scramble' | 'screen';
+  /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front;
+   *  'playaction' (complete / incomplete / int / sack): the QB fakes the handoff to the back, pulls it and drops to throw (or is sacked) */
+  style?: 'scramble' | 'screen' | 'playaction';
   /** the play ends in a lost fumble (the engine logs it as the next event): a run or a catch stripped at the tackle, or a
    *  strip-sack — the ball squirts loose and the defense falls on it */
   fumble?: boolean;
@@ -90,6 +91,9 @@ function passDepth(desc: string, y: number): 'short' | 'deep' {
 }
 const SCRAMBLE_RE = /scramble/i;
 const SCREEN_RE = /screen/i;
+/** liveCoachEngine.ts prefixes a called play action "🎭 Play Action — …"; playByPlay.ts writes "Play-action works perfectly. …".
+ *  Either way the sim shows the fake handoff before the throw (Tyler 11/20: "Right now it's just a throw"). */
+const PLAY_ACTION_RE = /play[- ]action/i;
 /** playByPlay.ts: "intended for X but it's batted down" / "Tipped at the line! X comes down with the pick!" */
 const BATTED_RE = /batted|tipped at the line|knocked down at the line/i;
 /** A fumble the offense recovered is told in the play's own line (the engines log a LOST fumble as its own 'fumble' event). */
@@ -109,6 +113,14 @@ export function clockSeconds(timeStr: string): number {
 /** Outcome the sim should animate, or null for plays it has no choreography for
  *  (kickoffs, fumbles, penalties, kneels, XPs, timeouts, quarter breaks, fakes). */
 export function toSimResult(e: PlayEvent): SimPlayResult | null {
+  const res = baseSimResult(e);
+  // a play-action pass (or a sack off the fake) starts with the run fake; a screen is never play action
+  if (res && !res.style && (res.kind === 'complete' || res.kind === 'incomplete' || res.kind === 'int' || res.kind === 'sack')
+    && PLAY_ACTION_RE.test(e.description)) res.style = 'playaction';
+  return res;
+}
+
+function baseSimResult(e: PlayEvent): SimPlayResult | null {
   if (FAKE_RE.test(e.description)) return null;
   const y = e.yardsGained ?? 0;
   const toGoal = 100 - e.fieldPos;

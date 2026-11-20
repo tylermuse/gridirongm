@@ -799,7 +799,7 @@ export function createLiveCoachEngine(
     doKickoffEvents(events);
   }
 
-  /** Two-point try as a real snap: the user picks a play (run / pass / scramble / screen) from the 3-yard line and the
+  /** Two-point try as a real snap: the user picks a play (run / pass / scramble / screen / play action) from the 3-yard line and the
    *  play engine decides it — a touchdown is +2, anything else is a failed try. The 3D sim animates it like any play. */
   let twoPointTry = false;
   let twoPointResolved = false;
@@ -811,14 +811,15 @@ export function createLiveCoachEngine(
   function runTwoPointPlay(events: PlayEvent[], userCall: PlayCallType | undefined) {
     state.awaitingTwoPointCall = false;
     twoPointTry = true; twoPointResolved = false;
-    const call: PlayCallType = (userCall && ['run', 'pass_short', 'pass_deep', 'qb_run', 'screen'].includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
-    const prefix = '2-PT — ' + ({ run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot', qb_run: '⚡ QB Scramble', screen: '🛡️ Screen' } as Record<string, string>)[call];
+    // The menu offers every scrimmage call here, Play Action included: a call this list didn't know used to become a coin-flip run or pass.
+    const call: PlayCallType = (userCall && ['run', 'pass_short', 'pass_deep', 'qb_run', 'screen', 'play_action'].includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
+    const prefix = '2-PT — ' + ({ run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot', qb_run: '⚡ QB Scramble', screen: '🛡️ Screen', play_action: '🎭 Play Action' } as Record<string, string>)[call];
     const clockBefore = state.timeSecs;
     if (call === 'run') runRunPlay(events, 'rb', prefix);
     else if (call === 'qb_run') runRunPlay(events, 'qb', prefix);
     else if (call === 'pass_deep') runPassPlay(events, 'deep', prefix);
     else if (call === 'screen') runPassPlay(events, 'screen', prefix);
-    else runPassPlay(events, 'short', prefix);
+    else runPassPlay(events, 'short', prefix);   // short pass, and play action (a short pass off the run fake; the sim shows the fake)
     state.timeSecs = clockBefore; state.pendingRunoff = 0;   // a try is untimed
     if (!twoPointResolved) {
       twoPointTry = false;

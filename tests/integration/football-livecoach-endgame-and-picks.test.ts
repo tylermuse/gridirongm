@@ -128,3 +128,17 @@ describe('interception returns', () => {
     expect(res).toEqual({ kind: 'int', depth: 'short' });
   });
 });
+
+describe('play action on a two-point try', () => {
+  it('is thrown as a play action, never swapped for a coin-flip run or plain pass (the menu offers it there too)', () => {
+    for (let i = 0; i < 60; i++) {
+      const engine = engineIn(lateState({ quarter: 2, timeSecs: 600, possession: 'home', fieldPos: 97, down: 1, yardsToGo: 3, homeScore: 13, awayScore: 7, awaitingTwoPointCall: true }));
+      const snap = engine.runOnePlay('play_action').find(e => ['pass_complete', 'pass_incomplete', 'interception', 'sack', 'run'].includes(e.type));
+      expect(snap, 'the try is a snap').toBeTruthy();
+      expect(snap!.type).not.toBe('run');
+      expect(snap!.description).toMatch(/^2-PT — 🎭 Play Action — /);
+      // …and the 3D sim pictures the fake handoff before the throw
+      expect(toSimResult(snap!)?.style).toBe('playaction');
+    }
+  });
+});
