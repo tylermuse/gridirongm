@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useSyncExternalStore } from 'react';
 import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
-import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites } from '@bs/core/storage';
+import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites, getWriteFailure, onWriteResult, type WriteFailure } from '@bs/core/storage';
 import { isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { scheduleCloudAutosavePush } from '@/lib/data/cloudAutosave';
 function uuid(): string {
@@ -107,6 +107,32 @@ export async function retrySaveLoad(): Promise<SaveLoadStatus> {
  *  Autosaves resume, so starting a new league will replace the old save. */
 export function continueWithoutSave(): void {
   setSaveLoadStatus('ready');
+}
+
+// ---------------------------------------------------------------------------
+// Save-write status
+// ---------------------------------------------------------------------------
+// Whether the latest autosave reached IndexedDB. The browser can refuse it
+// (storage full, private window, blocked site data); until 2026-11 that was a
+// console line and nothing else, so the player kept going and the next reload
+// put the league back at the last write that had landed.
+
+const saveWriteListeners = new Set<() => void>();
+let saveWriteFailureReported = false;
+
+/** Why the latest autosave did not land, or null if it did. */
+export function getSaveWriteFailure(): WriteFailure | null {
+  return getWriteFailure(AUTOSAVE_KEY);
+}
+
+function subscribeSaveWriteFailure(cb: () => void): () => void {
+  saveWriteListeners.add(cb);
+  return () => { saveWriteListeners.delete(cb); };
+}
+
+/** The current autosave failure for the UI to warn about (null = saving fine). */
+export function useSaveWriteFailure(): WriteFailure | null {
+  return useSyncExternalStore(subscribeSaveWriteFailure, getSaveWriteFailure, () => null);
 }
 
 // Exhibition sandbox (/live): a Football GM upload is loaded into memory to
@@ -11980,10 +12006,10 @@ export const useGameStore = create<GameStore>()(
  * Call this before router.push() after any store mutation to guarantee the
  * navigation target will rehydrate fresh data.
  */
-export async function flushToStorage(): Promise<void> {
+export async function flushToStorage(): Promise<boolean> {
   // Same rule as the persist storage: never write the empty pre-load state,
   // nor an exhibition league over the player's real save.
-  if (saveLoadStatus !== 'ready' || savesSuspended) return;
+  if (saveLoadStatus !== 'ready' || savesSuspended) return true;
   const { partialize } = useGameStore.persist.getOptions();
   const state = useGameStore.getState();
   const envelope = { state: partialize ? partialize(state) : state, version: SAVE_VERSION };
@@ -11995,7 +12021,28 @@ export async function flushToStorage(): Promise<void> {
   // The cloud copy is the same compact form as the local one; every restore
   // goes through the persist getItem, which expands it.
   if (isCloudSyncEnabled()) scheduleCloudAutosavePush(serializeSave(envelope));
+  // False when the browser refused the write: what is on disk is still the
+  // previous save, so a caller about to reload the page would lose progress.
+  return getWriteFailure(AUTOSAVE_KEY) === null;
 }
+
+// Autosave failures: wake the UI, and report the first one of this page load
+// (name + size tell a full store from a blocked one).
+onWriteResult((key, failure) => {
+  if (key !== AUTOSAVE_KEY) return;
+  saveWriteListeners.forEach(l => l());
+  if (!failure || saveWriteFailureReported) return;
+  saveWriteFailureReported = true;
+  const { season, week, phase } = useGameStore.getState();
+  trackEvent('save_write_failed', {
+    name: failure.name,
+    message: failure.message.slice(0, 200),
+    mb: Math.round(failure.bytes / 1e5) / 10,
+    season,
+    week,
+    phase,
+  });
+});
 
 /**
  * Start writing any queued autosave without waiting on it — for pagehide and
