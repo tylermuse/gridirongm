@@ -55,5 +55,10 @@ next-env.d.ts
 .env*.local
 
 .claude/
+# Claude Code worktrees are nested git checkouts. Committing one creates a
+# gitlink with no .gitmodules entry, which breaks `git submodule` commands
+# (and the CI checkout cleanup). Listed on its own so it stays ignored even if
+# the `.claude/` rule above is ever narrowed to allow shared settings.
+.claude/worktrees/
 apps/bs-basketball/public/court-cam/_fixture.json
 apps/bs-basketball/model/clips/

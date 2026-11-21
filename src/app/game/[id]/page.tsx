@@ -2708,7 +2708,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
         {/* One-time hint: after a few plays, point at sim-to-end-of-quarter (most players never knew it existed) */}
         {!simHintDone && !isFinished && revealedCount >= 8 && speed !== 'max' && liveQuarter <= 4 && (
-          <SimQuarterHint quarter={liveQuarter} gameId={id} onSim={() => simQuarter('hint')} onDismiss={retireSimHint} />
+          <SimQuarterHint
+            quarter={liveQuarter}
+            gameId={id}
+            onSim={() => simQuarter('hint')}
+            onSimToEnd={() => { trackEvent('sim_to_end_clicked', { game_id: id, quarter: liveQuarter, source: 'hint' }); retireSimHint(); skipToEnd(); }}
+            onDismiss={retireSimHint}
+          />
         )}
 
         {/* ================================================================
@@ -2737,12 +2743,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             >
               ⏩<span className="ml-1 sm:hidden">{simQuarterLabel(liveQuarter, true)}</span><span className="hidden sm:inline ml-1">{simQuarterLabel(liveQuarter)}</span>
             </button>
+            {/* Sim to End — finishes the game now with the result saved. Was an
+                unlabelled grey ⏭ on phones ("End Game" on desktop, which also
+                reads like quitting): of new real-season players who opened a
+                live game, most left mid-game after calling ~40 plays rather
+                than finishing it (Tyler 11/21). Labelled on every screen. */}
             <button
-              onClick={skipToEnd}
+              onClick={() => { trackEvent('sim_to_end_clicked', { game_id: id, quarter: liveQuarter, source: 'controls' }); skipToEnd(); }}
               disabled={isFinished}
-              className="inline-flex items-center h-8 px-2 sm:px-3 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+              title="Sim the rest of the game and go straight to the final score"
+              className="inline-flex items-center min-h-[44px] sm:min-h-0 sm:h-8 px-2 sm:px-3 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
             >
-              ⏭<span className="hidden sm:inline ml-1">End Game</span>
+              ⏭<span className="ml-1">Sim to End</span>
             </button>
 
             {/* Speed — one segmented control, pushed right. */}
@@ -3852,17 +3864,20 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 }
 
 /** One-time "moving too slow?" hint pointing at sim-to-end-of-quarter (shown once per device; logs when it is first seen). */
-function SimQuarterHint({ quarter, gameId, onSim, onDismiss }: { quarter: number; gameId: string; onSim: () => void; onDismiss: () => void }) {
+function SimQuarterHint({ quarter, gameId, onSim, onSimToEnd, onDismiss }: { quarter: number; gameId: string; onSim: () => void; onSimToEnd: () => void; onDismiss: () => void }) {
   useEffect(() => { trackEvent('sim_quarter_hint_shown', { game_id: gameId, quarter }); }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- once per mount
   return (
-    <div role="status" className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-900 px-3 py-2 text-xs">
+    <div role="status" className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-900 px-3 py-2 text-xs">
       <span className="text-base leading-none" aria-hidden>⏩</span>
-      <span className="flex-1 text-[var(--text)]">
+      <span className="flex-1 min-w-[12rem] text-[var(--text)]">
         <span className="font-semibold">No need to watch every snap.</span>{' '}
-        Sim the rest of the quarter and jump back in at the start of the next one.
+        Sim to the next quarter, or sim to the final whistle. The result counts either way.
       </span>
       <button onClick={onSim} className="shrink-0 rounded-md bg-blue-600 px-2.5 py-1.5 font-bold text-white hover:bg-blue-700">
         {simQuarterLabel(quarter)}
+      </button>
+      <button onClick={onSimToEnd} className="shrink-0 rounded-md border border-blue-300 bg-white px-2.5 py-1.5 font-bold text-blue-700 hover:bg-blue-100">
+        Sim to End
       </button>
       <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 px-1 text-[var(--text-sec)] hover:text-[var(--text)]">✕</button>
     </div>
