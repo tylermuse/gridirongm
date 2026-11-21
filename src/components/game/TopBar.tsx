@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
+import { isDraftOver } from '@/lib/engine/draftStatus';
 import { Button } from '@/components/ui/Button';
 import { useBusyAction, afterPaint } from '@/components/ui/useBusyAction';
 // TradeProposalPopup disabled — user prefers checking trades inline
@@ -47,6 +48,10 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const [isStartingSeason, setIsStartingSeason] = useState(false);
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const isFired = useGameStore(s => !!s.firedState?.fired);
+  // Over when every pick is made or the class has run out with picks left (a
+  // league with more picks than prospects). Reading only the pick order left
+  // such a draft "in progress" for good: no Draft Recap, no Start New Season.
+  const draftOver = useGameStore(s => s.phase === 'draft' && isDraftOver(s));
   const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
   const stableSBRef = useRef<boolean | null>(null);
@@ -219,6 +224,10 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     const capSpace = userTeam ? (userTeam.salaryCap - userTeam.totalPayroll) : 0;
     bannerText = `${remaining} player${remaining !== 1 ? 's' : ''} to re-sign · $${Math.round(capSpace * 10) / 10}M cap space`;
     phoneStatus = `${remaining} to re-sign\n$${Math.round(capSpace * 10) / 10}M cap`;
+  } else if (phase === 'draft' && draftOver) {
+    // Was "Round 8 · Pick #225" after the last pick of a 224-pick draft.
+    bannerText = 'Draft complete · Start the new season when you are ready';
+    phoneStatus = 'Draft\ncomplete';
   } else if (phase === 'draft') {
     const currentPickTeam = teams.find(t => t.id === draftOrder[0]);
     const totalPicks = teams.length * 7;
@@ -517,7 +526,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Button>
                   </Link>
                 )}
-                {draftOrder.length > 0 ? (
+                {!draftOver ? (
                   <>
                     {draftOrder[0] !== userTeamId && (
                       <Button onClick={() => runSim('draft-pick', simDraftPick)} size="sm" variant="secondary" busy={simBusy === 'draft-pick'} disabled={!!simBusy}>

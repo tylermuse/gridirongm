@@ -1233,6 +1233,9 @@ export function createLiveCoachEngine(
     else if (userCall === 'pass_deep') playType = 'pass_deep';
     else if (userCall === 'qb_run') playType = 'qb_run';
     else if (userCall === 'screen') playType = 'screen';
+    // Play action runs as a pass (short-to-intermediate off a run fake); the
+    // extra big-play upside is applied via execMod below.
+    else if (userCall === 'play_action') playType = 'pass_short';
     else if (userCall === 'go_for_it') playType = 'pass_short'; // default for 'go for it'
     else {
       // No user call — pick by down/distance. A CPU snap the user is calling the defense on was chosen when its set
@@ -1249,7 +1252,7 @@ export function createLiveCoachEngine(
     // The user's defensive call counts on a CPU scrimmage snap only
     const calledLook = !userCall && defCall && state.possession !== userSide ? defCall : null;
     const shownSet = calledLook ? (state.offSet ?? null) : null;
-    const callPrefix = userCall ? (CALL_ICONS[playType] ?? '')
+    const callPrefix = userCall ? (userCall === 'play_action' ? '🎭 Play Action' : (CALL_ICONS[playType] ?? ''))
       : calledLook ? `${LOOK_INFO[calledLook].icon} vs ${LOOK_INFO[calledLook].label}` : '';
 
     // Execute the play
@@ -1257,13 +1260,16 @@ export function createLiveCoachEngine(
     // The look only counts on a snap the user called: CPU snaps and auto-simmed user snaps play out as before.
     const look = userCall && state.possession === userSide ? (state.defLook ?? null) : null;
     const mod = lookModifier(playType, look ?? calledLook);
+    // Play action: a pass with modestly higher big-play upside (the run fake
+    // holds the second level). Everything else runs on the base modifier.
+    const execMod = userCall === 'play_action' ? { ...mod, bigPlayMult: mod.bigPlayMult * 1.4 } : mod;
     if (userCall) { recentCalls.push(playType); if (recentCalls.length > TENDENCY_WINDOW) recentCalls.shift(); }
     const snapIdx = events.length;
-    if (playType === 'run') runRunPlay(events, userCall === 'run' ? 'rb' : undefined, callPrefix, mod);
-    else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix, mod);
-    else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix, mod);
-    else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix, mod);
-    else runPassPlay(events, 'screen', callPrefix, mod);
+    if (playType === 'run') runRunPlay(events, userCall === 'run' ? 'rb' : undefined, callPrefix, execMod);
+    else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix, execMod);
+    else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix, execMod);
+    else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix, execMod);
+    else runPassPlay(events, 'screen', callPrefix, execMod);
     if (look && events[snapIdx]) { events[snapIdx].defLook = look; events[snapIdx].lookEdge = mod.edge; }
     if (calledLook && events[snapIdx]) {
       // the table's edge is the offense's; from the user's sideline it is the other way round
