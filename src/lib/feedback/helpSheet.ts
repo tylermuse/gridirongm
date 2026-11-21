@@ -11,7 +11,7 @@
  * - Leave out anything you are not sure of. The model returns no answer for
  *   what the sheet does not cover, and the developer answers it by hand.
  *
- * Last checked against the code: 2026-11-14 (award winners, create player, draft class and spectating lines added 2026-11-17 from player questions).
+ * Last checked against the code: 2026-11-14 (award winners, create player, draft class and spectating lines added 2026-11-17 from player questions; "Play Action" added 2026-11-19).
  */
 
 const IN_SEASON = `

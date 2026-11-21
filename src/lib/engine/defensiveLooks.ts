@@ -10,6 +10,10 @@
  *   Man Press    → QB Scramble (backs are turned) or a Deep Shot that beats the jam; Short Pass is contested
  *   Soft Zone    → Short Pass is given away, anything deep or wide is rallied to
  *
+ * Play Action is the run's partner: it beats the Stacked Box (backers bite on the fake and the throw goes over them)
+ * and is hurt by the Blitz (the QB turns his back to sell the fake) and the Soft Zone (nobody bites). Run a lot and the
+ * defense loads the box, which is when the fake works; call the fake too often and it drops into a soft zone.
+ *
  * The tables are built to be zero-sum per call under NEUTRAL_WEIGHTS: a coach who ignores the look gets, on average,
  * the same play he got before looks existed. tests/integration/football-livecoach-defensive-looks.test.ts holds that.
  * Pure data and pure functions; all randomness is passed in.
@@ -18,10 +22,10 @@
 import type { DefensiveScheme } from '@/types';
 
 export type DefensiveLook = 'blitz' | 'stacked_box' | 'two_high' | 'man_press' | 'soft_zone';
-export type LookPlay = 'run' | 'qb_run' | 'pass_short' | 'pass_deep' | 'screen';
+export type LookPlay = 'run' | 'qb_run' | 'pass_short' | 'pass_deep' | 'screen' | 'play_action';
 
 export const DEFENSIVE_LOOKS: DefensiveLook[] = ['blitz', 'stacked_box', 'two_high', 'man_press', 'soft_zone'];
-export const LOOK_PLAYS: LookPlay[] = ['run', 'qb_run', 'pass_short', 'pass_deep', 'screen'];
+export const LOOK_PLAYS: LookPlay[] = ['run', 'qb_run', 'pass_short', 'pass_deep', 'screen', 'play_action'];
 
 export const LOOK_INFO: Record<DefensiveLook, { label: string; icon: string; read: string }> = {
   blitz:       { label: 'Blitz',       icon: '🔥', read: 'Extra rushers are coming. The ball has to come out fast.' },
@@ -85,6 +89,13 @@ export const LOOK_TABLE: Record<LookPlay, Record<DefensiveLook, LookModifier>> =
     two_high:    m(0,  { yards: 0.5 }),
     man_press:   m(-1, { yards: -1.5, comp: -0.05 }),
     soft_zone:   m(0,  { yards: -1.0, bigPlayMult: 0.6 }),
+  },
+  play_action: {
+    blitz:       m(-1, { comp: -0.02, sackMult: 1.7 }),
+    stacked_box: m(1,  { yards: 2.5, comp: 0.12, sackMult: 0.8, intMult: 0.6, bigPlayMult: 1.6 }),
+    two_high:    m(0,  { yards: -0.5, comp: 0.02, sackMult: 0.9 }),
+    man_press:   m(0,  { comp: -0.03 }),
+    soft_zone:   m(-1, { yards: -1.5, comp: -0.08, sackMult: 0.8, intMult: 1.4, bigPlayMult: 0.6 }),
   },
 };
 
@@ -169,6 +180,8 @@ export function lookWeights(s: LookSituation): Record<DefensiveLook, number> {
     w.stacked_box *= clamp(1 + 2 * (share('run', 'qb_run') - 0.4), 0.5, 2.2);
     w.two_high *= clamp(1 + 3 * (share('pass_deep') - 0.2), 0.5, 2.5);
     w.man_press *= clamp(1 + 2 * (share('pass_short', 'screen') - 0.4), 0.5, 2.2);
+    // a fake called on every down stops getting bitten on: past a quarter of the calls the defense sits back in zone
+    w.soft_zone *= clamp(1 + 3 * (share('play_action') - 0.25), 1, 2.5);
   }
 
   const total = DEFENSIVE_LOOKS.reduce((sum, k) => sum + w[k], 0);

@@ -138,7 +138,7 @@ describe('play action on a two-point try', () => {
       expect(snap!.type).not.toBe('run');
       expect(snap!.description).toMatch(/^2-PT — 🎭 Play Action — /);
       // …and the 3D sim pictures the fake handoff before the throw
-      expect(toSimResult(snap!)?.style).toBe('playaction');
+      expect(toSimResult(snap!)?.style).toBe('play_action');
     }
   });
 });

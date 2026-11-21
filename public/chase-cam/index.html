@@ -1058,7 +1058,7 @@ function choreograph(res){
   const climbed = new Set();   /* backers picked up by a climbing blocker on a run: they don't join the pursuit until they shed */
 
   const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = (res.kind==='complete' || res.kind==='incomplete' || res.kind==='int') && res.style==='screen';   /* an incomplete screen is still thrown to the back in the flat */
-  const pa = !isRun && !scn && res.style==='playaction' && (res.kind==='complete' || res.kind==='incomplete' || res.kind==='int' || res.kind==='sack');   /* play action: the run fake first (runFake below) */
+  const pa = !isRun && !scn && res.style==='play_action' && (res.kind==='complete' || res.kind==='incomplete' || res.kind==='int' || res.kind==='sack');   /* play action: the run fake first (runFake below) */
   const runBlock = isRun;   /* a QB scramble is blocked like a run: he takes the snap and goes straight at the line, slides to the gap, then upfield */
   // eyes downfield: linemen never turn around, DL stay square while engaged, DBs backpedal before turning to run
   O.ol.forEach(a=>a.faceLock={angle:0, until:99});
@@ -2665,8 +2665,8 @@ const FORCED = {
   fumblekept:()=>({kind:'run', yards:Math.round(R(2,6)), fumble:true, kept:true}),
   stripkept:()=>({kind:'sack', yards:-Math.round(R(5,9)), depth:'short', fumble:true, kept:true}),
   catchkept:()=>({kind:'complete', depth:'short', yards:Math.round(R(7,13)), fumble:true, kept:true}),
-  playaction:()=>{ const deep = Math.random()<.35; return {kind:'complete', style:'playaction', depth: deep? 'deep' : 'short', yards: Math.round(deep? R(20,40) : R(6,16))}; },   /* the fake to the back, then the throw */
-  pasack:()=>({kind:'sack', style:'playaction', yards:-Math.round(R(5,9)), depth:'short'}),
+  playaction:()=>{ const deep = Math.random()<.35; return {kind:'complete', style:'play_action', depth: deep? 'deep' : 'short', yards: Math.round(deep? R(20,40) : R(6,16))}; },   /* the fake to the back, then the throw */
+  pasack:()=>({kind:'sack', style:'play_action', yards:-Math.round(R(5,9)), depth:'short'}),
 };
 
 // ---------- Flow ----------

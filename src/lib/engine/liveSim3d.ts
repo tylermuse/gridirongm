@@ -20,8 +20,9 @@ export interface SimPlayResult {
   depth?: 'short' | 'deep';
   good?: boolean;
   /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front;
-   *  'playaction' (complete / incomplete / int / sack): the QB fakes the handoff to the back, pulls it and drops to throw (or is sacked) */
-  style?: 'scramble' | 'screen' | 'playaction';
+   *  'play_action' (complete / incomplete / int / sack): the QB fakes the handoff to the back, the linebackers step up on it,
+   *  then he sets and throws (or is sacked) */
+  style?: 'scramble' | 'screen' | 'play_action';
   /** the play ends in a lost fumble (the engine logs it as the next event): a run or a catch stripped at the tackle, or a
    *  strip-sack — the ball squirts loose and the defense falls on it */
   fumble?: boolean;
@@ -108,8 +109,10 @@ function passDepth(desc: string, y: number): 'short' | 'deep' {
 const SCRAMBLE_RE = /scramble/i;
 const SCREEN_RE = /screen/i;
 /** liveCoachEngine.ts prefixes a called play action "🎭 Play Action — …"; playByPlay.ts writes "Play-action works perfectly. …".
- *  Either way the sim shows the fake handoff before the throw (Tyler 11/20: "Right now it's just a throw"). */
+ *  Either way the sim shows the fake handoff before the throw. Thrown over the backers who bit, so 16+ yards is pictured deep
+ *  and a miss is a shot downfield. */
 const PLAY_ACTION_RE = /play[- ]action/i;
+const PA = { style: 'play_action' as const };
 /** playByPlay.ts: "intended for X but it's batted down" / "Tipped at the line! X comes down with the pick!" */
 const BATTED_RE = /batted|tipped at the line|knocked down at the line/i;
 /** A fumble the offense recovered is told in the play's own line (the engines log a LOST fumble as its own 'fumble' event). */
@@ -132,7 +135,7 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
   const res = baseSimResult(e);
   // a play-action pass (or a sack off the fake) starts with the run fake; a screen is never play action
   if (res && !res.style && (res.kind === 'complete' || res.kind === 'incomplete' || res.kind === 'int' || res.kind === 'sack')
-    && PLAY_ACTION_RE.test(e.description)) res.style = 'playaction';
+    && PLAY_ACTION_RE.test(e.description)) res.style = 'play_action';
   return res;
 }
 
@@ -146,8 +149,10 @@ function baseSimResult(e: PlayEvent): SimPlayResult | null {
       if (KNEEL_RE.test(e.description) || NON_PLAY_RE.test(e.description)) return null;
       return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}) };
     case 'pass_complete':
+      if (PLAY_ACTION_RE.test(e.description)) return { kind: 'complete', depth: y >= 16 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...PA };
       return { kind: 'complete', depth: SCREEN_RE.test(e.description) ? 'short' : passDepth(e.description, y), yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'pass_incomplete':
+      if (PLAY_ACTION_RE.test(e.description)) return { kind: 'incomplete', depth: 'deep', ...PA };
       if (BATTED_RE.test(e.description) && !SCREEN_RE.test(e.description)) return { kind: 'incomplete', depth: 'short', batted: true };
       return { kind: 'incomplete', depth: SCREEN_RE.test(e.description) ? 'short' : DEEP_CALL_RE.test(e.description) || (!SHORT_CALL_RE.test(e.description) && /deep|bomb|downfield|long/i.test(e.description)) ? 'deep' : 'short', ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'touchdown':
@@ -174,7 +179,7 @@ function baseSimResult(e: PlayEvent): SimPlayResult | null {
       if (SCREEN_RE.test(e.description)) return { kind: 'int', depth: 'short', style: 'screen', ...end };
       // deep or short from where the engine says it was caught (older events: from the words)
       const deep = from != null ? toGoal - from >= 15 : /deep|downfield|long/i.test(e.description);
-      return { kind: 'int', depth: deep ? 'deep' : 'short', ...end };
+      return { kind: 'int', depth: deep ? 'deep' : 'short', ...(PLAY_ACTION_RE.test(e.description) ? PA : {}), ...end };
     }
     case 'field_goal_good':
       return { kind: 'fg', good: true };
@@ -273,7 +278,7 @@ export function simFormation(e: PlayEvent, res: SimPlayResult): SimFormation | u
       ? [['heavy', 40], ['iform', 35], ['singleback', 15], ['shotgun', 10]]
       : [['iform', 30], ['singleback', 30], ['shotgun', 30], ['heavy', 10]]);
   }
-  if (res.style === 'playaction') return pickFrom(r, [['iform', 40], ['singleback', 35], ['shotgun', 25]]);
+  if (res.style === 'play_action') return pickFrom(r, [['iform', 40], ['singleback', 35], ['shotgun', 25]]);
   if (passingDown) return pickFrom(r, [['shotgun', 55], ['spread', 45]]);
   if (res.depth === 'deep') return pickFrom(r, [['shotgun', 40], ['singleback', 30], ['iform', 15], ['spread', 15]]);
   return pickFrom(r, [['shotgun', 45], ['singleback', 25], ['spread', 20], ['iform', 10]]);

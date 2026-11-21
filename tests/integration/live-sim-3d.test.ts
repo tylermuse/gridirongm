@@ -330,23 +330,23 @@ describe('play action is pictured with the fake handoff', () => {
   // Tyler 11/20: "Play action is supposed to take the handoff to the RB and then throw. Right now it's just a throw."
   it('a called play action keeps its style through every result the engine can log for it', () => {
     expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts completes to D. Smith for 9 yards.', yardsGained: 9 })))
-      .toEqual({ kind: 'complete', depth: 'short', yards: 9, style: 'playaction' });
+      .toEqual({ kind: 'complete', depth: 'short', yards: 9, style: 'play_action' });
     // the extra big-play upside off the fake: a 20+ yard completion is the deep ball
     expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts fires deep to D. Smith — 34 yards!', yardsGained: 34 })))
-      .toEqual({ kind: 'complete', depth: 'deep', yards: 34, style: 'playaction' });
+      .toEqual({ kind: 'complete', depth: 'deep', yards: 34, style: 'play_action' });
     expect(toSimResult(ev({ type: 'pass_incomplete', description: "🎭 Play Action — J. Hurts's pass to D. Smith falls incomplete." })))
-      .toMatchObject({ kind: 'incomplete', style: 'playaction' });
+      .toMatchObject({ kind: 'incomplete', style: 'play_action' });
     expect(toSimResult(ev({ type: 'sack', description: '🎭 Play Action — J. Hurts is sacked by M. Parsons for a loss of 6.', yardsGained: -6 })))
-      .toEqual({ kind: 'sack', yards: -6, style: 'playaction' });
+      .toEqual({ kind: 'sack', yards: -6, style: 'play_action' });
     expect(toSimResult(ev({ type: 'interception', description: '🎭 Play Action — INTERCEPTED! T. Diggs picks off J. Hurts.', returnFrom: 62, returnTo: 70, returnYards: 8 })))
-      .toMatchObject({ kind: 'int', style: 'playaction' });
+      .toMatchObject({ kind: 'int', style: 'play_action' });
     // a play-action touchdown from the live engine (pass_complete + isScoring)
     expect(toSimResult(ev({ type: 'pass_complete', isScoring: true, fieldPos: 88, description: '🎭 Play Action — J. Hurts hits D. Smith for a 12-yard TOUCHDOWN!', yardsGained: 12 })))
-      .toMatchObject({ kind: 'complete', yards: 12, style: 'playaction' });
+      .toMatchObject({ kind: 'complete', yards: 12, style: 'play_action' });
   });
   it("the full sim's play-action wording gets the fake too", () => {
     expect(toSimResult(ev({ type: 'pass_complete', description: 'Play-action works perfectly. J. Hurts finds D. Smith wide open for 18.', yardsGained: 18 })))
-      .toMatchObject({ kind: 'complete', style: 'playaction' });
+      .toMatchObject({ kind: 'complete', style: 'play_action' });
   });
   it('a plain pass and a run have no fake', () => {
     expect(toSimResult(ev({ type: 'pass_complete', description: '🎯 Short Pass — J. Hurts completes to D. Smith for 9 yards.', yardsGained: 9 }))!.style).toBeUndefined();
@@ -406,5 +406,24 @@ describe('formations', () => {
     const dup = toSimLineup([mk('r1', 'RB', 26), mk('r2', 'RB', 7), mk('q', 'QB', 7)]);
     expect(dup.qb?.n).toBe(7);
     expect(dup.fb).toBeUndefined();
+  });
+});
+
+describe('play action keeps its style', () => {
+  it('a called play-action pass is pictured as a fake then a throw, deep from 16 yards, a miss as a shot downfield', () => {
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts sells the fake and finds D. Smith for 12 yards.', yardsGained: 12 })))
+      .toEqual({ kind: 'complete', depth: 'short', yards: 12, style: 'play_action' });
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts sells the fake and fires deep to D. Smith — 27 yards!', yardsGained: 27 })))
+      .toEqual({ kind: 'complete', depth: 'deep', yards: 27, style: 'play_action' });
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: '🎭 Play Action — J. Hurts fakes the handoff, but his pass to D. Smith falls incomplete.' })))
+      .toEqual({ kind: 'incomplete', depth: 'deep', style: 'play_action' });
+    expect(toSimResult(ev({ type: 'interception', description: '🎭 Play Action — INTERCEPTED! K. Lee picks off J. Hurts.', returnFrom: 55, returnTo: 60, returnYards: 5 })))
+      .toMatchObject({ kind: 'int', style: 'play_action', catchAt: 55 });
+  });
+  it('the man with the ball is the receiver, not the back who took the fake', () => {
+    const P = (firstName: string, lastName: string, position: string, jerseyNumber: number) => ({ id: lastName, firstName, lastName, position, jerseyNumber });
+    const phi = [P('Jalen', 'Hurts', 'QB', 1), P('Saquon', 'Barkley', 'RB', 26), P('DeVonta', 'Smith', 'WR', 6)];
+    const who = whoMadeThePlay(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts sells the fake and finds D. Smith for 12 yards.', yardsGained: 12 }), phi, []);
+    expect(who?.ball).toMatchObject({ n: 6, pos: 'WR' });
   });
 });
