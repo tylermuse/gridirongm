@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useSyncExternalStore } from 'react';
 import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
+import { hasDraftableProspect } from './draftStatus';
 import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites, getWriteFailure, onWriteResult, type WriteFailure } from '@bs/core/storage';
 import { isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { scheduleCloudAutosavePush } from '@/lib/data/cloudAutosave';
