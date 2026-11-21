@@ -2052,7 +2052,18 @@ function HomeContent({ realTeams }: { realTeams?: PickerTeam[] }) {
   // open the team picker even for a player with a saved league; picking a team
   // backs that league up to a free save slot first (handlePick).
   const forcePicker = searchParams.get('roster') !== null || searchParams.get('import') === 'fbgm';
-  return initialized && !forcePicker ? <Dashboard /> : <TeamPicker realTeams={realTeams} />;
+  const showDashboard = initialized && !forcePicker;
+  // Picking a team swaps the picker for the dashboard in place, but the
+  // window kept the picker's scroll position (~3,800px on a phone), so new
+  // players landed in the marketing copy below the dashboard with their team
+  // out of view. 68 of 125 real-season players who never simmed left from
+  // there within half a minute (Tyler 11/21). Jump to the top on that swap.
+  const wasDashboard = useRef(showDashboard);
+  useEffect(() => {
+    if (showDashboard && !wasDashboard.current) window.scrollTo({ top: 0, behavior: 'instant' });
+    wasDashboard.current = showDashboard;
+  }, [showDashboard]);
+  return showDashboard ? <Dashboard /> : <TeamPicker realTeams={realTeams} />;
 }
 
 export default function Home({ realTeams }: { realTeams?: PickerTeam[] }) {
