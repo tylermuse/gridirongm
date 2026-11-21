@@ -110,6 +110,7 @@ DRAFT
 - Open "Draft" in the sidebar. When the header says "YOU'RE ON THE CLOCK", click "Draft" on a prospect's row. Seven rounds. There is no timer that picks for you.
 - "Sim Pick" sims one pick, "Sim to My Pick" jumps to your next pick, and "Auto-Draft All" lets the AI finish the whole draft including your picks.
 - Trading picks during the draft: "Trade Pick" in the on-the-clock header.
+- The draft ends after the last pick, or sooner if the prospects run out first (an imported league with more than 32 teams has more picks than prospects). Either way the top bar then shows "Draft Recap" and "Start New Season →".
 - Scouting: click "Scout" on a prospect to spend 1 scout point and unlock his full report. "Scout Pts" shows what you have left, and "Auto-scout" spends the rest. Free accounts get 10 points per draft, Premium 30.
 - "Draft Preview" in the sidebar shows the upcoming class. It unlocks after the trade deadline.
 - Editing or replacing the draft class: on the "Draft" page, "📥 Import Draft Class" loads your own class from a file, and "📤 Export Current Class" downloads the current one so you can edit it and import it back. With "God Mode" on you can also use "Edit Player" on any player's card.
