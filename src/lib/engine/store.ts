@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useSyncExternalStore } from 'react';
 import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
+import { hasDraftableProspect } from './draftStatus';
 import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites } from '@bs/core/storage';
 import { isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { scheduleCloudAutosavePush } from '@/lib/data/cloudAutosave';
@@ -5560,8 +5561,10 @@ export const useGameStore = create<GameStore>()(
           return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart, draftPicks: updatedPicks };
         });
 
-        const newDraftOrder = state.draftOrder.slice(1);
         const newFreeAgents = state.freeAgents.filter(id => id !== playerId);
+        // The draft ends when the class runs out, even with picks left (a
+        // league with more picks than prospects): leave nobody on the clock.
+        const newDraftOrder = hasDraftableProspect(newFreeAgents, state.players) ? state.draftOrder.slice(1) : [];
 
         // Build updated players array — include created player if it wasn't in the original array
         const playerInArray = state.players.some(p => p.id === playerId);
@@ -5604,6 +5607,13 @@ export const useGameStore = create<GameStore>()(
         if (state.phase !== 'draft') return;
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
+        // No prospect left: the draft is over (not one empty slot per click
+        // for the rest of the order, and not a released veteran "drafted"
+        // out of the same pool).
+        if (!hasDraftableProspect(state.freeAgents, state.players)) {
+          set({ draftOrder: [] });
+          return;
+        }
         const playerId = autoDraftPlayerId(state, currentPickTeamId);
         if (playerId) {
           get().draftPlayer(playerId);
@@ -5628,7 +5638,7 @@ export const useGameStore = create<GameStore>()(
         const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
-        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && hasDraftableProspect(freeAgentIds, players); guard++) {
           const pickTeam = draftOrder[0];
           if (pickTeam === state.userTeamId) break; // Stop at user's pick
 
@@ -5709,6 +5719,11 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // Class exhausted with picks left over: the draft is over. Leaving the
+        // rest of the order in place kept the top bar on its draft buttons,
+        // with no way to "Start New Season" (player report 2026-11-16).
+        if (!hasDraftableProspect(freeAgentIds, players)) draftOrder = [];
+
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
       },
 
@@ -5726,7 +5741,7 @@ export const useGameStore = create<GameStore>()(
         const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
-        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && hasDraftableProspect(freeAgentIds, players); guard++) {
           const pickTeam = draftOrder[0];
           const fakeState = { ...state, draftOrder, freeAgents: freeAgentIds, players, teams } as LeagueState;
           const pid = autoDraftPlayerId(fakeState, pickTeam);
@@ -5805,6 +5820,11 @@ export const useGameStore = create<GameStore>()(
             })];
           }
         }
+
+        // Class exhausted with picks left over: the draft is over. Leaving the
+        // rest of the order in place kept the top bar on its draft buttons,
+        // with no way to "Start New Season" (player report 2026-11-16).
+        if (!hasDraftableProspect(freeAgentIds, players)) draftOrder = [];
 
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
 
@@ -10184,6 +10204,9 @@ export const useGameStore = create<GameStore>()(
           players: reconcileJerseys(allPlayersForNewSeason, teamsAfterCoaches),
           teams: teamsAfterCoaches,
           schedule: newSchedule,
+          // A draft that ended with picks unused (class ran out) must not
+          // leave its order behind in the new season.
+          draftOrder: [],
           draftResults: [],
           draftPickOrder: undefined,
           currentDraftYear: undefined,
