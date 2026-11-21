@@ -22,6 +22,7 @@ import {
 } from '@/lib/mockDraft/engine';
 import { getMockDraftData } from '@/lib/mockDraft/serverData';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { TeamStickyCta } from '../../_components/TeamStickyCta';
 
 const BASE_URL = 'https://bs-football.com';
 const BOARD_PATH = '/mock-draft/2027';
@@ -86,11 +87,24 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   };
 }
 
-function CtaButton({ team }: { team: MockTeam }) {
+/** Opens the simulator already drafting as this team. */
+function mockHref(team: MockTeam): string {
+  return `/mock-draft?team=${teamSlug(team)}&go=1`;
+}
+
+/** The game's team picker with this team first and highlighted. */
+function gameHref(team: MockTeam): string {
+  return `/?team=${team.abbrev}`;
+}
+
+/** `place` names the button in click tracking, so the three spots can be compared across teams. */
+function CtaButton({ team, place }: { team: MockTeam; place: 'top' | 'bottom' }) {
   return (
     <Link
-      href={`/mock-draft?team=${teamSlug(team)}&go=1`}
+      href={mockHref(team)}
       prefetch={false}
+      data-team-cta
+      data-track={`Run a mock draft (${place})`}
       className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors"
     >
       Run a mock draft as the {team.name} →
@@ -281,8 +295,16 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
           </>
         )}
       </p>
-      <div className="mt-5">
-        <CtaButton team={team} />
+      <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
+        <CtaButton team={team} place="top" />
+        <Link
+          href={gameHref(team)}
+          prefetch={false}
+          data-track="Play as GM (top)"
+          className="text-sm font-semibold text-blue-600 hover:underline"
+        >
+          or run the {team.name} as GM →
+        </Link>
       </div>
 
       <section className="mt-10">
@@ -406,7 +428,19 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
         <p className="text-gray-700 mb-4">
           Make every {team.abbrev} pick against the AI, then see how your class grades out. It&apos;s free, with no login.
         </p>
-        <CtaButton team={team} />
+        <CtaButton team={team} place="bottom" />
+        <p className="text-sm text-gray-700 mt-4">
+          Want more than the draft?{' '}
+          <Link
+            href={gameHref(team)}
+            prefetch={false}
+            data-track="Play as GM (bottom)"
+            className="font-semibold text-blue-600 hover:underline"
+          >
+            Take over the {team.name} as GM
+          </Link>{' '}
+          from Week {data.currentWeek} of the real {data.season} season: trades, the cap, free agency and every game.
+        </p>
       </div>
 
       <section className="mt-10">
@@ -442,6 +476,8 @@ export default async function TeamMockDraftPage({ params }: { params: Params }) 
           ))}
         </ul>
       </section>
+
+      <TeamStickyCta href={mockHref(team)} teamName={team.name} />
     </div>
   );
 }
