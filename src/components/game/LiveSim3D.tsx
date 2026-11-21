@@ -18,10 +18,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
 import { getDeviceId, DEVICE_CREATED_KEY, trackEvent } from '@bs/core/analytics/track';
-import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimNamedPlayer, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
+import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimFormation, type SimNamedPlayer, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
 /** A defensive call the user just made is shown set for this long before the ball is snapped (ms). */
 const LOOK_HOLD_MS = 900;
+/** The offense lines up in a different formation for this snap than the one on screen (the call decided it, e.g. an I-formation run
+ *  after the sim waited in the shotgun): the new line-up is shown this long before the snap, so nobody jumps into place at the snap. */
+const FORM_HOLD_MS = 650;
 
 /** Skin tones measured from real headshots, per photo URL, for the whole session (null = couldn't read it). */
 const photoSkinCache = new Map<string, string | null>();
@@ -36,7 +39,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b19a';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b19c';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 /** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used as-is by the scoring-play replay. */
 export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&v=${SIM_BUILD}`;
 /** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.
@@ -172,7 +175,7 @@ export function LiveSim3D({
   /** the event after this one, when the page already has it (a lost fumble is logged right after its run) */
   nextEvent?: PlayEvent | null;
   /** Current situation (spot, down, score, clock) for the pre-snap formation between plays — e.g. the two-point try at the 3 while the user picks a play */
-  state: SimStateMessage['pre'] & { possession: 'home' | 'away'; form?: 'xp' | 'kickoff' | 'punt' | 'fg'; look?: SimStateMessage['look'] } | null;
+  state: SimStateMessage['pre'] & { possession: 'home' | 'away'; form?: 'xp' | 'kickoff' | 'punt' | 'fg'; look?: SimStateMessage['look']; formation?: SimFormation } | null;
   /** e.g. speed === 'max' or the user skipped to the end: never hold the game */
   disabled?: boolean;
   homeTeam: TeamLike | null;
@@ -209,6 +212,8 @@ export function LiveSim3D({
   const activeRef = useRef(false);
   /** Pending "show the called look, then snap" delay (see LOOK_HOLD_MS) */
   const holdTimerRef = useRef<number | null>(null);
+  /** The offensive formation the sim has on the field now (the last one sent with a state or a play; the sim's default is the shotgun) */
+  const shownFormRef = useRef<SimFormation>('shotgun');
 
   const setActiveBoth = useCallback((v: boolean) => {
     if (activeRef.current === v) return;
@@ -272,8 +277,9 @@ export function LiveSim3D({
     if (!enabled || !ready || !state || active) return;
     if (tabHidden) return;
     if (stateKey === lastPlayPreRef.current) return;   // still the situation of the play just shown: the sim already moved on to its result
-    const { possession, form, look, ...pre } = state;
-    post({ type: 'bsgm:state', possession, pre, ...(form ? { form } : {}), ...(look ? { look } : {}) } satisfies SimStateMessage);
+    const { possession, form, look, formation, ...pre } = state;
+    shownFormRef.current = (!form && formation) || 'shotgun';   // the sim falls back to the shotgun for a state with no formation (a kick unit included)
+    post({ type: 'bsgm:state', possession, pre, ...(form ? { form } : {}), ...(look ? { look } : {}), ...(formation && !form ? { formation } : {}) } satisfies SimStateMessage);
   }, [enabled, ready, stateKey, active, post, tabHidden]);   // eslint-disable-line react-hooks/exhaustive-deps -- state is keyed by stateKey
 
   // Game clock → 3D scorebug, always (the page's clock runs during the play; without this the 3D bug sat at the snap time)
@@ -294,11 +300,15 @@ export function LiveSim3D({
     activeIdRef.current = play.id;
     lastPlayPreRef.current = JSON.stringify({ possession: play.possession, ...play.pre });
     setActiveBoth(true);
-    if (event.userDefCall && play.look) {
+    const newForm = !!play.formation && play.formation !== shownFormRef.current;
+    if (play.formation) shownFormRef.current = play.formation;
+    if ((event.userDefCall && play.look) || newForm) {
       // The user just called this look: line the defense up in it and let it be seen before the snap. (On the user's own
       // snaps the CPU's look has been on the field the whole time they were choosing, so those go straight to the play.)
-      post({ type: 'bsgm:state', possession: play.possession, pre: play.pre, look: play.look } satisfies SimStateMessage);
-      holdTimerRef.current = window.setTimeout(() => { holdTimerRef.current = null; if (activeIdRef.current === play.id) post(play); }, LOOK_HOLD_MS);
+      // Same when the offense lines up differently for this snap than what's on screen: show the new formation, then snap.
+      post({ type: 'bsgm:state', possession: play.possession, pre: play.pre, ...(play.look ? { look: play.look } : {}), ...(play.formation ? { formation: play.formation } : {}) } satisfies SimStateMessage);
+      holdTimerRef.current = window.setTimeout(() => { holdTimerRef.current = null; if (activeIdRef.current === play.id) post(play); },
+        event.userDefCall && play.look ? LOOK_HOLD_MS : FORM_HOLD_MS);
     } else {
       post(play);
     }

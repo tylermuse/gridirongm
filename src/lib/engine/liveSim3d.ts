@@ -10,7 +10,7 @@
  * down / yardsToGo / fieldPos are PRE-snap; homeScore / awayScore are POST-play.
  */
 import type { PlayEvent } from './playByPlay';
-import type { DefensiveLook } from './defensiveLooks';
+import type { DefensiveLook, OffensiveSet } from './defensiveLooks';
 import { portraitFileFor } from '@/lib/portraits/portraitPool';
 import portraitSkin from '@/lib/portraits/portraitSkin.json';
 
@@ -20,7 +20,8 @@ export interface SimPlayResult {
   depth?: 'short' | 'deep';
   good?: boolean;
   /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front;
-   *  'play_action': the QB fakes the handoff to the back, the linebackers step up on it, then he sets and throws */
+   *  'play_action' (complete / incomplete / int / sack): the QB fakes the handoff to the back, the linebackers step up on it,
+   *  then he sets and throws (or is sacked) */
   style?: 'scramble' | 'screen' | 'play_action';
   /** the play ends in a lost fumble (the engine logs it as the next event): a run or a catch stripped at the tackle, or a
    *  strip-sack — the ball squirts loose and the defense falls on it */
@@ -45,12 +46,24 @@ export interface SimPlayResult {
   batted?: boolean;
 }
 
+/** How the offense lines up for a scrimmage snap (Tyler 11/20: "players aren't always lined up in the shotgun — sometimes there's
+ *  I formation or others"). The sim's eleven bodies take these spots:
+ *  - shotgun:    QB five yards deep, the back offset beside him, three receivers and a tight end (the sim's original look)
+ *  - spread:     shotgun with four wide (the tight end splits out to the slot)
+ *  - singleback: QB under center, one back seven yards deep, three receivers and a tight end
+ *  - iform:      QB under center, a fullback (the RB2) in front of the tailback, two receivers and a tight end
+ *  - heavy:      the I with a second tight end in place of the other receiver (two tight ends and a fullback) */
+export type SimFormation = 'shotgun' | 'spread' | 'singleback' | 'iform' | 'heavy';
+export const SIM_FORMATIONS: SimFormation[] = ['shotgun', 'spread', 'singleback', 'iform', 'heavy'];
+
 export interface SimPlayMessage {
   type: 'bsgm:play';
   id: number;
   possession: 'home' | 'away';
   pre: { fieldPos: number; down: number; toGo: number; quarter: number; clock: number; homeScore: number; awayScore: number };
   res: SimPlayResult;
+  /** scrimmage snaps: how the offense lines up (simFormation) */
+  formation?: SimFormation;
   /** who has the ball / makes the sack or pick, by number + skin (see whoMadeThePlay) */
   who?: SimWho;
   /** Live Coach: the look the defense is in for this snap (the CPU's on the user's call, or the one the user called) */
@@ -66,6 +79,8 @@ export interface SimStateMessage {
   pre: { fieldPos: number; down: number; toGo: number; quarter: number; clock: number; homeScore: number; awayScore: number };
   /** Live Coach: the look the defense is showing for the snap being set up */
   look?: DefensiveLook;
+  /** how the offense lines up while it waits for the snap (none: the shotgun) */
+  formation?: SimFormation;
 }
 
 /** One man on the field: jersey number + skin tone (hex). */
@@ -73,6 +88,8 @@ export interface SimMan { n: number; s: string }
 /** Starters by slot, depth-chart order (wr[0] = WR1 …). Missing slots fall back to the sim's defaults. */
 export interface SimLineup {
   qb?: SimMan; rb?: SimMan; te?: SimMan; k?: SimMan; p?: SimMan;
+  /** the I formation's fullback (the RB2: the game has no fullback position) and the heavy set's second tight end */
+  fb?: SimMan; te2?: SimMan;
   wr: SimMan[]; ol: SimMan[]; dl: SimMan[]; lb: SimMan[]; cb: SimMan[]; s: SimMan[];
 }
 export interface SimTeam { id: string; name: string; jersey: string; num: string; pants: string; helmet: string; stripe: string; lineup?: SimLineup }
@@ -91,8 +108,10 @@ function passDepth(desc: string, y: number): 'short' | 'deep' {
 }
 const SCRAMBLE_RE = /scramble/i;
 const SCREEN_RE = /screen/i;
-/** A called play-action pass ("🎭 Play Action — …"): thrown over the backers who bit, so 16+ yards is pictured deep and a miss is a shot downfield. */
-const PLAY_ACTION_RE = /play action/i;
+/** liveCoachEngine.ts prefixes a called play action "🎭 Play Action — …"; playByPlay.ts writes "Play-action works perfectly. …".
+ *  Either way the sim shows the fake handoff before the throw. Thrown over the backers who bit, so 16+ yards is pictured deep
+ *  and a miss is a shot downfield. */
+const PLAY_ACTION_RE = /play[- ]action/i;
 const PA = { style: 'play_action' as const };
 /** playByPlay.ts: "intended for X but it's batted down" / "Tipped at the line! X comes down with the pick!" */
 const BATTED_RE = /batted|tipped at the line|knocked down at the line/i;
@@ -113,6 +132,14 @@ export function clockSeconds(timeStr: string): number {
 /** Outcome the sim should animate, or null for plays it has no choreography for
  *  (kickoffs, fumbles, penalties, kneels, XPs, timeouts, quarter breaks, fakes). */
 export function toSimResult(e: PlayEvent): SimPlayResult | null {
+  const res = baseSimResult(e);
+  // a play-action pass (or a sack off the fake) starts with the run fake; a screen is never play action
+  if (res && !res.style && (res.kind === 'complete' || res.kind === 'incomplete' || res.kind === 'int' || res.kind === 'sack')
+    && PLAY_ACTION_RE.test(e.description)) res.style = 'play_action';
+  return res;
+}
+
+function baseSimResult(e: PlayEvent): SimPlayResult | null {
   if (FAKE_RE.test(e.description)) return null;
   const y = e.yardsGained ?? 0;
   const toGoal = 100 - e.fieldPos;
@@ -215,6 +242,48 @@ export function scoreBeforeTry(tryEv: PlayEvent): { homeScore: number; awayScore
   return { homeScore: tryEv.homeScore - (tryEv.possession === 'home' ? pts : 0), awayScore: tryEv.awayScore - (tryEv.possession === 'away' ? pts : 0) };
 }
 
+/** The formation the CPU's shown set is (the defense menu's read: "Two tight ends and a fullback", "Four wide in the shotgun"…). */
+export function formationForSet(set: OffensiveSet): SimFormation {
+  return set === 'heavy' ? 'heavy' : set === 'spread' ? 'spread' : set === 'max_protect' ? 'iform' : 'singleback';
+}
+
+/** A stable 0-1 draw for one snap, so the same play always lines up the same way (live, in a replay, in a clip). */
+function snapDraw(e: PlayEvent): number {
+  let h = 2166136261;
+  for (const c of `${e.id}|${e.quarter}|${e.timeStr}|${e.fieldPos}|${e.down}|${e.yardsToGo}|${e.possession}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 10000) / 10000;
+}
+function pickFrom(r: number, mix: [SimFormation, number][]): SimFormation {
+  const tot = mix.reduce((a, [, w]) => a + w, 0);
+  let x = r * tot;
+  for (const [f, w] of mix) { x -= w; if (x < 0) return f; }
+  return mix[mix.length - 1][0];
+}
+
+/** How the offense lines up for this snap; undefined for kicks. The CPU's shown set (Live Coach, calling the defense) decides it;
+ *  otherwise the play and the situation do, the way a real offense picks a personnel group:
+ *  - a QB scramble and a screen come out of the shotgun (the choreography for both starts from it)
+ *  - runs and play action lean under center (the I, singleback, heavy at the goal line and on short yardage)
+ *  - passes lean to the shotgun, and to four wide on third and long */
+export function simFormation(e: PlayEvent, res: SimPlayResult): SimFormation | undefined {
+  const scrimmage = res.kind === 'run' || res.kind === 'complete' || res.kind === 'incomplete' || res.kind === 'int' || res.kind === 'sack';
+  if (!scrimmage) return undefined;
+  if (res.style === 'scramble' || res.style === 'screen') return 'shotgun';
+  if (e.offSet) return formationForSet(e.offSet);
+  const r = snapDraw(e);
+  const shortYardage = e.yardsToGo <= 2 || e.fieldPos >= 95;
+  const passingDown = e.down >= 3 && e.yardsToGo >= 7;
+  if (res.kind === 'run') {
+    return pickFrom(r, shortYardage
+      ? [['heavy', 40], ['iform', 35], ['singleback', 15], ['shotgun', 10]]
+      : [['iform', 30], ['singleback', 30], ['shotgun', 30], ['heavy', 10]]);
+  }
+  if (res.style === 'play_action') return pickFrom(r, [['iform', 40], ['singleback', 35], ['shotgun', 25]]);
+  if (passingDown) return pickFrom(r, [['shotgun', 55], ['spread', 45]]);
+  if (res.depth === 'deep') return pickFrom(r, [['shotgun', 40], ['singleback', 30], ['iform', 15], ['spread', 15]]);
+  return pickFrom(r, [['shotgun', 45], ['singleback', 25], ['spread', 20], ['iform', 10]]);
+}
+
 export function toSimPlay(
   e: PlayEvent,
   rosters?: { home: SimNamedPlayer[]; away: SimNamedPlayer[]; photoSkins?: Record<string, string> },
@@ -243,10 +312,12 @@ export function toSimPlay(
   const anchor = pts === 6 && next?.type === 'extra_point' && next.possession === e.possession ? scoreBeforeTry(next) : null;
   const preHome = anchor ? anchor.homeScore - (e.possession === 'home' ? 6 : 0) : e.homeScore - (e.possession === 'home' ? pts : retPts);
   const preAway = anchor ? anchor.awayScore - (e.possession === 'away' ? 6 : 0) : e.awayScore - (e.possession === 'away' ? pts : retPts);
+  const formation = simFormation(e, res);
   return {
     type: 'bsgm:play',
     id: e.id,
     possession: e.possession,
+    ...(formation ? { formation } : {}),
     pre: {
       fieldPos: e.type === 'extra_point' ? 85 : e.type === 'kickoff' ? 35 : e.fieldPos,   // kickoffs are from the kicking team's 35
       down: e.down,
@@ -351,8 +422,12 @@ export function toSimLineup(players: SimPlayerLike[], photoSkins?: Record<string
   };
   const at = (pos: string, k: number) => players.filter(p => p.position === pos).slice(0, k).map(man).filter((m): m is SimMan => !!m);
   const one = (pos: string) => man(players.find(p => p.position === pos));
-  return { qb: one('QB'), rb: one('RB'), te: one('TE'), k: one('K'), p: one('P'),
+  const second = (pos: string) => man(players.filter(p => p.position === pos)[1]);
+  // starters first, so a backup never takes a starter's number; then the RB2 (fullback) and TE2 for the I and heavy sets
+  const L: SimLineup = { qb: one('QB'), rb: one('RB'), te: one('TE'), k: one('K'), p: one('P'),
     wr: at('WR', 3), ol: at('OL', 5), dl: at('DL', 4), lb: at('LB', 3), cb: at('CB', 2), s: at('S', 2) };
+  const fb = second('RB'), te2 = second('TE');
+  return { ...L, ...(fb ? { fb } : {}), ...(te2 ? { te2 } : {}) };
 }
 
 /** Uniform palette for the sim from a team's two colours. Home wears its primary;
