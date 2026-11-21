@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AdSlot } from '@/components/AdSlot';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
+import { isDraftOver } from '@/lib/engine/draftStatus';
 import { GameShell } from '@/components/game/GameShell';
 import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -1181,6 +1182,17 @@ export default function DraftPage() {
   }
 
   const [selectedRound, setSelectedRound] = useState(1);
+  // Keep the round tab following the live draft as AI picks advance it to
+  // later rounds. Follow-only: never snaps backward past a round the user is
+  // browsing, so a manual round selection stays put while picks continue.
+  useEffect(() => {
+    if (phase !== 'draft') return;
+    const picks = teams.length || 1;
+    const total = draftPickOrder?.length || picks * 7;
+    const overall = Math.max(1, Math.min(total, total - draftOrder.length + 1));
+    const liveRound = Math.min(7, Math.max(1, Math.ceil(overall / picks)));
+    setSelectedRound(prev => (liveRound > prev ? liveRound : prev));
+  }, [phase, draftOrder.length, draftPickOrder, teams.length]);
   const [draftResultsTeamFilter, setDraftResultsTeamFilter] = useState<string>('ALL');
   const [autoDrafting, setAutoDrafting] = useState(false);
   const [positionFilter, setPositionFilter] = useState<Position | 'ALL'>('ALL');
@@ -1247,11 +1259,8 @@ export default function DraftPage() {
   const totalPicks = draftPickOrder?.length || picksPerRound * totalRounds;
   const currentPickTeamId = draftOrder[0];
   const isUserPick = currentPickTeamId === userTeamId;
-  const prospectCount = freeAgents.filter(id => {
-    const p = players.find(pl => pl.id === id);
-    return p && p.experience === 0;
-  }).length;
-  const draftComplete = draftOrder.length === 0 || prospectCount === 0;
+  // Every pick made, or nobody left to pick: same rule as the top bar and the store.
+  const draftComplete = isDraftOver({ draftOrder, freeAgents, players });
   // Older (1999-era) save formats can carry a draftOrder longer than totalPicks,
   // which drives `totalPicks - draftOrder.length + 1` to 0 or below and shows the
   // draft starting at pick #0. Floor at 1 so the overall pick is always a valid,

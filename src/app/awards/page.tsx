@@ -7,6 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { AwardRaceCard } from '@/components/awards/AwardRaceCard';
 import { RankingsTabs } from '@/components/awards/RankingsTabs';
+import Link from 'next/link';
 
 export default function AwardsPage() {
   const { teams, players, season, week, phase, schedule, seasonHistory } = useGameStore();
@@ -47,6 +48,9 @@ export default function AwardsPage() {
             Season {season} · Week {week} · Live ranking; leader updates after every week.
             {isPostRegularSeason && ' Season-end winners marked with 🏆.'}
           </p>
+          <Link href="/history" className="inline-block mt-1.5 text-sm text-blue-600 hover:underline">
+            → See past award winners
+          </Link>
         </div>
         {!anyGamesPlayed ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
