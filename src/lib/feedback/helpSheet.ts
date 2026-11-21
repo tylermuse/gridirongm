@@ -11,7 +11,7 @@
  * - Leave out anything you are not sure of. The model returns no answer for
  *   what the sheet does not cover, and the developer answers it by hand.
  *
- * Last checked against the code: 2026-11-14 (award winners, create player, draft class and spectating lines added 2026-11-17 from player questions).
+ * Last checked against the code: 2026-11-14 (award winners, create player, draft class and spectating lines added 2026-11-17 from player questions; "Play Action" added 2026-11-19).
  */
 
 const IN_SEASON = `
@@ -48,7 +48,7 @@ DURING A LIVE GAME
 - "🔄 Auto-subs" only changes what the "On the Field" display shows. It never swaps the QB.
 - To watch your game instead of simming it: press the red "Watch Live" button in the top bar ("Live" on phones), then "🏈 Kick Off" on the pregame show.
 - Live game controls: "▶ Play" / "⏸ Pause", "⏩ Skip Qtr", "⏭ End Game" (finishes the game now), and "Speed" of 0.5x, 1x, 2x, 5x or max.
-- Calling plays: "🎯 Live Coach" in the controls (on by default in your own games). Before each of your offensive snaps you choose "Run", "Short Pass", "Deep Shot", "QB Scramble" or "Screen"; on 4th down "Field Goal", "Punt" or "Go For It"; after a touchdown "Extra Point" or "Go for 2"; on kickoffs "Regular Kickoff" or "Onside Kick". "Turn off" in that panel stops play calling, and "Auto-sim to End ⏭" sims the rest.
+- Calling plays: "🎯 Live Coach" in the controls (on by default in your own games). Before each of your offensive snaps you choose "Run", "Short Pass", "Deep Shot", "QB Scramble", "Screen" or "Play Action" (a fake handoff to the back, then a pass); on 4th down "Field Goal", "Punt" or "Go For It"; after a touchdown "Extra Point" or "Go for 2"; on kickoffs "Regular Kickoff" or "Onside Kick". "Turn off" in that panel stops play calling, and "Auto-sim to End ⏭" sims the rest.
 - Calling defense is off by default: with Live Coach on, turn on "🛡️ Call Defense" to pick "Blitz", "Stacked Box", "Two-High", "Man Press" or "Soft Zone" before opponent snaps.
 - "📋 Game Plan" in the live game controls sets run/pass tendency, risk, red zone strategy, blitz rate, coverage and tempo.
 
@@ -138,6 +138,7 @@ SAVES
 - "Save/Load" at the bottom of the sidebar has 5 save slots, each with "Save", "Load" and delete.
 - Backup file: Settings, "Save Backup", "Export Save" downloads your current league as a file, and "Import Save" loads one (it replaces the league in this browser).
 - Playing on another device: sign in. Your current league is then backed up to your account automatically; Settings, "Cloud Saves", "Sync saves to my account" turns that off or back on. It syncs your current league, not the 5 slots. On the other device, sign in and the start screen offers to load the newer save.
+- If a red bar says "Your league is not being saved.", the browser is refusing the save (its storage is full or blocked). The game keeps running in that tab, but reloading or closing it goes back to the last save. Deleting a slot under "Save/Load" can free room; then click "Try saving again".
 - Clearing your browser data deletes local saves. Only an exported file or the cloud copy can bring a league back.
 - New league: "New League" at the bottom of the sidebar, then "Confirm?". This wipes the current league, so save it to a slot first if you want to keep it.
 
