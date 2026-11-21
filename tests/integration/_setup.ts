@@ -3,8 +3,9 @@
  *
  * Polyfills + mocks the browser APIs the engine and its dependencies expect
  * to exist:
- *  - IndexedDB (used by Dexie / idb in src/lib/storage.ts and the Zustand
- *    persist middleware)
+ *  - IndexedDB (used by idb in @bs/core/storage, behind the Zustand persist
+ *    middleware, and by Dexie in BS Hoops). Each test file gets empty
+ *    databases because it runs in its own worker (see vitest.config.ts).
  *  - crypto.randomUUID (Node 19+ has it; happy-dom may or may not expose it
  *    depending on version)
  *  - fetch (used by newLeague to load league files from URL — mocked to
@@ -18,6 +19,21 @@
  */
 import 'fake-indexeddb/auto';
 import { vi, beforeEach } from 'vitest';
+
+// Each test file must start in an environment no other file has used. That
+// only holds while vitest.config.ts runs every file in its own worker; with
+// singleThread / singleFork / isolate: false, the next file inherits this
+// one's IndexedDB saves, window globals and still-running timers, and tests
+// pass or fail depending on which file ran before them. Fail the file instead.
+const ENV_IN_USE = Symbol.for('bs-tests.environment-in-use');
+const testGlobals = globalThis as typeof globalThis & { [ENV_IN_USE]?: boolean };
+if (testGlobals[ENV_IN_USE]) {
+  throw new Error(
+    'This test file is reusing an environment an earlier file ran in, so that file\'s IndexedDB data and globals are ' +
+      'still here. Run each file in its own worker: no singleThread, singleFork or isolate: false (see vitest.config.ts).',
+  );
+}
+testGlobals[ENV_IN_USE] = true;
 
 // crypto.randomUUID is available in Node 19+, but happy-dom can sometimes
 // shadow it with an undefined value. Restore it from globalThis if missing.
@@ -50,8 +66,8 @@ Object.defineProperty(window, 'location', {
 
 // Reset all mocks between tests so spy assertions in one test don't pollute
 // expectations in another. fake-indexeddb persists across tests within a
-// file by design (mirrors browser behavior); use beforeEach in individual
-// tests to reset stores if needed.
+// file by design (mirrors browser behavior), but never into the next file;
+// use beforeEach in individual tests to reset stores if needed.
 beforeEach(() => {
   vi.clearAllMocks();
 });
