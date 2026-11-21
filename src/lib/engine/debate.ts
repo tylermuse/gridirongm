@@ -2143,3 +2143,5 @@ export function generateHalftimeAudioBreakdown(args: {
 
   return lines;
 }
+
+// CI lint smoke test: temporary, reverted before merge.
