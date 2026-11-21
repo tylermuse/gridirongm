@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSimResult, toSimPlay, toSimTeam, clockSeconds, toSimLineup, skinToneFor, whoMadeThePlay, scoreBeforeTry } from '@/lib/engine/liveSim3d';
+import { toSimResult, toSimPlay, toSimTeam, clockSeconds, toSimLineup, skinToneFor, whoMadeThePlay, scoreBeforeTry, simFormation, formationForSet, SIM_FORMATIONS } from '@/lib/engine/liveSim3d';
 import portraitSkin from '@/lib/portraits/portraitSkin.json';
 import { portraitFileFor } from '@/lib/portraits/portraitPool';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
@@ -323,5 +323,88 @@ describe('fumble returns', () => {
   it('a plain recovery stays a recovery', () => {
     const f = ev({ id: 2, type: 'fumble', description: 'Fumble! D. Singletary loses the ball — recovered by C. Wisniewski.', possession: 'home' });
     expect(toSimPlay(run, undefined, f)!.res.fumbleRet).toBeUndefined();
+  });
+});
+
+describe('play action is pictured with the fake handoff', () => {
+  // Tyler 11/20: "Play action is supposed to take the handoff to the RB and then throw. Right now it's just a throw."
+  it('a called play action keeps its style through every result the engine can log for it', () => {
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts completes to D. Smith for 9 yards.', yardsGained: 9 })))
+      .toEqual({ kind: 'complete', depth: 'short', yards: 9, style: 'playaction' });
+    // the extra big-play upside off the fake: a 20+ yard completion is the deep ball
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts fires deep to D. Smith — 34 yards!', yardsGained: 34 })))
+      .toEqual({ kind: 'complete', depth: 'deep', yards: 34, style: 'playaction' });
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: "🎭 Play Action — J. Hurts's pass to D. Smith falls incomplete." })))
+      .toMatchObject({ kind: 'incomplete', style: 'playaction' });
+    expect(toSimResult(ev({ type: 'sack', description: '🎭 Play Action — J. Hurts is sacked by M. Parsons for a loss of 6.', yardsGained: -6 })))
+      .toEqual({ kind: 'sack', yards: -6, style: 'playaction' });
+    expect(toSimResult(ev({ type: 'interception', description: '🎭 Play Action — INTERCEPTED! T. Diggs picks off J. Hurts.', returnFrom: 62, returnTo: 70, returnYards: 8 })))
+      .toMatchObject({ kind: 'int', style: 'playaction' });
+    // a play-action touchdown from the live engine (pass_complete + isScoring)
+    expect(toSimResult(ev({ type: 'pass_complete', isScoring: true, fieldPos: 88, description: '🎭 Play Action — J. Hurts hits D. Smith for a 12-yard TOUCHDOWN!', yardsGained: 12 })))
+      .toMatchObject({ kind: 'complete', yards: 12, style: 'playaction' });
+  });
+  it("the full sim's play-action wording gets the fake too", () => {
+    expect(toSimResult(ev({ type: 'pass_complete', description: 'Play-action works perfectly. J. Hurts finds D. Smith wide open for 18.', yardsGained: 18 })))
+      .toMatchObject({ kind: 'complete', style: 'playaction' });
+  });
+  it('a plain pass and a run have no fake', () => {
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎯 Short Pass — J. Hurts completes to D. Smith for 9 yards.', yardsGained: 9 }))!.style).toBeUndefined();
+    expect(toSimResult(ev({ type: 'run', description: '🏃 Run — S. Barkley runs for 4 yards.', yardsGained: 4 }))!.style).toBeUndefined();
+  });
+});
+
+describe('formations', () => {
+  // Tyler 11/20: "players aren't always lined up in the shotgun — sometimes there's I formation or others"
+  const res = (e: PlayEvent) => toSimResult(e)!;
+  const many = (make: (i: number) => PlayEvent) => Array.from({ length: 400 }, (_, i) => { const e = make(i); return simFormation(e, res(e)); });
+
+  it("the CPU's shown set is the formation the sim lines up in (the defense menu's read)", () => {
+    const e = ev({ type: 'run', description: 'S. Barkley runs for 3 yards.', yardsGained: 3, offSet: 'heavy' });
+    expect(simFormation(e, res(e))).toBe('heavy');
+    expect(formationForSet('spread')).toBe('spread');
+    expect(formationForSet('balanced')).toBe('singleback');
+    expect(formationForSet('max_protect')).toBe('iform');
+    expect(toSimPlay(e)!.formation).toBe('heavy');
+  });
+
+  it('runs are not all shotgun: the I, singleback and heavy sets all show up', () => {
+    const seen = new Set(many(i => ev({ id: i, type: 'run', description: 'S. Barkley runs for 4 yards.', yardsGained: 4 })));
+    for (const f of ['iform', 'singleback', 'shotgun', 'heavy'] as const) expect(seen.has(f)).toBe(true);
+  });
+
+  it('short yardage and the goal line lean heavy / I; third and long is shotgun or spread', () => {
+    const goal = many(i => ev({ id: i, type: 'run', description: 'S. Barkley runs for 1 yard.', yardsGained: 1, fieldPos: 98, yardsToGo: 2 }));
+    expect(goal.filter(f => f === 'heavy' || f === 'iform').length).toBeGreaterThan(goal.length * 0.6);
+    const long = many(i => ev({ id: i, type: 'pass_complete', description: 'J. Hurts completes to D. Smith for 9 yards.', yardsGained: 9, down: 3, yardsToGo: 9 }));
+    expect(new Set(long)).toEqual(new Set(['shotgun', 'spread']));
+  });
+
+  it('a called QB scramble and a screen come out of the shotgun; kicks have no formation', () => {
+    const scr = ev({ type: 'run', description: '⚡ QB Scramble — J. Hurts runs for 6 yards.', yardsGained: 6 });
+    expect(simFormation(scr, res(scr))).toBe('shotgun');
+    const scn = ev({ type: 'pass_complete', description: '🛡️ Screen — J. Hurts completes to S. Barkley for 5 yards.', yardsGained: 5 });
+    expect(simFormation(scn, res(scn))).toBe('shotgun');
+    expect(toSimPlay(ev({ type: 'field_goal_good', description: 'FG is good' }))!.formation).toBeUndefined();
+  });
+
+  it('the same snap always lines up the same way (live, replay, clip)', () => {
+    const e = ev({ id: 41, type: 'pass_incomplete', description: "J. Hurts's pass to D. Smith falls incomplete." });
+    const f = simFormation(e, res(e));
+    for (let i = 0; i < 5; i++) expect(simFormation({ ...e }, res(e))).toBe(f);
+    expect(SIM_FORMATIONS).toContain(f);
+  });
+
+  it('the lineup carries the RB2 as the fullback and the TE2, never stealing a starter\'s number', () => {
+    const mk = (id: string, position: string, jerseyNumber?: number) => ({ id, position, jerseyNumber });
+    const L = toSimLineup([mk('r1', 'RB', 26), mk('r2', 'RB', 44), mk('t1', 'TE', 87), mk('t2', 'TE', 81), mk('q', 'QB', 7)]);
+    expect(L.rb?.n).toBe(26);
+    expect(L.fb?.n).toBe(44);
+    expect(L.te?.n).toBe(87);
+    expect(L.te2?.n).toBe(81);
+    // a backup wearing a starter's number keeps the sim's default instead
+    const dup = toSimLineup([mk('r1', 'RB', 26), mk('r2', 'RB', 7), mk('q', 'QB', 7)]);
+    expect(dup.qb?.n).toBe(7);
+    expect(dup.fb).toBeUndefined();
   });
 });
