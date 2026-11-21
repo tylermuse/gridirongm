@@ -16,6 +16,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The lint step diffs against the merge base with main, so it needs
+          # history on both sides. The default (fetch-depth: 1) has no merge
+          # base, which silently made the lint step a no-op. blob:none fetches
+          # every commit and tree (a few MB) but only the blobs for this
+          # checkout; a plain fetch-depth: 0 would pull ~1 GB of old media.
+          fetch-depth: 0
+          filter: blob:none
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -27,25 +35,62 @@ jobs:
         run: npm ci
 
       - name: Lint changed TypeScript files
+        # Lints the .ts/.tsx files this change adds or modifies:
+        # - pull request: the files the PR changes ("Files changed" tab).
+        # - push to a branch other than main: the files the branch changes
+        #   since it forked from main (the same set its PR would lint).
+        # - push to main: the files that push brought in.
+        # Any git failure fails the step; it never falls back to "nothing to lint".
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="origin/${{ github.base_ref }}"
-            git fetch origin "${{ github.base_ref }}" --depth=1
-          else
-            BASE="origin/main"
-            git fetch origin main --depth=1 || true
+          set -euo pipefail
+
+          case "$EVENT_NAME" in
+            pull_request)
+              BASE="origin/$PR_BASE_REF"
+              ;;
+            push)
+              if [ "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH" ]; then
+                BASE="$PUSH_BEFORE"
+              else
+                BASE="origin/$DEFAULT_BRANCH"
+              fi
+              ;;
+            *)
+              echo "::error::Lint step does not know how to pick a diff base for '$EVENT_NAME' events."
+              exit 1
+              ;;
+          esac
+
+          if ! MERGE_BASE=$(git merge-base "$BASE" HEAD); then
+            echo "::error::No merge base between $BASE and HEAD, so the changed files are unknown. Failing instead of skipping lint."
+            exit 1
+          fi
+          echo "Diffing HEAD ($(git rev-parse --short HEAD)) against $BASE (merge base $(git rev-parse --short "$MERGE_BASE"))."
+
+          # -z: NUL-separated, safe for any filename. --no-renames: the blobless
+          # clone can't detect renames without downloading file contents, and a
+          # rename still shows up here as an added file. --diff-filter=d: skip
+          # deleted files, which ESLint can't open.
+          CHANGED_LIST="$RUNNER_TEMP/changed-ts-files"
+          if ! git diff --name-only -z --no-renames --diff-filter=d "$MERGE_BASE" HEAD -- '*.ts' '*.tsx' > "$CHANGED_LIST"; then
+            echo "::error::git diff failed, so the changed files are unknown. Failing instead of skipping lint."
+            exit 1
           fi
 
-          CHANGED=$(git diff --name-only "$BASE"...HEAD -- '*.ts' '*.tsx' || true)
-
-          if [ -z "$CHANGED" ]; then
-            echo "No TypeScript files changed; skipping scoped lint."
+          mapfile -d '' -t FILES < "$CHANGED_LIST"
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "No TypeScript files added or modified; nothing to lint."
             exit 0
           fi
 
           echo "Linting changed files:"
-          echo "$CHANGED"
-          echo "$CHANGED" | xargs npx eslint
+          printf '  %s\n' "${FILES[@]}"
+          npx eslint -- "${FILES[@]}"
 
       - name: Check feedback help sheet labels
         # The feedback modal answers players' how-to questions from
