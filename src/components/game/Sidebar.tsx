@@ -75,6 +75,22 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
   const [editingSlot, setEditingSlot] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<number | null>(null);
+  const [saveFailedSlot, setSaveFailedSlot] = useState<number | null>(null);
+
+  // A slot is a copy of the autosave, so the autosave has to land first. Either
+  // write can be refused by the browser (storage full or blocked); say so
+  // instead of leaving a button that does nothing.
+  async function handleSave(slot: number) {
+    setSaveFailedSlot(null);
+    try {
+      if (!(await flushToStorage())) throw new Error('autosave did not land');
+      await saveToSlot(slot);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      console.error('[save-slot] save failed', err);
+      setSaveFailedSlot(slot);
+    }
+  }
 
   useEffect(() => {
     async function loadMetas() {
@@ -117,7 +133,10 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
     await idbRemoveItem(`gridiron-gm-save-${slot}`);
     await idbRemoveItem(`gridiron-gm-save-${slot}-name`);
     setConfirmDeleteSlot(null);
+    setSaveFailedSlot(null);
     setRefreshKey(k => k + 1);
+    // A deleted slot frees room: if the autosave was being refused, try it again now.
+    void flushToStorage();
   }
 
   async function handleRename(slot: number) {
@@ -192,7 +211,7 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
             ) : (
               <div className="flex gap-1">
                 <button
-                  onClick={async () => { await saveToSlot(slot); setRefreshKey(k => k + 1); }}
+                  onClick={() => handleSave(slot)}
                   className="flex-1 text-xs py-1 rounded bg-blue-600/20 text-blue-600 hover:bg-blue-600/30 transition-colors"
                 >
                   Save
@@ -215,6 +234,11 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
                   </>
                 )}
               </div>
+            )}
+            {saveFailedSlot === slot && (
+              <p role="alert" className="mt-1 text-[11px] leading-snug text-red-600">
+                Couldn&apos;t save. This browser&apos;s storage is full or blocked.
+              </p>
             )}
           </div>
         );

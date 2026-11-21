@@ -8,7 +8,7 @@ import { GlobalBooth } from './GlobalBooth';
 import { FiredModal } from './FiredModal';
 import { GuestBackupPrompt } from './GuestBackupPrompt';
 import { Button } from '@/components/ui/Button';
-import { useGameStore, flushPendingSave, useSaveLoadStatus, retrySaveLoad, continueWithoutSave } from '@/lib/engine/store';
+import { useGameStore, flushPendingSave, flushToStorage, useSaveLoadStatus, useSaveWriteFailure, retrySaveLoad, continueWithoutSave } from '@/lib/engine/store';
 import { getTeamColorVars } from '@/lib/teamColors';
 import { setFeedbackContext } from '@bs/core/feedback/client';
 
@@ -75,6 +75,7 @@ export function GameShell({ children }: { children: React.ReactNode }) {
         <div className="sticky top-0 z-20">
           <GameTicker onMenuToggle={() => setSidebarOpen(v => !v)} />
           <TopBar />
+          <SaveWarning />
         </div>
         {godMode && (
           <div className="bg-yellow-500/10 border-b border-yellow-400/30 px-4 py-1 text-center">
@@ -88,6 +89,39 @@ export function GameShell({ children }: { children: React.ReactNode }) {
 
       <GlobalBooth />
       <FiredModal />
+    </div>
+  );
+}
+
+/** Shown while the browser is refusing the autosave (storage full, private
+ *  window, blocked site data). The game still runs from memory, so the player
+ *  has to know that a reload goes back to the last save that landed: until
+ *  this existed, that was a silent loss of everything since. */
+function SaveWarning() {
+  const failure = useSaveWriteFailure();
+  const [retrying, setRetrying] = useState(false);
+  if (!failure) return null;
+  const full = failure.name === 'QuotaExceededError';
+  return (
+    <div role="alert" className="bg-red-600 text-white px-3 md:px-6 py-2 text-xs sm:text-sm flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className="font-bold">Your league is not being saved.</span>
+      <span>
+        {full
+          ? 'This browser has no room left for it. Deleting a slot under Save/Load can free some.'
+          : 'This browser refused the save.'}
+        {' '}Keep this tab open: reloading goes back to your last save.
+      </span>
+      <button
+        type="button"
+        disabled={retrying}
+        onClick={async () => {
+          setRetrying(true);
+          try { await flushToStorage(); } finally { setRetrying(false); }
+        }}
+        className="font-semibold underline underline-offset-2 disabled:opacity-60"
+      >
+        {retrying ? 'Saving…' : 'Try saving again'}
+      </button>
     </div>
   );
 }
