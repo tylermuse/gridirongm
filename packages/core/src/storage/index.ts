@@ -158,14 +158,76 @@ let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let firstPendingAt = 0;
 let draining: Promise<void> | null = null;
 
+// ---------------------------------------------------------------------------
+// Write failures
+// ---------------------------------------------------------------------------
+// The browser can refuse a write (storage full, private window, blocked site
+// data). A coalesced autosave has no caller to throw to, and a failure used to
+// be logged and dropped: the game carried on as if it had saved, and the next
+// reload brought back whatever write last landed. Keep the latest failure per
+// key and tell listeners, so the game can warn the player and report it.
+
+/** Why the most recent coalesced write for a key did not land. */
+export interface WriteFailure {
+  /** Error name, e.g. "QuotaExceededError". */
+  name: string;
+  message: string;
+  /** Length of the serialized value (0 if serializing is what threw). */
+  bytes: number;
+}
+
+type WriteResultListener = (key: string, failure: WriteFailure | null) => void;
+
+const writeFailures = new Map<string, WriteFailure>();
+const writeResultListeners = new Set<WriteResultListener>();
+
+function settleWrite(key: string, failure: WriteFailure | null): void {
+  const wasFailing = writeFailures.has(key);
+  if (failure) writeFailures.set(key, failure);
+  else writeFailures.delete(key);
+  // Every failure is announced; a success only when it ends a failure.
+  if (!failure && !wasFailing) return;
+  writeResultListeners.forEach((listener) => {
+    try {
+      listener(key, failure);
+    } catch (err) {
+      console.error('[storage] write-result listener threw', err);
+    }
+  });
+}
+
+/** The failure of the latest coalesced write for `key`, or null if it landed
+ *  (or nothing has been written yet). */
+export function getWriteFailure(key: string): WriteFailure | null {
+  return writeFailures.get(key) ?? null;
+}
+
+/** Hear about each failed coalesced write, and the write that recovers from
+ *  one (failure = null). Returns the unsubscribe. */
+export function onWriteResult(listener: WriteResultListener): () => void {
+  writeResultListeners.add(listener);
+  return () => {
+    writeResultListeners.delete(listener);
+  };
+}
+
 async function runDrain(): Promise<void> {
   while (pendingWrites.size > 0) {
     const [key, { envelope, serialize }] = pendingWrites.entries().next().value as [string, PendingWrite];
     pendingWrites.delete(key);
+    let bytes = 0;
     try {
-      await writeValue(key, serialize(envelope));
+      const value = serialize(envelope);
+      bytes = value.length;
+      await writeValue(key, value);
+      settleWrite(key, null);
     } catch (err) {
       console.error(`[storage] Autosave write failed ("${key}")`, err);
+      settleWrite(key, {
+        name: err instanceof Error || err instanceof DOMException ? err.name : 'Error',
+        message: err instanceof Error || err instanceof DOMException ? err.message : String(err),
+        bytes,
+      });
     }
   }
 }

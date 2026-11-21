@@ -125,6 +125,17 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     ? Math.max(0, userTeam.roster.length - 53)
     : 0;
 
+  // Free agency → draft reloads the page, so the free-agency screen never
+  // re-renders in the draft phase (the "Something Went Wrong" flash). A reload
+  // reads the league back from disk, though: if the browser refused the save,
+  // that would return the player to their last good save and throw away
+  // everything since (player report 2026-11-17, four times in an hour). In
+  // that case stay in this page load and navigate in-app instead.
+  const goToDraft = useCallback((saved: boolean) => {
+    if (saved) window.location.href = '/draft';
+    else router.push('/draft');
+  }, [router]);
+
   const handleSimWeek = useCallback(async () => {
     const beforeIds = new Set(useGameStore.getState().tradeProposals.filter(p => p.status === 'pending').map(p => p.id));
     simWeek();
@@ -480,16 +491,17 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 )}
                 {faDay >= 30 ? (
                   <Button onClick={async () => {
+                    let saved = true;
                     try {
                       const store = useGameStore.getState();
                       if (store.phase !== 'draft') {
                         store.advanceToDraft();
                       }
-                      await flushToStorage();
+                      saved = await flushToStorage();
                     } catch (err) {
                       console.error('[AdvanceToDraft] error:', err);
                     }
-                    window.location.href = '/draft';
+                    goToDraft(saved);
                   }} variant="secondary" size="sm">
                     <span className="hidden sm:inline">Advance to Draft</span>
                     <span className="sm:hidden">Draft</span>
@@ -499,14 +511,15 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   <Button
                     onClick={async () => {
                       if (!window.confirm('End free agency early? AI teams will stop making moves and you\'ll advance to the draft.')) return;
+                      let saved = true;
                       try {
                         const store = useGameStore.getState();
                         store.advanceToDraft();
-                        await flushToStorage();
+                        saved = await flushToStorage();
                       } catch (err) {
                         console.error('[EndFAEarly] advanceToDraft error:', err);
                       }
-                      window.location.href = '/draft';
+                      goToDraft(saved);
                     }}
                     variant="secondary"
                     size="sm"
