@@ -6673,6 +6673,11 @@ export const useGameStore = create<GameStore>()(
           return {
             ...t,
             roster: t.roster.filter(id => id !== playerId),
+            // A released player must also leave the practice squad — otherwise
+            // a cut PS player lingers as a ghost (can't be cut, blocks a PS
+            // slot, ghost-promotes). Mirrors the roster/depthChart prune above
+            // and the PS filters already used elsewhere in this store.
+            practiceSquad: (t.practiceSquad ?? []).filter(id => id !== playerId),
             totalPayroll: Math.max(0, t.totalPayroll - actualSavings),
             depthChart: chart,
             deadCap: newDeadCap,

@@ -64,7 +64,7 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
   { type: 'pass_deep', label: 'Deep Shot', icon: '🚀', color: 'bg-purple-600 hover:bg-purple-700' },
   { type: 'qb_run', label: 'QB Scramble', icon: '⚡', color: 'bg-yellow-600 hover:bg-yellow-700' },
   { type: 'screen', label: 'Screen', icon: '🛡️', color: 'bg-teal-600 hover:bg-teal-700' },
-  { type: 'play_action', label: 'Play Action', icon: '🎭', color: 'bg-rose-600 hover:bg-rose-700' },
+  { type: 'play_action', label: 'Play Action', icon: '🎭', color: 'bg-pink-600 hover:bg-pink-700' },
 ];
 
 /** Longest field goal the menu offers (LOS + 17). The NFL record is 66; past ~62 the make rate is a few percent at best. */
