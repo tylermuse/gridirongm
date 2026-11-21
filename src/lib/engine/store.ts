@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useSyncExternalStore } from 'react';
 import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
-import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites } from '@bs/core/storage';
+import { hasDraftableProspect } from './draftStatus';
+import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites, getWriteFailure, onWriteResult, type WriteFailure } from '@bs/core/storage';
 import { isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { scheduleCloudAutosavePush } from '@/lib/data/cloudAutosave';
 function uuid(): string {
@@ -107,6 +108,32 @@ export async function retrySaveLoad(): Promise<SaveLoadStatus> {
  *  Autosaves resume, so starting a new league will replace the old save. */
 export function continueWithoutSave(): void {
   setSaveLoadStatus('ready');
+}
+
+// ---------------------------------------------------------------------------
+// Save-write status
+// ---------------------------------------------------------------------------
+// Whether the latest autosave reached IndexedDB. The browser can refuse it
+// (storage full, private window, blocked site data); until 2026-11 that was a
+// console line and nothing else, so the player kept going and the next reload
+// put the league back at the last write that had landed.
+
+const saveWriteListeners = new Set<() => void>();
+let saveWriteFailureReported = false;
+
+/** Why the latest autosave did not land, or null if it did. */
+export function getSaveWriteFailure(): WriteFailure | null {
+  return getWriteFailure(AUTOSAVE_KEY);
+}
+
+function subscribeSaveWriteFailure(cb: () => void): () => void {
+  saveWriteListeners.add(cb);
+  return () => { saveWriteListeners.delete(cb); };
+}
+
+/** The current autosave failure for the UI to warn about (null = saving fine). */
+export function useSaveWriteFailure(): WriteFailure | null {
+  return useSyncExternalStore(subscribeSaveWriteFailure, getSaveWriteFailure, () => null);
 }
 
 // Exhibition sandbox (/live): a Football GM upload is loaded into memory to
@@ -5560,8 +5587,10 @@ export const useGameStore = create<GameStore>()(
           return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart, draftPicks: updatedPicks };
         });
 
-        const newDraftOrder = state.draftOrder.slice(1);
         const newFreeAgents = state.freeAgents.filter(id => id !== playerId);
+        // The draft ends when the class runs out, even with picks left (a
+        // league with more picks than prospects): leave nobody on the clock.
+        const newDraftOrder = hasDraftableProspect(newFreeAgents, state.players) ? state.draftOrder.slice(1) : [];
 
         // Build updated players array — include created player if it wasn't in the original array
         const playerInArray = state.players.some(p => p.id === playerId);
@@ -5604,6 +5633,13 @@ export const useGameStore = create<GameStore>()(
         if (state.phase !== 'draft') return;
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
+        // No prospect left: the draft is over (not one empty slot per click
+        // for the rest of the order, and not a released veteran "drafted"
+        // out of the same pool).
+        if (!hasDraftableProspect(state.freeAgents, state.players)) {
+          set({ draftOrder: [] });
+          return;
+        }
         const playerId = autoDraftPlayerId(state, currentPickTeamId);
         if (playerId) {
           get().draftPlayer(playerId);
@@ -5628,7 +5664,7 @@ export const useGameStore = create<GameStore>()(
         const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
-        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && hasDraftableProspect(freeAgentIds, players); guard++) {
           const pickTeam = draftOrder[0];
           if (pickTeam === state.userTeamId) break; // Stop at user's pick
 
@@ -5709,6 +5745,11 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // Class exhausted with picks left over: the draft is over. Leaving the
+        // rest of the order in place kept the top bar on its draft buttons,
+        // with no way to "Start New Season" (player report 2026-11-16).
+        if (!hasDraftableProspect(freeAgentIds, players)) draftOrder = [];
+
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
       },
 
@@ -5726,7 +5767,7 @@ export const useGameStore = create<GameStore>()(
         const totalPicks = state.draftPickOrder?.length || state.teams.length * 7;
         const draftYear = state.currentDraftYear ?? state.season;
 
-        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && hasDraftableProspect(freeAgentIds, players); guard++) {
           const pickTeam = draftOrder[0];
           const fakeState = { ...state, draftOrder, freeAgents: freeAgentIds, players, teams } as LeagueState;
           const pid = autoDraftPlayerId(fakeState, pickTeam);
@@ -5805,6 +5846,11 @@ export const useGameStore = create<GameStore>()(
             })];
           }
         }
+
+        // Class exhausted with picks left over: the draft is over. Leaving the
+        // rest of the order in place kept the top bar on its draft buttons,
+        // with no way to "Start New Season" (player report 2026-11-16).
+        if (!hasDraftableProspect(freeAgentIds, players)) draftOrder = [];
 
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
 
@@ -10184,6 +10230,9 @@ export const useGameStore = create<GameStore>()(
           players: reconcileJerseys(allPlayersForNewSeason, teamsAfterCoaches),
           teams: teamsAfterCoaches,
           schedule: newSchedule,
+          // A draft that ended with picks unused (class ran out) must not
+          // leave its order behind in the new season.
+          draftOrder: [],
           draftResults: [],
           draftPickOrder: undefined,
           currentDraftYear: undefined,
@@ -11980,10 +12029,10 @@ export const useGameStore = create<GameStore>()(
  * Call this before router.push() after any store mutation to guarantee the
  * navigation target will rehydrate fresh data.
  */
-export async function flushToStorage(): Promise<void> {
+export async function flushToStorage(): Promise<boolean> {
   // Same rule as the persist storage: never write the empty pre-load state,
   // nor an exhibition league over the player's real save.
-  if (saveLoadStatus !== 'ready' || savesSuspended) return;
+  if (saveLoadStatus !== 'ready' || savesSuspended) return true;
   const { partialize } = useGameStore.persist.getOptions();
   const state = useGameStore.getState();
   const envelope = { state: partialize ? partialize(state) : state, version: SAVE_VERSION };
@@ -11995,7 +12044,28 @@ export async function flushToStorage(): Promise<void> {
   // The cloud copy is the same compact form as the local one; every restore
   // goes through the persist getItem, which expands it.
   if (isCloudSyncEnabled()) scheduleCloudAutosavePush(serializeSave(envelope));
+  // False when the browser refused the write: what is on disk is still the
+  // previous save, so a caller about to reload the page would lose progress.
+  return getWriteFailure(AUTOSAVE_KEY) === null;
 }
+
+// Autosave failures: wake the UI, and report the first one of this page load
+// (name + size tell a full store from a blocked one).
+onWriteResult((key, failure) => {
+  if (key !== AUTOSAVE_KEY) return;
+  saveWriteListeners.forEach(l => l());
+  if (!failure || saveWriteFailureReported) return;
+  saveWriteFailureReported = true;
+  const { season, week, phase } = useGameStore.getState();
+  trackEvent('save_write_failed', {
+    name: failure.name,
+    message: failure.message.slice(0, 200),
+    mb: Math.round(failure.bytes / 1e5) / 10,
+    season,
+    week,
+    phase,
+  });
+});
 
 /**
  * Start writing any queued autosave without waiting on it — for pagehide and

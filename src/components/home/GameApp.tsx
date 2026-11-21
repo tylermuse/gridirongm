@@ -334,8 +334,10 @@ function TeamPicker({ realTeams = [] }: { realTeams?: PickerTeam[] }) {
         await useGameStore.getState().startAtMockDraft(abbr, activeUrl, plan, (stage, detail) => {
           setMockProgress(detail ? `${labels[stage]}: ${detail}` : labels[stage]);
         });
-        await flushToStorage();
-        window.location.href = '/draft';
+        // Reload into the draft only if the save landed: a reload reads the
+        // league back from disk, and without it the simmed season is gone.
+        if (await flushToStorage()) window.location.href = '/draft';
+        else router.push('/draft');
       } catch {
         setMockProgress(null);
         setError('Failed to start at the draft. Please try again.');

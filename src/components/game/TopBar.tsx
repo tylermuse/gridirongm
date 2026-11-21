@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
+import { isDraftOver } from '@/lib/engine/draftStatus';
 import { Button } from '@/components/ui/Button';
 import { useBusyAction, afterPaint } from '@/components/ui/useBusyAction';
 // TradeProposalPopup disabled — user prefers checking trades inline
@@ -47,6 +48,10 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const [isStartingSeason, setIsStartingSeason] = useState(false);
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const isFired = useGameStore(s => !!s.firedState?.fired);
+  // Over when every pick is made or the class has run out with picks left (a
+  // league with more picks than prospects). Reading only the pick order left
+  // such a draft "in progress" for good: no Draft Recap, no Start New Season.
+  const draftOver = useGameStore(s => s.phase === 'draft' && isDraftOver(s));
   const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
   const stableSBRef = useRef<boolean | null>(null);
@@ -119,6 +124,17 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const rosterOverBy = phase === 'regular' && !isSpectator && userTeam && (week === 1 || weeklyRecapCount === 0)
     ? Math.max(0, userTeam.roster.length - 53)
     : 0;
+
+  // Free agency → draft reloads the page, so the free-agency screen never
+  // re-renders in the draft phase (the "Something Went Wrong" flash). A reload
+  // reads the league back from disk, though: if the browser refused the save,
+  // that would return the player to their last good save and throw away
+  // everything since (player report 2026-11-17, four times in an hour). In
+  // that case stay in this page load and navigate in-app instead.
+  const goToDraft = useCallback((saved: boolean) => {
+    if (saved) window.location.href = '/draft';
+    else router.push('/draft');
+  }, [router]);
 
   const handleSimWeek = useCallback(async () => {
     const beforeIds = new Set(useGameStore.getState().tradeProposals.filter(p => p.status === 'pending').map(p => p.id));
@@ -219,6 +235,10 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     const capSpace = userTeam ? (userTeam.salaryCap - userTeam.totalPayroll) : 0;
     bannerText = `${remaining} player${remaining !== 1 ? 's' : ''} to re-sign · $${Math.round(capSpace * 10) / 10}M cap space`;
     phoneStatus = `${remaining} to re-sign\n$${Math.round(capSpace * 10) / 10}M cap`;
+  } else if (phase === 'draft' && draftOver) {
+    // Was "Round 8 · Pick #225" after the last pick of a 224-pick draft.
+    bannerText = 'Draft complete · Start the new season when you are ready';
+    phoneStatus = 'Draft\ncomplete';
   } else if (phase === 'draft') {
     const currentPickTeam = teams.find(t => t.id === draftOrder[0]);
     const totalPicks = teams.length * 7;
@@ -471,16 +491,17 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 )}
                 {faDay >= 30 ? (
                   <Button onClick={async () => {
+                    let saved = true;
                     try {
                       const store = useGameStore.getState();
                       if (store.phase !== 'draft') {
                         store.advanceToDraft();
                       }
-                      await flushToStorage();
+                      saved = await flushToStorage();
                     } catch (err) {
                       console.error('[AdvanceToDraft] error:', err);
                     }
-                    window.location.href = '/draft';
+                    goToDraft(saved);
                   }} variant="secondary" size="sm">
                     <span className="hidden sm:inline">Advance to Draft</span>
                     <span className="sm:hidden">Draft</span>
@@ -490,14 +511,15 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   <Button
                     onClick={async () => {
                       if (!window.confirm('End free agency early? AI teams will stop making moves and you\'ll advance to the draft.')) return;
+                      let saved = true;
                       try {
                         const store = useGameStore.getState();
                         store.advanceToDraft();
-                        await flushToStorage();
+                        saved = await flushToStorage();
                       } catch (err) {
                         console.error('[EndFAEarly] advanceToDraft error:', err);
                       }
-                      window.location.href = '/draft';
+                      goToDraft(saved);
                     }}
                     variant="secondary"
                     size="sm"
@@ -517,7 +539,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Button>
                   </Link>
                 )}
-                {draftOrder.length > 0 ? (
+                {!draftOver ? (
                   <>
                     {draftOrder[0] !== userTeamId && (
                       <Button onClick={() => runSim('draft-pick', simDraftPick)} size="sm" variant="secondary" busy={simBusy === 'draft-pick'} disabled={!!simBusy}>

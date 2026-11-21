@@ -18,7 +18,7 @@ export const seoPages: SEOPage[] = [
     title: 'BS Football vs Football GM — Honest Comparison',
     seoTitle: 'BS Football vs Football GM — Honest Comparison (2026)',
     metaDescription:
-      'See how BS Football compares to Football GM for design, scouting, draft experience, and dynasty play. Free browser football GM with modern UI and scouting tiers.',
+      'See how BS Football compares to Football GM for design, scouting, draft experience, and dynasty play. Free browser football GM with modern UI and draft scouting.',
     keywords: [
       'bs football vs football gm',
       'football gm comparison',
@@ -48,14 +48,14 @@ export const seoPages: SEOPage[] = [
     </tr>
   </thead>
   <tbody>
-    <tr><td>Price</td><td>Free</td><td>Free</td></tr>
+    <tr><td>Price</td><td>Free (optional Premium)</td><td>Free</td></tr>
     <tr><td>Platform</td><td>Browser</td><td>Browser</td></tr>
     <tr><td>UI / Design</td><td>Modern, clean layout</td><td>Functional, spreadsheet-style</td></tr>
-    <tr><td>Scouting</td><td>3-tier scouting system</td><td>Ratings visible by default</td></tr>
-    <tr><td>Draft Experience</td><td>Deep Scout reports, round-by-round tension</td><td>Sortable table, quick picks</td></tr>
-    <tr><td>Salary Cap</td><td>Hard cap with dead cap</td><td>Soft/hard cap options</td></tr>
+    <tr><td>Scouting</td><td>Rating ranges until you scout; limited scout points</td><td>Ratings visible by default</td></tr>
+    <tr><td>Draft Experience</td><td>Full scouting reports, round-by-round tension</td><td>Sortable table, quick picks</td></tr>
+    <tr><td>Salary Cap</td><td>Salary cap with dead cap and luxury tax</td><td>Soft/hard cap options</td></tr>
     <tr><td>Dynasty Play</td><td>Full multi-season with awards</td><td>Full multi-season with awards</td></tr>
-    <tr><td>Customization</td><td>Limited (growing)</td><td>Extensive (leagues, rosters, God Mode)</td></tr>
+    <tr><td>Customization</td><td>League settings, God Mode, Football GM league-file import</td><td>Extensive (leagues, rosters, God Mode)</td></tr>
     <tr><td>Mobile Support</td><td>Responsive design</td><td>Usable but cramped</td></tr>
     <tr><td>Open Source</td><td>No</td><td>Yes</td></tr>
   </tbody>
@@ -67,7 +67,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>Draft &amp; Scouting</h2>
 <p>This is where the two games diverge the most. Football GM shows you player ratings up front. You sort, you pick, you move on. It is efficient but it removes the uncertainty that makes real drafts exciting.</p>
-<p>BS Football introduces a <strong>3-tier scouting system</strong>. You start with surface-level info and invest scouting resources to unlock deeper reports. The Deep Scout tier gives you detailed breakdowns that mirror real NFL scouting. You will miss on prospects. You will find sleepers. That tension is the point.</p>
+<p>BS Football builds the draft around <strong>scouting uncertainty</strong>. Every prospect starts with only an estimated rating range. Spending a scout point unlocks his full report, and you get a limited number of points per draft, so you cannot scout everyone. You will miss on prospects. You will find sleepers. That tension is the point.</p>
 
 <h2>Game Simulation</h2>
 <p>Football GM simulates games under the hood with a well-tested engine that has been refined over years. BS Football lets you sim, watch games drive by drive with live play-by-play, or take over play calling in real time with Call the Play. Box scores track passing, rushing, receiving, and defensive stats.</p>
@@ -76,11 +76,11 @@ export const seoPages: SEOPage[] = [
 <p>Both games let you run a franchise across many seasons. You will draft, develop players, manage aging rosters, and chase championships. Football GM has a slight edge here simply because its engine has been stress-tested over more seasons by more players. BS Football tracks season history, awards (MVP, DPOY, ROY), and gives you a clear dynasty timeline.</p>
 
 <h2>Customization &amp; Modding</h2>
-<p>Football GM wins this category decisively. It is open source, supports custom rosters, custom leagues, God Mode, and has an active modding community. BS Football is newer and more opinionated — you get a polished experience out of the box, but fewer knobs to turn. If modding is your thing, Football GM is hard to beat.</p>
+<p>Football GM still wins this category. It is open source, supports custom rosters and custom leagues, and has an active modding community. BS Football has God Mode, adjustable league settings, and imports Football GM league files, but it is newer and more opinionated — you get a polished experience out of the box, with fewer knobs to turn. If modding is your thing, Football GM is hard to beat.</p>
 
 <h2>Who Should Choose Football GM</h2>
 <ul>
-  <li>You want maximum customization and God Mode</li>
+  <li>You want maximum customization and modding</li>
   <li>You prefer raw data density over polished UI</li>
   <li>You want an open-source project you can contribute to</li>
   <li>You run multiple leagues simultaneously</li>
@@ -97,16 +97,16 @@ export const seoPages: SEOPage[] = [
 
 <h2>Frequently Asked Questions</h2>
 <h3>Is BS Football a copy of Football GM?</h3>
-<p>No. BS Football is inspired by the football management genre that Football GM helped popularize, but it is built from scratch with different design priorities — modern UI, scouting tiers, and live play-by-play.</p>
+<p>No. BS Football is inspired by the football management genre that Football GM helped popularize, but it is built from scratch with different design priorities — modern UI, scouting uncertainty, a 3D live sim, and live play calling.</p>
 
 <h3>Can I import Football GM rosters into BS Football?</h3>
 <p>Often, yes. BS Football can load Football GM-format league files (JSON) through Import League File on the start screen; its own NFL roster downloads use that format. Not every Football GM setting carries over, so expect some differences.</p>
 
 <h3>Which one is more realistic?</h3>
-<p>Both are abstractions of real NFL management. BS Football leans into scouting uncertainty and salary cap realism. Football GM offers more configurable realism through its settings and God Mode.</p>
+<p>Both are abstractions of real NFL management. BS Football leans into scouting uncertainty and salary cap realism. Football GM offers more configurable realism through its settings.</p>
 
 <h3>Are both really free?</h3>
-<p>Yes. Both games are completely free to play in your browser with no downloads required.</p>
+<p>Yes. Both games are free to play in your browser with no downloads required. BS Football's free version shows banner ads, and an optional Premium plan ($4.99/month) removes them.</p>
 
 <p><strong><a href="/">Play BS Football Now — Free in Your Browser</a></strong></p>
 `,
@@ -151,11 +151,11 @@ export const seoPages: SEOPage[] = [
     </tr>
   </thead>
   <tbody>
-    <tr><td>Price</td><td>Free</td><td>$70+</td></tr>
+    <tr><td>Price</td><td>Free (optional Premium)</td><td>$70+</td></tr>
     <tr><td>Platform</td><td>Any browser</td><td>Console / PC</td></tr>
-    <tr><td>On-Field Gameplay</td><td>Simulated (play-by-play)</td><td>Full 3D gameplay</td></tr>
-    <tr><td>Drafting</td><td>3-tier scouting, 7 rounds</td><td>Combine, pro days, 7 rounds</td></tr>
-    <tr><td>Salary Cap</td><td>Hard cap with dead cap</td><td>Full cap with restructures</td></tr>
+    <tr><td>On-Field Gameplay</td><td>Simulated; watch in a 3D live sim and call plays</td><td>Full 3D gameplay</td></tr>
+    <tr><td>Drafting</td><td>Limited scout points, 7 rounds</td><td>Combine, pro days, 7 rounds</td></tr>
+    <tr><td>Salary Cap</td><td>Cap with dead money, restructures, franchise tag</td><td>Full cap with restructures</td></tr>
     <tr><td>Free Agency</td><td>Multi-round negotiation</td><td>Bidding system</td></tr>
     <tr><td>Dynasty Length</td><td>Unlimited seasons</td><td>30+ seasons</td></tr>
     <tr><td>Load Time</td><td>Instant</td><td>Minutes per session</td></tr>
@@ -169,7 +169,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>What You Get with BS Football</h2>
 <ul>
-  <li><strong>Full 7-round draft</strong> with a 3-tier scouting system that creates real uncertainty</li>
+  <li><strong>Full 7-round draft</strong> with limited scout points, so every pick carries real uncertainty</li>
   <li><strong>Hard salary cap</strong> with dead cap on released players</li>
   <li><strong>Multi-round free agency</strong> — negotiate offers, counter, or walk away</li>
   <li><strong>Player development</strong> — youth growth, peak performance windows, aging decline</li>
@@ -180,7 +180,7 @@ export const seoPages: SEOPage[] = [
 </ul>
 
 <h2>What You Give Up</h2>
-<p>Let us be honest about what BS Football does not have. There is no 3D on-field gameplay, and you cannot control players during a game (you can call plays live with Call the Play, but you never move a player yourself). The default league uses fictional teams, though current NFL rosters load in one click. If playing the actual football games is important to you, Madden is the only option.</p>
+<p>Let us be honest about what BS Football does not have. You cannot control players during a game: you can watch every play in a 3D live sim and call plays live with Call the Play, but you never move a player yourself. It starts from real 2026 NFL rosters, but it is not an NFL-licensed product. If playing the actual football games is important to you, Madden is the only option.</p>
 
 <h2>What You Gain</h2>
 <ul>
@@ -213,10 +213,10 @@ export const seoPages: SEOPage[] = [
 <p>If you only use franchise mode for roster management, drafting, and dynasty building — yes. If you also want to play the on-field games, no. BS Football simulates games rather than letting you play them.</p>
 
 <h3>Does BS Football have real NFL teams?</h3>
-<p>BS Football uses fictional teams and players. The focus is on the management mechanics, not licensed content.</p>
+<p>BS Football starts from real 2026 NFL rosters, picking up the season at the current week, or you can play a fictional league. It is not an NFL-licensed product; the focus is on the management mechanics.</p>
 
 <h3>Is it really free?</h3>
-<p>Yes. BS Football is completely free to play in your browser. No downloads, no subscriptions, no microtransactions.</p>
+<p>Yes. The full game is free to play in your browser with no download. The free version shows banner ads; an optional Premium plan ($4.99/month) removes them and adds AI commentary and more scout points.</p>
 
 <p><strong><a href="/">Play BS Football Now — Free in Your Browser</a></strong></p>
 `,
@@ -230,7 +230,7 @@ export const seoPages: SEOPage[] = [
     seoTitle:
       'Best Football GM Alternative — BS Football (Free, No Download)',
     metaDescription:
-      'Looking for an alternative to Football GM? BS Football is a free browser football management game with modern design, scouting tiers, and instant playability.',
+      'Looking for an alternative to Football GM? BS Football is a free browser football management game with modern design, draft scouting, and instant playability.',
     keywords: [
       'football gm alternative',
       'alternative to football gm',
@@ -264,7 +264,7 @@ export const seoPages: SEOPage[] = [
 <p>Clean card-based layouts, color-coded indicators, and intuitive navigation. You spend less time hunting for information and more time making decisions.</p>
 
 <h3>Scouting That Matters</h3>
-<p>A 3-tier scouting system means you start with limited info and invest resources to learn more about prospects. Deep Scout reports give you detailed breakdowns. You will miss on picks. You will find late-round gems. That is what makes the draft exciting.</p>
+<p>You start with limited info on every prospect, just an estimated rating range, and spend scout points to unlock full reports on the ones you care about. You will miss on picks. You will find late-round gems. That is what makes the draft exciting.</p>
 
 <h3>Instant Playability</h3>
 <p>Open your browser, click play, and you are managing a team. No setup wizards, no configuration screens, no learning curve that takes an hour to climb.</p>
@@ -283,12 +283,12 @@ export const seoPages: SEOPage[] = [
   </thead>
   <tbody>
     <tr><td>Interface</td><td>Modern, card-based</td><td>Dense, spreadsheet-style</td></tr>
-    <tr><td>Scouting</td><td>3-tier system with uncertainty</td><td>Full ratings visible</td></tr>
-    <tr><td>Draft</td><td>Deep Scout reports, tension</td><td>Sort and pick</td></tr>
+    <tr><td>Scouting</td><td>Rating ranges, limited scout points</td><td>Full ratings visible</td></tr>
+    <tr><td>Draft</td><td>Full scouting reports, tension</td><td>Sort and pick</td></tr>
     <tr><td>Mobile</td><td>Responsive design</td><td>Usable but cramped</td></tr>
     <tr><td>Customization</td><td>Limited</td><td>Extensive</td></tr>
     <tr><td>Open Source</td><td>No</td><td>Yes</td></tr>
-    <tr><td>Price</td><td>Free</td><td>Free</td></tr>
+    <tr><td>Price</td><td>Free (optional Premium)</td><td>Free</td></tr>
   </tbody>
 </table>
 
@@ -306,7 +306,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>Frequently Asked Questions</h2>
 <h3>Is BS Football really free?</h3>
-<p>Yes. Completely free, runs in your browser, no account required.</p>
+<p>Yes. The full game is free, runs in your browser, and needs no account. The free version shows banner ads; an optional Premium plan ($4.99/month) removes them and adds AI commentary and more scout points.</p>
 
 <h3>Can I switch back and forth between the two?</h3>
 <p>Absolutely. They are separate games with separate saves. Play both and see which one clicks.</p>
@@ -318,8 +318,8 @@ export const seoPages: SEOPage[] = [
 <h2>What to Expect When You Switch</h2>
 <p>Coming from Football GM, the first thing you will notice is that you can see less at a glance — and that is by design. Instead of a wall of visible ratings, BS Football asks you to scout. The trade-off is that the draft regains its tension: you are making judgment calls under uncertainty, the way a real front office does. Most of the core concepts carry straight over — draft, cap, free agency, development — so you will feel at home within a season, just with a cleaner interface and a bit more mystery on draft day.</p>
 
-<h2>A Closer Look at Scouting Tiers</h2>
-<p>The 3-tier scouting system is the biggest single difference between the two games. At the first tier you see only rough, surface-level information about a prospect. Investing scouting resources unlocks the second tier and then the Deep Scout tier, which reveals detailed strengths, weaknesses, and a tighter projection. Because your scouting budget is limited, you cannot fully scout everyone — you have to decide which prospects are worth the investment, exactly like a real scouting department triaging a draft class.</p>
+<h2>A Closer Look at Scouting</h2>
+<p>Scouting is the biggest single difference between the two games. Before you scout a prospect you see only a rough rating range. Spending a scout point unlocks his full report and a tighter projection. Because your scout points are limited (10 per draft on the free plan, 30 with Premium), you cannot fully scout everyone — you have to decide which prospects are worth the investment, exactly like a real scouting department triaging a draft class.</p>
 
 <p><strong><a href="/">Try BS Football Now — Free, No Download</a></strong></p>
 `,
@@ -362,7 +362,7 @@ export const seoPages: SEOPage[] = [
 <h2>What If Franchise Mode Was the Whole Game?</h2>
 <p>That is exactly what BS Football is. Every feature, every screen, every mechanic is built around the GM experience:</p>
 <ul>
-  <li><strong>Scout and draft</strong> with a 3-tier scouting system that creates real uncertainty</li>
+  <li><strong>Scout and draft</strong> with limited scout points, so every pick carries real uncertainty</li>
   <li><strong>Manage a hard salary cap</strong> with dead cap implications when you cut players</li>
   <li><strong>Negotiate free agent contracts</strong> across multiple rounds</li>
   <li><strong>Develop players</strong> through youth growth, peak years, and aging decline</li>
@@ -374,8 +374,8 @@ export const seoPages: SEOPage[] = [
 <h2>What You Trade Off</h2>
 <p>BS Football is not Madden. Here is what you will not find:</p>
 <ul>
-  <li>No 3D on-field gameplay — games are simulated, not played</li>
-  <li>No real NFL teams, players, or stadiums</li>
+  <li>You do not play the games yourself — they are simulated, with a 3D live sim to watch and live play calling</li>
+  <li>Not an NFL-licensed product — real 2026 rosters, but no stadiums or broadcast presentation</li>
   <li>No online franchise leagues with friends</li>
   <li>No Superstar mode or player career paths</li>
 </ul>
@@ -396,7 +396,7 @@ export const seoPages: SEOPage[] = [
 <p>Yes. Drafting, free agency, salary cap, trades, player development, injuries, playoffs, and multi-season dynasty play are all included.</p>
 
 <h3>Do I need to download anything?</h3>
-<p>No. BS Football runs entirely in your browser. Your saves are stored locally so you can pick up where you left off.</p>
+<p>No. BS Football runs entirely in your browser. Your saves are stored in your browser so you can pick up where you left off, and signing in backs up your league to your account so you can continue on another device.</p>
 
 <h3>Can I play on my phone?</h3>
 <p>Yes. The interface is responsive and designed to work on mobile devices and tablets.</p>
@@ -411,10 +411,10 @@ export const seoPages: SEOPage[] = [
     <tr><th>Feature</th><th>BS Football</th><th>Madden Franchise</th></tr>
   </thead>
   <tbody>
-    <tr><td>Price</td><td>Free</td><td>~$70 per year</td></tr>
+    <tr><td>Price</td><td>Free (optional Premium)</td><td>~$70 per year</td></tr>
     <tr><td>Platform</td><td>Any browser (desktop or mobile)</td><td>Console or PC</td></tr>
-    <tr><td>On-field play</td><td>Simulated with play-by-play</td><td>Full 3D gameplay</td></tr>
-    <tr><td>Scouting depth</td><td>3-tier scouting with uncertainty</td><td>Point-based scouting</td></tr>
+    <tr><td>On-field play</td><td>Simulated, with a 3D live sim and play calling</td><td>Full 3D gameplay</td></tr>
+    <tr><td>Scouting depth</td><td>Limited scout points, real uncertainty</td><td>Point-based scouting</td></tr>
     <tr><td>Session length</td><td>Minutes — no load screens</td><td>Longer — installs and load times</td></tr>
     <tr><td>Real NFL license</td><td>No</td><td>Yes</td></tr>
     <tr><td>Focus</td><td>Built entirely around the GM role</td><td>One mode among many</td></tr>
@@ -436,7 +436,7 @@ export const seoPages: SEOPage[] = [
     seoTitle:
       'NFL Draft Simulator Game — Scout, Draft & Build a Dynasty | BS Football',
     metaDescription:
-      'Love the NFL Draft? Play a free football GM game with 3-tier scouting, Deep Scout reports, and round-by-round draft strategy. No download — play instantly in your browser.',
+      'Love the NFL Draft? Play a free football GM game with real scouting uncertainty, full scouting reports, and round-by-round draft strategy. No download — play instantly in your browser.',
     keywords: [
       'nfl draft simulator',
       'nfl draft game',
@@ -456,13 +456,13 @@ export const seoPages: SEOPage[] = [
 
 <h2>How the Draft Works in BS Football</h2>
 
-<h3>Tier 1: Surface Scouting</h3>
+<h3>Step 1: The Board</h3>
 <p>When draft season opens, you see every prospect's name, position, and a rough overall range. This is the equivalent of reading mock drafts in January — you have a general idea, but the details are fuzzy.</p>
 
-<h3>Tier 2: Deep Scout Reports</h3>
-<p>Invest your scouting resources to unlock detailed reports on specific prospects. You will get tighter rating ranges, strengths, weaknesses, and potential ceilings. Just like real NFL scouts, you cannot Deep Scout everyone — you have to prioritize.</p>
+<h3>Step 2: Scouting Reports</h3>
+<p>Spend a scout point on a prospect to unlock his full report and a tighter read on his rating. Points are limited (10 per draft on the free plan, 30 with Premium), so just like real NFL scouts, you cannot scout everyone — you have to prioritize.</p>
 
-<h3>Tier 3: Draft Day</h3>
+<h3>Step 3: Draft Day</h3>
 <p>Seven rounds. Thirty-two teams. The board falls differently every time. That quarterback you had rated as a top-10 talent? Another team just took him at pick 7. Your backup plan at edge rusher? Gone at pick 14. Now you are on the clock and you have to decide: reach for need or take the best player available?</p>
 
 <h2>For the Fan Who Lives for Draft Season</h2>
@@ -474,7 +474,7 @@ export const seoPages: SEOPage[] = [
   <li>Watches every minute of all seven rounds</li>
   <li>Tracks how your favorite team's picks develop over years</li>
 </ul>
-<p>Then BS Football was built for you. This is not a one-and-done mock draft simulator. It is a full GM experience where your draft picks play out across seasons. That third-round sleeper you took a chance on? Watch him develop into a Pro Bowl player — or flame out as a bust. The payoff (or regret) comes years later.</p>
+<p>Then BS Football was built for you. There is a free <a href="/mock-draft">2027 NFL mock draft simulator</a> for a quick run, but the main game goes further: it is a full GM experience where your draft picks play out across seasons. That third-round sleeper you took a chance on? Watch him develop into a Pro Bowl player — or flame out as a bust. The payoff (or regret) comes years later.</p>
 
 <h2>Beyond the Draft</h2>
 <p>The draft is the hook, but the dynasty is the game. After draft day, you will:</p>
@@ -502,7 +502,7 @@ export const seoPages: SEOPage[] = [
 <h2>New to Running Your Own Draft? Start Here</h2>
 <p>If you have only ever read mock drafts, actually being on the clock is a different feeling. A few tips to get the most out of your first draft:</p>
 <ul>
-  <li><strong>Spend your scouting budget early and deliberately.</strong> You cannot Deep Scout everyone, so focus on the prospects you might realistically pick with your top selections.</li>
+  <li><strong>Spend your scouting budget early and deliberately.</strong> You cannot scout everyone, so focus on the prospects you might realistically pick with your top selections.</li>
   <li><strong>Build a big board, then a needs list.</strong> Knowing both lets you make fast, confident calls when the board falls in unexpected ways.</li>
   <li><strong>Do not panic when your target gets picked.</strong> There is always value later. The best drafters adapt instead of reaching.</li>
   <li><strong>Track your picks after the draft.</strong> The real payoff is watching a mid-round gamble develop into a star — or learning from a bust — over the seasons that follow.</li>
@@ -581,9 +581,9 @@ export const seoPages: SEOPage[] = [
   <tbody>
     <tr><td>Roster Size</td><td>~15 players</td><td>53-man roster</td></tr>
     <tr><td>Positions Managed</td><td>Skill positions only</td><td>All 22 positions</td></tr>
-    <tr><td>Salary Cap</td><td>Auction only</td><td>Hard cap with dead cap</td></tr>
+    <tr><td>Salary Cap</td><td>Auction only</td><td>Salary cap with dead cap and luxury tax</td></tr>
     <tr><td>Draft Format</td><td>Snake or auction</td><td>7-round NFL-style draft</td></tr>
-    <tr><td>Scouting</td><td>None</td><td>3-tier scouting system</td></tr>
+    <tr><td>Scouting</td><td>None</td><td>Rating ranges until you scout; limited scout points</td></tr>
     <tr><td>Season Continuity</td><td>Resets yearly (redraft)</td><td>Full multi-season dynasty</td></tr>
     <tr><td>Offseason Play</td><td>Minimal</td><td>Draft, FA, re-signing, development</td></tr>
     <tr><td>Competition</td><td>Against friends</td><td>Against 31 AI teams</td></tr>
@@ -670,7 +670,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>Popular Football GM Simulators</h2>
 <ul>
-  <li><strong>BS Football</strong> — Free browser-based football GM with modern UI, 3-tier scouting, and live play-by-play. No download required.</li>
+  <li><strong>BS Football</strong> — Free browser-based football GM with modern UI, draft scouting, a 3D live sim, and live play calling. No download required.</li>
   <li><strong>Football GM</strong> — Open-source browser football sim with extensive customization and God Mode.</li>
   <li><strong>Madden Franchise Mode</strong> — The franchise mode within EA's Madden NFL series, combining GM management with on-field gameplay.</li>
   <li><strong>Pocket GM</strong> — Mobile football GM game available on iOS and Android.</li>
@@ -701,7 +701,7 @@ export const seoPages: SEOPage[] = [
 <h3>Do I need to know football to play a GM simulator?</h3>
 <p>A basic understanding helps, but good simulators surface the information you need. You will pick up positional value and cap strategy naturally as you play.</p>
 <h3>Are football GM simulators free?</h3>
-<p>Many of the best ones, including BS Football, are completely free and run in your browser. Some console franchise modes require buying the full game.</p>
+<p>Many of the best ones, including BS Football, are free and run in your browser (BS Football has an optional Premium plan). Some console franchise modes require buying the full game.</p>
 <h3>How long does a season take?</h3>
 <p>In a browser simulator you can sim a full season in minutes, which is why the genre is so easy to pick up in short sessions.</p>
 
@@ -761,7 +761,7 @@ export const seoPages: SEOPage[] = [
 <p>In a GM simulator like BS Football, you do not just predict picks — you scout prospects, invest scouting resources to learn more about them, and then draft players who join your roster and develop (or bust) over their careers. The draft is not the end of the story — it is the beginning.</p>
 
 <h2>Try a Draft Right Now</h2>
-<p>If you love mock drafts, you will love running your own draft in BS Football. Scout the class with a 3-tier scouting system, make your picks across all seven rounds, and then watch your rookies develop over multiple seasons. It is free and runs in your browser.</p>
+<p>If you love mock drafts, you will love running your own draft in BS Football. Scout the class with a limited pool of scout points, make your picks across all seven rounds, and then watch your rookies develop over multiple seasons. It is free and runs in your browser. For a quick standalone mock, try the free <a href="/mock-draft">2027 NFL mock draft simulator</a>.</p>
 
 
 <h2>How to Make Your Own Mock Draft</h2>
@@ -944,7 +944,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>Why Salary Cap Strategy Matters in Games</h2>
 <p>Without a salary cap, you could just sign every good free agent and trade for every star. The cap is what makes the game a puzzle. You have limited resources and unlimited wants. The best GMs find ways to build championship rosters while staying under the cap — and that means making hard choices about who to keep, who to let go, and when to invest in the future.</p>
-<p>In BS Football, the salary cap is a hard cap with dead cap penalties for releasing players mid-contract. Every dollar matters, and cap mismanagement can set your franchise back for years.</p>
+<p>In BS Football, the salary cap comes with dead cap penalties for releasing players mid-contract, and going over it costs you a luxury tax and limits you to minimum-salary signings. Every dollar matters, and cap mismanagement can set your franchise back for years.</p>
 
 <h2>Key Salary Cap Terms Every GM Should Know</h2>
 <ul>
@@ -970,7 +970,7 @@ export const seoPages: SEOPage[] = [
 <h3>Why do football games use a salary cap?</h3>
 <p>The cap is what makes roster building a strategic puzzle. Without it, you could simply sign every good player, and there would be no meaningful decisions to make.</p>
 <h3>What happens if I go over the cap?</h3>
-<p>Under a hard cap like the NFL's — and BS Football's — you cannot exceed it. You must clear space by cutting players, restructuring deals, or making trades before you can add salary.</p>
+<p>Under a hard cap like the NFL's, you cannot exceed it: you must clear space by cutting players, restructuring deals, or making trades before you can add salary. In BS Football, going over the cap costs you a luxury tax and limits you to minimum-salary signings until you clear space.</p>
 <h3>Is dead cap the same as a player's salary?</h3>
 <p>No. Dead cap is only the guaranteed and prorated money that remains after a player leaves. It counts against your cap even though the player is gone.</p>
 
@@ -1011,7 +1011,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>1. BS Football</h2>
 <p><strong>Price:</strong> Free | <strong>Platform:</strong> Browser (any device)</p>
-<p>BS Football is a modern football management simulator that runs entirely in your browser. It features a clean, card-based interface, a 3-tier scouting system that adds real uncertainty to the draft, and live play-by-play game simulation. The full dynasty experience includes player development, salary cap with dead cap, multi-round free agency negotiation, and season awards tracking.</p>
+<p>BS Football is a modern football management simulator that runs entirely in your browser. It features a clean, card-based interface, scouting that adds real uncertainty to the draft, a 3D live sim of every play, and live play calling. The full dynasty experience includes player development, salary cap with dead cap, multi-round free agency negotiation, and season awards tracking.</p>
 <p><strong>Best for:</strong> Players who want a polished, modern football GM experience with no download and no cost.</p>
 
 <h2>2. Football GM</h2>
@@ -1057,7 +1057,7 @@ export const seoPages: SEOPage[] = [
     </tr>
   </thead>
   <tbody>
-    <tr><td>BS Football</td><td>Free</td><td>Browser</td><td>3-tier system</td><td>No</td><td>Modern UI, scouting depth</td></tr>
+    <tr><td>BS Football</td><td>Free (optional Premium)</td><td>Browser</td><td>Scout points</td><td>No</td><td>Modern UI, scouting depth</td></tr>
     <tr><td>Football GM</td><td>Free</td><td>Browser</td><td>Full ratings</td><td>No</td><td>Customization, modding</td></tr>
     <tr><td>DeepRoute</td><td>Free*</td><td>Browser/Mobile</td><td>Basic</td><td>Yes</td><td>Competitive leagues</td></tr>
     <tr><td>Pocket GM 3</td><td>$3.99</td><td>Mobile</td><td>Basic</td><td>No</td><td>Mobile-first experience</td></tr>
@@ -1114,7 +1114,7 @@ export const seoPages: SEOPage[] = [
 <p>These games put you in the front office. You build the roster, manage the cap, and make the decisions that determine whether your franchise lifts a trophy or tanks for a draft pick.</p>
 
 <h3>BS Football</h3>
-<p>A modern football management simulator with a clean interface, 3-tier scouting system, live play-by-play simulation, and full dynasty mode. Covers everything from drafting to salary cap management to free agency negotiation. Runs in any browser on any device.</p>
+<p>A modern football management simulator with a clean interface, draft scouting with real uncertainty, a 3D live sim, and full dynasty mode. Covers everything from drafting to salary cap management to free agency negotiation. Runs in any browser on any device.</p>
 <p><strong>Why play it:</strong> The most polished free football GM experience available. Great scouting, intuitive UI, instant playability.</p>
 
 <h3>Football GM</h3>
@@ -1163,7 +1163,7 @@ export const seoPages: SEOPage[] = [
     </tr>
   </thead>
   <tbody>
-    <tr><td>BS Football</td><td>GM Sim</td><td>Simulated</td><td>Deep</td><td>No</td></tr>
+    <tr><td>BS Football</td><td>GM Sim</td><td>Simulated (3D view, play calling)</td><td>Deep</td><td>No</td></tr>
     <tr><td>Football GM</td><td>GM Sim</td><td>Simulated</td><td>Deep</td><td>No</td></tr>
     <tr><td>DeepRoute</td><td>GM Sim</td><td>Simulated</td><td>Medium</td><td>Yes</td></tr>
     <tr><td>Progression Football</td><td>GM Sim</td><td>Simulated</td><td>Light</td><td>Yes</td></tr>
@@ -1221,9 +1221,9 @@ export const seoPages: SEOPage[] = [
     <tr><td>Platform</td><td>Any browser, desktop or mobile</td><td>Windows</td></tr>
     <tr><td>Install</td><td>None</td><td>Download through Steam</td></tr>
     <tr><td>Presentation</td><td>Modern card-based UI</td><td>Text-based, scoreboard game view</td></tr>
-    <tr><td>Scouting</td><td>3-tier scouting with Deep Scout reports</td><td>Amateur draft with scouting</td></tr>
+    <tr><td>Scouting</td><td>Scout points that unlock full reports</td><td>Amateur draft with scouting</td></tr>
     <tr><td>Game planning</td><td>Sim, watch drive-by-drive, or call plays live</td><td>Play scripts, depth charts, custom offensive playbooks</td></tr>
-    <tr><td>Salary cap</td><td>Hard cap with dead money</td><td>Salary cap</td></tr>
+    <tr><td>Salary cap</td><td>Salary cap with dead money and luxury tax</td><td>Salary cap</td></tr>
     <tr><td>Multiplayer leagues</td><td>No (single-player)</td><td>Yes, up to 32 human GMs</td></tr>
     <tr><td>League setups</td><td>Current NFL rosters or historical eras</td><td>17 configurations, 9 to 32 teams</td></tr>
   </tbody>
@@ -1233,11 +1233,11 @@ export const seoPages: SEOPage[] = [
 <p>Front Office Football is made by Solecismic Software, a one-person studio that has been building the series since 1998. The latest version, Front Office Football Nine, launched on Steam on October 31, 2023 for Windows. You act as general manager, handling trades, contract negotiations, free agency, and the amateur draft, and you can go as deep as writing play scripts for game situations and building custom offensive playbooks. It also handles the business side: ticket prices, stadium proposals, and even relocating a franchise whose fans will not support it. The series is famously text-driven, with games shown on a scoreboard rather than animated, and it has a loyal community that runs multiplayer leagues of up to 32 human GMs.</p>
 
 <h2>About BS Football</h2>
-<p>BS Football is a free football general manager simulator that runs in your browser. You take over a franchise, scout prospects through a three-tier system, draft across seven rounds, negotiate contracts under a hard cap with dead-money penalties, trade with 31 AI front offices, and sim season after season. You can sim a full season in minutes, watch games drive by drive, or take over play calling live with Call the Play. It starts from current NFL rosters or historical eras, plays on desktop or mobile, and needs no account to start.</p>
+<p>BS Football is a free football general manager simulator that runs in your browser. You take over a franchise, scout prospects with a limited pool of scout points, draft across seven rounds, negotiate contracts under a salary cap with dead-money penalties, trade with 31 AI front offices, and sim season after season. You can sim a full season in minutes, watch games drive by drive, or take over play calling live with Call the Play. It starts from current NFL rosters or historical eras, plays on desktop or mobile, and needs no account to start.</p>
 
 <h2>Depth vs Accessibility</h2>
 <p>This is the real difference. Front Office Football gives you more knobs: detailed game planning, deep financial management, and an engine refined over more than two decades. That depth comes with a learning curve and a dense, text-heavy interface.</p>
-<p>BS Football trades some of that raw configurability for speed and clarity. The information you need is surfaced on cards instead of tables, the draft has real uncertainty thanks to tiered scouting, and you can be making your first pick within a minute of opening the page. For many players, that difference decides whether they actually stick with a franchise past the first season.</p>
+<p>BS Football trades some of that raw configurability for speed and clarity. The information you need is surfaced on cards instead of tables, the draft has real uncertainty because scout points are limited, and you can be making your first pick within a minute of opening the page. For many players, that difference decides whether they actually stick with a franchise past the first season.</p>
 
 <h2>Price and Platform</h2>
 <p>Front Office Football Nine is a paid Windows game ($29.99 on Steam at the time of writing; the previous version, Front Office Football Eight, is $19.99). BS Football is free in any modern browser, including on phones and tablets, with an optional Premium tier that removes ads and adds extra scouting points, free-agent intel reports, and Team Spotlight show episodes. Mac, Chromebook, and mobile players can play BS Football without workarounds.</p>
@@ -1270,7 +1270,7 @@ export const seoPages: SEOPage[] = [
 <p>Front Office Football Nine is listed for Windows on Steam. BS Football runs in any browser, so it works on Mac without any setup.</p>
 
 <h3>Which is more realistic?</h3>
-<p>Front Office Football offers more granular control over game planning and finances. BS Football focuses its realism on scouting uncertainty, a hard cap with dead money, player development, and owner expectations. Both model a real front office; they emphasize different parts of it.</p>
+<p>Front Office Football offers more granular control over game planning and finances. BS Football focuses its realism on scouting uncertainty, a salary cap with dead money, player development, and owner expectations. Both model a real front office; they emphasize different parts of it.</p>
 
 <h3>Can I play BS Football with friends?</h3>
 <p>Not in a shared league today. BS Football is single-player. Front Office Football supports multiplayer leagues of up to 32 human GMs.</p>
@@ -1311,9 +1311,9 @@ export const seoPages: SEOPage[] = [
   <tbody>
     <tr><td>Core gameplay</td><td>General manager simulation</td><td>Arcade on-field offense</td></tr>
     <tr><td>You control players on the field</td><td>No (you can call plays live)</td><td>Yes, on offense; defense is simulated</td></tr>
-    <tr><td>Scouting</td><td>3-tier scouting with Deep Scout</td><td>Light</td></tr>
+    <tr><td>Scouting</td><td>Scout points that unlock full reports</td><td>Light</td></tr>
     <tr><td>Draft</td><td>Full seven-round draft</td><td>Draft picks</td></tr>
-    <tr><td>Roster management</td><td>Contracts, hard cap with dead money, trades with 31 AI GMs</td><td>Trades, cuts, free agency, team morale</td></tr>
+    <tr><td>Roster management</td><td>Contracts, salary cap with dead money, trades with 31 AI GMs</td><td>Trades, cuts, free agency, team morale</td></tr>
     <tr><td>Rosters</td><td>Current NFL rosters or historical eras</td><td>Teams based on NFL counterparts</td></tr>
     <tr><td>Platforms</td><td>Any browser, desktop or mobile</td><td>iOS, Android, Nintendo Switch, web</td></tr>
     <tr><td>Price</td><td>Free (optional Premium)</td><td>Free to play with a paid unlimited version</td></tr>
@@ -1324,7 +1324,7 @@ export const seoPages: SEOPage[] = [
 <p>Retro Bowl, from New Star Games, launched on iOS and Android in January 2020 and later came to Nintendo Switch and the web. It became a phenomenon, topping Apple's free app chart in late 2021, and the Switch version scores 84 on Metacritic. The appeal is obvious: pick-up-and-play passing with a satisfying feel, short sessions, and just enough management (trades, cuts, free agency, morale, and press conferences) to make you care about your roster. New Star also released Retro Bowl College in 2023, with 250 college programs and a scholarship budget instead of a salary cap.</p>
 
 <h2>What BS Football Does Best</h2>
-<p>BS Football is all front office. Every draft involves real uncertainty because prospects are revealed through tiered scouting, and you have to decide where to spend your scouting resources. Contracts count against a hard cap with dead money, so a bad signing hurts for seasons. Thirty-one AI front offices run their own strategies, players develop and age, and your owner sets objectives that can get you fired. When a game matters, you can take over play calling with Call the Play; otherwise you can sim an entire season in minutes.</p>
+<p>BS Football is all front office. Every draft involves real uncertainty because prospects show only a rating range until you scout them, and you have to decide where to spend your scout points. Contracts count against a salary cap with dead money, so a bad signing hurts for seasons. Thirty-one AI front offices run their own strategies, players develop and age, and your owner sets objectives that can get you fired. When a game matters, you can take over play calling with Call the Play; otherwise you can sim an entire season in minutes.</p>
 
 <h2>The Key Difference: Hands vs Head</h2>
 <p>Retro Bowl rewards your thumbs: reading coverage and dropping a throw into a window. BS Football rewards long-term judgment: knowing when to rebuild, which rookie to extend, and whether a trade-deadline rental is worth your second-round pick. Many players enjoy both. They scratch different itches.</p>
@@ -1389,7 +1389,7 @@ export const seoPages: SEOPage[] = [
 <h2>1. BS Football</h2>
 <p><strong>Best for:</strong> players who loved Retro Bowl's roster building and want a lot more of it.<br>
 <strong>Price:</strong> Free (optional Premium) · <strong>Platform:</strong> Any browser, desktop or mobile</p>
-<p>BS Football is a full football general manager simulator. You scout prospects through a three-tier system, run a seven-round draft, sign players under a hard cap with dead money, trade with 31 AI front offices, and build a dynasty over many seasons. You do not control players on the field, but you can call plays live with Call the Play. No download, and no account needed to start.</p>
+<p>BS Football is a full football general manager simulator. You scout prospects with a limited pool of scout points, run a seven-round draft, sign players under a salary cap with dead money, trade with 31 AI front offices, and build a dynasty over many seasons. You do not control players on the field, but you can call plays live with Call the Play. No download, and no account needed to start.</p>
 
 <h2>2. Retro Bowl College</h2>
 <p><strong>Best for:</strong> more Retro Bowl, at the college level.<br>
@@ -1425,7 +1425,7 @@ export const seoPages: SEOPage[] = [
 <table>
   <thead><tr><th>Game</th><th>Price</th><th>Platform</th><th>Style</th></tr></thead>
   <tbody>
-    <tr><td>BS Football</td><td>Free</td><td>Browser</td><td>Deep GM sim</td></tr>
+    <tr><td>BS Football</td><td>Free (optional Premium)</td><td>Browser</td><td>Deep GM sim</td></tr>
     <tr><td>Retro Bowl College</td><td>See app store</td><td>Mobile</td><td>Arcade + light management</td></tr>
     <tr><td>Pocket GM 3</td><td>$2.99</td><td>iPhone</td><td>GM sim</td></tr>
     <tr><td>Ultimate Pro Football GM</td><td>Free + IAP</td><td>iPhone</td><td>GM + business</td></tr>
@@ -1511,7 +1511,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>Mock Drafts vs Running a Real Draft</h2>
 <p>Every tool above answers one question: who will teams pick? The draft is over the moment you finish. If what you enjoy is the GM side of the draft, scouting prospects you are not sure about, trading up for a player you believe in, and then finding out three seasons later whether you were right, a football GM simulator goes further.</p>
-<p><strong>BS Football</strong> is free and runs in your browser. Prospects come with real uncertainty: you start with a wide rating range and spend scouting resources, including Deep Scout reports, to narrow it. You draft all seven rounds, sign your picks under a hard salary cap, and then watch them develop or bust over multiple seasons. It is not a prediction tool for the real NFL draft; it is what happens after you make the pick.</p>
+<p><strong>BS Football</strong> is free and runs in your browser. Prospects come with real uncertainty: you start with a wide rating range and spend scout points to unlock full reports and narrow it. You draft all seven rounds, sign your picks under a salary cap, and then watch them develop or bust over multiple seasons. For a quick standalone mock of the real class, BS Football also has a free <a href="/mock-draft">2027 NFL mock draft simulator</a>; the full game is what happens after you make the pick.</p>
 
 <h2>How to Choose</h2>
 <ul>
@@ -1552,7 +1552,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>1. BS Football</h2>
 <p><strong>Price:</strong> Free (optional Premium) · <strong>Install:</strong> None, plays in your phone's browser</p>
-<p>A full NFL-style GM simulator that runs in Safari or Chrome on your phone. Scout with a three-tier system, draft seven rounds, manage a hard cap with dead money, trade with 31 AI front offices, and sim season after season. Because it runs in the browser, it works the same on iPhone, Android, tablet, and desktop, with no app store and no account needed to start.</p>
+<p>A full NFL-style GM simulator that runs in Safari or Chrome on your phone. Scout with a limited pool of scout points, draft seven rounds, manage a salary cap with dead money, trade with 31 AI front offices, and sim season after season. Because it runs in the browser, it works the same on iPhone, Android, tablet, and desktop, with no app store and no account needed to start.</p>
 
 <h2>2. Pocket GM 3: Football Sim</h2>
 <p><strong>Price:</strong> $2.99 · <strong>App Store rating:</strong> 4.9 from about 4,400 ratings</p>
@@ -1581,7 +1581,7 @@ export const seoPages: SEOPage[] = [
 <table>
   <thead><tr><th>Game</th><th>Price</th><th>Install</th><th>Best for</th></tr></thead>
   <tbody>
-    <tr><td>BS Football</td><td>Free</td><td>None (browser)</td><td>Deep GM sim on any device</td></tr>
+    <tr><td>BS Football</td><td>Free (optional Premium)</td><td>None (browser)</td><td>Deep GM sim on any device</td></tr>
     <tr><td>Pocket GM 3</td><td>$2.99</td><td>App Store</td><td>Polished paid sim</td></tr>
     <tr><td>Ultimate Pro Football GM</td><td>Free + IAP</td><td>App Store</td><td>Business management</td></tr>
     <tr><td>Retro Bowl</td><td>Free to start</td><td>App stores</td><td>Arcade action</td></tr>
@@ -1592,7 +1592,7 @@ export const seoPages: SEOPage[] = [
 </table>
 
 <h2>Why Browser Games Work Well on Phones</h2>
-<p>A browser-based GM game skips the install, takes no storage space, and lets you pick up the same franchise on your laptop later. If you would rather not fill your phone with apps, that is a real advantage.</p>
+<p>A browser-based GM game skips the install, takes no storage space, and lets you pick up the same franchise on your laptop later (sign in to sync your league). If you would rather not fill your phone with apps, that is a real advantage.</p>
 
 <p><strong><a href="/">Play BS Football on Your Phone — Free, No Download</a></strong></p>
 `,
