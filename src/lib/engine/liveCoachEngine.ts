@@ -812,7 +812,7 @@ export function createLiveCoachEngine(
     doKickoffEvents(events);
   }
 
-  /** Two-point try as a real snap: the user picks a play (run / pass / scramble / screen) from the 3-yard line and the
+  /** Two-point try as a real snap: the user picks a play (run / pass / scramble / screen / play action) from the 3-yard line and the
    *  play engine decides it — a touchdown is +2, anything else is a failed try. The 3D sim animates it like any play. */
   let twoPointTry = false;
   let twoPointResolved = false;
@@ -824,6 +824,7 @@ export function createLiveCoachEngine(
   function runTwoPointPlay(events: PlayEvent[], userCall: PlayCallType | undefined) {
     state.awaitingTwoPointCall = false;
     twoPointTry = true; twoPointResolved = false;
+    // The menu offers every scrimmage call here, Play Action included: a call this list didn't know used to become a coin-flip run or pass.
     const call: PlayCallType = (userCall && (LOOK_PLAYS as string[]).includes(userCall)) ? userCall : (Math.random() < 0.5 ? 'run' : 'pass_short');
     const prefix = '2-PT — ' + CALL_LABELS[call as LookPlay];
     const clockBefore = state.timeSecs;
