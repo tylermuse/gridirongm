@@ -76,7 +76,7 @@ export function resolveReturn(opts: { spot: number; returnYards: number; touchba
 type Rng = () => number;
 const between = (lo: number, hi: number, rng: Rng) => lo + Math.floor(rng() * (hi - lo + 1));
 
-export type PickDepth = 'deep' | 'short' | 'screen' | 'tipped';
+export type PickDepth = 'deep' | 'short' | 'screen' | 'tipped' | 'play_action';
 
 /** Share of picks on an uncalled pass that come on a deep ball. */
 export const DEEP_PICK_SHARE = 0.3;
@@ -85,7 +85,9 @@ export const DEEP_PICK_SHARE = 0.3;
  *  pick is pictured where the engine put it. `toGoal`: yards from the line of scrimmage to the goal line — a ball
  *  picked deeper than that is caught in the end zone. */
 export function rollPickAirYards(depth: PickDepth, toGoal: number, rng: Rng = Math.random): number {
-  const air = depth === 'deep' ? between(18, 27, rng) : depth === 'short' ? between(4, 9, rng) : between(0, 2, rng);
+  // play action: thrown behind the backers who bit on the fake, between a short pass and a deep shot
+  const air = depth === 'deep' ? between(18, 27, rng) : depth === 'play_action' ? between(10, 20, rng)
+    : depth === 'short' ? between(4, 9, rng) : between(0, 2, rng);
   return Math.min(air, toGoal + 7);
 }
 

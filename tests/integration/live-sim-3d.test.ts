@@ -325,3 +325,22 @@ describe('fumble returns', () => {
     expect(toSimPlay(run, undefined, f)!.res.fumbleRet).toBeUndefined();
   });
 });
+
+describe('play action keeps its style', () => {
+  it('a called play-action pass is pictured as a fake then a throw, deep from 16 yards, a miss as a shot downfield', () => {
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts sells the fake and finds D. Smith for 12 yards.', yardsGained: 12 })))
+      .toEqual({ kind: 'complete', depth: 'short', yards: 12, style: 'play_action' });
+    expect(toSimResult(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts sells the fake and fires deep to D. Smith — 27 yards!', yardsGained: 27 })))
+      .toEqual({ kind: 'complete', depth: 'deep', yards: 27, style: 'play_action' });
+    expect(toSimResult(ev({ type: 'pass_incomplete', description: '🎭 Play Action — J. Hurts fakes the handoff, but his pass to D. Smith falls incomplete.' })))
+      .toEqual({ kind: 'incomplete', depth: 'deep', style: 'play_action' });
+    expect(toSimResult(ev({ type: 'interception', description: '🎭 Play Action — INTERCEPTED! K. Lee picks off J. Hurts.', returnFrom: 55, returnTo: 60, returnYards: 5 })))
+      .toMatchObject({ kind: 'int', style: 'play_action', catchAt: 55 });
+  });
+  it('the man with the ball is the receiver, not the back who took the fake', () => {
+    const P = (firstName: string, lastName: string, position: string, jerseyNumber: number) => ({ id: lastName, firstName, lastName, position, jerseyNumber });
+    const phi = [P('Jalen', 'Hurts', 'QB', 1), P('Saquon', 'Barkley', 'RB', 26), P('DeVonta', 'Smith', 'WR', 6)];
+    const who = whoMadeThePlay(ev({ type: 'pass_complete', description: '🎭 Play Action — J. Hurts sells the fake and finds D. Smith for 12 yards.', yardsGained: 12 }), phi, []);
+    expect(who?.ball).toMatchObject({ n: 6, pos: 'WR' });
+  });
+});

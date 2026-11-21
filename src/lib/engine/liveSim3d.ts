@@ -19,8 +19,9 @@ export interface SimPlayResult {
   yards?: number;
   depth?: 'short' | 'deep';
   good?: boolean;
-  /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front */
-  style?: 'scramble' | 'screen';
+  /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front;
+   *  'play_action': the QB fakes the handoff to the back, the linebackers step up on it, then he sets and throws */
+  style?: 'scramble' | 'screen' | 'play_action';
   /** the play ends in a lost fumble (the engine logs it as the next event): a run or a catch stripped at the tackle, or a
    *  strip-sack — the ball squirts loose and the defense falls on it */
   fumble?: boolean;
@@ -90,6 +91,9 @@ function passDepth(desc: string, y: number): 'short' | 'deep' {
 }
 const SCRAMBLE_RE = /scramble/i;
 const SCREEN_RE = /screen/i;
+/** A called play-action pass ("🎭 Play Action — …"): thrown over the backers who bit, so 16+ yards is pictured deep and a miss is a shot downfield. */
+const PLAY_ACTION_RE = /play action/i;
+const PA = { style: 'play_action' as const };
 /** playByPlay.ts: "intended for X but it's batted down" / "Tipped at the line! X comes down with the pick!" */
 const BATTED_RE = /batted|tipped at the line|knocked down at the line/i;
 /** A fumble the offense recovered is told in the play's own line (the engines log a LOST fumble as its own 'fumble' event). */
@@ -118,8 +122,10 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
       if (KNEEL_RE.test(e.description) || NON_PLAY_RE.test(e.description)) return null;
       return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}) };
     case 'pass_complete':
+      if (PLAY_ACTION_RE.test(e.description)) return { kind: 'complete', depth: y >= 16 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...PA };
       return { kind: 'complete', depth: SCREEN_RE.test(e.description) ? 'short' : passDepth(e.description, y), yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'pass_incomplete':
+      if (PLAY_ACTION_RE.test(e.description)) return { kind: 'incomplete', depth: 'deep', ...PA };
       if (BATTED_RE.test(e.description) && !SCREEN_RE.test(e.description)) return { kind: 'incomplete', depth: 'short', batted: true };
       return { kind: 'incomplete', depth: SCREEN_RE.test(e.description) ? 'short' : DEEP_CALL_RE.test(e.description) || (!SHORT_CALL_RE.test(e.description) && /deep|bomb|downfield|long/i.test(e.description)) ? 'deep' : 'short', ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'touchdown':
@@ -146,7 +152,7 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
       if (SCREEN_RE.test(e.description)) return { kind: 'int', depth: 'short', style: 'screen', ...end };
       // deep or short from where the engine says it was caught (older events: from the words)
       const deep = from != null ? toGoal - from >= 15 : /deep|downfield|long/i.test(e.description);
-      return { kind: 'int', depth: deep ? 'deep' : 'short', ...end };
+      return { kind: 'int', depth: deep ? 'deep' : 'short', ...(PLAY_ACTION_RE.test(e.description) ? PA : {}), ...end };
     }
     case 'field_goal_good':
       return { kind: 'fg', good: true };
