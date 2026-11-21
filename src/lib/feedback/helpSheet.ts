@@ -11,7 +11,7 @@
  * - Leave out anything you are not sure of. The model returns no answer for
  *   what the sheet does not cover, and the developer answers it by hand.
  *
- * Last checked against the code: 2026-11-14 (award winners, create player, draft class and spectating lines added 2026-11-17 from player questions).
+ * Last checked against the code: 2026-11-14 (award winners, create player, draft class and spectating lines added 2026-11-17 from player questions; "Play Action" added 2026-11-19).
  */
 
 const IN_SEASON = `
@@ -48,7 +48,7 @@ DURING A LIVE GAME
 - "🔄 Auto-subs" only changes what the "On the Field" display shows. It never swaps the QB.
 - To watch your game instead of simming it: press the red "Watch Live" button in the top bar ("Live" on phones), then "🏈 Kick Off" on the pregame show.
 - Live game controls: "▶ Play" / "⏸ Pause", "⏩ Skip Qtr", "⏭ End Game" (finishes the game now), and "Speed" of 0.5x, 1x, 2x, 5x or max.
-- Calling plays: "🎯 Live Coach" in the controls (on by default in your own games). Before each of your offensive snaps you choose "Run", "Short Pass", "Deep Shot", "QB Scramble" or "Screen"; on 4th down "Field Goal", "Punt" or "Go For It"; after a touchdown "Extra Point" or "Go for 2"; on kickoffs "Regular Kickoff" or "Onside Kick". "Turn off" in that panel stops play calling, and "Auto-sim to End ⏭" sims the rest.
+- Calling plays: "🎯 Live Coach" in the controls (on by default in your own games). Before each of your offensive snaps you choose "Run", "Short Pass", "Deep Shot", "QB Scramble", "Screen" or "Play Action"; on 4th down "Field Goal", "Punt" or "Go For It"; after a touchdown "Extra Point" or "Go for 2"; on kickoffs "Regular Kickoff" or "Onside Kick". "Turn off" in that panel stops play calling, and "Auto-sim to End ⏭" sims the rest.
 - Calling defense is off by default: with Live Coach on, turn on "🛡️ Call Defense" to pick "Blitz", "Stacked Box", "Two-High", "Man Press" or "Soft Zone" before opponent snaps.
 - "📋 Game Plan" in the live game controls sets run/pass tendency, risk, red zone strategy, blitz rate, coverage and tempo.
 
