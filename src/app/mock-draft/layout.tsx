@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import MarketingLayout from '../(marketing)/layout';
+import MarketingShell from '@/components/marketing/MarketingShell';
 
 /**
  * Light theme only, even for someone who turned on dark mode in the game. Dark
@@ -25,7 +25,7 @@ const LIGHT_THEME = {
 export default function MockDraftLayout({ children }: { children: ReactNode }) {
   return (
     <div style={LIGHT_THEME}>
-      <MarketingLayout>{children}</MarketingLayout>
+      <MarketingShell showPlayNow={false}>{children}</MarketingShell>
     </div>
   );
 }
