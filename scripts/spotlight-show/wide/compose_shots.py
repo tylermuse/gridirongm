@@ -107,7 +107,7 @@ def main(k):
     if len(pieces) == 1: fc.append('[0:v]copy[v0]'); vmap = '[v0]'
     subprocess.check_call(['ffmpeg', '-v', 'error', '-y', *inputs, '-i', f'{k}.mp3',
         '-filter_complex', ';'.join(fc + af), '-map', vmap, '-map', '[a]', '-t', f'{total:.3f}',
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', f'{k}.mp4'])
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', f'{k}.mp4'])
     # Where the lines ended up: every cut before a line pushes it back by TURN.
     spans = json.load(open(f'{k}.mp3.spans.json'))
     shifted = [[a + TURN * sum(1 for c in cuts if c <= a + 1e-6), b + TURN * sum(1 for c in cuts if c <= a + 1e-6)] for a, b in spans]
