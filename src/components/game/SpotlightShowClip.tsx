@@ -29,14 +29,16 @@ import { SIM_URL, usePhotoSkins } from './LiveSim3D';
  *    celebration) from Math.random. It gets a seeded generator instead, reset
  *    the moment each play starts — the sim sets `__curPlayId` right before it
  *    plans one — to a seed that depends only on which score it is.
- *  - Not a loop: each run is shot from the next angle in ANGLES. 'front' is
- *    added to the sim's camera table here: the reverse of its chase camera,
+ *  - Not a loop: each run is shot from the next angle in ANGLES. 'replay' and 'front' are
+ *    added to the sim's camera table here. 'front' is the reverse of its chase camera,
  *    downfield of the ball and looking back at the play.
  *
  * If the frame can't be reached, nothing here applies and the replays simply
  * vary, as they did before.
  */
-const ANGLES = ['broadcast', 'front', 'wide'] as const;
+const ANGLES = ['replay', 'front', 'wide'] as const;
+// The first run stays behind the quarterback. It was the sim's 'broadcast' angle until that became the sideline camera.
+const REPLAY_CAM = { xf: 0.5, h: 4.6, back: 11, lxf: 0.7, ly: 1.1, ahead: 9, hLong: 9, backLong: 11, aheadLong: 5 };
 // Close enough to the ball that a goal-line play still has it inside the end zone.
 const FRONT_CAM = { xf: 0.5, h: 4.6, back: -9, lxf: 0.7, ly: 1.1, ahead: -1, hLong: 5.5, backLong: -6, aheadLong: -1 };
 
@@ -44,6 +46,7 @@ function installReplayHooks(w: Window, seedFor: (id: number) => number): void {
   try {
     const sim = w as unknown as { CAMS?: Record<string, unknown>; Math: { random: () => number } };
     if (sim.CAMS && !sim.CAMS.front) sim.CAMS.front = FRONT_CAM;
+    if (sim.CAMS && !sim.CAMS.replay) sim.CAMS.replay = REPLAY_CAM;
     let state = 1;
     // mulberry32
     sim.Math.random = () => {
@@ -145,7 +148,7 @@ export function SpotlightShowClip({ flow, play, teams, players, children }: {
   const awayPlayers = useMemo(() => inDepthOrder(awayTeam, players), [awayTeam, players]);
   const photoSkins = usePhotoSkins(true, homePlayers, awayPlayers);
 
-  // Uniforms, numbers and the broadcast angle, once the sim is up.
+  // Uniforms, numbers and the opening angle, once the sim is up.
   const setup = useMemo(() => (homeTeam && awayTeam
     ? JSON.stringify({ type: 'bsgm:setup', home: toSimTeam(homeTeam, 'home', homePlayers, photoSkins), away: toSimTeam(awayTeam, 'away', awayPlayers, photoSkins) })
     : null), [homeTeam, awayTeam, homePlayers, awayPlayers, photoSkins]);
