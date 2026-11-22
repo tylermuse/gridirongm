@@ -84,7 +84,7 @@ describe('liveSim3d.toSimPlay', () => {
     expect(m.type).toBe('bsgm:play');
     expect(m.id).toBe(7);
     expect(m.pre).toEqual({ fieldPos: 95, down: 2, toGo: 6, quarter: 2, clock: 425, homeScore: 11, awayScore: 3 });
-    expect(m.res).toEqual({ kind: 'run', yards: 5 });
+    expect(m.res).toEqual({ kind: 'run', yards: 5, oob: false });
   });
   it('parses the clock defensively', () => {
     expect(clockSeconds('12:34')).toBe(754);

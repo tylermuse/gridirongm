@@ -43,6 +43,8 @@ describe('watch-live engine names the defender who made the play', () => {
           const isCarry = e.type === 'run' && !/spikes the ball|FAKE PUNT|takes a knee|kneel/i.test(e.description);
           if (isCarry || e.type === 'pass_complete') {
             if (/FAKE PUNT/.test(e.description)) continue;
+            // a run that ends out of bounds has no tackler (a catch run out of bounds credits the man who shoved him out)
+            if (isCarry && e.outOfBounds) { expect(e.defNote, e.description).toBeFalsy(); continue; }
             expect(e.defNote, e.description).toBeTruthy();
             expect(e.description).toContain(e.defNote!);
             const who = defenders.filter(p => e.defNote!.includes(tagFull(p)));
@@ -115,6 +117,7 @@ describe('live-coach engine names the defender who made the play', () => {
       for (const e of events) {
         const defense = (e.possession === 'home' ? away : home).filter(p => DEF.includes(p.position));
         const scored = e.isScoring || /TOUCHDOWN/.test(e.description);
+        if (e.type === 'run' && e.outOfBounds) { expect(e.defNote, e.description).toBeFalsy(); continue; }   // out of bounds: nobody made the tackle
         if ((e.type === 'run' && /runs for|breaks free|stuffed|loses \d/.test(e.description) && !scored) || (e.type === 'pass_complete' && !scored)) {
           expect(e.defNote, e.description).toBeTruthy();
           const who = defense.filter(p => e.defNote!.includes(tagShort(p)));
