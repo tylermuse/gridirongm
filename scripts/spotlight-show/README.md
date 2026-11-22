@@ -119,9 +119,18 @@ two-shot and both are composited back over the still:
    both hosts sit ~9 px further apart for the second a turn is on screen and
    snap back when it ends (it read as a jiggle before every grin). Check a new
    turn the same way: the hosts' torsos must not move across the splice.
+   Nor during the turn. In the grinning generation both hosts lean as they
+   settle (hands still, shoulders ~6 px one way, then ~10 px the other); at
+   the speed a 1 s turn plays it, a lean is on and off in 2-3 frames, a jolt
+   of the whole torso. `make_turns.py` puts each host on his own clock: the
+   head turn up to the frame his lean starts, a few frames' dissolve to the
+   frames after it, then out to the camera still. Measure a rebuilt turn
+   frame by frame: a torso should stay within ~1 px of where it started.
    A composed clip whose per-segment renders are gone can't be recomposed;
-   `python3 patch_turns.py <in.mp4> <out.mp4> <turn s>…` takes the zoom out of
-   its turns in place (`buysell_open_1`, `buysell_open_3` were done this way).
+   `python3 splice_turns.py <in.mp4> <out.mp4> <cut s> <old turn> <new turn>…`
+   swaps its turns for rebuilt ones in place (`buysell_open_1`,
+   `buysell_open_3` are done this way, from their first version in git and
+   the turns in `show-assets/wide2/turn_bak_zoomed`).
 
 ## Verdict stamps (`kind: "stamp"`)
 
