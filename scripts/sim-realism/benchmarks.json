@@ -1,0 +1,105 @@
+{
+  "about": "Real-football targets for the chase-cam sim. Summary numbers only: no tracking data is stored in this repo. Measured 2026-11-22 with the same 10-frames-per-second math as metrics.py.",
+  "sources": {
+    "season2023": "14,105 pass plays from the 2023 NFL season (NFL Big Data Bowl 2026 Analytics files on Kaggle): quarterback, route runners and coverage defenders, snap to the ball's arrival. No run plays, linemen or pass rushers.",
+    "game2017": "135 scrimmage plays, all 22 players, from the sample game the NFL posts at github.com/nfl-football-ops/Big-Data-Bowl (Chiefs at Patriots, 2017-09-07). One game, so treat as +/- a few tenths of a second and about 0.4 yd/s."
+  },
+  "groups": [
+    {
+      "title": "Timing (seconds after the snap)",
+      "rows": [
+        {"key": "pass.time_to_throw.p50", "label": "Throw, median", "real": 2.5, "source": "season2023"},
+        {"key": "pass.time_to_throw.p10", "label": "Throw, quickest tenth", "real": 1.8, "source": "season2023"},
+        {"key": "pass.time_to_throw.p90", "label": "Throw, slowest tenth", "real": 3.8, "source": "season2023"},
+        {"key": "run.handoff_shotgun.p50", "label": "Handoff from shotgun", "real": 1.1, "source": "game2017"},
+        {"key": "run.handoff_under_center.p50", "label": "Handoff under center", "real": 1.4, "source": "game2017"},
+        {"key": "run.time_to_los.p50", "label": "Back reaches the line", "real": 2.5, "source": "game2017"},
+        {"key": "duration.run.p50", "label": "Run: snap to tackle", "real": 4.4, "source": "game2017"},
+        {"key": "duration.complete.p50", "label": "Completed pass: snap to whistle", "real": 6.25, "source": "game2017"}
+      ]
+    },
+    {
+      "title": "Receivers and coverage on pass plays, snap to throw (yd/s unless noted)",
+      "rows": [
+        {"key": "pw.WR.s05.mean", "label": "WR speed 0.5 s after the snap", "real": 1.86, "source": "season2023"},
+        {"key": "pw.WR.s10.mean", "label": "WR speed at 1.0 s", "real": 4.29, "source": "season2023"},
+        {"key": "pw.WR.s15.mean", "label": "WR speed at 1.5 s", "real": 5.70, "source": "season2023"},
+        {"key": "pw.WR.d1.p50", "label": "WR distance in the first second (yd)", "real": 1.86, "source": "season2023"},
+        {"key": "pw.WR.t5.p50", "label": "WR time to reach 5 yd/s (s)", "real": 1.2, "source": "season2023"},
+        {"key": "pw.WR.vmax.p50", "label": "WR top speed, median", "real": 6.85, "source": "season2023"},
+        {"key": "pw.WR.vmax.p90", "label": "WR top speed, 90th percentile", "real": 8.38, "source": "season2023"},
+        {"key": "pw.WR.amax.p50", "label": "WR peak acceleration, median (yd/s2)", "real": 6.01, "source": "season2023"},
+        {"key": "pw.WR.amax.p90", "label": "WR peak acceleration, 90th percentile (yd/s2)", "real": 7.15, "source": "season2023"},
+        {"key": "pw.TE.s10.mean", "label": "TE speed at 1.0 s", "real": 3.68, "source": "season2023"},
+        {"key": "pw.TE.vmax.p50", "label": "TE top speed, median", "real": 6.02, "source": "season2023"},
+        {"key": "pw.TE.vmax.p90", "label": "TE top speed, 90th percentile", "real": 7.48, "source": "season2023"},
+        {"key": "pw.RB.s10.mean", "label": "RB (in a route) speed at 1.0 s", "real": 3.34, "source": "season2023"},
+        {"key": "pw.RB.vmax.p50", "label": "RB (in a route) top speed, median", "real": 5.61, "source": "season2023"},
+        {"key": "pw.CB.s10.mean", "label": "CB speed at 1.0 s", "real": 2.00, "source": "season2023"},
+        {"key": "pw.CB.vmax.p50", "label": "CB top speed, median", "real": 4.66, "source": "season2023"},
+        {"key": "pw.CB.vmax.p90", "label": "CB top speed, 90th percentile", "real": 7.06, "source": "season2023"},
+        {"key": "pw.S.s10.mean", "label": "S speed at 1.0 s", "real": 2.11, "source": "season2023"},
+        {"key": "pw.S.vmax.p50", "label": "S top speed, median", "real": 4.22, "source": "season2023"},
+        {"key": "pw.S.vmax.p90", "label": "S top speed, 90th percentile", "real": 6.22, "source": "season2023"},
+        {"key": "pw.LB.s10.mean", "label": "LB speed at 1.0 s", "real": 1.95, "source": "season2023"},
+        {"key": "pw.LB.vmax.p50", "label": "LB top speed, median", "real": 3.83, "source": "season2023"},
+        {"key": "pw.LB.vmax.p90", "label": "LB top speed, 90th percentile", "real": 5.90, "source": "season2023"},
+        {"key": "pw.accel_share_over_10", "label": "Share of frames over 10 yd/s2", "real": 0.0001, "source": "season2023", "fmt": "pct"},
+        {"key": "pw.sharp_cuts_per_pass_play", "label": "Sharp cuts per pass play", "real": 0.00007, "source": "season2023", "fmt": "rate"},
+        {"key": "pw.target.share_turn_over_60", "label": "Catches with a turn over 60 degrees in 0.4 s", "real": 0.008, "source": "season2023", "fmt": "pct"}
+      ]
+    },
+    {
+      "title": "Top speed over a whole play, median / 90th percentile (yd/s)",
+      "rows": [
+        {"key": "speed_max.QB.p50", "label": "QB, median", "real": 4.4, "source": "game2017"},
+        {"key": "speed_max.QB.p90", "label": "QB, 90th percentile", "real": 5.3, "source": "game2017"},
+        {"key": "speed_max.RB.p50", "label": "RB, median", "real": 6.2, "source": "game2017"},
+        {"key": "speed_max.RB.p90", "label": "RB, 90th percentile", "real": 8.3, "source": "game2017"},
+        {"key": "speed_max.WR.p50", "label": "WR, median", "real": 6.5, "source": "game2017"},
+        {"key": "speed_max.WR.p90", "label": "WR, 90th percentile", "real": 8.8, "source": "game2017"},
+        {"key": "speed_max.OL.p50", "label": "OL, median", "real": 3.9, "source": "game2017"},
+        {"key": "speed_max.OL.p90", "label": "OL, 90th percentile", "real": 5.2, "source": "game2017"},
+        {"key": "speed_max.DL.p50", "label": "DL, median", "real": 4.5, "source": "game2017"},
+        {"key": "speed_max.DL.p90", "label": "DL, 90th percentile", "real": 6.0, "source": "game2017"},
+        {"key": "speed_max.LB.p50", "label": "LB, median", "real": 4.8, "source": "game2017"},
+        {"key": "speed_max.LB.p90", "label": "LB, 90th percentile", "real": 6.8, "source": "game2017"},
+        {"key": "all.plays_over_11_5", "label": "Plays where anyone tops 11.5 yd/s (23.5 mph)", "real": 0.007, "source": "game2017", "fmt": "pct"},
+        {"key": "all.sharp_cuts_per_play", "label": "Sharp cuts per play, all 22 players", "real": 0.015, "source": "game2017", "fmt": "rate"}
+      ]
+    },
+    {
+      "title": "Passing",
+      "rows": [
+        {"key": "pass.qb_depth_at_throw.p50", "label": "QB depth at the throw (yd)", "real": 7.85, "source": "season2023"},
+        {"key": "pass.ol_depth_at_throw.p50", "label": "Ground the line has given at the throw (yd)", "real": 4.4, "source": "game2017"},
+        {"key": "pass.nearest_defender_to_qb.p50", "label": "Nearest defender to the QB at the throw (yd)", "real": 2.8, "source": "game2017"},
+        {"key": "pass.target_separation.mean", "label": "Separation at the catch, average (yd)", "real": 3.03, "source": "season2023"},
+        {"key": "pass.air_distance.p50", "label": "Throw distance (yd)", "real": 19.0, "source": "season2023"},
+        {"key": "pass.ball_speed.p50", "label": "Ball speed in the air (yd/s)", "real": 19.1, "source": "season2023"}
+      ]
+    },
+    {
+      "title": "Run game",
+      "rows": [
+        {"key": "run.carrier_speed_at_los.p50", "label": "Runner's speed crossing the line (yd/s)", "real": 5.0, "source": "game2017"},
+        {"key": "run.carrier_max_speed.p50", "label": "Runner's top speed (yd/s)", "real": 6.2, "source": "game2017"},
+        {"key": "run.defenders_within_3yd.mean", "label": "Defenders within 3 yd at the tackle", "real": 3.8, "source": "game2017"},
+        {"key": "run.defenders_within_5yd.mean", "label": "Defenders within 5 yd at the tackle", "real": 5.6, "source": "game2017"}
+      ]
+    },
+    {
+      "title": "Alignment at the snap (yd; not affected by playback speed)",
+      "rows": [
+        {"key": "align.ol_gap.mean", "label": "Gap between neighboring linemen", "real": 1.55, "source": "game2017"},
+        {"key": "align.ol_span.mean", "label": "Tackle to tackle", "real": 6.2, "source": "game2017"},
+        {"key": "align.widest_wr.mean", "label": "Widest receiver from the ball", "real": 15.4, "source": "season2023"},
+        {"key": "align.cb_cushion.mean", "label": "Cornerback cushion", "real": 5.95, "source": "season2023"},
+        {"key": "align.deep_safety.mean", "label": "Deepest safety", "real": 13.1, "source": "season2023"},
+        {"key": "align.qb_depth_shotgun.mean", "label": "QB depth in shotgun", "real": 5.0, "source": "season2023"},
+        {"key": "align.rb_depth_shotgun.mean", "label": "RB depth in shotgun", "real": 4.1, "source": "game2017"},
+        {"key": "align.lb_depth_offball.mean", "label": "Off-ball linebacker depth", "real": 4.4, "source": "game2017"}
+      ]
+    }
+  ]
+}
