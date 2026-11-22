@@ -5,6 +5,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { createClient } from '@bs/core/supabase/client';
@@ -24,6 +25,7 @@ function AppearanceCard() {
   useEffect(() => {
     const current = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
       ? 'dark' : 'light';
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time read of the persisted theme; SSR-safe (document is only available client-side). Pre-existing.
     setTheme(current);
     setMounted(true);
   }, []);
@@ -86,6 +88,7 @@ function PregameShowCard() {
   useEffect(() => {
     try {
       const autoOff = localStorage.getItem(PREGAME_AUTO_OFF_KEY) === '1';
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time read of a localStorage flag; SSR-safe. Pre-existing.
       setOn(!autoOff);
     } catch { /* storage unavailable — keep default */ }
   }, []);
@@ -206,6 +209,7 @@ function CloudSyncCard() {
   const [tooLarge, setTooLarge] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time read of client-only cloud-sync state. Pre-existing.
     setEnabled(isCloudSyncEnabled());
     setLastSynced(getLastSyncedAt());
     setTooLarge(getCloudSyncProblem() === 'too-large');
@@ -547,6 +551,11 @@ export default function SettingsPage() {
 
   const [draft, setDraft] = useState<LeagueSettings>({ ...settings });
   const [saved, setSaved] = useState(false);
+  // God Mode first-enable confirmation. window.confirm() is unreliable in
+  // mobile browsers / PWA contexts (TEN player on Android Chrome 157 reported
+  // the toggle doing nothing), so we gate the first enable behind an inline
+  // modal instead of the native dialog.
+  const [showGodModeConfirm, setShowGodModeConfirm] = useState(false);
 
   // Sync when store changes externally
   useEffect(() => {
@@ -800,7 +809,8 @@ export default function SettingsPage() {
             <button
               onClick={() => {
                 if (!draft.godMode && !draft.godModeUsed) {
-                  if (!window.confirm('Enabling God Mode will permanently mark this league as modified. Continue?')) return;
+                  setShowGodModeConfirm(true);
+                  return;
                 }
                 setDraft(d => ({ ...d, godMode: !d.godMode, godModeUsed: true }));
               }}
@@ -1057,6 +1067,37 @@ export default function SettingsPage() {
           <ImportLeagueCard />
         </Card>
       </div>
+
+      {/* God Mode first-enable confirmation — inline modal replaces the native
+          window.confirm(), which is swallowed on some mobile browsers / PWAs. */}
+      <Modal
+        isOpen={showGodModeConfirm}
+        onClose={() => setShowGodModeConfirm(false)}
+        title="Enable God Mode?"
+        maxWidth="sm"
+      >
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-[var(--text-sec)]">
+            Enabling God Mode will permanently mark this league as modified and remove it from GM Rankings. This can&apos;t be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setShowGodModeConfirm(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setDraft(d => ({ ...d, godMode: true, godModeUsed: true }));
+                setShowGodModeConfirm(false);
+              }}
+            >
+              Enable God Mode
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </GameShell>
   );
 }
