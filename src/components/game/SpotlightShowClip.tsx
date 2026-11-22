@@ -20,6 +20,9 @@ import { clipEventOf } from '@/lib/spotlight/showClip';
 import { toSimPlay, toSimTeam } from '@/lib/engine/liveSim3d';
 import { SIM_URL, usePhotoSkins } from './LiveSim3D';
 
+/** The live sim plays in real time. A replay has to land its score inside a host's line, so the show runs it at 1.5x. */
+const SHOW_SIM_URL = `${SIM_URL}&speed=1.5`;
+
 /**
  * A replay has to be the same play every time it runs, and it shouldn't read
  * as a loop. Both are arranged from here, through the sim's own globals (the
@@ -206,7 +209,7 @@ export function SpotlightShowClip({ flow, play, teams, players, children }: {
       aria-hidden={!showing}
       data-show-clip={showing ? play : 'off'}
     >
-      <iframe ref={frameRef} src={SIM_URL} title="Scoring play replay" tabIndex={-1} allow="autoplay" className="h-full w-full border-0" />
+      <iframe ref={frameRef} src={SHOW_SIM_URL} title="Scoring play replay" tabIndex={-1} allow="autoplay" className="h-full w-full border-0" />
       <div className="absolute inset-0 bg-[#0f1f35] transition-opacity duration-200" style={{ opacity: dip ? 1 : 0 }} />
       {children}
     </div>
