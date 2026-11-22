@@ -7825,6 +7825,10 @@ export const useGameStore = create<GameStore>()(
             return {
               ...t,
               roster: newRoster,
+              // A traded-away player must also leave this team's practice squad,
+              // or they linger as a ghost PS entry that can't be cut (mirrors the
+              // releasePlayer prune). Harmless no-op for active-roster players.
+              practiceSquad: (t.practiceSquad ?? []).filter(id => !offeredPlayerIdsSet.has(id)),
               draftPicks: newPicks,
               totalPayroll: t.totalPayroll - offeredSalary + receivedSalary + userDeadCapTotal,
               depthChart: buildDefaultDepthChart(allPlayers),
@@ -7845,6 +7849,8 @@ export const useGameStore = create<GameStore>()(
             return {
               ...t,
               roster: newRoster,
+              // Same prune on the counterpart side for players it sends away.
+              practiceSquad: (t.practiceSquad ?? []).filter(id => !receivedPlayerIdsSet.has(id)),
               draftPicks: newPicks,
               totalPayroll: t.totalPayroll - receivedSalary + offeredSalary + aiDeadCapTotal,
               deadCap: [...(t.deadCap ?? []), ...aiDeadCapEntries],
