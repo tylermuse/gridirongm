@@ -3,6 +3,10 @@ import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
 import { fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
 import { DEEP_PICK_SHARE, resolveReturn, returnNote, returnSpotLabel, rollPickAirYards, rollReturn, type ReturnOutcome } from './returns';
+import {
+  CLOCK_STOPPED_TAIL, OOB_PLAY_SECS, OOB_SPOT_SECS, catchOutOfBoundsNote, oobStopsClockUntilSnap, rollCatchOutOfBounds,
+  rollRunOutOfBounds, runOutOfBoundsNote, type OobSituation,
+} from './outOfBounds';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,6 +67,9 @@ export interface PlayEvent {
    *  exactly as it appears there. Code that finds the ball carrier by name cuts it out first, so a defender who shares
    *  a name with an opposing player is never taken for him. Optional: older events and plays with no credit lack it. */
   defNote?: string;
+  /** A run or a catch that ended with the ball carrier out of bounds (outOfBounds.ts): the clock stopped, and the 3D
+   *  sim runs him out at the sideline. Absent on every other play, and on events from older saved games. */
+  outOfBounds?: boolean;
   /** Live Coach only: the look the defense showed on a snap the user called, and how the call fared against it
    *  (-1 the look had it covered, 0 even, +1 the call beat the look). See defensiveLooks.ts. */
   defLook?: import('./defensiveLooks').DefensiveLook;
@@ -1295,6 +1302,25 @@ export function simulatePlayByPlay(
     state.timeSecs = Math.max(0, state.timeSecs - secs);
   }
 
+  /** The situation an out-of-bounds roll reads (outOfBounds.ts): the clock as the play ends, and the offense's margin. */
+  function oobSituation(): OobSituation {
+    const diff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
+    return { quarter: state.quarter, timeSecs: Math.max(0, state.timeSecs - OOB_PLAY_SECS), overtime: state.overtime, scoreDiff: diff };
+  }
+  function oobStopsClock(): boolean {
+    return oobStopsClockUntilSnap(state.quarter, Math.max(0, state.timeSecs - OOB_PLAY_SECS), state.overtime);
+  }
+
+  /** The clock after a run or a catch that didn't score. In bounds, `baseSecs` runs off (the play and the time to the
+   *  next snap). Out of bounds the clock stops: in the last 2:00 of the half and the last 5:00 of the game it stays
+   *  stopped until the snap, otherwise it starts again once the ball is spotted (outOfBounds.ts). */
+  function advanceClockAfterCarry(baseSecs: number, oob: boolean) {
+    if (!oob) { advanceClock(baseSecs); return; }
+    const stopped = oobStopsClock();
+    state.timeSecs = Math.max(0, state.timeSecs - OOB_PLAY_SECS);
+    if (!stopped) advanceClock(Math.max(0, baseSecs - OOB_PLAY_SECS - OOB_SPOT_SECS));
+  }
+
   function checkTwoMinWarning(): boolean {
     if (state.quarter === 2 && !state.twoMinWarningQ2Fired && state.timeSecs <= 120) {
       state.twoMinWarningQ2Fired = true;
@@ -1548,20 +1574,24 @@ export function simulatePlayByPlay(
         advanceClock(Math.floor(Math.random() * 8) + 30);
         return true;
       }
-      const tackle = creditTackle('run', yardsGained);
-
       // Lost fumble, or one the offense falls on (about as common in the NFL) — decided before the line is written.
       const fumbleChance = clamp(0.018 - (qbCarrying / 100) * 0.006, 0.005, 0.025);
       const lostFumble = Math.random() < fumbleChance;
       const keptFumble = !lostFumble && Math.random() < fumbleChance;
+      // Out of bounds (outOfBounds.ts): he gets to the sideline, nobody makes the tackle and the clock stops.
+      const oob = !lostFumble && !keptFumble && rollRunOutOfBounds(yardsGained, true, oobSituation());
+      const tackle = oob ? { tackler: null, note: '' } : creditTackle('run', yardsGained);
       const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession)) + tackle.note
+        + (oob ? runOutOfBoundsNote(oobStopsClock()) : '')
         + (keptFumble ? keptFumbleTail(ok.qb, keptRecoverer(ok.qb, ok.ols)) : '');
-      addEvent('run', desc, yardsGained, false).defNote = tackle.note || undefined;
+      const runEv = addEvent('run', desc, yardsGained, false);
+      runEv.defNote = tackle.note || undefined;
+      if (oob) runEv.outOfBounds = true;
       if (keptFumble && ok.qb) creditRusher(ob, ok.qb.id, { fumbles: 1 });
 
       state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
       state.yardsToGo -= yardsGained;
-      advanceClock(Math.floor(Math.random() * 8) + 30);
+      advanceClockAfterCarry(Math.floor(Math.random() * 8) + 30, oob);
 
       if (lostFumble) {
         if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
@@ -1602,21 +1632,25 @@ export function simulatePlayByPlay(
         advanceClock(Math.floor(Math.random() * 8) + 30);
         return true;
       }
-      const tackle = creditTackle('run', yardsGained);
-
       // Skill-based fumble rate (Bug 3 fix). About half of NFL fumbles are recovered by the offense: same odds again for one
       // it keeps (the play stands, the drive goes on).
       const fumbleChance = clamp(0.015 - (rbCarrying / 100) * 0.008, 0.003, 0.02);
       const lostFumble = Math.random() < fumbleChance;
       const keptFumble = !lostFumble && Math.random() < fumbleChance;
+      // Out of bounds (outOfBounds.ts): he gets to the sideline, nobody makes the tackle and the clock stops.
+      const oob = !lostFumble && !keptFumble && rollRunOutOfBounds(yardsGained, rusher?.position === 'QB', oobSituation());
+      const tackle = oob ? { tackler: null, note: '' } : creditTackle('run', yardsGained);
       const desc = descRun(rusher, yardsGained, fieldPosLabel(state.fieldPos, state.possession)) + tackle.note
+        + (oob ? runOutOfBoundsNote(oobStopsClock()) : '')
         + (keptFumble ? keptFumbleTail(rusher, keptRecoverer(rusher, ok.ols)) : '');
-      addEvent('run', desc, yardsGained, false).defNote = tackle.note || undefined;
+      const runEv = addEvent('run', desc, yardsGained, false);
+      runEv.defNote = tackle.note || undefined;
+      if (oob) runEv.outOfBounds = true;
       if (keptFumble && rusher) creditRusher(ob, rusher.id, { fumbles: 1 });
 
       state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
       state.yardsToGo -= yardsGained;
-      advanceClock(Math.floor(Math.random() * 8) + 30);
+      advanceClockAfterCarry(Math.floor(Math.random() * 8) + 30, oob);
 
       if (lostFumble) {
         if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });
@@ -1660,13 +1694,18 @@ export function simulatePlayByPlay(
           return true;
         }
 
-        const tackle = creditTackle('run', yardsGained);
-        const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession)) + tackle.note;
-        addEvent('run', desc, yardsGained, false).defNote = tackle.note || undefined;
+        // Out of bounds (outOfBounds.ts): he gets to the sideline, nobody makes the tackle and the clock stops.
+        const oob = rollRunOutOfBounds(yardsGained, true, oobSituation());
+        const tackle = oob ? { tackler: null, note: '' } : creditTackle('run', yardsGained);
+        const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession)) + tackle.note
+          + (oob ? runOutOfBoundsNote(oobStopsClock()) : '');
+        const runEv = addEvent('run', desc, yardsGained, false);
+        runEv.defNote = tackle.note || undefined;
+        if (oob) runEv.outOfBounds = true;
 
         state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
         state.yardsToGo -= yardsGained;
-        advanceClock(Math.floor(Math.random() * 8) + 25);
+        advanceClockAfterCarry(Math.floor(Math.random() * 8) + 25, oob);
 
       } else {
 
@@ -1794,16 +1833,29 @@ export function simulatePlayByPlay(
         // Fumble after the catch (~1 in 175 completions lost at NFL rates; about as many the offense falls on).
         const catchLost = Math.random() < catchFumbleLossChance(receiver);
         const catchKept = !catchLost && Math.random() < catchFumbleLossChance(receiver);
-        const tackle = creditTackle('pass', yardsGained);
+        // Out of bounds (outOfBounds.ts): the man in coverage shoves him out (he's credited with the tackle) and the
+        // clock stops. Only on a short throw: a 20+ yard catch is pictured as a deep ball, which never ends out of bounds.
+        const oob = !catchLost && !catchKept && rollCatchOutOfBounds(yardsGained, 'short', oobSituation());
+        let tackle: { tackler: Player | null; note: string };
+        if (oob) {
+          const pusher = pickPassDefender(dk);
+          if (pusher) { db.tackles += 1; creditDefender(db, pusher.id, { tackles: 1 }); }
+          tackle = { tackler: pusher, note: catchOutOfBoundsNote(playerTag(pusher, 'the defender')) };
+        } else {
+          tackle = creditTackle('pass', yardsGained);
+        }
         const desc = descPassComplete(ok.qb, receiver, yardsGained, isLong) + tackle.note
+          + (oob && oobStopsClock() ? CLOCK_STOPPED_TAIL : '')
           + (catchKept ? keptFumbleTail(receiver, keptRecoverer(receiver, [...ok.wrs, ...ok.tes])) : '');
-        addEvent('pass_complete', desc, yardsGained, false).defNote = tackle.note || undefined;
+        const catchEv = addEvent('pass_complete', desc, yardsGained, false);
+        catchEv.defNote = tackle.note || undefined;
+        if (oob) catchEv.outOfBounds = true;
         if (catchKept && receiver) creditRusher(ob, receiver.id, { fumbles: 1 });
         if (isLong) shiftMomentum(12); // big play momentum
 
         state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
         state.yardsToGo -= yardsGained;
-        advanceClock(Math.floor(Math.random() * 10) + 25);
+        advanceClockAfterCarry(Math.floor(Math.random() * 10) + 25, oob);
 
         if (catchLost) {
           if (tackle.tackler) creditDefender(db, tackle.tackler.id, { ffs: 1 });

@@ -18,6 +18,10 @@ import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickTackler, pic
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
+import {
+  CLOCK_STOPPED_TAIL, catchOutOfBoundsNote, oobRunoffSecs, oobStopsClockUntilSnap, rollCatchOutOfBounds, rollRunOutOfBounds,
+  runOutOfBoundsNote, type OobSituation,
+} from './outOfBounds';
 import { resolveReturn, returnNote, returnSpotLabel, rollPickAirYards, rollReturn, type ReturnOutcome } from './returns';
 import type { DefensiveScheme } from '@/types';
 import {
@@ -320,6 +324,24 @@ export function createLiveCoachEngine(
     state.pendingRunoff = runoffSecs;
   }
 
+  /** Snap to whistle on a run or a catch (the play-time part of advanceCarryClock). */
+  const CARRY_PLAY_SECS = 5;
+  /** The situation an out-of-bounds roll reads (outOfBounds.ts): the clock as the play ends, and the offense's margin. */
+  function oobSituation(): OobSituation {
+    const diff = state.possession === 'home' ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
+    return { quarter: state.quarter, timeSecs: Math.max(0, state.timeSecs - CARRY_PLAY_SECS), overtime: state.overtime, scoreDiff: diff };
+  }
+  function oobStopsClock(): boolean {
+    return oobStopsClockUntilSnap(state.quarter, Math.max(0, state.timeSecs - CARRY_PLAY_SECS), state.overtime);
+  }
+  /** The clock after a run or a catch that didn't score: the play ticks now and, in bounds, `runoffSecs` are owed to the
+   *  next snap. Out of bounds the clock stops: nothing is owed in the last 2:00 of the half and the last 5:00 of the
+   *  game, otherwise the runoff less the time it takes to spot the ball (outOfBounds.ts). */
+  function advanceCarryClock(runoffSecs: number, oob: boolean) {
+    advanceClock(CARRY_PLAY_SECS);
+    state.pendingRunoff = oob ? oobRunoffSecs(runoffSecs, state.quarter, state.timeSecs, state.overtime) : runoffSecs;
+  }
+
   function switchPossession(newFieldPos = 25) {
     // When possession changes during OT AND the leaving team actually ran a
     // play, they've completed a possession. Real NFL playoff OT requires both
@@ -567,11 +589,28 @@ export function createLiveCoachEngine(
             ? `${prefix}${name} stuffed at the line for no gain.`
             : `${prefix}${name} loses ${Math.abs(finalYards)} on the play.`;
 
+    // Lost fumble on the carry — same ball-security odds as the watch-live engine — or one the offense falls on (about
+    // as many again). Decided before the line is written, like whether he gets out of bounds (outOfBounds.ts): then
+    // nobody makes the tackle and the clock stops.
+    const carrying = rating(rusher, 'carrying', isQb ? 50 : 70);
+    const fumbleChance = isQb
+      ? clamp(0.018 - (carrying / 100) * 0.006, 0.005, 0.025)
+      : clamp(0.015 - (carrying / 100) * 0.008, 0.003, 0.02);
+    const keptRoll = !isTD && Math.random() < fumbleChance;
+    const lostFumble = !isTD && Math.random() < fumbleChance;
+    const keptFumble = keptRoll && !lostFumble;
+    const oob = !isTD && !lostFumble && !keptFumble && !twoPointTry && rollRunOutOfBounds(finalYards, isQb, oobSituation());
+
     // A runner who isn't scoring got tackled — the line names the defender and
     // the box score credits him (same pick the watch-live engine makes).
-    const tackler = isTD ? null : pickTackler(dk, 'run');
+    const tackler = isTD || oob ? null : pickTackler(dk, 'run');
     const tackleLine = tackler ? tackleNote(nameOrFallback(tackler, 'the defender'), finalYards) : '';
-    events.push({ ...makeEvent('run', desc + tackleLine, finalYards, isTD), ...(tackleLine ? { defNote: tackleLine } : {}) });
+    const oobLine = oob ? runOutOfBoundsNote(oobStopsClock()) : '';
+    events.push({
+      ...makeEvent('run', desc + tackleLine + oobLine, finalYards, isTD),
+      ...(tackleLine ? { defNote: tackleLine } : {}),
+      ...(oob ? { outOfBounds: true } : {}),
+    });
     bump(rusher, { rushAttempts: 1, rushYards: finalYards, rushTDs: isTD ? 1 : 0 });
     if (tackler) bump(tackler, { tackles: 1, tacklesForLoss: finalYards < 0 ? 1 : 0 });
 
@@ -580,13 +619,7 @@ export function createLiveCoachEngine(
     } else {
       state.fieldPos = clamp(newPos, 1, 99);
       state.yardsToGo -= finalYards;
-      // Lost fumble on the carry — same ball-security odds as the watch-live engine.
-      const carrying = rating(rusher, 'carrying', isQb ? 50 : 70);
-      const fumbleChance = isQb
-        ? clamp(0.018 - (carrying / 100) * 0.006, 0.005, 0.025)
-        : clamp(0.015 - (carrying / 100) * 0.008, 0.003, 0.02);
-      const keptFumble = Math.random() < fumbleChance;   // about as many again that the offense falls on
-      if (Math.random() < fumbleChance) {
+      if (lostFumble) {
         const rec = pickTackler(dk, 'run') ?? tackler;
         loseFumble(events, `Fumble! ${name} has it punched out — recovered by ${nameOrFallback(rec, 'the defense')}!`, rusher, tackler);
         return;
@@ -599,7 +632,7 @@ export function createLiveCoachEngine(
         handleTurnoverOnDowns(events);
         return;
       }
-      advancePlayClock(5, 30);
+      advanceCarryClock(30, oob);
     }
   }
 
@@ -706,10 +739,23 @@ export function createLiveCoachEngine(
             ? `${prefix}${qbName} sells the fake and finds ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`
             : `${prefix}${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
 
-      // Receiver brought down short of the end zone — name the tackler and credit him.
-      const tackler = isTD ? null : pickTackler(dk, 'pass');
-      const tackleLine = tackler ? tackleNote(nameOrFallback(tackler, 'the defender'), finalYards) : '';
-      events.push({ ...makeEvent('pass_complete', desc + tackleLine, finalYards, isTD), ...(tackleLine ? { defNote: tackleLine } : {}) });
+      // Fumble after the catch (~1 in 175 completions lost at NFL rates; about as many the offense falls on), and whether
+      // he's run out of bounds (outOfBounds.ts) — both decided before the line is written.
+      const catchLost = !isTD && Math.random() < catchFumbleLossChance(target);
+      const catchKept = !isTD && !catchLost && Math.random() < catchFumbleLossChance(target);
+      const oob = !isTD && !catchLost && !catchKept && !twoPointTry && rollCatchOutOfBounds(finalYards, depth, oobSituation());
+
+      // Receiver brought down short of the end zone — name the tackler and credit him. Out of bounds, the man in
+      // coverage shoves him out (the 3D sim pictures the corner driving on him) and gets the tackle.
+      const tackler = isTD ? null : oob ? pickPassDefender(dk) : pickTackler(dk, 'pass');
+      const tackleLine = !tackler ? '' : oob ? catchOutOfBoundsNote(nameOrFallback(tackler, 'the defender'))
+        : tackleNote(nameOrFallback(tackler, 'the defender'), finalYards);
+      const clockLine = oob && oobStopsClock() ? CLOCK_STOPPED_TAIL : '';
+      events.push({
+        ...makeEvent('pass_complete', desc + tackleLine + clockLine, finalYards, isTD),
+        ...(tackleLine ? { defNote: tackleLine } : {}),
+        ...(oob ? { outOfBounds: true } : {}),
+      });
       bump(ok.qb, { passAttempts: 1, passCompletions: 1, passYards: finalYards, passTDs: isTD ? 1 : 0 });
       bump(target, { targets: 1, receptions: 1, receivingYards: finalYards, receivingTDs: isTD ? 1 : 0 });
       if (tackler) bump(tackler, { tackles: 1 });
@@ -719,13 +765,12 @@ export function createLiveCoachEngine(
       } else {
         state.fieldPos = clamp(newPos, 1, 99);
         state.yardsToGo -= finalYards;
-        // Fumble after the catch (~1 in 175 completions lost at NFL rates; about as many the offense falls on).
-        if (Math.random() < catchFumbleLossChance(target)) {
+        if (catchLost) {
           const rec = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? tackler;
           loseFumble(events, `Fumble! ${recName} has it punched out after the catch — recovered by ${nameOrFallback(rec, 'the defense')}!`, target, tackler);
           return;
         }
-        if (Math.random() < catchFumbleLossChance(target)) {
+        if (catchKept) {
           events[events.length - 1].description += keptFumbleTail(target, [...ok.wrs, ...ok.tes]);
           bump(target, { fumbles: 1 });
         }
@@ -733,7 +778,7 @@ export function createLiveCoachEngine(
           handleTurnoverOnDowns(events);
           return;
         }
-        advancePlayClock(5, 23);
+        advanceCarryClock(23, oob);
       }
     } else {
       const qbName = nameOrFallback(ok.qb, 'the QB');
