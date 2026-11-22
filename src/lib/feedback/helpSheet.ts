@@ -47,8 +47,8 @@ DURING A LIVE GAME
 - You cannot substitute players by hand during a game. Not in the game: a mid-game substitution or bench button. The lineup comes from your depth chart. To change who plays (for example a QB who is throwing interceptions), reorder the depth chart on the Roster page before your next game.
 - "🔄 Auto-subs" only changes what the "On the Field" display shows. It never swaps the QB.
 - To watch your game instead of simming it: press the red "Watch Live" button in the top bar ("Live" on phones), then "🏈 Kick Off" on the pregame show.
-- Live game controls: "▶ Play" / "⏸ Pause", "⏩ Skip Qtr", "⏭ End Game" (finishes the game now), and "Speed" of 0.5x, 1x, 2x, 5x or max.
-- Calling plays: "🎯 Live Coach" in the controls (on by default in your own games). Before each of your offensive snaps you choose "Run", "Short Pass", "Deep Shot", "QB Scramble", "Screen" or "Play Action" (a fake handoff to the back, then a pass); on 4th down "Field Goal", "Punt" or "Go For It"; after a touchdown "Extra Point" or "Go for 2"; on kickoffs "Regular Kickoff" or "Onside Kick". "Turn off" in that panel stops play calling, and "Auto-sim to End ⏭" sims the rest.
+- Live game controls: "▶ Play" / "⏸ Pause", "⏩ Skip Qtr", "⏭ Sim to End" (sims the rest of the game now; the result counts), and "Speed" of 0.5x, 1x, 2x, 5x or max.
+- Calling plays: "🎯 Live Coach" in the controls (on by default in your own games). Before each of your offensive snaps you choose "Run", "Short Pass", "Deep Shot", "QB Scramble", "Screen" or "Play Action"; on 4th down "Field Goal", "Punt" or "Go For It"; after a touchdown "Extra Point" or "Go for 2"; on kickoffs "Regular Kickoff" or "Onside Kick". "Turn off" in that panel stops play calling, and "Auto-sim to End ⏭" sims the rest.
 - Calling defense is off by default: with Live Coach on, turn on "🛡️ Call Defense" to pick "Blitz", "Stacked Box", "Two-High", "Man Press" or "Soft Zone" before opponent snaps.
 - "📋 Game Plan" in the live game controls sets run/pass tendency, risk, red zone strategy, blitz rate, coverage and tempo.
 
@@ -56,7 +56,7 @@ SIMMING AND ADVANCING
 - "Sim Week N" in the top bar sims every unplayed game that week, including yours. If you watched your game live first, it sims the rest.
 - "Sim Season" sims to the end of the regular season and stops at the playoffs. Trade offers that arrive during it are rejected automatically.
 - "Sim to Deadline" sims up to the last week trades are allowed.
-- Not in the game: a button that sims only your own regular-season game (use "Watch Live" and then "⏭ End Game"), and a button that sims straight through the playoffs.
+- Not in the game: a button that sims only your own regular-season game (use "Watch Live" and then "⏭ Sim to End"), and a button that sims straight through the playoffs.
 - Playoffs: "Sim Next Game", "Sim Round" and "Sim Remaining" in the top bar, plus "Watch Live" for your game. After the championship, "Advance to Re-signing →" starts the offseason.
 
 INJURIES
