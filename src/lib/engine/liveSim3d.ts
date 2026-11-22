@@ -44,6 +44,10 @@ export interface SimPlayResult {
   /** incomplete / int: the play-by-play says the ball was batted down or tipped at the line. A lineman gets a hand on it,
    *  it pops up, and a backer leaps for it (catches it on a tipped pick). Always a short throw. */
   batted?: boolean;
+  /** run / complete: the engine ended the play with the carrier out of bounds (PlayEvent.outOfBounds, outOfBounds.ts) —
+   *  he turns up the sideline and steps out (run) or the man in coverage shoves him out (catch). toSimPlay sends false
+   *  on every other run and catch, so the sim never runs a man out of bounds the engine (and its clock) didn't. */
+  oob?: boolean;
 }
 
 /** How the offense lines up for a scrimmage snap (Tyler 11/20: "players aren't always lined up in the shotgun — sometimes there's
@@ -144,13 +148,14 @@ function baseSimResult(e: PlayEvent): SimPlayResult | null {
   const y = e.yardsGained ?? 0;
   const toGoal = 100 - e.fieldPos;
   const td = (yards: number) => Math.max(yards, toGoal);   // the sim scores when yards >= yards-to-goal
+  const oob = e.outOfBounds && !e.isScoring ? { oob: true } : {};
   switch (e.type) {
     case 'run':
       if (KNEEL_RE.test(e.description) || NON_PLAY_RE.test(e.description)) return null;
-      return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}) };
+      return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}), ...oob };
     case 'pass_complete':
-      if (PLAY_ACTION_RE.test(e.description)) return { kind: 'complete', depth: y >= 16 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...PA };
-      return { kind: 'complete', depth: SCREEN_RE.test(e.description) ? 'short' : passDepth(e.description, y), yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
+      if (PLAY_ACTION_RE.test(e.description)) return { kind: 'complete', depth: y >= 16 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...PA, ...oob };
+      return { kind: 'complete', depth: SCREEN_RE.test(e.description) ? 'short' : passDepth(e.description, y), yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}), ...oob };
     case 'pass_incomplete':
       if (PLAY_ACTION_RE.test(e.description)) return { kind: 'incomplete', depth: 'deep', ...PA };
       if (BATTED_RE.test(e.description) && !SCREEN_RE.test(e.description)) return { kind: 'incomplete', depth: 'short', batted: true };
@@ -291,6 +296,9 @@ export function toSimPlay(
 ): SimPlayMessage | null {
   const res = toSimResult(e);
   if (!res) return null;
+  // Out of bounds is the engine's call (it stopped the clock for it): every other run and catch ends in bounds. Left
+  // unset, the sim used to run some long runs and sideline catches out of bounds on its own while the clock kept going.
+  if ((res.kind === 'run' || res.kind === 'complete') && !res.oob) res.oob = false;
   // The engine logs a lost fumble as its own event right after the run / sack / catch ("Fumble! X loses the ball — recovered
   // by Y"): picture both as one play — it ends with the strip and the defense on the ball.
   const fumbleNext = !!next && next.type === 'fumble' && (res.kind === 'run' || res.kind === 'sack' || res.kind === 'complete') && !e.isScoring;

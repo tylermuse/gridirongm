@@ -184,7 +184,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b20a'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b20b'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1390,8 +1390,12 @@ function choreograph(res){
     else if(scn){ // screen: the back slips out behind the rush and takes a soft throw 2 yd behind the line, blockers out in front
       rec = O.rb; const side = Math.random()<.5? -1 : 1; Yc = -3; catchX = side*15; res.screenSide = side; }   /* out by the numbers: at 9.5 he was barely outside the tackle and it read as a short throw over the middle (Tyler 11/9) */
     else { const pick = Math.random();
-      rec = O[res.recKey] && res.recKey!=='rb'? O[res.recKey] : bat? (pick<.55? O.slot : O.te) : pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
-      catchX = rec===O.slot? -4.5 : rec===O.te? 5 : rec===O.wrR? 22.5 : FM.te2? -5.5 : -22.5; }
+      const oobC = res.oob===true && res.kind==='complete' && !td;   /* the game ran him out of bounds (it stopped the clock for it) */
+      rec = O[res.recKey] && res.recKey!=='rb'? O[res.recKey] : bat? (pick<.55? O.slot : O.te) : oobC? (FM.te2 || pick<.5? O.wrR : O.wrL) : pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
+      catchX = rec===O.slot? -4.5 : rec===O.te? 5 : rec===O.wrR? 22.5 : FM.te2? -5.5 : -22.5;
+      /* an out-of-bounds catch by a man lined up inside (the slot, a tight end, a back): he runs the out to the numbers instead, and
+         the catch comes a few yards short of the spot so there's room to turn up the sideline before he's shoved out */
+      if(oobC){ if(Math.abs(catchX) <= 14) catchX = (Math.sign(catchX)||1)*20.5; Yc = Math.max(1, Math.min(Yc, Y-3)); } }
     if(res.comeback && res.kind==='complete' && !deep && !scn && !td && (rec===O.wrL || rec===O.wrR)) Yc = Math.max(3, Y - R(0,1.2));   /* a called comeback is caught where he's brought down */
     /* a fumble after the catch only counts once he has it secured and is a runner: catch it short of the spot, then a few strides
        (4+ yards, ~0.6 s+) before the hit that punches it out — anything sooner is an incompletion, not a fumble (Tyler) */
@@ -1400,7 +1404,7 @@ function choreograph(res){
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc;
     /* Comeback / hitch (reference: DAL @ IND on FOX, #88 at the Colts 40, Tyler 11/8): he pushes upfield, plants, comes back to the
        ball facing the QB, and the corner who was on top of him drives down and wraps him at the catch — no run after it */
-    const comeback = res.kind==='complete' && !deep && !scn && !td && (rec===O.wrL || rec===O.wrR) && (Y-Yc) <= 1.5 && Yc >= 3
+    const comeback = res.kind==='complete' && !deep && !scn && !td && res.oob!==true && (rec===O.wrL || rec===O.wrR) && (Y-Yc) <= 1.5 && Yc >= 3
       && !!(res.comeback ?? window.__comeback ?? Math.random() < .45);
     const cbSg = Math.sign(catchX)||1, cbBack = 2.2, cbStem = [catchX - cbSg*1.4, cz + cbBack];
     /* Roll-out (reference: Prescott at GB, SNF): the pocket closes from the back side, he climbs, escapes toward the receiver's sideline
@@ -1555,7 +1559,7 @@ function choreograph(res){
       tackler = cover; tackleT = tEnd;
       rec.behav = P(...recKeys);
       ev(tCatch, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && d.behav?.type!=='lunge') d.behav = F(rec, tCatch+.1+(i%4)*.08, 6.4+(i%3)*.4); }); });
-    } else if(res.kind==='complete' && !scn && !deep && !td && !res.fumble && Math.abs(catchX)>=20 && (Y-Yc)<=1.5 && (window.__mxDive ?? true) && Math.random() < (window.__diveP ?? .7)){
+    } else if(res.kind==='complete' && !scn && !deep && !td && !res.fumble && res.oob!==true && Math.abs(catchX)>=20 && (Y-Yc)<=1.5 && (window.__mxDive ?? true) && Math.random() < (window.__diveP ?? .7)){
       // out route at the boundary, tackled on the spot: the laid-out sideline catch ('Receiver Catch on boundary line') — he dives the last 2.8 m along the break and is down where he lands
       const stem = routeKeys[routeKeys.length-2]; const th = Math.atan2(catchX-stem[1], cz-stem[2]);
       const sx = catchX - Math.sin(th)*1.65, sz = cz - Math.cos(th)*1.65;   /* the capture reaches up for the ball .7 s in, 1.65 m along the dive, then lays out */
