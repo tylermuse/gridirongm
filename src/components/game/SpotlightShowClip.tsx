@@ -20,8 +20,13 @@ import { clipEventOf } from '@/lib/spotlight/showClip';
 import { toSimPlay, toSimTeam } from '@/lib/engine/liveSim3d';
 import { SIM_URL, usePhotoSkins } from './LiveSim3D';
 
-/** The live sim plays in real time. A replay has to land its score inside a host's line, so the show runs it at 1.5x. */
-const SHOW_SIM_URL = `${SIM_URL}&speed=1.5`;
+/** A replay has to land its score inside a host's line, so the show always runs the sim at 1.5x, whatever rate the live game is set to in SIM_URL. */
+const SHOW_SIM_URL = (() => {
+  const [path, query = ''] = SIM_URL.split('?');
+  const q = new URLSearchParams(query);
+  q.set('speed', '1.5');
+  return `${path}?${q}`;
+})();
 
 /**
  * A replay has to be the same play every time it runs, and it shouldn't read

@@ -40,16 +40,21 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
 }
 
 const SIM_BUILD = 'b21a';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
-/** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used as-is by the scoring-play replay. */
-export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&v=${SIM_BUILD}`;
+/** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used by the scoring-play replay too.
+ *  `speed` is the playback rate. The sim's clock is in real seconds (b21a), so 1 is real time: a play then averages 7.5 s on screen against 4.6 s
+ *  before b21a, and a whole game drags (Tyler: "crazy slow"). 1.5, the rate the game ran at before b21a, averages 5.2 s; 1.75 matches the old 4.6 s.
+ *  The timing between players stays real at any rate (throw, handoff, routes); everything is just fast-forwarded by this much. */
+export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&speed=1.5&v=${SIM_BUILD}`;
 /** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.
- *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=fp27` (the previous player), `?simMotion=0`. */
+ *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=fp27` (the previous player), `?simMotion=0`, `?simSpeed=1` (playback rate; 1 is real time). */
 function simSrc(): string {
   if (typeof window === 'undefined') return SIM_URL;
   const q = new URLSearchParams(window.location.search);
   let src = SIM_URL;
   if (q.get('simModel') === 'fp27') src = src.replace('model=mh2', 'model=fp27');
   if (q.get('simMotion') === '0') src = src.replace('&motion=2', '');
+  const speed = q.get('simSpeed');
+  if (speed && /^\d(\.\d+)?$/.test(speed)) src = src.replace(/speed=[^&]*/, `speed=${speed}`);
   const look = q.get('simLook');
   const desktop = window.matchMedia?.('(pointer: fine)').matches && window.innerWidth >= 900;
   if (look === '2' || (look !== '0' && desktop)) src += '&look=2';
