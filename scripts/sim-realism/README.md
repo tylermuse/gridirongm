@@ -26,20 +26,23 @@ python3 scripts/sim-realism/compare.py        # prints the table, writes out/rep
 
 A row is marked `ok` when the on-screen value is within 15% of real.
 
-## Baseline
+## Results so far
 
-Build b19c, 1,200 plays, seed 20261122: 5 of 66 measures within 15% of real on screen. The biggest gaps:
+Same 1,200 plays (seed 20261122) on each build. Measures within 15% of real on screen: 5 of 66 on b19c, 34 of 66 on b21a.
 
-| Measure | Real | On screen | Sim clock |
+| Measure | Real | b19c (1.5x playback) | b21a (real time) |
 | --- | --- | --- | --- |
-| Throw, median (s after the snap) | 2.50 | 1.23 | 1.85 |
-| Handoff under center (s) | 1.40 | 0.48 | 0.72 |
-| WR distance in the first second (yd) | 1.86 | 9.43 | 5.90 |
-| WR top speed, median (yd/s) | 6.85 | 12.32 | 8.21 |
-| Plays where anyone tops 11.5 yd/s | 0.7% | 93.9% | 0.4% |
-| Sharp cuts per play, all 22 players | 0.01 | 11.12 | 1.33 |
-| Nearest defender to the QB at the throw (yd) | 2.80 | 5.74 | 5.71 |
+| Throw, median (s after the snap) | 2.50 | 1.23 | 2.52 |
+| Handoff under center (s) | 1.40 | 0.48 | 1.30 |
+| Back reaches the line (s) | 2.50 | 0.90 | 2.20 |
+| WR distance in the first second (yd) | 1.86 | 9.43 | 2.12 |
+| WR top speed, median (yd/s) | 6.85 | 12.32 | 6.36 |
+| Plays where anyone tops 11.5 yd/s | 0.7% | 93.9% | 0.0% |
+| Sharp cuts per play, all 22 players | 0.01 | 11.12 | 0.83 |
+| Nearest defender to the QB at the throw (yd) | 2.80 | 5.74 | 4.90 |
 | Gap between neighboring linemen (yd) | 1.55 | 2.54 | 2.54 |
+
+Still open after b21a: line and receiver spacing at the snap, the pocket closing on the quarterback, pursuit to the ball, and cuts by players other than receivers.
 
 ## Where the real numbers come from
 
