@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { InteractionsSection, type InteractionReport } from './InteractionsSection';
 import { OverviewSection } from './OverviewSection';
 import { RevenueSection } from './RevenueSection';
 import { GrowthSection } from './GrowthSection';
@@ -44,7 +43,6 @@ interface AnalyticsData {
   sim3dCohorts: Sim3dCohorts | null;
   /** null until migration 20261106_sim3d_followup is applied (or the query failed) */
   sim3dFollowup?: Sim3dFollowup | null;
-  interactions: InteractionReport | null;
   // The four business reports (api/admin/analytics/business.ts). Each is its whole
   // history, independent of `period`, and null when its own query failed.
   subscriberGrowth?: SubscriberGrowth | null;
@@ -364,13 +362,6 @@ export default function AdminAnalyticsPage() {
 
             {/* 6. Detail for when a number above raises a question. Folded away so the page stays short. */}
             <div className={`space-y-6 border-t border-gray-200 pt-8 ${stale}`}>
-              <Collapsible title="Feature usage" note="what people click, ignore and fight with" defaultOpen>
-                <InteractionsSection
-                  r={data.interactions}
-                  when={trafficRange.phrase}
-                  error={data.warnings?.find(w => w.startsWith('Feature usage'))}
-                />
-              </Collapsible>
               {data.sim3dCohorts && (
                 <Collapsible title="3D live sim experiment" note="decided Nov 6: stays free">
                   <Sim3dSection c={data.sim3dCohorts} f={data.sim3dFollowup ?? null} when={trafficRange.phrase} />
