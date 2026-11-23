@@ -21,7 +21,7 @@ python3 scripts/sim-realism/compare.py        # prints the table, writes out/rep
 `compare.py` resamples each play to 10 frames per second, the rate NFL tracking uses, and computes timing, speed, acceleration, cuts, pocket, pursuit and alignment. It reports each measure three ways:
 
 - **Real:** the target from `benchmarks.json`.
-- **On screen:** the sim at the playback speed the game uses (`G.speed`, currently 1.5x). This is what a player sees.
+- **On screen:** the sim at the playback speed the game uses (`G.speed`, currently 1.5x, plus the extra rate on handoff runs). This is what a player sees.
 - **Sim clock:** the sim at 1x.
 
 A row is marked `ok` when the on-screen value is within 15% of real.
@@ -53,6 +53,16 @@ Real time turned out too slow to watch a whole game at, so the game embeds b21a 
 | b21a at 1.25x | 6.1 | 15 of 66 |
 | b21a at 1.5x (the game) | 5.2 | 10 of 66 |
 | b21a at 1.75x | 4.6 | 5 of 66 |
+
+At 1.5x passes read fine but runs still looked slow: a real back needs 2.5 s to reach the line. Since b21b the game also passes `run=1.33`, which fast-forwards a handoff run by that much more (2x in all) from the snap until the back reaches the line, and until the tackle on a gain of 6 yards or less. Longer runs, the tackle and the post-play hold stay at 1.5x. `run_sim.py` logs each play's `rate` and `rateUntil`, and `compare.py` applies them to the on-screen column. Sim-clock numbers are the same as b21a.
+
+| Handoff runs, on screen | Real | b19c at 1.5x | b21a at 1.5x | b21b (1.5x, run 1.33) |
+| --- | --- | --- | --- | --- |
+| Handoff from shotgun (s) | 1.10 | 0.41 | 0.70 | 0.53 |
+| Back reaches the line (s) | 2.50 | 0.90 | 1.50 | 1.10 |
+| Snap to tackle (s) | 4.40 | 1.40 | 2.13 | 1.66 |
+| Runner's top speed (yd/s) | 6.20 | 12.09 | 7.77 | 10.12 |
+| Seconds per run play in the game | - | 4.2 | 4.9 | 4.4 |
 
 Still open after b21a: line and receiver spacing at the snap, the pocket closing on the quarterback, pursuit to the ball, and cuts by players other than receivers.
 

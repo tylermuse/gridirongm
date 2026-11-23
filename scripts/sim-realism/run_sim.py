@@ -56,7 +56,8 @@ window.__H = {
     const bp = ballPlan.map(s=>({t0:s.t0, t1:s.t1, held: s.held? (roles.get(s.held)||'other') : null,
       flight: s.flight? {x0:s.flight.x0, z0:s.flight.z0, x1:s.flight.x1, z1:s.flight.z1, h:s.flight.h} : null}));
     return {res, cfg, z0, roles: acts.map(a=>roles.get(a)), frames, ballPlan: bp, tEnd: play.tEnd, whistleT: play.whistleT ?? play.tEnd, td: !!play.td,
-      carrier: play.carrier? (roles.get(play.carrier)||'other') : null, snap:.35, uc: !!(FORMS[G.formation]||{}).uc};
+      carrier: play.carrier? (roles.get(play.carrier)||'other') : null, snap:.35, uc: !!(FORMS[G.formation]||{}).uc,
+      rate: play.rate ?? 1, rateUntil: play.rateUntil ?? 0};   /* frame() plays the stretch before rateUntil this much faster (handoff runs) */
   }
 };
 '''

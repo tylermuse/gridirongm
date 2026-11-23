@@ -39,7 +39,7 @@ def main():
     log = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / 'out' / 'sim_plays.jsonl.gz'
     if not log.exists(): sys.exit(f'compare: {log} not found. Run scripts/sim-realism/run_sim.py first.')
     meta = m.read_meta(log); speed = float(meta['meta'].get('speed', 1.5)); bench = json.loads((HERE / 'benchmarks.json').read_text())
-    clock = m.load_sim(log, 1.0); screen = clock if abs(speed - 1.0) < 1e-6 else m.load_sim(log, speed)
+    clock = m.load_sim(log, 1.0); screen = m.load_sim(log, speed, on_screen=True)
     Mc, PWc = m.whole_play(clock), m.pass_window(clock); Ms, PWs = (Mc, PWc) if screen is clock else (m.whole_play(screen), m.pass_window(screen))
     head = f"Sim build {meta['meta'].get('build')} · {Mc['n_plays']} plays ({', '.join(f'{v} {k}' for k, v in sorted(Mc['kinds'].items(), key=lambda kv: -kv[1]))}) · playback {speed:g}x"
     lines = ['# Sim realism report', '', head, '', f'"On screen" is the sim at {speed:g}x, as the game plays it. "Sim clock" is the sim at 1x. A row is ok when the on-screen value is within {OK_WITHIN:.0%} of real.', '']

@@ -183,10 +183,14 @@ TEAMS.forEach((t,i)=>{ selA.add(new Option(t.name,i)); selB.add(new Option(t.nam
 selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
-/* Playback: 1 = real time. The choreography's clock is in real seconds (b21a), so players move at real speeds; ?speed=1.5 plays it faster (the show's replay clips use that). */
+/* Playback: 1 = real time. The choreography's clock is in real seconds (b21a), so players move at real speeds; ?speed=1.5 plays it faster (the game and the show's replay clips use that).
+   ?run=1.33 fast-forwards a handoff run by that much more, from the snap until the back reaches the line, and on a short gain (6 yds or less, where he travels at 4.8 yd/s) until the tackle (b21b).
+   A real back takes 2.5 s to reach the line, so at the game's 1.5x the mesh and a short run still looked slow next to a pass (Tyler). Longer runs burst at 6.6-7.8 yd/s past the line and keep the base rate there;
+   so do the tackle and the post-play hold. All 22 players are fast-forwarded together, so the timing between them is unchanged. */
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
+const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b21a'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b21b'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1920,7 +1924,9 @@ function choreograph(res){
     let tGo = snap+3; for(let t=snap; t<snap+3; t+=.05){ const q=pathAt(w.behav.k, t, w.behav.acc); if(q[1]+b.off[1] >= c.z + .8*(t-snap) - .4){ tGo=t; break; } }
     if(tGo <= b.start + .05) return;
     const pre = P([snap,c.x,c.z],[tGo,c.x,c.z+.8*(tGo-snap)]); c.behav = pre; b.start = tGo; ev(tGo, ()=>{ if(c.behav===pre) c.behav = b; }); });
-  play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, holdOn, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal};
+  const runFast = isRun && !scr && RUN_RATE!==1;   /* see RUN_RATE */
+  play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, holdOn, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal,
+    rate: runFast? RUN_RATE : 1, rateUntil: runFast? (res.yards>6 || res.oob? tHole : (tEnd ?? 3)) : 0};
   if(tackler && carrier){ play.tackler = tackler; play.tackleAt = (res.lock && res.kind==='int' && res.endAt!=null)? null : tackleAtFn; }   /* a return the game already spotted (res.endAt) is tackled at the planned spot only: armed early (the intended receiver is standing right at the pick) the returner broke free and ran until the 6 s cap, ending yards short of or past where the next drive starts */
   cameraTarget = null;
 }
@@ -2444,7 +2450,7 @@ function frame(now){
   const dtReal = Math.min(.2,dtRaw); last=now;   /* real elapsed time (capped for tab switches): a slow frame no longer slows the play down — the sim sub-steps below */ crowdU.uTime.value=now/1000; ribbonTex.offset.x=(ribbonTex.offset.x+dtReal*.03)%1;
   crowdU.uCheer.value += ((running && play && play.td && playT>=play.tEnd ? 1 : 0) - crowdU.uCheer.value)*Math.min(1,dtReal*1.6);
   if(running){ // fixed-size sub-steps (≤50 ms of play time each) so contact checks and the captures stay stable whatever the frame rate; wall-clock pace is kept
-    let rem = dtReal*G.speed;
+    let rem = dtReal*G.speed*(playT < play.rateUntil? play.rate : 1);   /* handoff runs: see RUN_RATE */
     while(rem > 1e-6 && running){ const dt = Math.min(rem, .05); rem -= dt; playT += dt;
     events.forEach(e=>{ if(!e.done && playT>=e.t){ e.done=true; e.fn(); } });
     if(!play.whistled && playT >= (play.whistleT ?? play.tEnd)) blowWhistle();
