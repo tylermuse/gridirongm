@@ -61,7 +61,9 @@ def _throw(o):
     return None, None, None
 
 
-def load_sim(path, tscale=1.0):
+def load_sim(path, tscale=1.0, on_screen=False):
+    """tscale is the playback rate (G.speed). With on_screen, a play's own fast-forward is applied too: the game plays a handoff
+    run `rate` times faster until `rateUntil` (sim clock), so on-screen time is not one constant multiple of the sim clock there."""
     plays = []
     for meta, o in read_log(path):
         fr = o['frames']; snap = o['snap']; roles = o['roles']; form = o['cfg']['formation']; z0 = o['z0']
@@ -69,7 +71,12 @@ def load_sim(path, tscale=1.0):
         pos = np.array([[[q[0], q[1]] for q in r[4]] for r in fr], dtype=float)
         down = np.array([[q[2] for q in r[4]] for r in fr])
         ballr = np.array([[r[1], r[3]] for r in fr], dtype=float)
-        grid = np.arange(snap, min(ta[-1], o['whistleT'] + 1.0) + 1e-9, DT * tscale)   # sim-clock time of each 10 Hz frame
+        rate = float(o.get('rate') or 1.0) if on_screen else 1.0; until = float(o.get('rateUntil') or 0.0) if rate != 1.0 else 0.0
+        # on-screen seconds since the snap <-> sim clock (piecewise: tscale*rate before `until`, tscale after)
+        to_screen = lambda tc, r=rate, u=until: ((np.minimum(tc, u) - min(snap, u)) / (tscale * r) + (np.maximum(tc, u) - max(snap, u)) / tscale)
+        split = float(to_screen(max(until, snap)))
+        to_clock = lambda ts, r=rate, u=until, sp=split: np.where(ts < sp, snap + ts * tscale * r, max(u, snap) + (ts - sp) * tscale)
+        grid = to_clock(np.arange(0, float(to_screen(min(ta[-1], o['whistleT'] + 1.0))) + 1e-9, DT))   # sim-clock time of each 10 Hz on-screen frame
         if len(grid) < 8: continue
         P = np.zeros((len(roles), len(grid), 2))
         for i in range(len(roles)):
@@ -91,9 +98,9 @@ def load_sim(path, tscale=1.0):
         # (about 1.3 yd in one step), which is an animation detail, not movement.
         pend = np.full(len(roles), 10 ** 6)
         for i in range(len(roles)):
-            if down[:, i].any(): pend[i] = max(2, int(np.floor((ta[np.argmax(down[:, i] > 0)] - snap) / (DT * tscale))) - 2)
-        sc = lambda v: None if v is None else (v - snap) / tscale
-        plays.append(dict(id=o['seed'], t=(grid - snap) / tscale, P=P, side=side, group=group, ball=B, kind=kind, throw_t=sc(throw_a), arrive_t=sc(arrive_a),
+            if down[:, i].any(): pend[i] = max(2, int(np.floor(float(to_screen(ta[np.argmax(down[:, i] > 0)])) / DT)) - 2)
+        sc = lambda v: None if v is None else float(to_screen(v))
+        plays.append(dict(id=o['seed'], t=to_screen(grid), P=P, side=side, group=group, ball=B, kind=kind, throw_t=sc(throw_a), arrive_t=sc(arrive_a),
                           handoff_t=sc(handoff_a), end_t=sc(end_a), carrier=carrier, pend=pend, shotgun=not o['uc'], form=form))
     return plays
 
