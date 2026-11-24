@@ -15,6 +15,7 @@ import { lineupDepthChart } from '@/lib/engine/lineup';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { LiveSim3D, useSim3DMode, readSim3DPref, sim3dTestArm } from '@/components/game/LiveSim3D';
+import { sim3dCapArm, readSim3DQuota, countGame, SIM3D_WEEKLY_FREE_GAMES, type Sim3DQuotaState } from '@/lib/sim3dQuota';
 import { nextSnapSituation } from '@/lib/engine/scorebugSituation';
 import { clockSeconds, formationForSet, scoreBeforeTry } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
@@ -83,8 +84,9 @@ const TEASER_DAY_KEY = 'bsgm.broadcastTeaser.day';
 /** How many games this browser has watched with the 3D sim on; the quarter-break Premium cards skip the first one. */
 const SIM3D_GAMES_KEY = 'bsgm.sim3d.games';
 const utcDay = () => new Date().toISOString().slice(0, 10);
-/** Where the in-sim Premium card shows: the breaks between quarters, and the end of the free broadcast teaser. */
-type UpsellReason = 'q1' | 'half' | 'q3' | 'teaser_end';
+/** Where the in-sim Premium card shows: the breaks between quarters, the end of the free broadcast teaser, and a
+ *  capped free device that has used this week's 3D games (src/lib/sim3dQuota.ts). */
+type UpsellReason = 'q1' | 'half' | 'q3' | 'teaser_end' | 'cap_out';
 /** One benefit per break, so a free player watching a whole game in 3D sees the case for Premium once, in three parts. */
 const UPSELL_COPY: Record<UpsellReason, { title: string; body: string }> = {
   q1: {
@@ -102,6 +104,10 @@ const UPSELL_COPY: Record<UpsellReason, { title: string; body: string }> = {
   teaser_end: {
     title: 'That was Marcus & Tony on the call.',
     body: 'Premium puts the live broadcast on every play of every game, plus the spoken halftime breakdown, AI commentary and no ads.',
+  },
+  cap_out: {
+    title: `You've watched your ${SIM3D_WEEKLY_FREE_GAMES} free 3D games this week.`,
+    body: 'Premium is unlimited 3D for every game, with Marcus & Tony on the call. Your free 3D games reset Monday, and the game keeps playing in 2D.',
   },
 };
 
@@ -1265,7 +1271,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const isPremium = subTier === 'premium' || subIsAdmin || isFoundingMember;
   // 3D live sim access: free for everyone (see SIM3D_FREE_FOR_ALL). /admin/analytics keeps comparing 3D-on vs
   // 3D-off devices (admin_sim3d_cohorts) and the default-on test arms (admin_sim3d_default_test).
-  const sim3dAllowed = SIM3D_FREE_FOR_ALL || isPremium;
+  // Weekly free-3D cap test (src/lib/sim3dQuota.ts). Read once per game, after the subscription has loaded, so a
+  // Premium player is never locked while it loads and a game that opens with allowance left plays out in 3D.
+  const [quota, setQuota] = useState<Sim3DQuotaState | null>(null);
+  const quotaGameRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (subLoading || !id || quotaGameRef.current === id) return;
+    quotaGameRef.current = id;
+    const q = readSim3DQuota({ gameId: id, isPremium, isExhibition, arm: isPremium ? null : sim3dCapArm() });
+    setQuota(q);
+    if (q.blocked) trackEvent('sim3d_quota_blocked', { game_id: id, used: q.used, limit: SIM3D_WEEKLY_FREE_GAMES, cap_arm: 'cap' });
+  }, [subLoading, id, isPremium, isExhibition]);
+  const quotaBlocked = !!quota?.blocked;
+  const sim3dAllowed = (SIM3D_FREE_FOR_ALL || isPremium) && !quotaBlocked;
   // An exhibition starts in 3D whatever this browser's saved choice; the toggle
   // still works for the game and leaves the saved choice alone.
   const [exhibition3d, setExhibition3d] = useState(true);
@@ -1432,7 +1450,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // read the saved choice directly: the hook's own read lands a render later than this first effect
     // readSim3DPref() first: it assigns the default-on test arm for a qualifying new device, which sim3dTestArm() then reports
     const on = sim3dAllowed && readSim3DPref();
-    trackEvent('sim3d_game_view', { game_id: id, on, allowed: sim3dAllowed, premium: isPremium, arm: sim3dTestArm(), exhibition: isExhibition });
+    trackEvent('sim3d_game_view', { game_id: id, on, allowed: sim3dAllowed, premium: isPremium, arm: sim3dTestArm(), cap_arm: isPremium ? null : sim3dCapArm(), exhibition: isExhibition });
     if (on) {
       try {
         const n = (parseInt(window.localStorage.getItem(SIM3D_GAMES_KEY) || '0', 10) || 0) + 1;
@@ -1453,7 +1471,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (upsellShownRef.current.has(reason)) return;
     upsellShownRef.current.add(reason);
     setUpsell(reason);
-    trackEvent('sim3d_upsell_shown', { game_id: id, reason, sim3d: sim3dOn, arm: sim3dTestArm() });
+    trackEvent('sim3d_upsell_shown', { game_id: id, reason, sim3d: sim3dOn, arm: sim3dTestArm(), cap_arm: sim3dCapArm() });
   }, [id, sim3dOn]);
   useEffect(() => {
     if (!upsell) return;
@@ -1476,8 +1494,31 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     if (!quarterBreak || subLoading || isPremium || !sim3dOn) return;
     if (sim3dGamesRef.current < 2) return;
+    if (quota?.capped) return; // the weekly meter is the pitch for capped devices, not a card every quarter
     showUpsell(quarterBreak);
-  }, [quarterBreak, subLoading, isPremium, sim3dOn, showUpsell]);
+  }, [quarterBreak, subLoading, isPremium, sim3dOn, showUpsell, quota?.capped]);
+
+  // Weekly 3D allowance: a game counts once a full quarter has been watched in 3D (any break: a game joined late
+  // still counts). Recorded for both test arms so their usage compares; only the 'cap' arm is ever locked. Never
+  // counts Premium, exhibitions, or the device's first-ever 3D game.
+  const quotaCountedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!quarterBreak || !quota || subLoading || isPremium || isExhibition || !sim3dOn) return;
+    if (sim3dGamesRef.current < 2 || quotaCountedRef.current === id) return;
+    quotaCountedRef.current = id;
+    if (quota.thisGameCounted) return;
+    const used = countGame(id);
+    trackEvent('sim3d_quota_used', { game_id: id, used, limit: SIM3D_WEEKLY_FREE_GAMES, cap_arm: sim3dCapArm(), capped: quota.capped });
+    if (quota.capped) setQuota(q => (q ? { ...q, used, left: Math.max(0, SIM3D_WEEKLY_FREE_GAMES - used), thisGameCounted: true } : q));
+  }, [quarterBreak, quota, subLoading, isPremium, isExhibition, sim3dOn, id]);
+
+  // Out of free 3D games and this browser wants 3D: say why it's in 2D, once, when the game opens.
+  const capOutShownRef = useRef(false);
+  useEffect(() => {
+    if (!quotaBlocked || capOutShownRef.current) return;
+    capOutShownRef.current = true;
+    if (readSim3DPref()) showUpsell('cap_out');
+  }, [quotaBlocked, showUpsell]);
   const [tabHidden, setTabHidden] = useState(false);
   useEffect(() => {
     const on = () => setTabHidden(document.visibilityState === 'hidden');
@@ -2795,7 +2836,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               width on desktop. Hidden when empty. */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border)] empty:hidden">
           {/* 3D live sim toggle — plays every snap in the three.js chase-cam sim */}
-          {!isFinished && !sim3dAllowed && (
+          {!isFinished && quotaBlocked && (
+            <button
+              onClick={() => { trackEvent('sim3d_quota_locked_click', { game_id: id, cap_arm: 'cap' }); setUpsell('cap_out'); }}
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]"
+              title={`You've used this week's ${SIM3D_WEEKLY_FREE_GAMES} free 3D games. They reset Monday; Premium is unlimited.`}
+            >
+              🎥 3D Sim <span className="ml-1 rounded bg-amber-400 px-1 text-[10px] font-bold text-black">0 left · ✨ Premium</span>
+            </button>
+          )}
+          {!isFinished && !sim3dAllowed && !quotaBlocked && (
             <Link
               href="/pricing"
               className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]"
@@ -2812,9 +2862,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
-              title="Watch every play in the 3D sim (loads a 10 MB player model once)"
+              title={quota?.capped
+                ? `Free players get ${SIM3D_WEEKLY_FREE_GAMES} live 3D games a week (a game counts once you've watched a quarter in 3D). Premium is unlimited.`
+                : 'Watch every play in the 3D sim (loads a 10 MB player model once)'}
             >
               🎥 3D Sim {sim3dOn ? 'ON' : 'OFF'}
+              {quota?.capped && (
+                <span className={`ml-1.5 rounded px-1 text-[10px] font-bold ${sim3dOn ? 'bg-white/20 text-white' : 'bg-[var(--surface-3,var(--border))] text-[var(--text-sec)]'}`}>
+                  {quota.thisGameCounted ? `${quota.left} left` : `${quota.left} of ${SIM3D_WEEKLY_FREE_GAMES} left`}
+                </span>
+              )}
             </button>
           )}
           {/* Game Plan — only when user is in this game and game isn't done */}
@@ -2957,7 +3014,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </div>
             <Link
               href="/pricing"
-              onClick={() => trackEvent('sim3d_upsell_clicked', { game_id: id, reason: upsell, arm: sim3dTestArm() })}
+              onClick={() => trackEvent('sim3d_upsell_clicked', { game_id: id, reason: upsell, arm: sim3dTestArm(), cap_arm: isPremium ? null : sim3dCapArm() })}
               className="shrink-0 inline-flex items-center h-8 px-3 rounded-md text-xs font-bold bg-amber-400 text-black hover:bg-amber-300"
             >
               ✨ Go Premium
