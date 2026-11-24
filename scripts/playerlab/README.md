@@ -14,3 +14,7 @@ What goes in:
 Run: `python3 player.py` (numpy needed), then package the GLB + `player-mh2.json` into `player-mh2.js` (base64 GLB + the dark skin texture in
 `PLAYER_TEX`; see the header of the current file). Body types are morph targets [0] line, [1] power; [2] is the face morph for deeper skin tones.
 Remember to bump `SIM_BUILD` in `LiveSim3D.tsx` and `public/chase-cam/index.html` after replacing the file.
+
+After packaging, run `python3 add_clips.py`: it adds the extra captured throws (`football_throw_b`..`e`) to `player-mh2.js`, which `player.py` does not carry.
+It reads the retargeted captures from `$PLAYERLAB_DIR/mocaplab/raw/` (licensed, not committed) and can be run again safely. The sim picks a throw per
+quarterback in `throwClip()` and falls back to `football_throw` on a player file without them.

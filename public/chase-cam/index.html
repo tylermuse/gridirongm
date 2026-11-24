@@ -169,6 +169,7 @@ const modelSelect = document.getElementById('modelSelect');
 { const mc=document.getElementById('modelCredit'); if(mc) mc.hidden = modelChoice!=='fp27' && !MH; }
 if(modelSelect){ modelSelect.value = modelChoice; modelSelect.addEventListener('change',()=>{ try{ localStorage.setItem('chaseModel', modelSelect.value); }catch(e){} const url=new URL(location.href); if(url.searchParams.get('model')){ url.searchParams.set('model',modelSelect.value); location.href=url.href; } else location.reload(); }); }
 // ---------- Teams (fictional palettes; production would read team colors) ----------
+const REF_X = 3.08, REF_Z = 61.4;   /* where the two officials stand on a kick: directly under each upright (the posts are at x = ±3.08, z = 60.5), a step behind the end line. They were at ±3.9 and 62.4 — outside the posts with their backs against the ad boards */
 const REF = {id:'REF', name:'Officials', jersey:'#f4f4f4', num:'#222222', pants:'#1a1a1a', helmet:'#f4f4f4', stripe:'#d9d9d9'};   // officials: white top, black pants, white cap
 const TEAMS = [
   {id:'HAR', name:'Harbor',   jersey:'#1f3a68', num:'#ffffff', pants:'#c9ced6', helmet:'#1f3a68', stripe:'#e8b33a'},
@@ -192,7 +193,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b21d'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22a'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -685,10 +686,11 @@ function makePlayer(t, number, big, opts={}){
   // Width/depth differences are baked morphs, never non-uniform bone scaling.
   const profile = opts.profile || (big?'line':'skill');
   const BUILD = {line:{height:2.04,morph:[1,0]},power:{height:1.98,morph:[0,1]},qb:{height:2.03,morph:[0,0]},skill:{height:1.99,morph:[0,0]}};
-  const build=BUILD[profile]; const sc=build.height/(.9144*(BOT.userData.height||1.874));
-  model.scale.setScalar(sc*(kit.size||1)); body.add(model);
+  const build = opts.ref? {height:BUILD.skill.height, morph:[.4,.1]} : BUILD[profile];   /* an official is an ordinary man in slacks, not a 190 lb receiver in tights: a little of the heavier builds fills out his waist and legs */
+  const sc=build.height/(.9144*(BOT.userData.height||1.874));
+  /* officials stand at 95% of a player. (This was a flat .95, not 95% OF the player's scale: they came out 18% short, about 5'5" next to 6'4" players.) */
+  model.scale.setScalar(sc*(opts.ref? .95 : (kit.size||1))); body.add(model);
   model.traverse(o=>{ if(o.isSkinnedMesh && o.morphTargetInfluences){o.morphTargetInfluences[0]=build.morph[0];o.morphTargetInfluences[1]=build.morph[1];} });
-  if(opts.ref) model.scale.setScalar(.95);
   const bones = {};
   model.traverse(o=>{
     if(o.isBone) bones[o.name.replace('mixamorig','')] = o;
@@ -704,16 +706,27 @@ function makePlayer(t, number, big, opts={}){
       o.material = teamMaterial(o.material, part, t, part==='hand' && kit.gloves ? kit.gloveCol : skin, kit);
       if(MH2 && o.morphTargetInfluences && o.morphTargetInfluences.length>2){ const L=skinLum(skin); o.morphTargetInfluences[2] = clamp((.16 - L)/.1, 0, 1)*(window.__faceK ?? .85); } }   /* deeper tones: African-ancestry facial structure (MakeHuman target), scaled with the tone */
   });
-  if(opts.ref){ // official's cap: crown + band + brim on the Head bone, seated from the measured top of the head (bind space)
-    let top=-1e9, headY=0; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; const hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)); if(hi<0) return; headY=new THREE.Vector3().setFromMatrixPosition(o.skeleton.boneInverses[hi].clone().invert()).y; const pos=o.geometry.attributes.position, si=o.geometry.attributes.skinIndex.array;
-      for(let i=0;i<pos.count;i++){ if(si[i*4]===hi) top=Math.max(top, pos.getY(i)); } });
-    const capY = top>-1e8? (top-headY)*100-(MH? 9.5 : 8.7) : 13.5;
-    const capMat=new THREE.MeshLambertMaterial({color:opts.cap||'#f4f4f4'}); const cap=new THREE.Group();
-    const crown=new THREE.Mesh(new THREE.SphereGeometry(.124,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.85,1.04); cap.add(crown); cap.scale.setScalar(window.__capS ?? (MH? .98 : 1.15));   /* mh2's head is a real skull: the fp27-sized cap came down over the eyes (Tyler 11/15) */
-    const band=new THREE.Mesh(new THREE.CylinderGeometry(.124,.12,.04,20,1,true), capMat); band.position.y=-.018; cap.add(band);
-    const brim=new THREE.Mesh(new THREE.SphereGeometry(.13,20,6,Math.PI/2-1.15,2.3,Math.PI*.44,Math.PI*.12), capMat); brim.scale.set(1.0,.35,1.05); brim.position.set(0,-.03,.03);   /* front arc only: a full ring reads as a bowler's rim */ cap.add(brim);
-    cap.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.material.side=THREE.DoubleSide; } });
-    attach(bones.Head, cap, new THREE.Vector3(0,capY-(window.__capDown??-.2),(window.__capFwd ?? (MH? 1.2 : 2.0))), sc); cap.rotation.x=(window.__capTilt??0); }   /* seated forward and down on the brow (it sat on the back of the head and read as a backwards cap) */
+  if(opts.ref){ /* official's cap, built to the measured skull in the Head bone's own space (cm) so it fits whatever the model's scale. The old one was a
+       world-sized cap divided by the player's scale on a body drawn 18% smaller: too small for the head it sat on, so the bare scalp came up through the
+       crown and the brim lay across the eyes like a blindfold (Tyler 11/24: "refs still look super weird under the uprights") */
+    let top=-1e9; const hv=[], v3=new THREE.Vector3();
+    model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; const hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)); if(hi<0) return;
+      const inv=o.skeleton.boneInverses[hi], pos=o.geometry.attributes.position, si=o.geometry.attributes.skinIndex.array, used=o.geometry.index? new Set(o.geometry.index.array) : null;   /* indexed triangles only: fp27's helmet verts stay in the buffer after its shell is cut away */
+      for(let i=0;i<pos.count;i++){ if(si[i*4]!==hi || (used && !used.has(i))) continue; v3.fromBufferAttribute(pos,i).applyMatrix4(inv); hv.push(v3.x,v3.y,v3.z); top=Math.max(top,v3.y); } });
+    if(hv.length){ const yb=top-(window.__capDrop ?? 8.6); let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;   // the cap's lower edge: a finger above the brow
+      for(let i=0;i<hv.length;i+=3){ if(hv[i+1]<yb) continue; x0=Math.min(x0,hv[i]); x1=Math.max(x1,hv[i]); z0=Math.min(z0,hv[i+2]); z1=Math.max(z1,hv[i+2]); }
+      const cx=(x0+x1)/2, cz=(z0+z1)/2, rx=(x1-x0)/2+.7, rz=(z1-z0)/2+.7, ye=yb+2.6, ry=top-ye+.8;
+      /* the two men under the posts are the field judge and back judge: black caps (only the referee's is white, and a white dome on a bare head read as a bald man) */
+      const capMat=new THREE.MeshLambertMaterial({color:opts.cap||'#17181c', side:THREE.DoubleSide}), cap=new THREE.Group();
+      const crown=new THREE.Mesh(new THREE.SphereGeometry(1,24,10,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(rx,ry,rz); crown.position.set(cx,ye,cz); cap.add(crown);
+      const band=new THREE.Mesh(new THREE.CylinderGeometry(1,1,2.6,24,1,true), capMat); band.scale.set(rx,1,rz); band.position.set(cx,ye-1.3,cz); cap.add(band);
+      const w=rx*.84, zb=cz+rz*.5, zf=zb+(rz*.5+6.5)/.75, sh=new THREE.Shape(); sh.moveTo(-w,zb); sh.bezierCurveTo(-w,zf, w,zf, w,zb); sh.closePath();   // bill: 6.5 cm out over the brow, drooping a little at the sides and the front
+      const bg=new THREE.ShapeGeometry(sh,14); bg.rotateX(Math.PI/2); { const q=bg.attributes.position; for(let i=0;i<q.count;i++) q.setY(i, -.014*q.getX(i)**2 - .07*Math.max(0,q.getZ(i)-zb)); } bg.computeVertexNormals();
+      const brim=new THREE.Mesh(bg, capMat); brim.position.set(cx, yb+.25, 0); cap.add(brim);
+      if(MH){ /* short hair below the cap, round the back from temple to temple: the helmetless player head is shaved, and a shaved head under a cap is half of what looked off */
+        const hair=new THREE.Mesh(new THREE.SphereGeometry(1,20,6, Math.PI*1.5-1.95, 3.9, Math.PI*.5, .8), new THREE.MeshLambertMaterial({color:opts.hair||'#241c17', side:THREE.DoubleSide})); hair.scale.set(rx-.45, 13, rz-.45); hair.position.set(cx, ye-1.5, cz); cap.add(hair); }
+      cap.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); bones.Head.add(cap); }
+  }
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
   if(!opts.ref){
@@ -782,14 +795,14 @@ const PR = (...k)=>({type:'path', k, acc:ROUTE_ACC});   // a receiver's route: s
 const F = (target, start, speed, off=[0,0], reach=0.9)=>({type:'follow', target, start, speed, off, reach});
 
 let preSnap=false, actors=[], O={}, D={}, T0=0, playT=0, events=[], ballPlan=[], cameraTarget=null, play=null, running=false;
-window.__simDbg = ()=>({actors, O, D, playT, running, setupFormation, play, G});   /* console/QA access */
+window.__simDbg = ()=>({actors, O, D, playT, running, setupFormation, play, G, camera, renderer, scene});   /* console/QA access */
 
 function clearPlayers(){ actors.forEach(a=>scene.remove(a.root)); actors=[]; refObjs.forEach(r=>scene.remove(r.root)); refObjs=[]; }
 let refObjs = [];
 const stripeTex = (()=>{ const c=document.createElement('canvas'); c.width=64; c.height=8; const g=c.getContext('2d'); for(let i=0;i<8;i++){ g.fillStyle = i%2? '#111':'#f6f6f6'; g.fillRect(i*8,0,8,8); } const t=canvasTex(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,1); return t; })();
 function makeRiggedRef(x,z,face,opts){
   // Officials on the gameplay rig: full head under a cap, striped shirt, the idle clip, and the referee arm signals in stepActor (refgood / refno)
-  const a = makePlayer(REF, 0, false, {ref:true, profile:'skill'}); a.isRef=true; a.x=x; a.z=z; a.face=face; a.y=0; a.stance=''; place(a); a.mixer.update(Math.random()*2);
+  const a = makePlayer(REF, x<0? 2 : 5, false, {ref:true, profile:'skill', hair: x<0? '#221a15' : '#8f8c88'}); a.isRef=true;   /* two different men (the number only picks the skin tone), one of them grey */ a.x=x; a.z=z; a.face=face; a.y=0; a.stance=''; place(a); a.mixer.update(Math.random()*2);
   const r={root:a.root, actor:a, x, z, signal:null, t0:0, update(t,dt){
     if(this.signal && (a.celebrate==null || a.celebrate===false)){ a.celebrate=this.t0; a.celebStyle = this.signal==='good'? 'refgood' : 'refno'; }
     stepActor(a, t, dt||1/60); }};
@@ -949,7 +962,7 @@ function setupFormation(kind){
           O.rb.face = Math.atan2(.35-O.rb.x, (z0-6.8)-O.rb.z); } else { O.rb.x=1.8; O.rb.z=z0-8.6; O.rb.face=f; } O.rb.stance=''; }
       D.cbL.x=-9.6; D.cbL.z=z0+1.2; D.cbR.x=9.6; D.cbR.z=z0+1.2; D.sL.x=-2.6; D.sL.z=z0+5.5; D.sR.x=2.6; D.sR.z=z0+5.5;
       [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>{ a.face=Math.PI; a.stance='two'; });
-      O.refs = [makeRef(-3.9, 62.4, Math.PI), makeRef(3.9, 62.4, Math.PI)];   // officials under each upright, facing the kick
+      O.refs = [makeRef(-REF_X, REF_Z, Math.PI), makeRef(REF_X, REF_Z, Math.PI)];   // officials under each upright, facing the kick
     } else {
       O.slot.x=-6.15; O.slot.z=z0-.75; O.slot.face=0; O.slot.stance='three'; O.wrL.x=-21; O.wrL.z=z0-.9; O.wrL.face=0; O.wrL.stance='two';   // slot joins the line, wrL is the left gunner
       O.wrR.x=21; O.wrR.z=z0-.9; O.wrR.face=0; O.wrR.stance='two';
@@ -1133,6 +1146,48 @@ function choreograph(res){
   D.lb.forEach((a,i)=>{ a.behav = runBlock
     ? P([snap,a.x,a.z],[snap+.45+dRun*.6,a.x+Math.sign(res.gap ?? 1)*1.6,a.z-.4],[snap+.95+dRun,a.x+Math.sign(res.gap ?? 1)*3.2+(i-1)*.8,a.z-1.6])   // read, scrape to the play-side gap, fill
     : PR([snap,a.x,a.z],[snap+2.0,a.x*1.3,a.z+4.5,1],[snap+3.0,a.x*1.3+(i-1)*2.2,a.z+5.5,1],[snap+4.4,a.x*1.1,a.z+6.5]); });   /* real backers drop at 2 to 3 yd/s */
+
+  /* Blitz (the Live Coach look; Tyler 11/24: "when I call blitz they don't actually blitz, they seem to back off"): the look walked the
+     backers up to the line, then at the snap all three ran the base coverage drop above. On a dropback the two outside backers now come.
+     A back who stays in to protect steps up and takes one on in the B gap; the other is the free man and gets to the QB as the ball
+     leaves (or as he goes down): the engine already decided whose play this is, so he is never early. He shoots the B gap when the ball
+     comes out fast, loops outside the end when it is held, and shows it for a beat first when it is held longer still. The middle backer
+     keeps his drop: the catch, tip and pick choreography all use him.
+     sendBlitz(tArr, at, o): tArr / at = when and where the QB lets it go or goes down. o.skip: a backer with another job (the screen's
+     cover man). o.pickSide: the side the back takes. o.rbBusy / o.fbBusy: that back has somewhere else to be. o.tRel: when the blocks
+     let go. o.off: where the free man ends up relative to the QB (sd: his side). */
+  const sendBlitz = (tArr, at, o={}) => { if(G.look!=='blitz' || runBlock) return;
+    const pickSide = o.pickSide ?? 1, rbIn = !o.rbBusy, fbIn = !!FM.fb && !o.fbBusy, tRel = o.tRel ?? tArr+.4;
+    const len = p => { let L=0; for(let i=1;i<p.length;i++) L += Math.hypot(p[i][0]-p[i-1][0], p[i][1]-p[i-1][1]); return L; };
+    [D.lb[0], D.lb[2]].forEach(lb=>{ if(lb===o.skip) return;
+      const sd = Math.sign(lb.x)||1, gx = sd*3.9;   /* the B gap: between the guard's man and the tackle's, where the look lines him up */
+      const blk = sd===pickSide? (rbIn? O.rb : fbIn? O.slot : null) : (rbIn && fbIn? O.slot : null);
+      lb.blitzing = true; lb.faceLock = null; lb.engage = null;
+      if(blk){ /* picked up: the back meets him in the hole and they lock up until the ball is gone */
+        const mx = sd*2.7, mz = z0-3.3, tMeet = snap+1.15;
+        lb.behav = P([snap,lb.x,lb.z],[snap+.6,gx,z0+.1],[tMeet,mx,mz+.5]);
+        blk.behav = P([snap,blk.x,blk.z],[snap+.3,blk.x,blk.z],[tMeet,mx,mz-.45]); blk.faceLock = {angle:0, until:99};
+        ev(tMeet, ()=>{ const pr={bx:mx, bz:mz, dv:-.9, dur:1.5, seed:R(0,3), start:playT};
+          blk.behav={type:'line', pr, side:-1, x0:blk.x, z0:blk.z, dx:0}; lb.behav={type:'line', pr, side:1, x0:lb.x, z0:lb.z, dx:0};
+          blk.engage=lb; lb.engage=blk; lb.faceLock={angle:Math.PI, until:tRel}; sndThump(.3,.25); });
+        ev(tRel, ()=>{ if(lb.engage!==blk) return; lb.engage=null; blk.engage=null; lb.faceLock=null; blk.faceLock=null;
+          [lb, blk].forEach(a=>{ if(a.behav?.type==='line') a.behav = {type:'coast', vx:0, vz:0, t0:playT}; }); });
+        return; }
+      /* the free man: the route and the head start whose running speed is closest to a real rush (about 6.4 yd/s) for the time there is */
+      const off = o.off? o.off(sd) : [sd*1.15, .75], E = [at[0]+off[0], at[1]+off[1]], T = tArr-snap; let best = null;
+      for(const w of [0, 7.6, 8.4, 9.2]) for(const d of [0, .25, .5, .75, 1.0]){   /* no wider than 9.2: the slot (or a split tight end) releases at 10 to 11 */
+        const pts = w? [[lb.x,lb.z],[sd*w,z0+.4],[sd*(w+.3),z0-1.7],E] : [[lb.x,lb.z],[gx,z0+.1],E];
+        const v = len(pts)/Math.max(.4, T-d-.3), cost = Math.abs(v-6.4)*(v>6.4? 2 : 1) + d*.9 + (w? .1 : 0);
+        if(!best || cost<best.cost) best = {cost, pts, d}; }
+      const pts = best.pts, tGo = snap+best.d, k = [[snap,lb.x,lb.z]];
+      if(best.d){ const w1 = pts[1], d1 = Math.hypot(w1[0]-lb.x, w1[1]-lb.z)||1, c = Math.min(.9*best.d, d1*.4);   /* the beat he shows it: creeping at the gap, not standing */
+        pts[0] = [lb.x+(w1[0]-lb.x)/d1*c, lb.z+(w1[1]-lb.z)/d1*c]; k.push([tGo, ...pts[0]]); }
+      const L = len(pts);
+      let s = 0; for(let i=1;i<pts.length;i++){ s += Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+        k.push([tGo + .3*Math.min(1, s/2) + (tArr-tGo-.3)*s/L, pts[i][0], pts[i][1]]); }
+      const a0 = pts[pts.length-2], dl = Math.hypot(E[0]-a0[0], E[1]-a0[1])||1;   /* then he runs on a couple of strides past the QB's shoulder and pulls up */
+      k.push([tArr+.55, E[0]+(E[0]-a0[0])/dl*1.2+Math.sign(off[0]||sd)*.4, E[1]+(E[1]-a0[1])/dl*1.2]);
+      lb.behav = P(...k); }); };
 
   /* Play action (Tyler 11/20: "supposed to take the handoff to the RB and then throw — right now it's just a throw"): the QB opens to
      the back and puts the ball in his belly at the mesh (the spot and timing of a real handoff), rides him a beat, pulls it and drops
@@ -1421,6 +1476,7 @@ function choreograph(res){
     O.ol[0].behav = P([snap,-4.1,z0-.75],[snap+1.0,-5.2,z0-2],[snap+2.3,-4,z0-3]); O.ol[0].engage = null;
     carrier = O.qb; tackler = sacker; tackleT = tEnd = tSack; endPos=[.6,z0+Y];
     }
+    sendBlitz(tSack+.25, endPos, {rbBusy:true, fbBusy: pa || !!res.blitz, tRel: tSack+.6, off: sd=>[sd*1.6, 1.9]});   /* a blitz was called: the outside backers come too and get there as he goes down */
   } else { // passes: complete / incomplete / int
     const deep = res.depth==='deep';
     /* batted at the line (reference: DAL @ IND on FOX, Tyler 11/8): the play-by-play said it was batted down / tipped at the line */
@@ -1523,6 +1579,9 @@ function choreograph(res){
       ev(tThrow+.08, qbHit); }
     ev(tThrow,()=>{flightSeg.captureHand=O.qb;});
     const cover = rec===O.rb? D.lb[res.screenSide<0? 0 : 2] : rec===O.wrL? D.cbL : rec===O.wrR? D.cbR : rec===O.te? D.lb[1] : D.sL;
+    /* a blitz was called: the outside backers rush (see sendBlitz). A screen keeps its cover man and the back is the receiver; a play-action
+       fake takes both backs out of the protection; on a roll-out the back takes the back-side man and the roll-side one comes off the edge at him */
+    sendBlitz(tThrow+.12, [hx,hz], {skip: scn? cover : null, pickSide: roll? -rSide : 1, rbBusy: scn || pa, fbBusy: pa, tRel: tThrow+.5, off: roll? sd=>[-sd*.5, 1.5] : null});
     rec.catchT = tCatch;
     // contested ball: deep shots, picks, breakups and tight coverage -> both players elevate for it
     let contested = res.kind!=='complete' || (deep && !res.fumble && Math.random() < .4); if(window.__contest!=null && res.kind==='complete') contested = window.__contest;   /* QA override */   /* short completions are a man who won separation (the DB plays off); only deep balls are contested */   /* a completion is usually a receiver who won separation; sometimes a contested catch */
@@ -1558,7 +1617,7 @@ function choreograph(res){
         ev(tBat, ()=>{ batter.swat = playT; sndThump(.3,.25); sndRoar(.3,.2,.6,1.8,'cheer'); });
         /* the backer who goes for it: the pick is the middle backer (the page puts the named defender on him); otherwise whoever is nearest */
         const isInt = res.kind==='int', lbAt = a => a.behav?.type==='path'? pathAt(a.behav.k, tBat) : [a.x, a.z];
-        const g = isInt? D.lb[1] : D.lb.map(a=>({a, p:lbAt(a)})).sort((u,v)=>Math.hypot(u.p[0]-bx,u.p[1]-bz-3.5)-Math.hypot(v.p[0]-bx,v.p[1]-bz-3.5))[0].a;
+        const g = isInt? D.lb[1] : D.lb.filter(a=>!a.blitzing).map(a=>({a, p:lbAt(a)})).sort((u,v)=>Math.hypot(u.p[0]-bx,u.p[1]-bz-3.5)-Math.hypot(v.p[0]-bx,v.p[1]-bz-3.5))[0].a;
         const gp = lbAt(g), T = R(1.15, 1.4), h = 1.225*T*T;   /* a real pop-up: apex height and hang time agree (g/8·T²) */
         const uK = isInt? 1 : .77;   /* when the ball comes down through his reach: at his hands for the pick, on the way down past his fingertips for the miss */
         const gx = gp[0]-bx, gz = gp[1]-bz, gd = Math.hypot(gx,gz)||1, dir = [gx/gd, Math.max(.35, gz/gd)], dl = Math.hypot(dir[0],dir[1]);
@@ -2060,6 +2119,36 @@ function poseArm(a, side, pose, fr, w=1){
   const df = pose.df || dirIn(fr, pose[1][0], pose[1][1]*m, pose[1][2]);
   aimBone(up[0], up[1], du, w); aimBone(up[1], up[2], df, w);
 }
+/* Officials under the uprights (Tyler 11/24: "refs still look super weird"). They stand on the gameplay rig, whose idle is a player's: feet a yard
+   apart, elbows cocked, fingers curled — in a striped shirt that read as a wrestler waiting for the bell. This layer stands the man up like an
+   official (feet under his hips, arms at his sides, open hands) and owns both signals: good (arms straight up, hands flat) and no good (arms
+   swept out from crossed in front, over and over). */
+const REF_POSE = { hang:[[.04,.2,-1],[.12,.1,-1]], fwd:[[.85,.16,.05],[.75,.06,.5]], up:[[.03,.07,1],[.02,.02,1]], out:[[.3,.9,-.35],[.3,.9,-.25]], in:[[.55,-.25,-.75],[.75,-.5,-.45]] };
+const _ra=new THREE.Vector3(), _rb=new THREE.Vector3(), _rd=new THREE.Vector3(), _rh=new THREE.Vector3(), _rq=new THREE.Quaternion(), _rp=new THREE.Quaternion();
+function refPose(a, t){
+  const B=a.bones, sig = (a.celebrate!=null && a.celebrate!==false)? a.celebStyle : null, k = sig? Math.max(0, t-a.celebrate) : 0, T=window.__refPose||REF_POSE;
+  a.model.updateMatrixWorld(true); let fr=frameOf(a), lift=0;
+  for(const [up,foot,m] of [[B.RightUpLeg,B.RightFoot,1],[B.LeftUpLeg,B.LeftFoot,-1]]){   // feet under the hips, soles still flat on the turf
+    up.getWorldPosition(_ra); foot.getWorldPosition(_rb); foot.getWorldQuaternion(_rq); const y0=_rb.y;
+    _rd.subVectors(_rb,_ra); _rd.addScaledVector(fr.R, m*(window.__refFeet ?? .05) - _rd.dot(fr.R)).normalize();
+    aimBone(up, foot, _rd); foot.parent.getWorldQuaternion(_rp); foot.quaternion.copy(_rp.invert().multiply(_rq)); foot.updateMatrixWorld(true);
+    foot.getWorldPosition(_rb); lift=Math.max(lift, y0-_rb.y); }
+  a.body.position.y = lift;   // a straighter leg reaches lower: keep him on the turf, not in it
+  let pose=T.hang, raise=0;
+  if(sig==='refgood'){ raise=smooth01(k/.5); pose = raise<.5? blendPose(fr, T.hang, T.fwd, raise*2) : blendPose(fr, T.fwd, T.up, raise*2-1); }   /* up through the front, the way a man raises his arms: straight from his sides to overhead swung them out through a T-pose */
+  else if(sig==='refno'){ const u = k<.25? 0 : .5-.5*Math.cos((k-.25)*Math.PI*2/.7); pose=blendPose(fr, T.hang, blendPose(fr, T.in, T.out, u), smooth01(k/.25)); }
+  if(raise>0){ for(const [sh,arm] of [[B.RightShoulder,B.RightArm],[B.LeftShoulder,B.LeftArm]]){ if(!sh) continue;   // arms overhead: the shoulders come up with them
+      sh.getWorldPosition(_ra); arm.getWorldPosition(_rb); _rd.subVectors(_rb,_ra).normalize(); _rd.y += (window.__refShrug ?? .4)*raise; aimBone(sh, arm, _rd.normalize()); }
+    fr=frameOf(a); }
+  poseArm(a,'R',pose,fr); poseArm(a,'L',pose,fr);
+  /* open hands. The mesh is modelled with the fingers curled (its bind pose is a claw, the clips curl them further), so each finger is laid out
+     straight along the forearm joint by joint: loosely at his sides, flat with the fingers together in a signal */
+  const flat=(window.__refFlat ?? .5) + (1-(window.__refFlat ?? .5))*(sig? smooth01(k/.3) : 0);
+  for(const side of ['Right','Left']){ const mid=B[side+'HandMiddle1']; if(!mid) continue;
+    B[side+'ForeArm'].getWorldPosition(_ra); B[side+'Hand'].getWorldPosition(_rb); _rh.subVectors(_rb,_ra).normalize();
+    aimBone(B[side+'Hand'], mid, _rh, .9);
+    for(const f of ['Index','Middle','Ring','Pinky']) for(let i=1;i<4;i++){ const b0=B[side+'Hand'+f+i], b1=B[side+'Hand'+f+(i+1)]; if(b0 && b1) aimBone(b0, b1, _rh, flat); } }
+}
 function blendPose(fr, A, B, u){ // interpolate in body coordinates; poseArm mirrors the left side exactly once
   return A.map((v,i)=>v.map((x,j)=>x+(B[i][j]-x)*u));
 }
@@ -2157,11 +2246,21 @@ function mocapFall(a,t){
 // Arm frame from the torso itself (forward/right/up of the spine), for posing arms on a body that is pitched over by a clip
 function torsoFrame(a){ const q=a.bones.Spine1.getWorldQuaternion(new THREE.Quaternion()); const F=new THREE.Vector3(0,0,1).applyQuaternion(q), R=new THREE.Vector3(-1,0,0).applyQuaternion(q), U=new THREE.Vector3().crossVectors(R,F); return {F,R,U}; }
 function torsoPose(fr,p,m){ const v=x=>new THREE.Vector3().addScaledVector(fr.F,x[0]).addScaledVector(fr.R,x[1]*m).addScaledVector(fr.U,x[2]).normalize(); return {du:v(p[0]),df:v(p[1]),0:p[0],1:p[1]}; }
+const THROWS=['football_throw','football_throw_b','football_throw_c','football_throw_d','football_throw_e'];   /* five captured throws, all cut to the same length, release time and aim (scripts/playerlab/add_clips.py) */
+const hasClip=n=>!!(BOT && BOT.animations.some(c=>c.name===n));
+// Which throw this is: each quarterback has his own motion and uses it on most throws, so the two QBs in a game do not throw alike and neither repeats one clip all day.
+function throwClip(a){
+  if(window.__throwClip) return window.__throwClip;
+  if(a._throwFor!==a.throwT0){ a._throwFor=a.throwT0; const have=THROWS.filter(hasClip); if(!have.length) return 'football_throw';
+    const own=have[((a.num||0)*7+String(a.teamId||'').length*3)%have.length], r=x=>{ const v=Math.sin(a.throwT0*x+(a.num||0))*43758.5453; return v-Math.floor(v); };   /* picked from the throw's own start time, not Math.random: the seeded realism harness replays the same plays */
+    a._throwClip = r(91.7)<.6? own : have[Math.floor(r(37.3)*have.length)]; }
+  return a._throwClip||'football_throw';
+}
 function throwBody(a,p){
   const blend=smooth01((p+.08)/.18)*(1-smooth01((p-.92)/.23));
   const sourceTime=p<=.5?Math.max(0,p)*(.666666667/.5):.666666667+(p-.5)*(.933333333/.65);
   const heading=a.aimAt?Math.atan2(a.aimAt[0]-a.x,a.aimAt[1]-a.z)-a.face:0;
-  if(footballMotion(a,'football_throw',sourceTime,blend,heading)){a.mocapThrow=true;return;}
+  if(footballMotion(a,throwClip(a),sourceTime,blend,heading)){a.mocapThrow=true;return;}
   const B=a.bones,set=smooth01((p+.08)/.18),fade=1-smooth01((p-.82)/.33),w=set*fade;
   const load=smooth01(p/.28)*(1-smooth01((p-.30)/.23)),drive=smooth01((p-.25)/.30);
   const cm=100, shift=(-.13*load+.17*drive)*w;
@@ -2254,7 +2353,7 @@ function motionLook(a, t, dt, sp){
     else { const dx=ball.position.x-_mv.x, dz=ball.position.z-_mv.z, dy=ball.position.y-_mv.y, d=Math.hypot(dx,dz);
       yaw = Math.atan2(Math.sin(Math.atan2(dx,dz)-a.face), Math.cos(Math.atan2(dx,dz)-a.face)); pitch = Math.atan2(dy, Math.max(d,.3));
       const lim=1.25; if(Math.abs(yaw)>1.9) yaw=0;                                            // ball behind him: no owl turns, he keeps his eyes front
-      yaw=clamp(yaw,-lim,lim); pitch=clamp(pitch,-.55,.45); } }
+      yaw=clamp(yaw,-lim,lim); pitch=clamp(pitch,-.55, a.isRef? .9 : .45); } }   /* an official under the upright cranes his neck at the ball coming over the bar */
   const g=a.gait, k=Math.min(1, dt/(g.react||.2));
   a._ly = (a._ly||0) + (yaw*g.look - (a._ly||0))*k; a._lp = (a._lp||0) + (pitch*g.look - (a._lp||0))*k;
   if(Math.abs(a._ly)<1e-3 && Math.abs(a._lp)<1e-3) return;
@@ -2420,8 +2519,7 @@ function stepActor(a, t, dt){
         else { poseArm(a,'R', blendPose(fr, POSE.golfThru, POSE.shade, clamp((k-1.35)/.4,0,1)), fr); poseArm(a,'L', blendPose(fr, POSE.golfThruL, POSE.hang, clamp((k-1.35)/.4,0,1)), fr); } }
       else if(st==='heisman'){ poseArm(a,'R',POSE.tuck,fr); poseArm(a,'L',POSE.stiff,fr, clamp(k/.4,0,1)); }
       else if(st==='flexes'){ const w=clamp(k/.35,0,1); poseArm(a,'R',POSE.flex,fr,w); poseArm(a,'L',POSE.flex,fr,w); }
-      else if(st==='refgood'){ const w=clamp(k/.4,0,1); poseArm(a,'R',POSE.up,fr,w); poseArm(a,'L',POSE.up,fr,w); }   // official: both arms straight up, held
-      else if(st==='refno'){ const w=clamp(k/.3,0,1), u=.5+.5*Math.sin(k*7.5); poseArm(a,'R', blendPose(fr, POSE.waveOut, POSE.waveIn, u), fr, w); poseArm(a,'L', blendPose(fr, POSE.waveOut, POSE.waveIn, u), fr, w); }   // official: arms waved across at the waist, no good
+      else if(st==='refgood' || st==='refno'){ /* refPose owns the official, head to toe */ }
       else { // 'hop': arms come up, then pump — each arm on its own beat — and open wide to the crowd
         const rise = clamp(k/.35, 0, 1); const uR = .5+.5*Math.sin(k*6.5), uL = .5+.5*Math.sin(k*6.5+2.4), wide = k>1.6 ? clamp((k-1.6)/.5,0,1) : 0;
         poseArm(a,'R', blendPose(fr, POSE.half, wide? POSE.wide : POSE.up, wide? wide : uR), fr, rise);
@@ -2460,6 +2558,7 @@ function stepActor(a, t, dt){
   if(a.hold && a.down==null && !(a.mocapActive && a.mocapAct)){ const B2=a.bones; const T=window.__holdTune||[44,.1,1.6,1.5,1.5]; B2.Hips.position.y -= T[0]; B2.RightUpLeg.rotation.x += T[1]; B2.RightLeg.rotation.x += T[2]; B2.LeftUpLeg.rotation.x -= T[3]; B2.LeftLeg.rotation.x += T[4]; B2.Spine.rotation.x += .45; B2.Head.rotation.x += .2; if(!running || playT < .85){ B2.Spine.rotation.y += .6; B2.Head.rotation.y += .5; }   /* eyes on the snapper until the ball arrives */ a.model.updateMatrixWorld(true);
       if(running && playT > .85){ const sg=ballPlan.find(s=>s.hold); if(sg){ a._hv = a._hv || new THREE.Vector3(); a._hv.set(sg.hold[0], .55, sg.hold[1]); armsAt(a, a._hv, a._hv, 1, .1); } } }
 
+  if(a.isRef) refPose(a, t);
   if(MOTION2) motionLook(a, t, dt, sp);
   place(a);
   if(a.mocapThrow || (a.mocapCeleb && a.celebStyle!=='mocapLoop') || (a.mocapActive && a.mocapAct) || a.down!=null || (a.celebrate!==false && a.celebStyle==='nap')){
@@ -2542,8 +2641,8 @@ function frame(now){
     if(!play.res.postCut){ play.res.postCut = true; camPos.copy(wantPos); camLook.copy(wantLook); } }
   if(Math.abs(camera.fov - fovWant) > .01){ camera.fov = fovWant; camera.updateProjectionMatrix(); }
   /* the result shot cuts to the officials under the uprights on EVERY camera: High (cp = null) skipped the whole kick block above, so it never showed the signal */
-  if(running && play && play.res.kind==='fg' && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±3.9) fit the frame: at 6.2 m a square phone frame only spans ±2.8 m, so neither signal was on screen */
-      const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(6.2, 5.4/hw); wantPos.set(0, 1.6 + (back-6.2)*.12, 62.4-back); wantLook.set(0, 1.9, 62.4); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } }   /* broadcast cut to the officials under the uprights for the signal */
+  if(running && play && play.res.kind==='fg' && play.res.refT!=null && playT >= play.res.refT){ /* back off far enough that BOTH officials (x = ±REF_X) fit the frame with their arms up, however narrow it is: a square phone frame spans less than half what a 16:9 one does */
+      const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect, back = Math.max(5.2, (REF_X+1.0)/hw); wantPos.set(0, 1.55 + (back-5.2)*.12, REF_Z-back); wantLook.set(0, 1.75, REF_Z); if(!play.res.refCut){ play.res.refCut=true; camPos.copy(wantPos); camLook.copy(wantLook); } }   /* broadcast cut to the officials under the uprights for the signal */
   { const koRun = running && play && play.res.kind==='kickoff', koIdle = !running && G.formKind==='kickoff';
     if(koRun || koIdle){ /* kickoff, as SNF shoots it (Tyler's DAL @ GB clip): low behind the kicker with the whole field in front of him, then the
          high wide shot as the ball hangs, then high and in front of the returner with the coverage running at the lens */
@@ -2962,7 +3061,7 @@ selA.addEventListener('change', retheme); selB.addEventListener('change', rethem
 // boot: draw once fonts are ready so canvas text uses the display face
 $('hint').textContent='Loading players…';
 const botReady = new Promise((res,rej)=>{
-  const sc=document.createElement('script'); sc.src=({repaired:'player.js',fp27:'player-fp27.js',mh1:'player-mh1.js',mh2:'player-mh2.js',procedural:'player-procedural.js',original:'player-original.js'})[modelChoice] || 'player.js'; sc.onerror=rej; document.head.appendChild(sc);
+  const sc=document.createElement('script'); sc.src=({repaired:'player.js',fp27:'player-fp27.js',mh1:'player-mh1.js',mh2:'player-mh2.js',procedural:'player-procedural.js',original:'player-original.js'})[modelChoice] || 'player.js'; sc.src += '?v='+SIM_BUILD;   /* the player file carries the clips: a stale cached one would be missing the newest */ sc.onerror=rej; document.head.appendChild(sc);
   const b64 = str => { const bin=atob(str), buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); return buf; };
   sc.onload=async()=>{ try {
     // textures are decoded from bytes (no image fetches, which the hosted page's policy may block) and attached by material name
