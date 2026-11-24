@@ -1,5 +1,5 @@
 /**
- * @bs/core/analytics/interactions — automatic click / hover / change capture.
+ * @bs/core/analytics/interactions — automatic click / change capture (hover capture removed Nov 2026).
  *
  * One set of document-level listeners records what people actually touch, so
  * no button needs its own trackEvent() call. Everything goes through the
@@ -9,7 +9,6 @@
  *   ui_click        any click on something clickable
  *   ui_rage_click   3+ clicks on the same element within 1s (fired once)
  *   ui_dead_click   click on a button/link that changed nothing for 1s
- *   ui_hover        mouse rested 600ms+ on a clickable element (once per element per page view)
  *   ui_change       select / checkbox / radio / range / text field changed
  *   page_engagement visible + active time on a page, sent on route change and tab hide
  *
@@ -36,7 +35,6 @@ const NO_RAGE_CHECK = 'input:not([type=checkbox]):not([type=radio]):not([type=bu
 /** Routes whose second segment is an id — collapsed so /player/abc and /player/xyz aggregate. */
 const ID_ROUTES = new Set(['player', 'game', 'coach', 'team', 'gm']);
 
-const HOVER_MIN_MS = 600;
 const RAGE_WINDOW_MS = 1000;
 const RAGE_CLICKS = 3;
 const DEAD_CLICK_MS = 1000;
@@ -146,28 +144,13 @@ export function setInteractionPage(pathname: string) {
   if (next === page) return;
   emitEngagement();
   page = next;
-  hovered.clear();
 }
 
 // ── listeners ───────────────────────────────────────────────────────────────
 
-const hovered = new Set<string>();
-let hoverEl: Element | null = null;
-let hoverStart = 0;
 let rage: { el: Element; n: number; first: number } | null = null;
 let deadWatch = false;
 let lastLabel: HTMLLabelElement | null = null;
-
-function endHover() {
-  const el = hoverEl;
-  hoverEl = null;
-  if (!el || !el.isConnected || Date.now() - hoverStart < HOVER_MIN_MS || ignored()) return;
-  const props = describe(el);
-  const key = `${props.feature}|${props.target}`;
-  if (hovered.has(key)) return;
-  hovered.add(key);
-  trackEvent('ui_hover', { ...props, ms: Date.now() - hoverStart });
-}
 
 function watchDeadClick(props: Record<string, unknown>) {
   if (deadWatch) return;
@@ -231,26 +214,10 @@ function onChange(e: Event) {
   trackEvent('ui_change', props);
 }
 
-function onPointerOver(e: PointerEvent) {
-  if (e.pointerType !== 'mouse') return;
-  const el = clickableOf(e.target, true);
-  if (el === hoverEl) return;
-  endHover();
-  if (el) { hoverEl = el; hoverStart = Date.now(); }
-}
-
-function onPointerOut(e: PointerEvent) {
-  if (!hoverEl) return;
-  const to = e.relatedTarget;
-  if (to instanceof Node && hoverEl.contains(to)) return;
-  endHover();
-}
-
 const onInput = () => { lastInput = Date.now(); };
 
 function onVisibility() {
   if (document.visibilityState !== 'hidden') return;
-  endHover();
   emitEngagement();
   flushEvents(true);
 }
@@ -264,8 +231,6 @@ export function startInteractionTracking(): () => void {
   const opts = { capture: true, passive: true } as const;
   document.addEventListener('click', onClick, opts);
   document.addEventListener('change', onChange, opts);
-  document.addEventListener('pointerover', onPointerOver, opts);
-  document.addEventListener('pointerout', onPointerOut, opts);
   for (const t of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const) {
     document.addEventListener(t, onInput, opts);
   }
@@ -284,8 +249,6 @@ export function startInteractionTracking(): () => void {
     clearInterval(tick);
     document.removeEventListener('click', onClick, opts);
     document.removeEventListener('change', onChange, opts);
-    document.removeEventListener('pointerover', onPointerOver, opts);
-    document.removeEventListener('pointerout', onPointerOut, opts);
     for (const t of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const) {
       document.removeEventListener(t, onInput, opts);
     }
