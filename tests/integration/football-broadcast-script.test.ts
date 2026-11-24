@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { simulatePlayByPlay, type PlayEvent } from '@/lib/engine/playByPlay';
-import { broadcastClipLines } from '@/lib/engine/gameBroadcast';
+import { broadcastClipLines, callWaitsForWhistle } from '@/lib/engine/gameBroadcast';
 import type { Player, Position, Team } from '@/types';
 
 function makePlayer(id: string, position: Position, last: string): Player {
@@ -131,5 +131,42 @@ describe('football broadcast script', () => {
     expect(clip([end, half], 0)).toEqual([]);
     expect(clip([half], 0)[0].text).toMatch(/^That's the half\. /);
     expect(clip([end], 0)[0].text).toBe("That's the end of the second quarter. Still scoreless.");
+  });
+});
+
+describe('when the call starts over the 3D sim', () => {
+  const game = simulatePlayByPlay(team('DAL', 'Dallas'), team('BUF', 'Buffalo'), roster('Dal'), roster('Buf'));
+
+  it('runs with the play for a routine snap', () => {
+    expect(callWaitsForWhistle(ev({ type: 'run', description: 'S. Barkley RB runs for 4 yards', yardsGained: 4 }))).toBe(false);
+    expect(callWaitsForWhistle(ev({ type: 'pass_complete', description: 'D. Prescott QB to C. Lamb WR for 9 yards', yardsGained: 9 }))).toBe(false);
+    expect(callWaitsForWhistle(ev({ type: 'sack', description: 'D. Prescott QB sacked', yardsGained: -7 }))).toBe(false);
+    expect(callWaitsForWhistle(ev({ type: 'punt', description: 'Punt — 44-yard punt' }))).toBe(false);
+    expect(callWaitsForWhistle(undefined)).toBe(false);
+  });
+
+  it('holds a score, turnover or field goal to the whistle, so the voice never beats the picture', () => {
+    expect(callWaitsForWhistle(ev({ type: 'touchdown', description: 'TOUCHDOWN! S. Barkley RB punches it in' }))).toBe(true);
+    expect(callWaitsForWhistle(ev({ type: 'pass_complete', description: 'TOUCHDOWN! D. Prescott QB finds C. Lamb WR' }))).toBe(true);
+    expect(callWaitsForWhistle(ev({ type: 'interception', description: 'INTERCEPTED by T. Diggs CB' }))).toBe(true);
+    expect(callWaitsForWhistle(ev({ type: 'fumble', description: 'FUMBLE! Recovered by Buffalo' }))).toBe(true);
+    expect(callWaitsForWhistle(ev({ type: 'field_goal_good', description: '45-yard field goal is GOOD' }))).toBe(true);
+    expect(callWaitsForWhistle(ev({ type: 'field_goal_miss', description: '52-yard field goal is NO GOOD' }))).toBe(true);
+  });
+
+  it('holds a stuffed run too: "nothing there" was being said before the handoff', () => {
+    const stuffed = ev({ type: 'run', description: 'J. Cook RB runs for no gain', yardsGained: 0 });
+    const loss = ev({ type: 'run', description: 'J. Cook RB runs for a loss of 2', yardsGained: -2 });
+    expect(clip([stuffed], 0)[0].text).toMatch(/stopped for no gain|Nothing there/);
+    expect(callWaitsForWhistle(stuffed)).toBe(true);
+    expect(callWaitsForWhistle(loss)).toBe(true);
+    expect(callWaitsForWhistle(ev({ type: 'run', description: 'J. Cook RB runs for 1 yard', yardsGained: 1 }))).toBe(false);
+  });
+
+  it('lets most of a real game run with the play', () => {
+    const snaps = game.events.filter(e => ['run', 'pass_complete', 'pass_incomplete', 'sack', 'interception', 'fumble', 'touchdown', 'field_goal_good', 'field_goal_miss', 'punt'].includes(e.type));
+    const held = snaps.filter(callWaitsForWhistle);
+    expect(snaps.length).toBeGreaterThan(60);
+    expect(held.length / snaps.length).toBeLessThan(0.3);
   });
 });

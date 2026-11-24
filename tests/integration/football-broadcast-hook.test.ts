@@ -7,6 +7,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { createElement, useEffect } from 'react';
 import { useGameBroadcast, type GameBroadcast, type StartOpts } from '@/lib/engine/useGameBroadcast';
+import { simAllows } from '@/lib/engine/gameBroadcast';
+import type { PlayEvent } from '@/lib/engine/playByPlay';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -239,6 +241,63 @@ describe('useGameBroadcast', () => {
     simRunning = false;
     await until(() => done, 'done', 3000);
     expect(shown).toEqual([0, 1, 2]);
+  }, 6000);
+
+  it('over the 3D sim, calls a routine play as it runs and a touchdown at the whistle', async () => {
+    const plays = [
+      { id: 10, type: 'run', description: 'S. Barkley RB runs for 4 yards' },
+      { id: 11, type: 'touchdown', description: 'TOUCHDOWN! S. Barkley RB punches it in' },
+    ] as PlayEvent[];
+    events = plays.map(p => p.description);
+    const sim = { active: false, deadId: null as number | null };
+    await start({
+      willAnimate: () => true,
+      onShowPlay: i => { shown.push(i); sim.active = true; sim.deadId = null; }, // the sim picks the play up
+      gate: (stage, i) => simAllows(stage, plays[i], sim),
+    });
+
+    // The run: Marcus is talking while the play is still live, well before any whistle.
+    await until(() => FakeAudio.played.length === 1, 'call during the play');
+    expect(sim.deadId).toBeNull();
+    await flush(150);
+    expect(shown).toEqual([0]); // call long over, but the sim hasn't finished the play
+
+    sim.active = false;
+    await until(() => shown.length === 2, 'next snap once the sim is done');
+
+    // The touchdown: nothing said until the play is dead.
+    await flush(300);
+    expect(FakeAudio.played).toHaveLength(1);
+    sim.deadId = 11;
+    await until(() => FakeAudio.played.length === 2, 'touchdown call at the whistle');
+    sim.active = false;
+    await until(() => done, 'done', 3000);
+  }, 6000);
+
+  it("snaps a 3D play without waiting for its call, and still holds a text-only play for it", async () => {
+    let release: (() => void)[] = [];
+    fetchMock.mockImplementation(() => new Promise(resolve => {
+      release.push(() => resolve(new Response(new Blob(['x']), { status: 200 })));
+    }));
+
+    // No sim: voice and text land together, so nothing shows until the call is in hand.
+    await start();
+    await flush(120);
+    expect(shown).toEqual([]);
+    release.forEach(fn => fn());
+    await until(() => shown.length >= 1, 'reveal once the call arrived');
+    await act(async () => { b.stop(); });
+
+    // Over the sim: the snap goes now, and the late call joins the play.
+    shown = []; release = []; FakeAudio.played = [];
+    let simRunning = true;
+    await start({ willAnimate: () => true, gate: stage => stage === 'call' || !simRunning });
+    await until(() => shown.length === 1, 'snap before the call arrives');
+    expect(FakeAudio.played).toHaveLength(0);
+    release.forEach(fn => fn());
+    await until(() => FakeAudio.played.length === 1, 'the call joins the play');
+    simRunning = false;
+    await act(async () => { b.stop(); });
   }, 6000);
 
   it('seek cuts off the current call and carries on from the new spot', async () => {
