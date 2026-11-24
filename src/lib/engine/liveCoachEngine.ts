@@ -14,6 +14,7 @@
 
 import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
+import { lineupDepthChart } from './lineup';
 import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickTackler, pickPassDefender, tackleNote, PASS_BREAKUP_CHANCE } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
@@ -246,10 +247,13 @@ export function createLiveCoachEngine(
   let callDefense = !!opts.callDefense;
   /** The play the CPU has already chosen for its next snap, behind the set it is showing. */
   let pendingCpuPlay: CpuPlay | null = null;
-  const homeOff = extractOff(homePlayers, homeTeam.depthChart);
-  const awayOff = extractOff(awayPlayers, awayTeam.depthChart);
-  const homeDef = extractDef(homePlayers, homeTeam.depthChart);
-  const awayDef = extractDef(awayPlayers, awayTeam.depthChart);
+  // Lined up per game so each formation slot's player starts (lineup.ts).
+  const homeDepth = lineupDepthChart(homeTeam, homePlayers);
+  const awayDepth = lineupDepthChart(awayTeam, awayPlayers);
+  const homeOff = extractOff(homePlayers, homeDepth);
+  const awayOff = extractOff(awayPlayers, awayDepth);
+  const homeDef = extractDef(homePlayers, homeDepth);
+  const awayDef = extractDef(awayPlayers, awayDepth);
 
   const state: LiveEngineState = {
     ...initialState,
