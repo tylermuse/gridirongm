@@ -192,7 +192,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b21e'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b21c'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -243,6 +243,17 @@ window.CAMS = { broadcast:{xf:.5,h:4.6,back:11,lxf:.7,ly:1.1,ahead:9,hLong:9,bac
                high:null };
 const CAMS = window.CAMS; window.__camProfile = window.__camProfile || CAMS.low;
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+/* b21c: "live game mode keeps flickering" (Tyler). Every few seconds the 3D view rendered one fully black frame (5-6 a minute at the 'med' tier).
+   Cause: now and then one pixel on a player (jersey, hands) shaded to NaN, where the shading normal degenerates (zero or non-finite length), and the
+   bloom blur spread that single NaN over the whole frame. Normalize the vertex normal, and again after any normal map, through a guard that falls back
+   to a safe normal. The guard tests the exponent bits as integers: a plain `len > eps` check was measured NOT to work (the GPU compiler's fast-math
+   assumes no NaN and rewrites the comparison), while this one took NaN pixels from 9 in 2,314 frames to 0 in 4,562. The bloom input is guarded the
+   same way as a backstop (see POST below). Both need WebGL2 (floatBitsToUint); a WebGL1 fallback keeps the stock shaders. */
+if(renderer.capabilities.isWebGL2){ const SC = THREE.ShaderChunk, safe = (v, fb) => `{ float nn_ = dot( ${v}, ${v} ); bool ok_ = ( floatBitsToUint( nn_ ) & 0x7f800000u ) != 0x7f800000u && nn_ > 1e-12; ${v} = ok_ ? ${v} * inversesqrt( nn_ ) : ${fb}; }`;
+  const begin = 'vec3 normal = normalize( vNormal );';
+  if(SC.normal_fragment_begin.includes(begin)) SC.normal_fragment_begin = SC.normal_fragment_begin.replace(begin, `vec3 normal = vNormal; ${safe('normal', 'vec3( 0.0, 0.0, 1.0 )')}`);
+  else console.warn('normal guard: normal_fragment_begin changed');
+  SC.normal_fragment_maps += `\n${safe('normal', 'nonPerturbedNormal')}`; }
 renderer.outputColorSpace = THREE.SRGBColorSpace;   /* r160: colour management converts authored sRGB hex colours itself. Physically based light units (the default; useLegacyLights is deprecated): light intensities below are the tuned legacy values × LEGACY_K */
 const canvasTex = (c)=>{ const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; };
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
@@ -2577,6 +2588,15 @@ const POST = { on: new URLSearchParams(location.search).get('fx')!=='0' };   /* 
   const rt=new THREE.WebGLRenderTarget(size.x||1280, size.y||720, {samples: window.__manual? 0 : 4, type:THREE.HalfFloatType});
   POST.composer=new EffectComposer(renderer, rt); POST.composer.addPass(new RenderPass(scene, camera));
   POST.bloom=new UnrealBloomPass(new THREE.Vector2(size.x||1280,size.y||720), .22, .5, .9);   /* only the boards, lights and the brightest highlights glow */ POST.composer.addPass(POST.bloom);
+  /* b21c: the bloom blurs its input across the whole frame, so a single NaN pixel turned the entire frame black (the live-game flicker). Its bright pass now drops any
+     non-finite pixel, tested on the exponent bits as integers: fast-math shader compilers may drop an isnan() or x!=x test, but not this. No extra pass, no cost. */
+  { const m=POST.bloom.materialHighPassFilter, read='vec4 texel = texture2D( tDiffuse, vUv );';
+    if(!renderer.capabilities.isWebGL2){ /* WebGL1: no floatBitsToUint, keep the stock bright pass */ }
+    else if(m.fragmentShader.includes(read)){
+      m.fragmentShader = m.fragmentShader.replace('void main() {', 'bool finite4( vec4 c ) { return all( notEqual( floatBitsToUint( c ) & 0x7f800000u, uvec4( 0x7f800000u ) ) ); }\n\t\tvoid main() {')
+        .replace(read, read + '\n\t\t\tif( ! finite4( texel ) ) texel = vec4( 0.0 );');
+      m.needsUpdate=true; }
+    else console.warn('bloom NaN guard: LuminosityHighPassShader changed, guard not applied'); }
   POST.grade=new ShaderPass({ uniforms:{ tDiffuse:{value:null}, uVig:{value:.38}, uSat:{value:1.04}, uContrast:{value:1.04} },
     vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
     fragmentShader:`uniform sampler2D tDiffuse; uniform float uVig, uSat, uContrast; varying vec2 vUv;
