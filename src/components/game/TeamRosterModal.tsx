@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { getActiveRoster } from '@/lib/engine/roster';
+import { calcTeamOvr } from '@/lib/engine/teamOvr';
 import { Modal } from '@/components/ui/Modal';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { POSITIONS, formatRecord } from '@/types';
@@ -101,15 +102,14 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
   if (!team) return null;
 
   const isChampTeam = currentChamp?.teamId === teamId;
-  // Active-53 only (excludes practice squad + IR), so this modal's player
-  // count and average OVR match every other screen, which all read the roster
-  // through getActiveRoster(). Filtering by teamId alone counted PS/IR players
-  // and made the OVR here disagree with the rest of the UI.
+  // Active-53 only (excludes practice squad + IR) — used for the player count
+  // shown below.
   const teamRoster = getActiveRoster(team, players);
 
-  const avgOvr = teamRoster.length > 0
-    ? Math.round(teamRoster.reduce((s, p) => s + p.ratings.overall, 0) / teamRoster.length)
-    : 0;
+  // Starter-weighted team OVR via the shared helper, so the figure here agrees
+  // with the team page and trade summaries (all read calcTeamOvr) instead of
+  // being dragged down by deep backups and injured players.
+  const avgOvr = calcTeamOvr(teamRoster);
 
   const capSpace = Math.round((team.salaryCap - team.totalPayroll) * 10) / 10;
 

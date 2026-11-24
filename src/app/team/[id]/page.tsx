@@ -8,7 +8,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
-import { playerAvailable } from '@/lib/engine/simulate';
+import { calcTeamOvr } from '@/lib/engine/teamOvr';
 import { Button } from '@/components/ui/Button';
 import { formatRecord, type Position } from '@/types';
 import { POSITIONS } from '@/types';
@@ -49,17 +49,11 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
     .filter(p => p.teamId === team.id && !p.retired)
     .sort((a, b) => b.ratings.overall - a.ratings.overall);
 
-  // Display "Avg OVR" off the starters pool — the top 22 available players by
-  // overall (roster is already non-retired + sorted) — so this figure matches
-  // the starter-weighted numbers shown on Power Rankings / standings instead of
-  // being dragged down by deep backups and injured players.
-  const starterPool = roster.filter(playerAvailable).slice(0, 22);
-  const starterAvgOvr =
-    starterPool.length > 0
-      ? Math.round(
-          starterPool.reduce((s, p) => s + p.ratings.overall, 0) / starterPool.length,
-        )
-      : '—';
+  // Display "Avg OVR" off the shared starter-weighted helper, so this figure
+  // matches the team roster modal and trade summaries instead of being dragged
+  // down by deep backups and injured players. See calcTeamOvr.
+  const teamOvr = calcTeamOvr(roster);
+  const starterAvgOvr = teamOvr > 0 ? teamOvr : '—';
 
   const total = team.record.wins + team.record.losses;
   const pct = total > 0 ? (team.record.wins / total).toFixed(3) : '.000';
