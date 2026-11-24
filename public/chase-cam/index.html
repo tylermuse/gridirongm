@@ -186,11 +186,13 @@ selA.value = 0; selB.value = 1;
 /* Playback: 1 = real time. The choreography's clock is in real seconds (b21a), so players move at real speeds; ?speed=1.5 plays it faster (the game and the show's replay clips use that).
    ?run=1.33 fast-forwards a handoff run by that much more, from the snap until the back reaches the line, and on a short gain (6 yds or less, where he travels at 4.8 yd/s) until the tackle (b21b).
    A real back takes 2.5 s to reach the line, so at the game's 1.5x the mesh and a short run still looked slow next to a pass (Tyler). Longer runs burst at 6.6-7.8 yd/s past the line and keep the base rate there;
-   so do the tackle and the post-play hold. All 22 players are fast-forwarded together, so the timing between them is unchanged. */
+   so do the tackle and the post-play hold. All 22 players are fast-forwarded together, so the timing between them is unchanged.
+   Play action gets the same rate through the fake and the drop, until the QB sets (b21e): the fake is a real handoff's timing plus PA_LATE, so at the
+   base rate it crawled next to the runs around it (Tyler: "play action is super slow"). The throw, the flight and the catch keep the base rate. */
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b21b'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b21e'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1127,6 +1129,7 @@ function choreograph(res){
      bail into their drops. The fake costs the drop about half a second, so the set and the throw come PA_LATE later. */
   /* Under center the QB reverse-pivots, turning his back to the defense, and meets the back about three yards deep. */
   const PA_LATE = .7, tMesh = snap+(UC? 1.30 : 1.05), tPull = tMesh+.26;
+  let paFastUntil = 0;   /* play action: fast-forwarded like a handoff run through the fake and the drop, until the QB sets (b21e, see RUN_RATE) */
   const paQb = UC? [[qbRecv,...qbAt],[tMesh,.3,z0-2.95],[tPull,.35,z0-3.2]]
     : [[qbRecv,0,z0-4.7],[tMesh,.35,z0-4.55],[tPull,.42,z0-4.45]];   /* the first keys of the QB's path on a play-action snap */
   /* call once the QB's path is set (the pull lands in his hands where that path has him); fakeX: where the back hits the line */
@@ -1365,7 +1368,7 @@ function choreograph(res){
     /* off a play-action fake: everything after the mesh comes PA_LATE later, and the back carries out the fake away from the rush
        (the free rusher comes from the -x side, the blitzer through the -x A gap) instead of picking anyone up */
     const late = (pa? PA_LATE : 0) + (UC? .3 : 0), qb0 = pa? paQb : [[qbRecv,...qbAt]];   /* a drop from under center takes a beat longer */
-    let tSack = snap+2.9+late;
+    let tSack = snap+2.9+late; if(pa) paFastUntil = snap+1.9+late;   /* the fake and the drop, as on a completed play action */
     O.qb.behav = P(...qb0,[snap+1.9+late,0,z0-6.8],[tSack,.6,z0+Y]);
     if(pa) runFake(res.fakeGap ?? R(1.2,3));
     ballPlan.push({t0:qbRecv, t1:1e9, held:O.qb});
@@ -1402,6 +1405,7 @@ function choreograph(res){
     /* Real throws (2023 season): 2.5 s after the snap at the median, 1.9 s on a slant to 2.8 s on a cross or corner, about 3 s on a ball 15+ yd downfield; the QB lets it go 7.9 yd behind the line. hold: no two throws come out on the same count. */
     const hold = R(-.2,.45);
     const dropZ = z0-(deep?8.9: scn? 5.6 : 7.8), tSet = snap+(deep?1.75: scn? 1.0 : 1.5)+late; let tThrow = snap+(deep?2.45: scn? 1.9 : 2.15)+hold+late;
+    if(pa) paFastUntil = tSet;
     O.rb.behav = PR([snap,rbX0,rbZ0],[snap+.7,rbX0+1.0,rbZ0+1.4],[snap+1.2,rbX0+1.8,rbZ0+1.6],[snap+2.4,9.5,z0-2.5,1],[snap+4.2,17,z0+5.5]);   // check, then release to the flat
     let rec, catchX, Yc, routeKeys;
     let Y = res.yards||0; td = res.kind==='complete' && Y>=toGoal; if(td) Y = toGoal;
@@ -1924,9 +1928,9 @@ function choreograph(res){
     let tGo = snap+3; for(let t=snap; t<snap+3; t+=.05){ const q=pathAt(w.behav.k, t, w.behav.acc); if(q[1]+b.off[1] >= c.z + .8*(t-snap) - .4){ tGo=t; break; } }
     if(tGo <= b.start + .05) return;
     const pre = P([snap,c.x,c.z],[tGo,c.x,c.z+.8*(tGo-snap)]); c.behav = pre; b.start = tGo; ev(tGo, ()=>{ if(c.behav===pre) c.behav = b; }); });
-  const runFast = isRun && !scr && RUN_RATE!==1;   /* see RUN_RATE */
+  const runFast = isRun && !scr && RUN_RATE!==1, paFast = pa && paFastUntil > 0 && RUN_RATE!==1;   /* see RUN_RATE */
   play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, holdOn, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal,
-    rate: runFast? RUN_RATE : 1, rateUntil: runFast? (res.yards>6 || res.oob? tHole : (tEnd ?? 3)) : 0};
+    rate: (runFast || paFast)? RUN_RATE : 1, rateUntil: runFast? (res.yards>6 || res.oob? tHole : (tEnd ?? 3)) : paFast? paFastUntil : 0};
   if(tackler && carrier){ play.tackler = tackler; play.tackleAt = (res.lock && res.kind==='int' && res.endAt!=null)? null : tackleAtFn; }   /* a return the game already spotted (res.endAt) is tackled at the planned spot only: armed early (the intended receiver is standing right at the pick) the returner broke free and ran until the 6 s cap, ending yards short of or past where the next drive starts */
   cameraTarget = null;
 }
