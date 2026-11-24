@@ -1,64 +1,64 @@
 {
- "asOf": "2026-11-17",
+ "asOf": "2026-11-24",
  "fits": {
   "CB": {
-   "corr": 0.14,
-   "pool": 114
+   "corr": 0.13,
+   "pool": 116
   },
   "DL": {
-   "corr": 0.43,
-   "pool": 231
+   "corr": 0.45,
+   "pool": 241
   },
   "K": {
-   "corr": 0.39,
-   "pool": 33
+   "corr": 0.41,
+   "pool": 34
   },
   "LB": {
-   "corr": 0.37,
-   "pool": 88
+   "corr": 0.27,
+   "pool": 91
   },
   "P": {
-   "corr": 0.39,
+   "corr": 0.37,
    "pool": 32
   },
   "QB": {
-   "corr": 0.41,
-   "pool": 39
+   "corr": 0.51,
+   "pool": 42
   },
   "RB": {
-   "corr": 0.5,
-   "pool": 68
+   "corr": 0.51,
+   "pool": 69
   },
   "S": {
-   "corr": 0.39,
-   "pool": 91
+   "corr": 0.41,
+   "pool": 92
   },
   "TE": {
-   "corr": 0.49,
-   "pool": 55
+   "corr": 0.51,
+   "pool": 57
   },
   "WR": {
-   "corr": 0.45,
-   "pool": 96
+   "corr": 0.46,
+   "pool": 102
   }
  },
  "players": {
   "100": {
    "applied": {
-    "ovr": 4,
-    "ovrs.DL": 4,
-    "pot": 4,
-    "prs": 4,
-    "rns": 4,
-    "tck": 4
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 4,
+   "delta": 5,
    "name": "Jadeveon Clowney",
-   "ovrAfter": 61,
+   "ovrAfter": 62,
    "ovrBefore": 57,
    "pos": "DL",
-   "residualZ": 2.16,
-   "sample": 201,
+   "residualZ": 2.35,
+   "sample": 241,
    "tid": 12
   },
   "1008": {
@@ -74,62 +74,63 @@
    "ovrAfter": 67,
    "ovrBefore": 69,
    "pos": "P",
-   "residualZ": -0.67,
+   "residualZ": -0.66,
    "sample": 30,
    "tid": 30
   },
   "1020": {
    "applied": {
-    "ovr": -2,
-    "ovrs.QB": -2,
-    "pot": -2,
-    "tha": -2,
-    "thp": -2,
-    "thv": -2
+    "ovr": -1,
+    "ovrs.QB": -1,
+    "pot": -1,
+    "tha": -1,
+    "thp": -1,
+    "thv": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Kyler Murray",
-   "ovrAfter": 68,
+   "ovrAfter": 69,
    "ovrBefore": 70,
    "pos": "QB",
-   "residualZ": -0.53,
+   "residualZ": -0.46,
    "sample": 198,
    "tid": 20
   },
   "1032": {
    "applied": {
-    "ovr": -4,
-    "ovrs.LB": -4,
-    "pcv": -4,
-    "pot": -4,
-    "rns": -4,
-    "tck": -4
+    "ovr": -3,
+    "ovrs.LB": -3,
+    "pcv": -3,
+    "pot": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -4,
+   "delta": -3,
    "name": "Tyrel Dodson",
-   "ovrAfter": 62,
+   "ovrAfter": 63,
    "ovrBefore": 66,
    "pos": "LB",
-   "residualZ": -2.32,
-   "sample": 188,
+   "residualZ": -1.29,
+   "sample": 250,
    "tid": 4
   },
-  "10511": {
+  "1048": {
    "applied": {
-    "bsc": -1,
-    "elu": -1,
-    "ovr": -1,
-    "ovrs.RB": -1,
-    "pot": -1
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": -1,
-   "name": "Kimani Vidal",
-   "ovrAfter": 49,
-   "ovrBefore": 50,
-   "pos": "RB",
-   "residualZ": -0.34,
-   "sample": 50,
-   "tid": 17
+   "delta": 1,
+   "name": "Josh Hines-Allen",
+   "ovrAfter": 70,
+   "ovrBefore": 69,
+   "pos": "DL",
+   "residualZ": 0.17,
+   "sample": 481,
+   "tid": 14
   },
   "1052": {
    "applied": {
@@ -145,8 +146,8 @@
    "ovrAfter": 52,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": -1.04,
-   "sample": 303,
+   "residualZ": -0.94,
+   "sample": 341,
    "tid": -1
   },
   "10521": {
@@ -163,27 +164,9 @@
    "ovrAfter": 38,
    "ovrBefore": 36,
    "pos": "DL",
-   "residualZ": 0.95,
-   "sample": 229,
+   "residualZ": 0.82,
+   "sample": 266,
    "tid": 22
-  },
-  "10530": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Deone Walker",
-   "ovrAfter": 56,
-   "ovrBefore": 55,
-   "pos": "DL",
-   "residualZ": 0.19,
-   "sample": 414,
-   "tid": 3
   },
   "10538": {
    "applied": {
@@ -199,8 +182,8 @@
    "ovrAfter": 28,
    "ovrBefore": 23,
    "pos": "DL",
-   "residualZ": 1.81,
-   "sample": 336,
+   "residualZ": 1.74,
+   "sample": 364,
    "tid": 20
   },
   "10539": {
@@ -217,9 +200,27 @@
    "ovrAfter": 51,
    "ovrBefore": 50,
    "pos": "WR",
-   "residualZ": 0.24,
-   "sample": 54,
+   "residualZ": 0.48,
+   "sample": 61,
    "tid": 22
+  },
+  "10545": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Jowon Briggs",
+   "ovrAfter": 50,
+   "ovrBefore": 49,
+   "pos": "DL",
+   "residualZ": 0.38,
+   "sample": 392,
+   "tid": 24
   },
   "10556": {
    "applied": {
@@ -234,8 +235,8 @@
    "ovrAfter": 73,
    "ovrBefore": 75,
    "pos": "K",
-   "residualZ": -0.81,
-   "sample": 24,
+   "residualZ": -0.77,
+   "sample": 25,
    "tid": 8
   },
   "10561": {
@@ -251,7 +252,7 @@
    "ovrAfter": 52,
    "ovrBefore": 50,
    "pos": "P",
-   "residualZ": 0.63,
+   "residualZ": 0.57,
    "sample": 40,
    "tid": 11
   },
@@ -268,8 +269,8 @@
    "ovrAfter": 68,
    "ovrBefore": 66,
    "pos": "K",
-   "residualZ": 0.79,
-   "sample": 17,
+   "residualZ": 0.57,
+   "sample": 19,
    "tid": 10
   },
   "10563": {
@@ -285,42 +286,42 @@
    "ovrAfter": 67,
    "ovrBefore": 70,
    "pos": "K",
-   "residualZ": -1.37,
+   "residualZ": -1.47,
    "sample": 11,
    "tid": 27
   },
   "10566": {
    "applied": {
-    "kac": -4,
-    "kpw": -4,
-    "ovr": -4,
-    "ovrs.K": -4,
-    "pot": -4
+    "kac": -5,
+    "kpw": -5,
+    "ovr": -5,
+    "ovrs.K": -5,
+    "pot": -5
    },
-   "delta": -4,
+   "delta": -5,
    "name": "Nick Folk",
-   "ovrAfter": 70,
+   "ovrAfter": 69,
    "ovrBefore": 74,
    "pos": "K",
-   "residualZ": -1.59,
+   "residualZ": -1.79,
    "sample": 18,
    "tid": 1
   },
   "10576": {
    "applied": {
-    "ovr": 2,
-    "ovrs.P": 2,
-    "pac": 2,
-    "pot": 2,
-    "ppw": 2
+    "ovr": 3,
+    "ovrs.P": 3,
+    "pac": 3,
+    "pot": 3,
+    "ppw": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "Ryan Rehkow",
-   "ovrAfter": 62,
+   "ovrAfter": 63,
    "ovrBefore": 60,
    "pos": "P",
-   "residualZ": 0.74,
-   "sample": 26,
+   "residualZ": 1.01,
+   "sample": 30,
    "tid": 6
   },
   "10588": {
@@ -336,8 +337,8 @@
    "ovrAfter": 57,
    "ovrBefore": 58,
    "pos": "WR",
-   "residualZ": -0.54,
-   "sample": 36,
+   "residualZ": -0.45,
+   "sample": 39,
    "tid": 30
   },
   "106": {
@@ -353,8 +354,8 @@
    "ovrAfter": 31,
    "ovrBefore": 32,
    "pos": "DL",
-   "residualZ": -0.69,
-   "sample": 195,
+   "residualZ": -0.56,
+   "sample": 212,
    "tid": 6
   },
   "10601": {
@@ -370,7 +371,7 @@
    "ovrAfter": 48,
    "ovrBefore": 49,
    "pos": "RB",
-   "residualZ": -0.55,
+   "residualZ": -0.68,
    "sample": 53,
    "tid": 11
   },
@@ -388,26 +389,26 @@
    "ovrAfter": 57,
    "ovrBefore": 58,
    "pos": "RB",
-   "residualZ": -0.46,
+   "residualZ": -0.49,
    "sample": 123,
    "tid": 12
   },
   "10603": {
    "applied": {
-    "bsc": 4,
-    "elu": 4,
-    "hnd": 4,
-    "ovr": 4,
-    "ovrs.RB": 4,
-    "pot": 4
+    "bsc": 2,
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.RB": 2,
+    "pot": 2
    },
-   "delta": 4,
+   "delta": 2,
    "name": "Kyle Monangai",
-   "ovrAfter": 65,
+   "ovrAfter": 63,
    "ovrBefore": 61,
    "pos": "RB",
-   "residualZ": 1.79,
-   "sample": 65,
+   "residualZ": 1.13,
+   "sample": 73,
    "tid": 5
   },
   "10607": {
@@ -424,44 +425,44 @@
    "ovrAfter": 69,
    "ovrBefore": 75,
    "pos": "TE",
-   "residualZ": -1.9,
-   "sample": 56,
+   "residualZ": -1.97,
+   "sample": 61,
    "tid": 13
   },
   "10608": {
    "applied": {
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.TE": 3,
-    "pot": 3,
-    "rbk": 3,
-    "rtr": 3
+    "hnd": 4,
+    "ovr": 4,
+    "ovrs.TE": 4,
+    "pot": 4,
+    "rbk": 4,
+    "rtr": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Harold Fannin Jr.",
-   "ovrAfter": 68,
+   "ovrAfter": 69,
    "ovrBefore": 65,
    "pos": "TE",
-   "residualZ": 1.13,
+   "residualZ": 1.17,
    "sample": 62,
    "tid": 7
   },
   "10609": {
    "applied": {
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.TE": -1,
-    "pot": -1,
-    "rbk": -1,
-    "rtr": -1
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.TE": -2,
+    "pot": -2,
+    "rbk": -2,
+    "rtr": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Gunnar Helm",
-   "ovrAfter": 50,
+   "ovrAfter": 49,
    "ovrBefore": 51,
    "pos": "TE",
-   "residualZ": -0.61,
-   "sample": 30,
+   "residualZ": -0.71,
+   "sample": 33,
    "tid": 30
   },
   "10611": {
@@ -478,8 +479,8 @@
    "ovrAfter": 55,
    "ovrBefore": 56,
    "pos": "TE",
-   "residualZ": -0.7,
-   "sample": 29,
+   "residualZ": -0.56,
+   "sample": 31,
    "tid": 24
   },
   "10612": {
@@ -495,26 +496,26 @@
    "ovrAfter": 64,
    "ovrBefore": 65,
    "pos": "K",
-   "residualZ": -0.28,
-   "sample": 17,
+   "residualZ": -0.24,
+   "sample": 19,
    "tid": 4
   },
-  "10621": {
+  "10613": {
    "applied": {
+    "kac": -1,
+    "kpw": -1,
     "ovr": -1,
-    "ovrs.P": -1,
-    "pac": -1,
-    "pot": -1,
-    "ppw": -1
+    "ovrs.K": -1,
+    "pot": -1
    },
    "delta": -1,
-   "name": "Kai Kroeger",
-   "ovrAfter": 49,
-   "ovrBefore": 50,
-   "pos": "P",
-   "residualZ": -0.26,
-   "sample": 39,
-   "tid": 12
+   "name": "Andy Borregales",
+   "ovrAfter": 52,
+   "ovrBefore": 53,
+   "pos": "K",
+   "residualZ": -0.25,
+   "sample": 14,
+   "tid": 21
   },
   "1074": {
    "applied": {
@@ -530,8 +531,8 @@
    "ovrAfter": 65,
    "ovrBefore": 62,
    "pos": "S",
-   "residualZ": 1.28,
-   "sample": 321,
+   "residualZ": 1.16,
+   "sample": 390,
    "tid": 9
   },
   "1079": {
@@ -548,43 +549,43 @@
    "ovrAfter": 71,
    "ovrBefore": 69,
    "pos": "LB",
-   "residualZ": 0.64,
-   "sample": 489,
+   "residualZ": 0.6,
+   "sample": 559,
    "tid": 14
   },
   "10944": {
    "applied": {
-    "kac": 4,
-    "kpw": 4,
-    "ovr": 4,
-    "ovrs.K": 4,
-    "pot": 4
+    "kac": 2,
+    "kpw": 2,
+    "ovr": 2,
+    "ovrs.K": 2,
+    "pot": 2
    },
-   "delta": 4,
+   "delta": 2,
    "name": "Spencer Shrader",
-   "ovrAfter": 69,
+   "ovrAfter": 67,
    "ovrBefore": 65,
    "pos": "K",
-   "residualZ": 1.24,
-   "sample": 25,
+   "residualZ": 0.69,
+   "sample": 28,
    "tid": 13
   },
   "10953": {
    "applied": {
-    "bsc": 1,
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.RB": 1,
-    "pot": 1
+    "bsc": -1,
+    "elu": -1,
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.RB": -1,
+    "pot": -1
    },
-   "delta": 1,
+   "delta": -1,
    "name": "Cam Skattebo",
-   "ovrAfter": 66,
+   "ovrAfter": 64,
    "ovrBefore": 65,
    "pos": "RB",
-   "residualZ": 0.26,
-   "sample": 130,
+   "residualZ": -0.23,
+   "sample": 147,
    "tid": 23
   },
   "10971": {
@@ -601,29 +602,11 @@
    "ovrAfter": 56,
    "ovrBefore": 51,
    "pos": "RB",
-   "residualZ": 1.53,
-   "sample": 166,
+   "residualZ": 1.4,
+   "sample": 179,
    "tid": 14
   },
   "10985": {
-   "applied": {
-    "elu": 3,
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.WR": 3,
-    "pot": 3,
-    "rtr": 3
-   },
-   "delta": 3,
-   "name": "Jaylin Noel",
-   "ovrAfter": 53,
-   "ovrBefore": 50,
-   "pos": "WR",
-   "residualZ": 2.18,
-   "sample": 23,
-   "tid": 12
-  },
-  "11003": {
    "applied": {
     "elu": 4,
     "hnd": 4,
@@ -633,30 +616,65 @@
     "rtr": 4
    },
    "delta": 4,
+   "name": "Jaylin Noel",
+   "ovrAfter": 54,
+   "ovrBefore": 50,
+   "pos": "WR",
+   "residualZ": 2.22,
+   "sample": 23,
+   "tid": 12
+  },
+  "10988": {
+   "applied": {
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.WR": -2,
+    "pot": -2,
+    "rtr": -2
+   },
+   "delta": -2,
+   "name": "Tai Felton",
+   "ovrAfter": 37,
+   "ovrBefore": 39,
+   "pos": "WR",
+   "residualZ": -1.26,
+   "sample": 24,
+   "tid": 20
+  },
+  "11003": {
+   "applied": {
+    "elu": 5,
+    "hnd": 5,
+    "ovr": 5,
+    "ovrs.WR": 5,
+    "pot": 5,
+    "rtr": 5
+   },
+   "delta": 5,
    "name": "Matthew Golden",
-   "ovrAfter": 58,
+   "ovrAfter": 59,
    "ovrBefore": 54,
    "pos": "WR",
-   "residualZ": 1.34,
+   "residualZ": 1.39,
    "sample": 101,
    "tid": 11
   },
   "11007": {
    "applied": {
-    "ovr": 3,
-    "ovrs.DL": 3,
-    "pot": 3,
-    "prs": 3,
-    "rns": 3,
-    "tck": 3
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 3,
+   "delta": 5,
    "name": "Mike Green",
-   "ovrAfter": 70,
+   "ovrAfter": 72,
    "ovrBefore": 67,
    "pos": "DL",
-   "residualZ": 1.32,
-   "sample": 335,
+   "residualZ": 1.69,
+   "sample": 386,
    "tid": 2
   },
   "11008": {
@@ -673,8 +691,8 @@
    "ovrAfter": 52,
    "ovrBefore": 51,
    "pos": "LB",
-   "residualZ": 0.4,
-   "sample": 487,
+   "residualZ": 0.19,
+   "sample": 545,
    "tid": 6
   },
   "1101": {
@@ -691,8 +709,8 @@
    "ovrAfter": 56,
    "ovrBefore": 60,
    "pos": "S",
-   "residualZ": -1.33,
-   "sample": 490,
+   "residualZ": -1.36,
+   "sample": 539,
    "tid": 15
   },
   "11011": {
@@ -709,9 +727,45 @@
    "ovrAfter": 72,
    "ovrBefore": 70,
    "pos": "LB",
-   "residualZ": 0.57,
+   "residualZ": 0.62,
    "sample": 662,
    "tid": 7
+  },
+  "11023": {
+   "applied": {
+    "ovr": -3,
+    "ovrs.LB": -3,
+    "pcv": -3,
+    "pot": -3,
+    "rns": -3,
+    "tck": -3
+   },
+   "delta": -3,
+   "name": "Teddye Buchanan",
+   "ovrAfter": 58,
+   "ovrBefore": 61,
+   "pos": "LB",
+   "residualZ": -2.24,
+   "sample": 122,
+   "tid": 2
+  },
+  "11035": {
+   "applied": {
+    "bsc": 1,
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.RB": 1,
+    "pot": 1
+   },
+   "delta": 1,
+   "name": "Jacory Croskey-Merritt",
+   "ovrAfter": 50,
+   "ovrBefore": 49,
+   "pos": "RB",
+   "residualZ": 0.35,
+   "sample": 87,
+   "tid": 31
   },
   "11038": {
    "applied": {
@@ -727,7 +781,7 @@
    "ovrAfter": 59,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": -1.06,
+   "residualZ": -1.03,
    "sample": 228,
    "tid": 23
   },
@@ -763,9 +817,26 @@
    "ovrAfter": 60,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": -0.7,
-   "sample": 134,
+   "residualZ": -0.84,
+   "sample": 149,
    "tid": 30
+  },
+  "11047": {
+   "applied": {
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.WR": -1,
+    "pot": -1,
+    "rtr": -1
+   },
+   "delta": -1,
+   "name": "Isaac TeSlaa",
+   "ovrAfter": 47,
+   "ovrBefore": 48,
+   "pos": "WR",
+   "residualZ": -0.37,
+   "sample": 31,
+   "tid": 10
   },
   "11048": {
    "applied": {
@@ -781,8 +852,8 @@
    "ovrAfter": 47,
    "ovrBefore": 49,
    "pos": "DL",
-   "residualZ": -0.88,
-   "sample": 307,
+   "residualZ": -0.75,
+   "sample": 337,
    "tid": 22
   },
   "11050": {
@@ -799,7 +870,7 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -0.78,
+   "residualZ": -0.74,
    "sample": 236,
    "tid": 0
   },
@@ -817,44 +888,62 @@
    "ovrAfter": 58,
    "ovrBefore": 60,
    "pos": "DL",
-   "residualZ": -0.99,
-   "sample": 273,
+   "residualZ": -0.96,
+   "sample": 306,
    "tid": 17
+  },
+  "11055": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Jonas Sanker",
+   "ovrAfter": 59,
+   "ovrBefore": 58,
+   "pos": "S",
+   "residualZ": 0.2,
+   "sample": 476,
+   "tid": 22
   },
   "11064": {
    "applied": {
-    "ovr": 5,
-    "ovrs.LB": 5,
-    "pcv": 5,
-    "pot": 5,
-    "rns": 5,
-    "tck": 5
+    "ovr": 6,
+    "ovrs.LB": 6,
+    "pcv": 6,
+    "pot": 6,
+    "rns": 6,
+    "tck": 6
    },
-   "delta": 5,
+   "delta": 6,
    "name": "David Walker",
-   "ovrAfter": 53,
+   "ovrAfter": 54,
    "ovrBefore": 48,
    "pos": "LB",
-   "residualZ": 2.4,
-   "sample": 182,
+   "residualZ": 3.02,
+   "sample": 201,
    "tid": 29
   },
   "11069": {
    "applied": {
-    "ovr": -1,
-    "ovrs.LB": -1,
-    "pcv": -1,
-    "pot": -1,
-    "rns": -1,
-    "tck": -1
+    "ovr": -2,
+    "ovrs.LB": -2,
+    "pcv": -2,
+    "pot": -2,
+    "rns": -2,
+    "tck": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Que Robinson",
-   "ovrAfter": 56,
+   "ovrAfter": 55,
    "ovrBefore": 57,
    "pos": "LB",
-   "residualZ": -0.5,
-   "sample": 299,
+   "residualZ": -0.72,
+   "sample": 326,
    "tid": 9
   },
   "11070": {
@@ -871,7 +960,7 @@
    "ovrAfter": 51,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": -0.33,
+   "residualZ": -0.28,
    "sample": 272,
    "tid": 16
   },
@@ -889,7 +978,7 @@
    "ovrAfter": 46,
    "ovrBefore": 47,
    "pos": "DL",
-   "residualZ": -0.52,
+   "residualZ": -0.46,
    "sample": 157,
    "tid": 21
   },
@@ -907,8 +996,8 @@
    "ovrAfter": 53,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": -0.75,
-   "sample": 294,
+   "residualZ": -0.81,
+   "sample": 318,
    "tid": 20
   },
   "11076": {
@@ -925,7 +1014,7 @@
    "ovrAfter": 40,
    "ovrBefore": 42,
    "pos": "DL",
-   "residualZ": -1.05,
+   "residualZ": -0.96,
    "sample": 168,
    "tid": 28
   },
@@ -943,9 +1032,27 @@
    "ovrAfter": 52,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": -0.83,
+   "residualZ": -0.79,
    "sample": 327,
    "tid": 19
+  },
+  "11078": {
+   "applied": {
+    "ovr": -2,
+    "ovrs.DL": -2,
+    "pot": -2,
+    "prs": -2,
+    "rns": -2,
+    "tck": -2
+   },
+   "delta": -2,
+   "name": "Elijah Roberts",
+   "ovrAfter": 56,
+   "ovrBefore": 58,
+   "pos": "DL",
+   "residualZ": -1.38,
+   "sample": 127,
+   "tid": 29
   },
   "11081": {
    "applied": {
@@ -961,7 +1068,7 @@
    "ovrAfter": 48,
    "ovrBefore": 50,
    "pos": "DL",
-   "residualZ": -1.61,
+   "residualZ": -1.53,
    "sample": 135,
    "tid": 18
   },
@@ -979,24 +1086,24 @@
    "ovrAfter": 49,
    "ovrBefore": 48,
    "pos": "S",
-   "residualZ": 0.25,
+   "residualZ": 0.3,
    "sample": 464,
    "tid": 19
   },
   "11097": {
    "applied": {
-    "kac": -1,
-    "kpw": -1,
-    "ovr": -1,
-    "ovrs.K": -1,
-    "pot": -1
+    "kac": -2,
+    "kpw": -2,
+    "ovr": -2,
+    "ovrs.K": -2,
+    "pot": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Tyler Loop",
-   "ovrAfter": 69,
+   "ovrAfter": 68,
    "ovrBefore": 70,
    "pos": "K",
-   "residualZ": -0.55,
+   "residualZ": -0.65,
    "sample": 17,
    "tid": 2
   },
@@ -1013,9 +1120,27 @@
    "ovrAfter": 58,
    "ovrBefore": 62,
    "pos": "S",
-   "residualZ": -2.76,
+   "residualZ": -2.75,
    "sample": 172,
    "tid": 21
+  },
+  "11099": {
+   "applied": {
+    "ovr": -2,
+    "ovrs.DL": -2,
+    "pot": -2,
+    "prs": -2,
+    "rns": -2,
+    "tck": -2
+   },
+   "delta": -2,
+   "name": "Tim Smith",
+   "ovrAfter": 35,
+   "ovrBefore": 37,
+   "pos": "DL",
+   "residualZ": -1.03,
+   "sample": 144,
+   "tid": 13
   },
   "11107": {
    "applied": {
@@ -1049,7 +1174,7 @@
    "ovrBefore": 62,
    "pos": "S",
    "residualZ": -1.6,
-   "sample": 209,
+   "sample": 227,
    "tid": 17
   },
   "11116": {
@@ -1065,8 +1190,8 @@
    "ovrAfter": 57,
    "ovrBefore": 54,
    "pos": "P",
-   "residualZ": 0.88,
-   "sample": 44,
+   "residualZ": 0.79,
+   "sample": 49,
    "tid": 9
   },
   "11124": {
@@ -1082,8 +1207,8 @@
    "ovrAfter": 54,
    "ovrBefore": 55,
    "pos": "S",
-   "residualZ": -0.8,
-   "sample": 170,
+   "residualZ": -0.69,
+   "sample": 185,
    "tid": 13
   },
   "11128": {
@@ -1100,7 +1225,7 @@
    "ovrAfter": 36,
    "ovrBefore": 35,
    "pos": "WR",
-   "residualZ": 0.33,
+   "residualZ": 0.42,
    "sample": 27,
    "tid": 18
   },
@@ -1118,7 +1243,7 @@
    "ovrAfter": 50,
    "ovrBefore": 51,
    "pos": "DL",
-   "residualZ": -0.5,
+   "residualZ": -0.45,
    "sample": 303,
    "tid": 19
   },
@@ -1136,8 +1261,8 @@
    "ovrAfter": 76,
    "ovrBefore": 70,
    "pos": "LB",
-   "residualZ": 2.14,
-   "sample": 479,
+   "residualZ": 1.79,
+   "sample": 529,
    "tid": 20
   },
   "11186": {
@@ -1154,7 +1279,7 @@
    "ovrAfter": 56,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": 0.85,
+   "residualZ": 0.87,
    "sample": 267,
    "tid": 7
   },
@@ -1171,7 +1296,7 @@
    "ovrAfter": 61,
    "ovrBefore": 59,
    "pos": "K",
-   "residualZ": 0.52,
+   "residualZ": 0.5,
    "sample": 24,
    "tid": 7
   },
@@ -1188,7 +1313,7 @@
    "ovrAfter": 44,
    "ovrBefore": 42,
    "pos": "P",
-   "residualZ": 0.64,
+   "residualZ": 0.55,
    "sample": 38,
    "tid": 24
   },
@@ -1206,8 +1331,8 @@
    "ovrAfter": 57,
    "ovrBefore": 56,
    "pos": "WR",
-   "residualZ": 0.4,
-   "sample": 54,
+   "residualZ": 0.37,
+   "sample": 55,
    "tid": 8
   },
   "11202": {
@@ -1224,7 +1349,7 @@
    "ovrAfter": 36,
    "ovrBefore": 35,
    "pos": "WR",
-   "residualZ": 0.4,
+   "residualZ": 0.46,
    "sample": 26,
    "tid": 21
   },
@@ -1242,8 +1367,8 @@
    "ovrAfter": 31,
    "ovrBefore": 30,
    "pos": "WR",
-   "residualZ": 0.32,
-   "sample": 32,
+   "residualZ": 0.71,
+   "sample": 37,
    "tid": 25
   },
   "1125": {
@@ -1259,7 +1384,7 @@
    "ovrAfter": 38,
    "ovrBefore": 40,
    "pos": "DL",
-   "residualZ": -1.01,
+   "residualZ": -0.92,
    "sample": 150,
    "tid": 27
   },
@@ -1277,43 +1402,43 @@
    "ovrAfter": 58,
    "ovrBefore": 57,
    "pos": "WR",
-   "residualZ": 0.45,
-   "sample": 43,
+   "residualZ": 0.38,
+   "sample": 53,
    "tid": 14
   },
   "1130": {
    "applied": {
-    "ovr": 2,
-    "ovrs.DL": 2,
-    "pot": 2,
-    "prs": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Josh Uche",
-   "ovrAfter": 63,
+   "ovrAfter": 62,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": 0.63,
-   "sample": 367,
+   "residualZ": 0.36,
+   "sample": 422,
    "tid": 19
   },
   "1133": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "John Jenkins",
-   "ovrAfter": 49,
+   "ovrAfter": 48,
    "ovrBefore": 51,
    "pos": "DL",
-   "residualZ": -1.54,
-   "sample": 144,
+   "residualZ": -1.51,
+   "sample": 158,
    "tid": 2
   },
   "1134": {
@@ -1330,44 +1455,44 @@
    "ovrAfter": 60,
    "ovrBefore": 62,
    "pos": "RB",
-   "residualZ": -0.77,
-   "sample": 77,
+   "residualZ": -0.86,
+   "sample": 79,
    "tid": 22
   },
   "1146": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -1,
+    "ovrs.DL": -1,
+    "pot": -1,
+    "prs": -1,
+    "rns": -1,
+    "tck": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Javon Hargrave",
-   "ovrAfter": 52,
+   "ovrAfter": 53,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": -1.06,
+   "residualZ": -1.0,
    "sample": 123,
    "tid": 11
   },
   "1153": {
    "applied": {
-    "ovr": 2,
-    "ovrs.QB": 2,
-    "pot": 2,
-    "tha": 2,
-    "thp": 2,
-    "thv": 2
+    "ovr": 4,
+    "ovrs.QB": 4,
+    "pot": 4,
+    "tha": 4,
+    "thp": 4,
+    "thv": 4
    },
-   "delta": 2,
+   "delta": 4,
    "name": "Geno Smith",
-   "ovrAfter": 56,
+   "ovrAfter": 58,
    "ovrBefore": 54,
    "pos": "QB",
-   "residualZ": 0.61,
-   "sample": 345,
+   "residualZ": 1.0,
+   "sample": 368,
    "tid": 24
   },
   "1160": {
@@ -1384,7 +1509,7 @@
    "ovrAfter": 65,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": 3.7,
+   "residualZ": 3.65,
    "sample": 144,
    "tid": 1
   },
@@ -1402,8 +1527,8 @@
    "ovrAfter": 57,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": -0.48,
-   "sample": 267,
+   "residualZ": -0.57,
+   "sample": 301,
    "tid": 31
   },
   "1179": {
@@ -1420,8 +1545,8 @@
    "ovrAfter": 70,
    "ovrBefore": 73,
    "pos": "DL",
-   "residualZ": -1.0,
-   "sample": 427,
+   "residualZ": -1.06,
+   "sample": 475,
    "tid": 4
   },
   "1193": {
@@ -1437,8 +1562,8 @@
    "ovrAfter": 51,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": -0.43,
-   "sample": 279,
+   "residualZ": -0.48,
+   "sample": 298,
    "tid": 9
   },
   "120": {
@@ -1454,43 +1579,26 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -1.4,
-   "sample": 123,
+   "residualZ": -1.41,
+   "sample": 151,
    "tid": 24
-  },
-  "1205": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.P": 1,
-    "pac": 1,
-    "pot": 1,
-    "ppw": 1
-   },
-   "delta": 1,
-   "name": "AJ Cole III",
-   "ovrAfter": 75,
-   "ovrBefore": 74,
-   "pos": "P",
-   "residualZ": 0.43,
-   "sample": 34,
-   "tid": 16
   },
   "1212": {
    "applied": {
-    "ovr": -5,
-    "ovrs.QB": -5,
-    "pot": -5,
-    "tha": -5,
-    "thp": -5,
-    "thv": -5
+    "ovr": -4,
+    "ovrs.QB": -4,
+    "pot": -4,
+    "tha": -4,
+    "thp": -4,
+    "thv": -4
    },
-   "delta": -5,
+   "delta": -4,
    "name": "Baker Mayfield",
-   "ovrAfter": 71,
+   "ovrAfter": 72,
    "ovrBefore": 76,
    "pos": "QB",
-   "residualZ": -1.83,
-   "sample": 177,
+   "residualZ": -1.45,
+   "sample": 220,
    "tid": 29
   },
   "1214": {
@@ -1507,8 +1615,8 @@
    "ovrAfter": 57,
    "ovrBefore": 56,
    "pos": "S",
-   "residualZ": 0.35,
-   "sample": 310,
+   "residualZ": 0.25,
+   "sample": 336,
    "tid": 20
   },
   "1223": {
@@ -1524,9 +1632,26 @@
    "ovrAfter": 70,
    "ovrBefore": 68,
    "pos": "P",
-   "residualZ": 0.63,
+   "residualZ": 0.62,
    "sample": 26,
    "tid": 8
+  },
+  "12258": {
+   "applied": {
+    "kac": 1,
+    "kpw": 1,
+    "ovr": 1,
+    "ovrs.K": 1,
+    "pot": 1
+   },
+   "delta": 1,
+   "name": "Charlie Smyth",
+   "ovrAfter": 57,
+   "ovrBefore": 56,
+   "pos": "K",
+   "residualZ": 0.52,
+   "sample": 8,
+   "tid": 22
   },
   "1237": {
    "applied": {
@@ -1541,7 +1666,7 @@
    "ovrAfter": 45,
    "ovrBefore": 50,
    "pos": "P",
-   "residualZ": -3.7,
+   "residualZ": -3.64,
    "sample": 12,
    "tid": -1
   },
@@ -1559,8 +1684,8 @@
    "ovrAfter": 81,
    "ovrBefore": 80,
    "pos": "WR",
-   "residualZ": 0.38,
-   "sample": 91,
+   "residualZ": 0.31,
+   "sample": 97,
    "tid": 10
   },
   "1256": {
@@ -1576,61 +1701,26 @@
    "ovrAfter": 69,
    "ovrBefore": 70,
    "pos": "P",
-   "residualZ": -0.22,
-   "sample": 40,
+   "residualZ": -0.23,
+   "sample": 44,
    "tid": 31
-  },
-  "1268": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "D.J. Reader",
-   "ovrAfter": 60,
-   "ovrBefore": 61,
-   "pos": "DL",
-   "residualZ": -0.51,
-   "sample": 337,
-   "tid": 23
-  },
-  "1270": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.P": 1,
-    "pac": 1,
-    "pot": 1,
-    "ppw": 1
-   },
-   "delta": 1,
-   "name": "Rigoberto Sanchez",
-   "ovrAfter": 67,
-   "ovrBefore": 66,
-   "pos": "P",
-   "residualZ": 0.26,
-   "sample": 36,
-   "tid": 13
   },
   "1278": {
    "applied": {
-    "ovr": 6,
-    "ovrs.DL": 6,
-    "pot": 6,
-    "prs": 6,
-    "rns": 6,
-    "tck": 6
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 6,
+   "delta": 5,
    "name": "Carl Granderson",
-   "ovrAfter": 69,
+   "ovrAfter": 68,
    "ovrBefore": 63,
    "pos": "DL",
-   "residualZ": 2.06,
-   "sample": 393,
+   "residualZ": 1.71,
+   "sample": 430,
    "tid": 22
   },
   "1281": {
@@ -1647,7 +1737,7 @@
    "ovrAfter": 66,
    "ovrBefore": 67,
    "pos": "S",
-   "residualZ": -0.38,
+   "residualZ": -0.37,
    "sample": 604,
    "tid": 7
   },
@@ -1664,8 +1754,8 @@
    "ovrAfter": 66,
    "ovrBefore": 69,
    "pos": "K",
-   "residualZ": -1.54,
-   "sample": 12,
+   "residualZ": -1.06,
+   "sample": 15,
    "tid": 19
   },
   "130": {
@@ -1682,43 +1772,61 @@
    "ovrAfter": 62,
    "ovrBefore": 64,
    "pos": "WR",
-   "residualZ": -0.89,
-   "sample": 52,
+   "residualZ": -0.74,
+   "sample": 58,
    "tid": 9
   },
   "13039": {
    "applied": {
     "elu": -1,
-    "hnd": -2,
-    "ovr": -2,
-    "ovrs.WR": -2,
-    "pot": -2,
-    "rtr": -2
+    "hnd": -3,
+    "ovr": -3,
+    "ovrs.WR": -3,
+    "pot": -3,
+    "rtr": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Germie Bernard",
-   "ovrAfter": 54,
+   "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "WR",
-   "residualZ": -0.94,
-   "sample": 45,
+   "residualZ": -0.98,
+   "sample": 55,
    "tid": 26
+  },
+  "13041": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.QB": -1,
+    "pot": -1,
+    "tha": -1,
+    "thp": -1,
+    "thv": -1
+   },
+   "delta": -1,
+   "name": "Fernando Mendoza",
+   "ovrAfter": 69,
+   "ovrBefore": 70,
+   "pos": "QB",
+   "residualZ": -0.7,
+   "sample": 96,
+   "tid": 16
   },
   "13046": {
    "applied": {
-    "ovr": -2,
-    "ovrs.QB": -2,
-    "pot": -2,
-    "tha": -2,
-    "thp": -2,
-    "thv": -2
+    "ovr": -1,
+    "ovrs.QB": -1,
+    "pot": -1,
+    "tha": -1,
+    "thp": -1,
+    "thv": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Jalon Daniels",
-   "ovrAfter": 38,
+   "ovrAfter": 39,
    "ovrBefore": 40,
    "pos": "QB",
-   "residualZ": -0.71,
+   "residualZ": -0.53,
    "sample": 129,
    "tid": 29
   },
@@ -1737,8 +1845,26 @@
    "ovrBefore": 47,
    "pos": "WR",
    "residualZ": -1.92,
-   "sample": 27,
+   "sample": 28,
    "tid": 19
+  },
+  "13057": {
+   "applied": {
+    "elu": -1,
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.WR": -2,
+    "pot": -2,
+    "rtr": -2
+   },
+   "delta": -2,
+   "name": "Jordyn Tyson",
+   "ovrAfter": 63,
+   "ovrBefore": 65,
+   "pos": "WR",
+   "residualZ": -1.26,
+   "sample": 20,
+   "tid": 22
   },
   "1306": {
    "applied": {
@@ -1758,6 +1884,24 @@
    "sample": 42,
    "tid": 1
   },
+  "13065": {
+   "applied": {
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
+   },
+   "delta": 2,
+   "name": "Antonio Williams",
+   "ovrAfter": 51,
+   "ovrBefore": 49,
+   "pos": "WR",
+   "residualZ": 0.6,
+   "sample": 52,
+   "tid": 31
+  },
   "13078": {
    "applied": {
     "hnd": -1,
@@ -1771,7 +1915,7 @@
    "ovrAfter": 56,
    "ovrBefore": 57,
    "pos": "WR",
-   "residualZ": -0.26,
+   "residualZ": -0.25,
    "sample": 63,
    "tid": 7
   },
@@ -1789,26 +1933,26 @@
    "ovrAfter": 59,
    "ovrBefore": 61,
    "pos": "TE",
-   "residualZ": -0.95,
-   "sample": 33,
+   "residualZ": -0.79,
+   "sample": 36,
    "tid": 24
   },
   "13090": {
    "applied": {
-    "bsc": 2,
-    "elu": 2,
-    "hnd": 2,
-    "ovr": 2,
-    "ovrs.RB": 2,
-    "pot": 2
+    "bsc": 3,
+    "elu": 3,
+    "hnd": 3,
+    "ovr": 3,
+    "ovrs.RB": 3,
+    "pot": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "Jonah Coleman",
-   "ovrAfter": 56,
+   "ovrAfter": 57,
    "ovrBefore": 54,
    "pos": "RB",
-   "residualZ": 0.85,
-   "sample": 60,
+   "residualZ": 1.49,
+   "sample": 88,
    "tid": 9
   },
   "13091": {
@@ -1824,8 +1968,8 @@
    "ovrAfter": 59,
    "ovrBefore": 62,
    "pos": "WR",
-   "residualZ": -1.08,
-   "sample": 54,
+   "residualZ": -1.24,
+   "sample": 57,
    "tid": 25
   },
   "13099": {
@@ -1842,29 +1986,11 @@
    "ovrAfter": 63,
    "ovrBefore": 65,
    "pos": "RB",
-   "residualZ": -0.98,
+   "residualZ": -1.03,
    "sample": 87,
    "tid": 0
   },
-  "131": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.LB": -1,
-    "pcv": -1,
-    "pot": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Jordyn Brooks",
-   "ovrAfter": 78,
-   "ovrBefore": 79,
-   "pos": "LB",
-   "residualZ": -0.38,
-   "sample": 523,
-   "tid": 19
-  },
-  "13107": {
+  "13106": {
    "applied": {
     "kac": 1,
     "kpw": 1,
@@ -1873,12 +1999,29 @@
     "pot": 1
    },
    "delta": 1,
+   "name": "Dominic Zvada",
+   "ovrAfter": 57,
+   "ovrBefore": 56,
+   "pos": "K",
+   "residualZ": 0.17,
+   "sample": 27,
+   "tid": 23
+  },
+  "13107": {
+   "applied": {
+    "kac": 2,
+    "kpw": 2,
+    "ovr": 2,
+    "ovrs.K": 2,
+    "pot": 2
+   },
+   "delta": 2,
    "name": "Drew Stevens",
-   "ovrAfter": 52,
+   "ovrAfter": 53,
    "ovrBefore": 51,
    "pos": "K",
-   "residualZ": 0.37,
-   "sample": 20,
+   "residualZ": 0.49,
+   "sample": 25,
    "tid": 31
   },
   "1311": {
@@ -1895,8 +2038,8 @@
    "ovrAfter": 70,
    "ovrBefore": 71,
    "pos": "DL",
-   "residualZ": -0.39,
-   "sample": 387,
+   "residualZ": -0.42,
+   "sample": 425,
    "tid": 0
   },
   "13120": {
@@ -1913,26 +2056,26 @@
    "ovrAfter": 51,
    "ovrBefore": 52,
    "pos": "RB",
-   "residualZ": -0.51,
+   "residualZ": -0.59,
    "sample": 67,
    "tid": 28
   },
   "13121": {
    "applied": {
-    "bsc": 3,
-    "elu": 3,
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.RB": 3,
-    "pot": 3
+    "bsc": 4,
+    "elu": 4,
+    "hnd": 4,
+    "ovr": 4,
+    "ovrs.RB": 4,
+    "pot": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Emmett Johnson",
-   "ovrAfter": 55,
+   "ovrAfter": 56,
    "ovrBefore": 52,
    "pos": "RB",
-   "residualZ": 1.45,
-   "sample": 68,
+   "residualZ": 1.59,
+   "sample": 95,
    "tid": 15
   },
   "13122": {
@@ -1949,8 +2092,8 @@
    "ovrAfter": 52,
    "ovrBefore": 51,
    "pos": "RB",
-   "residualZ": 0.61,
-   "sample": 60,
+   "residualZ": 0.39,
+   "sample": 64,
    "tid": 13
   },
   "13137": {
@@ -1967,26 +2110,9 @@
    "ovrAfter": 56,
    "ovrBefore": 53,
    "pos": "WR",
-   "residualZ": 1.85,
+   "residualZ": 1.86,
    "sample": 24,
    "tid": 24
-  },
-  "13143": {
-   "applied": {
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.WR": -1,
-    "pot": -1,
-    "rtr": -1
-   },
-   "delta": -1,
-   "name": "Ted Hurst",
-   "ovrAfter": 44,
-   "ovrBefore": 45,
-   "pos": "WR",
-   "residualZ": -0.67,
-   "sample": 25,
-   "tid": 29
   },
   "1315": {
    "applied": {
@@ -2002,26 +2128,26 @@
    "ovrAfter": 63,
    "ovrBefore": 59,
    "pos": "S",
-   "residualZ": 2.89,
-   "sample": 566,
+   "residualZ": 2.76,
+   "sample": 612,
    "tid": 3
   },
   "13158": {
    "applied": {
-    "hnd": 2,
-    "ovr": 2,
-    "ovrs.TE": 2,
-    "pot": 2,
-    "rbk": 2,
-    "rtr": 2
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.TE": 1,
+    "pot": 1,
+    "rbk": 1,
+    "rtr": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Josh Cuevas",
-   "ovrAfter": 49,
+   "ovrAfter": 48,
    "ovrBefore": 47,
    "pos": "TE",
-   "residualZ": 1.3,
-   "sample": 16,
+   "residualZ": 0.68,
+   "sample": 19,
    "tid": 2
   },
   "13160": {
@@ -2056,7 +2182,7 @@
    "ovrAfter": 49,
    "ovrBefore": 47,
    "pos": "TE",
-   "residualZ": 1.57,
+   "residualZ": 1.52,
    "sample": 14,
    "tid": 14
   },
@@ -2074,9 +2200,27 @@
    "ovrAfter": 51,
    "ovrBefore": 50,
    "pos": "LB",
-   "residualZ": 0.41,
+   "residualZ": 0.32,
    "sample": 476,
    "tid": 1
+  },
+  "1319": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Alex Highsmith",
+   "ovrAfter": 76,
+   "ovrBefore": 75,
+   "pos": "DL",
+   "residualZ": 0.46,
+   "sample": 382,
+   "tid": 26
   },
   "132": {
    "applied": {
@@ -2092,26 +2236,26 @@
    "ovrAfter": 71,
    "ovrBefore": 74,
    "pos": "RB",
-   "residualZ": -1.67,
+   "residualZ": -1.69,
    "sample": 47,
    "tid": 11
   },
   "13201": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Caleb Banks",
-   "ovrAfter": 57,
+   "ovrAfter": 56,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": -1.53,
-   "sample": 124,
+   "residualZ": -1.62,
+   "sample": 140,
    "tid": 20
   },
   "13219": {
@@ -2128,8 +2272,8 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -0.73,
-   "sample": 212,
+   "residualZ": -0.77,
+   "sample": 235,
    "tid": 4
   },
   "13222": {
@@ -2146,27 +2290,9 @@
    "ovrAfter": 57,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": -0.65,
-   "sample": 284,
+   "residualZ": -0.71,
+   "sample": 321,
    "tid": 27
-  },
-  "13224": {
-   "applied": {
-    "ovr": -2,
-    "ovrs.S": -2,
-    "pcv": -2,
-    "pot": -2,
-    "rns": -2,
-    "tck": -2
-   },
-   "delta": -2,
-   "name": "A.J. Haulcy",
-   "ovrAfter": 55,
-   "ovrBefore": 57,
-   "pos": "S",
-   "residualZ": -0.75,
-   "sample": 455,
-   "tid": 13
   },
   "1323": {
    "applied": {
@@ -2182,7 +2308,7 @@
    "ovrAfter": 55,
    "ovrBefore": 54,
    "pos": "LB",
-   "residualZ": 0.38,
+   "residualZ": 0.33,
    "sample": 429,
    "tid": 12
   },
@@ -2200,26 +2326,26 @@
    "ovrAfter": 54,
    "ovrBefore": 51,
    "pos": "DL",
-   "residualZ": 1.13,
+   "residualZ": 1.14,
    "sample": 368,
    "tid": 7
   },
   "13255": {
    "applied": {
-    "ovr": 2,
-    "ovrs.S": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Robert Spears-Jennings",
-   "ovrAfter": 46,
+   "ovrAfter": 45,
    "ovrBefore": 44,
    "pos": "S",
-   "residualZ": 0.9,
-   "sample": 234,
+   "residualZ": 0.64,
+   "sample": 278,
    "tid": 26
   },
   "13258": {
@@ -2236,7 +2362,7 @@
    "ovrAfter": 50,
    "ovrBefore": 51,
    "pos": "DL",
-   "residualZ": -0.56,
+   "residualZ": -0.51,
    "sample": 226,
    "tid": 8
   },
@@ -2254,26 +2380,26 @@
    "ovrAfter": 48,
    "ovrBefore": 50,
    "pos": "LB",
-   "residualZ": -0.92,
+   "residualZ": -0.93,
    "sample": 346,
    "tid": 8
   },
   "13273": {
    "applied": {
-    "ovr": 2,
-    "ovrs.LB": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.LB": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Sonny Styles",
-   "ovrAfter": 65,
+   "ovrAfter": 64,
    "ovrBefore": 63,
    "pos": "LB",
-   "residualZ": 0.62,
-   "sample": 567,
+   "residualZ": 0.41,
+   "sample": 619,
    "tid": 31
   },
   "13274": {
@@ -2290,8 +2416,8 @@
    "ovrAfter": 51,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": -1.65,
-   "sample": 230,
+   "residualZ": -1.62,
+   "sample": 254,
    "tid": 2
   },
   "13286": {
@@ -2308,27 +2434,45 @@
    "ovrAfter": 71,
    "ovrBefore": 67,
    "pos": "LB",
-   "residualZ": 1.37,
-   "sample": 577,
+   "residualZ": 1.19,
+   "sample": 649,
    "tid": 23
   },
   "13290": {
    "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.LB": 2,
+    "pcv": 2,
+    "pot": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "CJ Allen",
-   "ovrAfter": 58,
+   "ovrAfter": 59,
    "ovrBefore": 57,
    "pos": "LB",
-   "residualZ": 0.58,
-   "sample": 241,
+   "residualZ": 0.67,
+   "sample": 307,
    "tid": 13
+  },
+  "13303": {
+   "applied": {
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
+   },
+   "delta": -3,
+   "name": "Kayden McDonald",
+   "ovrAfter": 56,
+   "ovrBefore": 59,
+   "pos": "DL",
+   "residualZ": -1.78,
+   "sample": 121,
+   "tid": 12
   },
   "13307": {
    "applied": {
@@ -2344,8 +2488,8 @@
    "ovrAfter": 65,
    "ovrBefore": 68,
    "pos": "DL",
-   "residualZ": -1.24,
-   "sample": 248,
+   "residualZ": -1.37,
+   "sample": 276,
    "tid": 29
   },
   "1332": {
@@ -2362,8 +2506,8 @@
    "ovrAfter": 65,
    "ovrBefore": 66,
    "pos": "DL",
-   "residualZ": -0.42,
-   "sample": 422,
+   "residualZ": -0.39,
+   "sample": 456,
    "tid": 3
   },
   "13356": {
@@ -2380,27 +2524,9 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -0.79,
-   "sample": 290,
+   "residualZ": -0.85,
+   "sample": 313,
    "tid": 15
-  },
-  "13365": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Darrell Jackson Jr.",
-   "ovrAfter": 47,
-   "ovrBefore": 48,
-   "pos": "DL",
-   "residualZ": -0.29,
-   "sample": 315,
-   "tid": 24
   },
   "13371": {
    "applied": {
@@ -2416,9 +2542,27 @@
    "ovrAfter": 53,
    "ovrBefore": 51,
    "pos": "S",
-   "residualZ": 0.8,
-   "sample": 276,
+   "residualZ": 0.87,
+   "sample": 291,
    "tid": -1
+  },
+  "13374": {
+   "applied": {
+    "ovr": -2,
+    "ovrs.DL": -2,
+    "pot": -2,
+    "prs": -2,
+    "rns": -2,
+    "tck": -2
+   },
+   "delta": -2,
+   "name": "James Thompson Jr.",
+   "ovrAfter": 43,
+   "ovrBefore": 45,
+   "pos": "DL",
+   "residualZ": -1.18,
+   "sample": 140,
+   "tid": 27
   },
   "13384": {
    "applied": {
@@ -2434,27 +2578,9 @@
    "ovrAfter": 61,
    "ovrBefore": 60,
    "pos": "DL",
-   "residualZ": 0.43,
-   "sample": 332,
+   "residualZ": 0.27,
+   "sample": 344,
    "tid": 17
-  },
-  "13391": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Anthony Hill Jr.",
-   "ovrAfter": 57,
-   "ovrBefore": 56,
-   "pos": "LB",
-   "residualZ": 0.24,
-   "sample": 561,
-   "tid": 30
   },
   "13400": {
    "applied": {
@@ -2470,8 +2596,8 @@
    "ovrAfter": 58,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": 1.22,
-   "sample": 204,
+   "residualZ": 0.86,
+   "sample": 234,
    "tid": 3
   },
   "13401": {
@@ -2488,7 +2614,7 @@
    "ovrAfter": 58,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": -1.52,
+   "residualZ": -1.48,
    "sample": 193,
    "tid": 15
   },
@@ -2506,26 +2632,26 @@
    "ovrAfter": 58,
    "ovrBefore": 60,
    "pos": "DL",
-   "residualZ": -0.84,
-   "sample": 206,
+   "residualZ": -0.95,
+   "sample": 230,
    "tid": 30
   },
   "13406": {
    "applied": {
-    "ovr": 2,
-    "ovrs.S": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 4,
+    "ovrs.S": 4,
+    "pcv": 4,
+    "pot": 4,
+    "rns": 4,
+    "tck": 4
    },
-   "delta": 2,
+   "delta": 4,
    "name": "Dillon Thieneman",
-   "ovrAfter": 60,
+   "ovrAfter": 62,
    "ovrBefore": 58,
    "pos": "S",
-   "residualZ": 0.88,
-   "sample": 494,
+   "residualZ": 1.41,
+   "sample": 566,
    "tid": 5
   },
   "13407": {
@@ -2542,8 +2668,8 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -1.12,
-   "sample": 185,
+   "residualZ": -1.15,
+   "sample": 209,
    "tid": 8
   },
   "1341": {
@@ -2560,7 +2686,7 @@
    "ovrAfter": 64,
    "ovrBefore": 67,
    "pos": "DL",
-   "residualZ": -1.51,
+   "residualZ": -1.5,
    "sample": 152,
    "tid": 18
   },
@@ -2578,8 +2704,8 @@
    "ovrAfter": 57,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": 1.77,
-   "sample": 187,
+   "residualZ": 1.31,
+   "sample": 242,
    "tid": 10
   },
   "13417": {
@@ -2596,43 +2722,43 @@
    "ovrAfter": 53,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": -1.66,
-   "sample": 128,
+   "residualZ": -1.27,
+   "sample": 152,
    "tid": 31
   },
   "13418": {
    "applied": {
-    "ovr": 5,
-    "ovrs.DL": 5,
-    "pot": 5,
-    "prs": 5,
-    "rns": 5,
-    "tck": 5
+    "ovr": 6,
+    "ovrs.DL": 6,
+    "pot": 6,
+    "prs": 6,
+    "rns": 6,
+    "tck": 6
    },
-   "delta": 5,
+   "delta": 6,
    "name": "David Bailey",
-   "ovrAfter": 72,
+   "ovrAfter": 73,
    "ovrBefore": 67,
    "pos": "DL",
-   "residualZ": 1.76,
-   "sample": 478,
+   "residualZ": 2.02,
+   "sample": 520,
    "tid": 24
   },
   "13419": {
    "applied": {
-    "ovr": 3,
-    "ovrs.P": 3,
-    "pac": 3,
-    "pot": 3,
-    "ppw": 3
+    "ovr": 5,
+    "ovrs.P": 5,
+    "pac": 5,
+    "pot": 5,
+    "ppw": 5
    },
-   "delta": 3,
+   "delta": 5,
    "name": "Brett Thorson",
-   "ovrAfter": 65,
+   "ovrAfter": 67,
    "ovrBefore": 62,
    "pos": "P",
-   "residualZ": 1.3,
-   "sample": 28,
+   "residualZ": 1.82,
+   "sample": 30,
    "tid": 20
   },
   "1343": {
@@ -2648,8 +2774,8 @@
    "ovrAfter": 60,
    "ovrBefore": 56,
    "pos": "K",
-   "residualZ": 1.31,
-   "sample": 23,
+   "residualZ": 1.34,
+   "sample": 24,
    "tid": 16
   },
   "13439": {
@@ -2666,63 +2792,27 @@
    "ovrAfter": 51,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": -1.29,
+   "residualZ": -1.24,
    "sample": 315,
    "tid": 11
   },
   "13454": {
    "applied": {
-    "ovr": -2,
-    "ovrs.LB": -2,
-    "pcv": -2,
-    "pot": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.LB": -3,
+    "pcv": -3,
+    "pot": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Kaleb Elarms-Orr",
-   "ovrAfter": 44,
+   "ovrAfter": 43,
    "ovrBefore": 46,
    "pos": "LB",
-   "residualZ": -1.5,
-   "sample": 126,
+   "residualZ": -1.65,
+   "sample": 157,
    "tid": 3
-  },
-  "13463": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Nick Barrett",
-   "ovrAfter": 41,
-   "ovrBefore": 42,
-   "pos": "DL",
-   "residualZ": -0.34,
-   "sample": 140,
-   "tid": 17
-  },
-  "13467": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Jaden Dugger",
-   "ovrAfter": 37,
-   "ovrBefore": 36,
-   "pos": "LB",
-   "residualZ": 0.33,
-   "sample": 266,
-   "tid": 27
   },
   "135": {
    "applied": {
@@ -2738,8 +2828,8 @@
    "ovrAfter": 53,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": -0.46,
-   "sample": 184,
+   "residualZ": -0.54,
+   "sample": 192,
    "tid": 3
   },
   "1351": {
@@ -2756,26 +2846,44 @@
    "ovrAfter": 43,
    "ovrBefore": 44,
    "pos": "TE",
-   "residualZ": -0.42,
-   "sample": 14,
+   "residualZ": -0.37,
+   "sample": 15,
    "tid": 12
+  },
+  "13517": {
+   "applied": {
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.WR": 1,
+    "pot": 1,
+    "rtr": 1
+   },
+   "delta": 1,
+   "name": "Denzel Boston",
+   "ovrAfter": 59,
+   "ovrBefore": 58,
+   "pos": "WR",
+   "residualZ": 0.21,
+   "sample": 62,
+   "tid": 7
   },
   "13519": {
    "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.LB": 2,
+    "pcv": 2,
+    "pot": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Jacob Rodriguez",
-   "ovrAfter": 59,
+   "ovrAfter": 60,
    "ovrBefore": 58,
    "pos": "LB",
-   "residualZ": 0.4,
-   "sample": 548,
+   "residualZ": 0.61,
+   "sample": 626,
    "tid": 19
   },
   "13520": {
@@ -2792,8 +2900,8 @@
    "ovrAfter": 57,
    "ovrBefore": 55,
    "pos": "LB",
-   "residualZ": 0.82,
-   "sample": 452,
+   "residualZ": 0.72,
+   "sample": 510,
    "tid": 29
   },
   "13527": {
@@ -2810,7 +2918,7 @@
    "ovrAfter": 56,
    "ovrBefore": 55,
    "pos": "LB",
-   "residualZ": 0.37,
+   "residualZ": 0.29,
    "sample": 352,
    "tid": 21
   },
@@ -2828,43 +2936,43 @@
    "ovrAfter": 61,
    "ovrBefore": 60,
    "pos": "S",
-   "residualZ": 0.29,
+   "residualZ": 0.34,
    "sample": 313,
    "tid": 7
   },
   "1354": {
    "applied": {
-    "hnd": -2,
-    "ovr": -2,
-    "ovrs.WR": -2,
-    "pot": -2,
-    "rtr": -2
+    "hnd": -3,
+    "ovr": -3,
+    "ovrs.WR": -3,
+    "pot": -3,
+    "rtr": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Darnell Mooney",
-   "ovrAfter": 54,
+   "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "WR",
-   "residualZ": -1.24,
-   "sample": 31,
+   "residualZ": -1.51,
+   "sample": 36,
    "tid": 23
   },
   "13541": {
    "applied": {
-    "elu": 3,
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.WR": 3,
-    "pot": 3,
-    "rtr": 3
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
    },
-   "delta": 3,
+   "delta": 2,
    "name": "Caleb Douglas",
-   "ovrAfter": 48,
+   "ovrAfter": 47,
    "ovrBefore": 45,
    "pos": "WR",
-   "residualZ": 1.64,
-   "sample": 35,
+   "residualZ": 1.05,
+   "sample": 45,
    "tid": 19
   },
   "13546": {
@@ -2880,7 +2988,7 @@
    "ovrAfter": 56,
    "ovrBefore": 58,
    "pos": "WR",
-   "residualZ": -1.3,
+   "residualZ": -1.35,
    "sample": 25,
    "tid": 2
   },
@@ -2898,8 +3006,8 @@
    "ovrAfter": 37,
    "ovrBefore": 39,
    "pos": "DL",
-   "residualZ": -1.09,
-   "sample": 146,
+   "residualZ": -0.96,
+   "sample": 169,
    "tid": 20
   },
   "1355": {
@@ -2916,8 +3024,8 @@
    "ovrAfter": 45,
    "ovrBefore": 50,
    "pos": "LB",
-   "residualZ": -2.44,
-   "sample": 238,
+   "residualZ": -2.3,
+   "sample": 255,
    "tid": 19
   },
   "1356": {
@@ -2934,43 +3042,43 @@
    "ovrAfter": 55,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": -0.66,
+   "residualZ": -0.62,
    "sample": 183,
    "tid": 14
   },
   "13566": {
    "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.DL": 2,
+    "pot": 2,
+    "prs": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Gracen Halton",
-   "ovrAfter": 46,
+   "ovrAfter": 47,
    "ovrBefore": 45,
    "pos": "DL",
-   "residualZ": 0.67,
+   "residualZ": 0.71,
    "sample": 228,
    "tid": 27
   },
   "13575": {
    "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.DL": 2,
+    "pot": 2,
+    "prs": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Dani Dennis-Sutton",
-   "ovrAfter": 56,
+   "ovrAfter": 57,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": 0.58,
+   "residualZ": 0.59,
    "sample": 314,
    "tid": 11
   },
@@ -2988,8 +3096,8 @@
    "ovrAfter": 55,
    "ovrBefore": 58,
    "pos": "RB",
-   "residualZ": -1.15,
-   "sample": 83,
+   "residualZ": -1.05,
+   "sample": 92,
    "tid": 16
   },
   "13586": {
@@ -3006,8 +3114,8 @@
    "ovrAfter": 43,
    "ovrBefore": 44,
    "pos": "LB",
-   "residualZ": -0.51,
-   "sample": 219,
+   "residualZ": -0.52,
+   "sample": 273,
    "tid": 13
   },
   "13587": {
@@ -3023,8 +3131,8 @@
    "ovrAfter": 49,
    "ovrBefore": 53,
    "pos": "WR",
-   "residualZ": -2.3,
-   "sample": 23,
+   "residualZ": -2.27,
+   "sample": 24,
    "tid": 22
   },
   "13599": {
@@ -3041,8 +3149,8 @@
    "ovrAfter": 53,
    "ovrBefore": 52,
    "pos": "S",
-   "residualZ": 0.38,
-   "sample": 347,
+   "residualZ": 0.37,
+   "sample": 412,
    "tid": 4
   },
   "13606": {
@@ -3059,9 +3167,44 @@
    "ovrAfter": 55,
    "ovrBefore": 52,
    "pos": "S",
-   "residualZ": 1.22,
-   "sample": 524,
+   "residualZ": 0.99,
+   "sample": 601,
    "tid": 19
+  },
+  "13630": {
+   "applied": {
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.WR": 1,
+    "pot": 1,
+    "rtr": 1
+   },
+   "delta": 1,
+   "name": "Josh Cameron",
+   "ovrAfter": 51,
+   "ovrBefore": 50,
+   "pos": "WR",
+   "residualZ": 0.61,
+   "sample": 24,
+   "tid": 14
+  },
+  "13642": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.P": 1,
+    "pac": 1,
+    "pot": 1,
+    "ppw": 1
+   },
+   "delta": 1,
+   "name": "Ryan Eckley",
+   "ovrAfter": 57,
+   "ovrBefore": 56,
+   "pos": "P",
+   "residualZ": 0.19,
+   "sample": 47,
+   "tid": 2
   },
   "13646": {
    "applied": {
@@ -3077,7 +3220,7 @@
    "ovrAfter": 51,
    "ovrBefore": 52,
    "pos": "LB",
-   "residualZ": -0.4,
+   "residualZ": -0.42,
    "sample": 380,
    "tid": 1
   },
@@ -3094,7 +3237,7 @@
    "ovrAfter": 48,
    "ovrBefore": 51,
    "pos": "K",
-   "residualZ": -0.91,
+   "residualZ": -1.08,
    "sample": 21,
    "tid": 11
   },
@@ -3111,26 +3254,26 @@
    "ovrAfter": 58,
    "ovrBefore": 56,
    "pos": "P",
-   "residualZ": 0.94,
+   "residualZ": 0.87,
    "sample": 22,
    "tid": 3
   },
   "1370": {
    "applied": {
-    "elu": -1,
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.WR": -1,
-    "pot": -1,
-    "rtr": -1
+    "elu": -2,
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.WR": -2,
+    "pot": -2,
+    "rtr": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Stefon Diggs",
-   "ovrAfter": 69,
+   "ovrAfter": 68,
    "ovrBefore": 70,
    "pos": "WR",
-   "residualZ": -0.51,
-   "sample": 59,
+   "residualZ": -0.54,
+   "sample": 65,
    "tid": 31
   },
   "1371": {
@@ -3163,26 +3306,8 @@
    "ovrAfter": 70,
    "ovrBefore": 67,
    "pos": "P",
-   "residualZ": 0.93,
-   "sample": 30,
-   "tid": 10
-  },
-  "1385": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Derrick Barnes",
-   "ovrAfter": 55,
-   "ovrBefore": 54,
-   "pos": "LB",
-   "residualZ": 0.21,
-   "sample": 524,
+   "residualZ": 0.98,
+   "sample": 32,
    "tid": 10
   },
   "1399": {
@@ -3199,26 +3324,26 @@
    "ovrAfter": 52,
    "ovrBefore": 55,
    "pos": "TE",
-   "residualZ": -1.76,
-   "sample": 20,
+   "residualZ": -1.47,
+   "sample": 23,
    "tid": 3
   },
   "140": {
    "applied": {
-    "hnd": -2,
-    "ovr": -2,
-    "ovrs.TE": -2,
-    "pot": -2,
-    "rbk": -2,
-    "rtr": -2
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.TE": -1,
+    "pot": -1,
+    "rbk": -1,
+    "rtr": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Evan Engram",
-   "ovrAfter": 53,
+   "ovrAfter": 54,
    "ovrBefore": 55,
    "pos": "TE",
-   "residualZ": -1.1,
-   "sample": 30,
+   "residualZ": -0.52,
+   "sample": 38,
    "tid": 9
   },
   "1401": {
@@ -3235,9 +3360,27 @@
    "ovrAfter": 64,
    "ovrBefore": 62,
    "pos": "TE",
-   "residualZ": 0.93,
+   "residualZ": 1.0,
    "sample": 40,
    "tid": 21
+  },
+  "1405": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.LB": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
+   },
+   "delta": -1,
+   "name": "Zaire Franklin",
+   "ovrAfter": 52,
+   "ovrBefore": 53,
+   "pos": "LB",
+   "residualZ": -0.18,
+   "sample": 415,
+   "tid": 11
   },
   "1408": {
    "applied": {
@@ -3253,26 +3396,26 @@
    "ovrAfter": 58,
    "ovrBefore": 57,
    "pos": "S",
-   "residualZ": 0.38,
-   "sample": 558,
+   "residualZ": 0.25,
+   "sample": 603,
    "tid": 20
   },
   "141": {
    "applied": {
-    "ovr": 2,
-    "ovrs.QB": 2,
-    "pot": 2,
-    "tha": 2,
-    "thp": 2,
-    "thv": 2
+    "ovr": 3,
+    "ovrs.QB": 3,
+    "pot": 3,
+    "tha": 3,
+    "thp": 3,
+    "thv": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "Jared Goff",
-   "ovrAfter": 79,
+   "ovrAfter": 80,
    "ovrBefore": 77,
    "pos": "QB",
-   "residualZ": 0.66,
-   "sample": 345,
+   "residualZ": 0.87,
+   "sample": 379,
    "tid": 10
   },
   "143": {
@@ -3289,8 +3432,8 @@
    "ovrAfter": 57,
    "ovrBefore": 58,
    "pos": "LB",
-   "residualZ": -0.33,
-   "sample": 641,
+   "residualZ": -0.35,
+   "sample": 713,
    "tid": 0
   },
   "1450": {
@@ -3307,8 +3450,8 @@
    "ovrAfter": 56,
    "ovrBefore": 55,
    "pos": "TE",
-   "residualZ": 0.42,
-   "sample": 38,
+   "residualZ": 0.46,
+   "sample": 43,
    "tid": 26
   },
   "1456": {
@@ -3325,63 +3468,63 @@
    "ovrAfter": 74,
    "ovrBefore": 71,
    "pos": "S",
-   "residualZ": 0.97,
+   "residualZ": 1.01,
    "sample": 531,
-   "tid": 9
-  },
-  "1466": {
-   "applied": {
-    "ovr": -3,
-    "ovrs.LB": -3,
-    "pcv": -3,
-    "pot": -3,
-    "rns": -3,
-    "tck": -3
-   },
-   "delta": -3,
-   "name": "Jonathon Cooper",
-   "ovrAfter": 53,
-   "ovrBefore": 56,
-   "pos": "LB",
-   "residualZ": -1.95,
-   "sample": 127,
    "tid": 9
   },
   "1470": {
    "applied": {
-    "bsc": -1,
-    "elu": -1,
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.RB": -1,
-    "pot": -1
+    "bsc": -2,
+    "elu": -2,
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.RB": -2,
+    "pot": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Rico Dowdle",
-   "ovrAfter": 61,
+   "ovrAfter": 60,
    "ovrBefore": 62,
    "pos": "RB",
-   "residualZ": -0.55,
-   "sample": 66,
+   "residualZ": -0.71,
+   "sample": 75,
    "tid": 26
   },
   "148": {
    "applied": {
-    "ovr": 3,
-    "ovrs.QB": 3,
-    "pot": 3,
-    "tha": 3,
-    "thp": 3,
-    "thv": 3
+    "ovr": 4,
+    "ovrs.QB": 4,
+    "pot": 4,
+    "tha": 4,
+    "thp": 4,
+    "thv": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Kirk Cousins",
-   "ovrAfter": 58,
+   "ovrAfter": 59,
    "ovrBefore": 55,
    "pos": "QB",
-   "residualZ": 0.88,
-   "sample": 385,
+   "residualZ": 0.98,
+   "sample": 425,
    "tid": 20
+  },
+  "1480": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.LB": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Quincy Williams",
+   "ovrAfter": 69,
+   "ovrBefore": 68,
+   "pos": "LB",
+   "residualZ": 0.19,
+   "sample": 631,
+   "tid": 7
   },
   "1484": {
    "applied": {
@@ -3397,25 +3540,25 @@
    "ovrAfter": 58,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": -0.65,
+   "residualZ": -0.63,
    "sample": 249,
    "tid": 28
   },
   "1485": {
    "applied": {
-    "ovr": 2,
-    "ovrs.S": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "M.J. Stewart Jr.",
-   "ovrAfter": 34,
+   "ovrAfter": 33,
    "ovrBefore": 32,
    "pos": "S",
-   "residualZ": 1.06,
+   "residualZ": 0.78,
    "sample": 216,
    "tid": 12
   },
@@ -3433,63 +3576,45 @@
    "ovrAfter": 70,
    "ovrBefore": 74,
    "pos": "LB",
-   "residualZ": -1.51,
-   "sample": 356,
+   "residualZ": -1.39,
+   "sample": 428,
    "tid": 5
   },
   "1500": {
    "applied": {
-    "ovr": 6,
-    "ovrs.DL": 6,
-    "pot": 6,
-    "prs": 6,
-    "rns": 6,
-    "tck": 6
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 6,
+   "delta": 5,
    "name": "Andrew Van Ginkel",
-   "ovrAfter": 74,
+   "ovrAfter": 73,
    "ovrBefore": 68,
    "pos": "DL",
-   "residualZ": 2.0,
-   "sample": 454,
+   "residualZ": 1.73,
+   "sample": 488,
    "tid": 20
   },
   "1506": {
    "applied": {
-    "ovr": 4,
-    "ovrs.LB": 4,
-    "pcv": 4,
-    "pot": 4,
-    "rns": 4,
-    "tck": 4
+    "ovr": 3,
+    "ovrs.LB": 3,
+    "pcv": 3,
+    "pot": 3,
+    "rns": 3,
+    "tck": 3
    },
-   "delta": 4,
+   "delta": 3,
    "name": "Kaden Elliss",
-   "ovrAfter": 69,
+   "ovrAfter": 68,
    "ovrBefore": 65,
    "pos": "LB",
-   "residualZ": 1.38,
-   "sample": 412,
+   "residualZ": 0.94,
+   "sample": 473,
    "tid": 22
-  },
-  "1511": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Alex Anzalone",
-   "ovrAfter": 54,
-   "ovrBefore": 53,
-   "pos": "LB",
-   "residualZ": 0.27,
-   "sample": 545,
-   "tid": 29
   },
   "1523": {
    "applied": {
@@ -3505,26 +3630,26 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -0.99,
-   "sample": 168,
+   "residualZ": -1.07,
+   "sample": 188,
    "tid": 8
   },
   "1541": {
    "applied": {
-    "bsc": 1,
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.RB": 1,
-    "pot": 1
+    "bsc": 2,
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.RB": 2,
+    "pot": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Tony Pollard",
-   "ovrAfter": 68,
+   "ovrAfter": 69,
    "ovrBefore": 67,
    "pos": "RB",
-   "residualZ": 0.34,
-   "sample": 164,
+   "residualZ": 0.47,
+   "sample": 185,
    "tid": 30
   },
   "1542": {
@@ -3540,9 +3665,27 @@
    "ovrAfter": 48,
    "ovrBefore": 52,
    "pos": "WR",
-   "residualZ": -2.91,
+   "residualZ": -2.86,
    "sample": 20,
    "tid": 1
+  },
+  "1552": {
+   "applied": {
+    "bsc": 1,
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.RB": 1,
+    "pot": 1
+   },
+   "delta": 1,
+   "name": "Javonte Williams",
+   "ovrAfter": 77,
+   "ovrBefore": 76,
+   "pos": "RB",
+   "residualZ": 0.21,
+   "sample": 216,
+   "tid": 8
   },
   "1555": {
    "applied": {
@@ -3558,9 +3701,45 @@
    "ovrAfter": 57,
    "ovrBefore": 60,
    "pos": "S",
-   "residualZ": -1.01,
-   "sample": 596,
+   "residualZ": -1.03,
+   "sample": 661,
    "tid": 4
+  },
+  "1556": {
+   "applied": {
+    "elu": -1,
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.WR": -1,
+    "pot": -1,
+    "rtr": -1
+   },
+   "delta": -1,
+   "name": "Kalif Raymond",
+   "ovrAfter": 47,
+   "ovrBefore": 48,
+   "pos": "WR",
+   "residualZ": -0.29,
+   "sample": 45,
+   "tid": 5
+  },
+  "1564": {
+   "applied": {
+    "bsc": 1,
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.RB": 1,
+    "pot": 1
+   },
+   "delta": 1,
+   "name": "Samaje Perine",
+   "ovrAfter": 50,
+   "ovrBefore": 49,
+   "pos": "RB",
+   "residualZ": 0.41,
+   "sample": 74,
+   "tid": 6
   },
   "1571": {
    "applied": {
@@ -3576,26 +3755,26 @@
    "ovrAfter": 51,
    "ovrBefore": 48,
    "pos": "DL",
-   "residualZ": 1.04,
-   "sample": 414,
+   "residualZ": 1.12,
+   "sample": 446,
    "tid": 31
   },
   "1575": {
    "applied": {
-    "bsc": 3,
-    "elu": 3,
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.RB": 3,
-    "pot": 3
+    "bsc": 4,
+    "elu": 4,
+    "hnd": 4,
+    "ovr": 4,
+    "ovrs.RB": 4,
+    "pot": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Justice Hill",
-   "ovrAfter": 54,
+   "ovrAfter": 55,
    "ovrBefore": 51,
    "pos": "RB",
-   "residualZ": 1.44,
-   "sample": 61,
+   "residualZ": 1.81,
+   "sample": 71,
    "tid": 2
   },
   "1581": {
@@ -3612,27 +3791,9 @@
    "ovrAfter": 69,
    "ovrBefore": 71,
    "pos": "RB",
-   "residualZ": -1.23,
-   "sample": 52,
+   "residualZ": -0.94,
+   "sample": 66,
    "tid": 22
-  },
-  "1583": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Drue Tranquill",
-   "ovrAfter": 54,
-   "ovrBefore": 53,
-   "pos": "LB",
-   "residualZ": 0.19,
-   "sample": 524,
-   "tid": 15
   },
   "1589": {
    "applied": {
@@ -3648,8 +3809,8 @@
    "ovrAfter": 72,
    "ovrBefore": 74,
    "pos": "LB",
-   "residualZ": -0.67,
-   "sample": 649,
+   "residualZ": -0.52,
+   "sample": 706,
    "tid": 24
   },
   "1596": {
@@ -3666,9 +3827,27 @@
    "ovrAfter": 40,
    "ovrBefore": 44,
    "pos": "LB",
-   "residualZ": -1.31,
-   "sample": 407,
+   "residualZ": -1.5,
+   "sample": 423,
    "tid": 30
+  },
+  "1597": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.LB": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Frankie Luvu",
+   "ovrAfter": 70,
+   "ovrBefore": 69,
+   "pos": "LB",
+   "residualZ": 0.19,
+   "sample": 509,
+   "tid": 31
   },
   "1602": {
    "applied": {
@@ -3690,56 +3869,56 @@
   },
   "1617": {
    "applied": {
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.WR": 1,
-    "pot": 1,
-    "rtr": 1
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "D.J. Moore",
-   "ovrAfter": 63,
+   "ovrAfter": 64,
    "ovrBefore": 62,
    "pos": "WR",
-   "residualZ": 0.5,
-   "sample": 38,
+   "residualZ": 0.74,
+   "sample": 48,
    "tid": 3
   },
   "1623": {
    "applied": {
-    "ovr": -3,
-    "ovrs.S": -3,
-    "pcv": -3,
-    "pot": -3,
-    "rns": -3,
-    "tck": -3
+    "ovr": -1,
+    "ovrs.S": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
    },
-   "delta": -3,
+   "delta": -1,
    "name": "Damar Hamlin",
-   "ovrAfter": 47,
+   "ovrAfter": 49,
    "ovrBefore": 50,
    "pos": "S",
-   "residualZ": -1.35,
-   "sample": 263,
+   "residualZ": -0.29,
+   "sample": 269,
    "tid": 3
   },
   "1629": {
    "applied": {
-    "bsc": 6,
-    "elu": 6,
-    "hnd": 6,
-    "ovr": 6,
-    "ovrs.RB": 6,
-    "pot": 6
+    "bsc": 7,
+    "elu": 7,
+    "hnd": 7,
+    "ovr": 7,
+    "ovrs.RB": 7,
+    "pot": 7
    },
-   "delta": 6,
+   "delta": 7,
    "name": "Chuba Hubbard",
-   "ovrAfter": 67,
+   "ovrAfter": 68,
    "ovrBefore": 61,
    "pos": "RB",
-   "residualZ": 1.86,
-   "sample": 192,
+   "residualZ": 1.98,
+   "sample": 219,
    "tid": 4
   },
   "1630": {
@@ -3756,9 +3935,26 @@
    "ovrAfter": 57,
    "ovrBefore": 56,
    "pos": "LB",
-   "residualZ": 0.43,
+   "residualZ": 0.39,
    "sample": 456,
    "tid": 22
+  },
+  "167": {
+   "applied": {
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.WR": -1,
+    "pot": -1,
+    "rtr": -1
+   },
+   "delta": -1,
+   "name": "DeVonta Smith",
+   "ovrAfter": 68,
+   "ovrBefore": 69,
+   "pos": "WR",
+   "residualZ": -0.35,
+   "sample": 53,
+   "tid": 25
   },
   "175": {
    "applied": {
@@ -3774,8 +3970,8 @@
    "ovrAfter": 72,
    "ovrBefore": 70,
    "pos": "DL",
-   "residualZ": 0.76,
-   "sample": 490,
+   "residualZ": 0.54,
+   "sample": 544,
    "tid": 10
   },
   "179": {
@@ -3792,26 +3988,26 @@
    "ovrAfter": 61,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": 1.76,
-   "sample": 320,
+   "residualZ": 1.81,
+   "sample": 369,
    "tid": 10
   },
   "18": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Nick Bosa",
-   "ovrAfter": 85,
+   "ovrAfter": 84,
    "ovrBefore": 87,
    "pos": "DL",
-   "residualZ": -1.37,
-   "sample": 172,
+   "residualZ": -1.41,
+   "sample": 214,
    "tid": 27
   },
   "182": {
@@ -3828,7 +4024,7 @@
    "ovrAfter": 67,
    "ovrBefore": 66,
    "pos": "LB",
-   "residualZ": 0.31,
+   "residualZ": 0.34,
    "sample": 380,
    "tid": 23
   },
@@ -3846,8 +4042,8 @@
    "ovrAfter": 74,
    "ovrBefore": 68,
    "pos": "WR",
-   "residualZ": 2.04,
-   "sample": 73,
+   "residualZ": 2.02,
+   "sample": 76,
    "tid": 6
   },
   "198": {
@@ -3863,27 +4059,45 @@
    "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": -1.62,
+   "residualZ": -1.56,
    "sample": 228,
    "tid": 7
   },
   "202": {
    "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.LB": 2,
+    "pcv": 2,
+    "pot": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Zack Baun",
-   "ovrAfter": 85,
+   "ovrAfter": 86,
    "ovrBefore": 84,
    "pos": "LB",
-   "residualZ": 0.37,
+   "residualZ": 0.52,
    "sample": 500,
    "tid": 25
+  },
+  "208": {
+   "applied": {
+    "ovr": 5,
+    "ovrs.LB": 5,
+    "pcv": 5,
+    "pot": 5,
+    "rns": 5,
+    "tck": 5
+   },
+   "delta": 5,
+   "name": "Troy Dye",
+   "ovrAfter": 39,
+   "ovrBefore": 34,
+   "pos": "LB",
+   "residualZ": 3.58,
+   "sample": 124,
+   "tid": 17
   },
   "21": {
    "applied": {
@@ -3899,8 +4113,8 @@
    "ovrAfter": 59,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": 0.6,
-   "sample": 212,
+   "residualZ": 0.55,
+   "sample": 236,
    "tid": 3
   },
   "215": {
@@ -3916,8 +4130,8 @@
    "ovrAfter": 33,
    "ovrBefore": 34,
    "pos": "DL",
-   "residualZ": -0.45,
-   "sample": 221,
+   "residualZ": -0.42,
+   "sample": 232,
    "tid": 5
   },
   "238": {
@@ -3934,8 +4148,8 @@
    "ovrAfter": 82,
    "ovrBefore": 83,
    "pos": "LB",
-   "residualZ": -0.33,
-   "sample": 595,
+   "residualZ": -0.19,
+   "sample": 633,
    "tid": 15
   },
   "243": {
@@ -3952,27 +4166,9 @@
    "ovrAfter": 53,
    "ovrBefore": 54,
    "pos": "WR",
-   "residualZ": -0.57,
+   "residualZ": -0.51,
    "sample": 38,
    "tid": 0
-  },
-  "244": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Dre'Mont Jones",
-   "ovrAfter": 54,
-   "ovrBefore": 55,
-   "pos": "DL",
-   "residualZ": -0.2,
-   "sample": 336,
-   "tid": 21
   },
   "254": {
    "applied": {
@@ -3988,44 +4184,44 @@
    "ovrAfter": 52,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": -1.45,
-   "sample": 155,
+   "residualZ": -1.27,
+   "sample": 166,
    "tid": 5
   },
   "256": {
    "applied": {
-    "ovr": 2,
-    "ovrs.S": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 3,
+    "ovrs.S": 3,
+    "pcv": 3,
+    "pot": 3,
+    "rns": 3,
+    "tck": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "Chuck Clark",
-   "ovrAfter": 56,
+   "ovrAfter": 57,
    "ovrBefore": 54,
    "pos": "S",
-   "residualZ": 0.74,
-   "sample": 540,
+   "residualZ": 0.95,
+   "sample": 609,
    "tid": 10
   },
   "257": {
    "applied": {
-    "ovr": 4,
-    "ovrs.DL": 4,
-    "pot": 4,
-    "prs": 4,
-    "rns": 4,
-    "tck": 4
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 4,
+   "delta": 5,
    "name": "Quinnen Williams",
-   "ovrAfter": 84,
+   "ovrAfter": 85,
    "ovrBefore": 80,
    "pos": "DL",
-   "residualZ": 1.3,
-   "sample": 453,
+   "residualZ": 1.73,
+   "sample": 488,
    "tid": 8
   },
   "258": {
@@ -4042,43 +4238,61 @@
    "ovrAfter": 62,
    "ovrBefore": 65,
    "pos": "RB",
-   "residualZ": -1.64,
-   "sample": 59,
+   "residualZ": -1.14,
+   "sample": 88,
    "tid": 12
   },
   "266": {
    "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.LB": 2,
+    "pcv": 2,
+    "pot": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Bobby Okereke",
-   "ovrAfter": 76,
+   "ovrAfter": 77,
    "ovrBefore": 75,
    "pos": "LB",
-   "residualZ": 0.45,
+   "residualZ": 0.53,
    "sample": 428,
    "tid": 4
   },
+  "269": {
+   "applied": {
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
+   },
+   "delta": -3,
+   "name": "Levi Onwuzurike",
+   "ovrAfter": 47,
+   "ovrBefore": 50,
+   "pos": "DL",
+   "residualZ": -2.03,
+   "sample": 128,
+   "tid": 10
+  },
   "275": {
    "applied": {
-    "ovr": 2,
-    "ovrs.QB": 2,
-    "pot": 2,
-    "tha": 2,
-    "thv": 2
+    "ovr": 1,
+    "ovrs.QB": 1,
+    "pot": 1,
+    "tha": 1,
+    "thv": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Josh Allen",
-   "ovrAfter": 94,
+   "ovrAfter": 93,
    "ovrBefore": 92,
    "pos": "QB",
-   "residualZ": 0.5,
-   "sample": 341,
+   "residualZ": 0.15,
+   "sample": 389,
    "tid": 3
   },
   "290": {
@@ -4095,8 +4309,8 @@
    "ovrAfter": 78,
    "ovrBefore": 81,
    "pos": "DL",
-   "residualZ": -1.03,
-   "sample": 312,
+   "residualZ": -1.14,
+   "sample": 359,
    "tid": 2
   },
   "306": {
@@ -4113,25 +4327,25 @@
    "ovrAfter": 63,
    "ovrBefore": 65,
    "pos": "S",
-   "residualZ": -1.16,
+   "residualZ": -1.21,
    "sample": 167,
    "tid": 8
   },
   "310": {
    "applied": {
-    "ovr": -3,
-    "ovrs.S": -3,
-    "pcv": -3,
-    "pot": -3,
-    "tck": -3
+    "ovr": -4,
+    "ovrs.S": -4,
+    "pcv": -4,
+    "pot": -4,
+    "tck": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "Ifeatu Melifonwu",
-   "ovrAfter": 43,
+   "ovrAfter": 42,
    "ovrBefore": 46,
    "pos": "S",
-   "residualZ": -1.86,
-   "sample": 231,
+   "residualZ": -1.95,
+   "sample": 284,
    "tid": 29
   },
   "319": {
@@ -4148,8 +4362,8 @@
    "ovrAfter": 58,
    "ovrBefore": 57,
    "pos": "LB",
-   "residualZ": 0.55,
-   "sample": 200,
+   "residualZ": 0.3,
+   "sample": 225,
    "tid": 20
   },
   "32": {
@@ -4166,7 +4380,7 @@
    "ovrAfter": 73,
    "ovrBefore": 76,
    "pos": "S",
-   "residualZ": -1.22,
+   "residualZ": -1.27,
    "sample": 314,
    "tid": 29
   },
@@ -4183,9 +4397,45 @@
    "ovrAfter": 59,
    "ovrBefore": 61,
    "pos": "S",
-   "residualZ": -0.66,
-   "sample": 629,
+   "residualZ": -0.51,
+   "sample": 695,
    "tid": 13
+  },
+  "3289": {
+   "applied": {
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.TE": -1,
+    "pot": -1,
+    "rbk": -1,
+    "rtr": -1
+   },
+   "delta": -1,
+   "name": "David Njoku",
+   "ovrAfter": 56,
+   "ovrBefore": 57,
+   "pos": "TE",
+   "residualZ": -1.03,
+   "sample": 12,
+   "tid": 17
+  },
+  "333": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.LB": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
+   },
+   "delta": -1,
+   "name": "Zaven Collins",
+   "ovrAfter": 56,
+   "ovrBefore": 57,
+   "pos": "LB",
+   "residualZ": -0.37,
+   "sample": 355,
+   "tid": 0
   },
   "3335": {
    "applied": {
@@ -4201,8 +4451,8 @@
    "ovrAfter": 59,
    "ovrBefore": 61,
    "pos": "TE",
-   "residualZ": -0.7,
-   "sample": 51,
+   "residualZ": -0.8,
+   "sample": 54,
    "tid": 2
   },
   "3348": {
@@ -4219,44 +4469,44 @@
    "ovrAfter": 57,
    "ovrBefore": 55,
    "pos": "S",
-   "residualZ": 0.87,
-   "sample": 238,
+   "residualZ": 0.95,
+   "sample": 310,
    "tid": 23
   },
-  "3370": {
+  "3376": {
    "applied": {
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.TE": -1,
-    "pot": -1,
-    "rbk": -1,
-    "rtr": -1
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.TE": 1,
+    "pot": 1,
+    "rbk": 1,
+    "rtr": 1
    },
-   "delta": -1,
-   "name": "Cole Kmet",
-   "ovrAfter": 49,
-   "ovrBefore": 50,
+   "delta": 1,
+   "name": "Drew Sample",
+   "ovrAfter": 29,
+   "ovrBefore": 28,
    "pos": "TE",
-   "residualZ": -0.43,
-   "sample": 14,
-   "tid": 5
+   "residualZ": 0.63,
+   "sample": 12,
+   "tid": 6
   },
   "3393": {
    "applied": {
-    "hnd": -2,
-    "ovr": -2,
-    "ovrs.TE": -2,
-    "pot": -2,
-    "rbk": -2,
-    "rtr": -2
+    "hnd": -3,
+    "ovr": -3,
+    "ovrs.TE": -3,
+    "pot": -3,
+    "rbk": -3,
+    "rtr": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Noah Fant",
-   "ovrAfter": 54,
+   "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "TE",
-   "residualZ": -1.45,
-   "sample": 19,
+   "residualZ": -1.63,
+   "sample": 24,
    "tid": 22
   },
   "34": {
@@ -4273,8 +4523,8 @@
    "ovrAfter": 70,
    "ovrBefore": 77,
    "pos": "QB",
-   "residualZ": -1.92,
-   "sample": 382,
+   "residualZ": -2.02,
+   "sample": 412,
    "tid": 13
   },
   "3404": {
@@ -4291,8 +4541,8 @@
    "ovrAfter": 61,
    "ovrBefore": 59,
    "pos": "TE",
-   "residualZ": 0.59,
-   "sample": 44,
+   "residualZ": 0.69,
+   "sample": 51,
    "tid": 20
   },
   "348": {
@@ -4309,8 +4559,8 @@
    "ovrAfter": 63,
    "ovrBefore": 64,
    "pos": "DL",
-   "residualZ": -0.23,
-   "sample": 454,
+   "residualZ": -0.34,
+   "sample": 485,
    "tid": 8
   },
   "35": {
@@ -4327,45 +4577,27 @@
    "ovrAfter": 56,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": 0.52,
-   "sample": 222,
+   "residualZ": 0.27,
+   "sample": 257,
    "tid": 17
   },
   "350": {
    "applied": {
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.TE": 3,
-    "pot": 3,
-    "rbk": 3,
-    "rtr": 3
+    "hnd": 4,
+    "ovr": 4,
+    "ovrs.TE": 4,
+    "pot": 4,
+    "rbk": 4,
+    "rtr": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Mike Gesicki",
-   "ovrAfter": 55,
+   "ovrAfter": 56,
    "ovrBefore": 52,
    "pos": "TE",
-   "residualZ": 1.56,
-   "sample": 28,
+   "residualZ": 1.95,
+   "sample": 34,
    "tid": 6
-  },
-  "358": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.QB": 1,
-    "pot": 1,
-    "tha": 1,
-    "thp": 1,
-    "thv": 1
-   },
-   "delta": 1,
-   "name": "Jordan Love",
-   "ovrAfter": 85,
-   "ovrBefore": 84,
-   "pos": "QB",
-   "residualZ": 0.16,
-   "sample": 406,
-   "tid": 11
   },
   "368": {
    "applied": {
@@ -4381,62 +4613,62 @@
    "ovrAfter": 54,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": -0.32,
+   "residualZ": -0.29,
    "sample": 295,
    "tid": 28
   },
   "39": {
    "applied": {
-    "bsc": -3,
-    "elu": -3,
-    "hnd": -3,
-    "ovr": -3,
-    "ovrs.RB": -3,
-    "pot": -3
+    "bsc": -2,
+    "elu": -2,
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.RB": -2,
+    "pot": -2
    },
-   "delta": -3,
+   "delta": -2,
    "name": "Derrick Henry",
-   "ovrAfter": 83,
+   "ovrAfter": 84,
    "ovrBefore": 86,
    "pos": "RB",
-   "residualZ": -0.79,
-   "sample": 202,
+   "residualZ": -0.61,
+   "sample": 219,
    "tid": 2
   },
   "394": {
    "applied": {
-    "ovr": -2,
-    "ovrs.S": -2,
-    "pcv": -2,
-    "pot": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -1,
+    "ovrs.S": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Marcus Epps",
-   "ovrAfter": 45,
+   "ovrAfter": 46,
    "ovrBefore": 47,
    "pos": "S",
-   "residualZ": -1.09,
-   "sample": 175,
+   "residualZ": -0.74,
+   "sample": 234,
    "tid": 25
   },
   "402": {
    "applied": {
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.WR": 1,
-    "pot": 1,
-    "rtr": 1
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "CeeDee Lamb",
-   "ovrAfter": 86,
+   "ovrAfter": 87,
    "ovrBefore": 85,
    "pos": "WR",
-   "residualZ": 0.38,
-   "sample": 121,
+   "residualZ": 0.57,
+   "sample": 133,
    "tid": 8
   },
   "413": {
@@ -4453,7 +4685,7 @@
    "ovrAfter": 49,
    "ovrBefore": 53,
    "pos": "LB",
-   "residualZ": -2.72,
+   "residualZ": -2.6,
    "sample": 148,
    "tid": -1
   },
@@ -4471,80 +4703,45 @@
    "ovrAfter": 64,
    "ovrBefore": 62,
    "pos": "RB",
-   "residualZ": 0.6,
-   "sample": 179,
+   "residualZ": 0.48,
+   "sample": 194,
    "tid": 5
   },
   "420": {
    "applied": {
-    "bsc": 3,
-    "elu": 3,
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.RB": 3,
-    "pot": 3
+    "bsc": 2,
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.RB": 2,
+    "pot": 2
    },
-   "delta": 3,
+   "delta": 2,
    "name": "Christian McCaffrey",
-   "ovrAfter": 92,
+   "ovrAfter": 91,
    "ovrBefore": 89,
    "pos": "RB",
-   "residualZ": 0.9,
-   "sample": 155,
+   "residualZ": 0.76,
+   "sample": 169,
    "tid": 27
   },
   "421": {
    "applied": {
-    "ovr": -3,
-    "ovrs.QB": -3,
-    "pot": -3,
-    "tha": -3,
-    "thp": -3,
-    "thv": -3
+    "ovr": -2,
+    "ovrs.QB": -2,
+    "pot": -2,
+    "tha": -2,
+    "thp": -2,
+    "thv": -2
    },
-   "delta": -3,
+   "delta": -2,
    "name": "Jacoby Brissett",
-   "ovrAfter": 64,
+   "ovrAfter": 65,
    "ovrBefore": 67,
    "pos": "QB",
-   "residualZ": -0.73,
-   "sample": 406,
+   "residualZ": -0.55,
+   "sample": 447,
    "tid": 2
-  },
-  "4290": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1
-   },
-   "delta": -1,
-   "name": "Harrison Phillips",
-   "ovrAfter": 42,
-   "ovrBefore": 43,
-   "pos": "DL",
-   "residualZ": -0.41,
-   "sample": 362,
-   "tid": 24
-  },
-  "43": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Kwity Paye",
-   "ovrAfter": 57,
-   "ovrBefore": 56,
-   "pos": "DL",
-   "residualZ": 0.23,
-   "sample": 408,
-   "tid": 16
   },
   "4300": {
    "applied": {
@@ -4560,7 +4757,7 @@
    "ovrAfter": 49,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": -1.7,
+   "residualZ": -1.63,
    "sample": 176,
    "tid": -1
   },
@@ -4578,26 +4775,26 @@
    "ovrAfter": 49,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": -1.41,
-   "sample": 180,
+   "residualZ": -1.33,
+   "sample": 204,
    "tid": 14
   },
   "4372": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -1,
+    "ovrs.DL": -1,
+    "pot": -1,
+    "prs": -1,
+    "rns": -1,
+    "tck": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Jonathan Greenard",
-   "ovrAfter": 63,
+   "ovrAfter": 64,
    "ovrBefore": 65,
    "pos": "DL",
-   "residualZ": -0.94,
-   "sample": 154,
+   "residualZ": -0.37,
+   "sample": 188,
    "tid": 25
   },
   "4373": {
@@ -4614,8 +4811,8 @@
    "ovrAfter": 50,
    "ovrBefore": 44,
    "pos": "DL",
-   "residualZ": 2.9,
-   "sample": 378,
+   "residualZ": 2.6,
+   "sample": 416,
    "tid": 30
   },
   "438": {
@@ -4631,7 +4828,7 @@
    "ovrAfter": 41,
    "ovrBefore": 42,
    "pos": "DL",
-   "residualZ": -0.78,
+   "residualZ": -0.7,
    "sample": 127,
    "tid": 23
   },
@@ -4649,8 +4846,8 @@
    "ovrAfter": 53,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": -0.59,
-   "sample": 380,
+   "residualZ": -0.56,
+   "sample": 423,
    "tid": 13
   },
   "4395": {
@@ -4667,27 +4864,9 @@
    "ovrAfter": 49,
    "ovrBefore": 45,
    "pos": "S",
-   "residualZ": 1.57,
+   "residualZ": 1.63,
    "sample": 399,
    "tid": 0
-  },
-  "4397": {
-   "applied": {
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.TE": 1,
-    "pot": 1,
-    "rbk": 1,
-    "rtr": 1
-   },
-   "delta": 1,
-   "name": "Noah Gray",
-   "ovrAfter": 55,
-   "ovrBefore": 54,
-   "pos": "TE",
-   "residualZ": 0.55,
-   "sample": 20,
-   "tid": 15
   },
   "4399": {
    "applied": {
@@ -4703,8 +4882,8 @@
    "ovrAfter": 56,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": -1.45,
-   "sample": 202,
+   "residualZ": -1.16,
+   "sample": 242,
    "tid": 4
   },
   "440": {
@@ -4720,25 +4899,25 @@
    "ovrAfter": 48,
    "ovrBefore": 52,
    "pos": "LB",
-   "residualZ": -1.35,
-   "sample": 327,
+   "residualZ": -1.47,
+   "sample": 363,
    "tid": 0
   },
   "4417": {
    "applied": {
-    "ovr": -2,
-    "ovrs.S": -2,
-    "pcv": -2,
-    "pot": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.S": -3,
+    "pcv": -3,
+    "pot": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Taylor Rapp",
-   "ovrAfter": 49,
+   "ovrAfter": 48,
    "ovrBefore": 51,
    "pos": "S",
-   "residualZ": -1.06,
-   "sample": 217,
+   "residualZ": -1.34,
+   "sample": 250,
    "tid": 9
   },
   "4419": {
@@ -4755,7 +4934,7 @@
    "ovrAfter": 53,
    "ovrBefore": 52,
    "pos": "WR",
-   "residualZ": 0.43,
+   "residualZ": 0.51,
    "sample": 32,
    "tid": 21
   },
@@ -4773,43 +4952,43 @@
    "ovrAfter": 62,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": 0.41,
+   "residualZ": 0.4,
    "sample": 375,
    "tid": 19
   },
-  "4455": {
+  "4443": {
    "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": -1,
+    "ovrs.LB": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
    },
-   "delta": 1,
-   "name": "Shy Tuttle",
-   "ovrAfter": 51,
-   "ovrBefore": 50,
-   "pos": "DL",
-   "residualZ": 0.23,
-   "sample": 243,
-   "tid": 31
+   "delta": -1,
+   "name": "Anfernee Jennings",
+   "ovrAfter": 50,
+   "ovrBefore": 51,
+   "pos": "LB",
+   "residualZ": -0.46,
+   "sample": 131,
+   "tid": 22
   },
   "446": {
    "applied": {
-    "ovr": 1,
-    "ovrs.S": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.S": 2,
+    "pcv": 2,
+    "pot": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Julian Love",
-   "ovrAfter": 74,
+   "ovrAfter": 75,
    "ovrBefore": 73,
    "pos": "S",
-   "residualZ": 0.48,
+   "residualZ": 0.54,
    "sample": 539,
    "tid": 28
   },
@@ -4827,8 +5006,8 @@
    "ovrAfter": 49,
    "ovrBefore": 50,
    "pos": "DL",
-   "residualZ": -0.25,
-   "sample": 243,
+   "residualZ": -0.34,
+   "sample": 260,
    "tid": 22
   },
   "4476": {
@@ -4844,7 +5023,7 @@
    "ovrAfter": 44,
    "ovrBefore": 46,
    "pos": "S",
-   "residualZ": -1.31,
+   "residualZ": -1.26,
    "sample": 214,
    "tid": 23
   },
@@ -4862,7 +5041,7 @@
    "ovrAfter": 70,
    "ovrBefore": 72,
    "pos": "DL",
-   "residualZ": -0.83,
+   "residualZ": -0.85,
    "sample": 425,
    "tid": 21
   },
@@ -4880,24 +5059,42 @@
    "ovrAfter": 57,
    "ovrBefore": 60,
    "pos": "LB",
-   "residualZ": -0.89,
+   "residualZ": -0.81,
    "sample": 593,
    "tid": 21
   },
+  "4510": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.DL": -1,
+    "pot": -1,
+    "prs": -1,
+    "rns": -1,
+    "tck": -1
+   },
+   "delta": -1,
+   "name": "Arden Key",
+   "ovrAfter": 49,
+   "ovrBefore": 50,
+   "pos": "DL",
+   "residualZ": -0.32,
+   "sample": 244,
+   "tid": 13
+  },
   "4553": {
    "applied": {
-    "kac": -3,
-    "kpw": -3,
-    "ovr": -3,
-    "ovrs.K": -3,
-    "pot": -3
+    "kac": -4,
+    "kpw": -4,
+    "ovr": -4,
+    "ovrs.K": -4,
+    "pot": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "Zane Gonzalez",
-   "ovrAfter": 48,
+   "ovrAfter": 47,
    "ovrBefore": 51,
    "pos": "K",
-   "residualZ": -1.63,
+   "residualZ": -1.86,
    "sample": 10,
    "tid": -1
   },
@@ -4915,8 +5112,8 @@
    "ovrAfter": 57,
    "ovrBefore": 53,
    "pos": "LB",
-   "residualZ": 1.19,
-   "sample": 647,
+   "residualZ": 1.25,
+   "sample": 717,
    "tid": 9
   },
   "474": {
@@ -4933,8 +5130,8 @@
    "ovrAfter": 42,
    "ovrBefore": 41,
    "pos": "DL",
-   "residualZ": 0.37,
-   "sample": 234,
+   "residualZ": 0.25,
+   "sample": 257,
    "tid": 29
   },
   "48": {
@@ -4950,8 +5147,8 @@
    "ovrAfter": 44,
    "ovrBefore": 46,
    "pos": "DL",
-   "residualZ": -1.14,
-   "sample": 135,
+   "residualZ": -1.18,
+   "sample": 151,
    "tid": 31
   },
   "490": {
@@ -4968,8 +5165,8 @@
    "ovrAfter": 59,
    "ovrBefore": 58,
    "pos": "S",
-   "residualZ": 0.44,
-   "sample": 667,
+   "residualZ": 0.36,
+   "sample": 740,
    "tid": 16
   },
   "492": {
@@ -4986,61 +5183,42 @@
    "ovrAfter": 78,
    "ovrBefore": 77,
    "pos": "LB",
-   "residualZ": 0.3,
+   "residualZ": 0.42,
    "sample": 614,
    "tid": 28
   },
   "495": {
    "applied": {
-    "kac": 3,
-    "kpw": 3,
-    "ovr": 3,
-    "ovrs.K": 3,
-    "pot": 3
+    "kac": 4,
+    "kpw": 4,
+    "ovr": 4,
+    "ovrs.K": 4,
+    "pot": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Evan McPherson",
-   "ovrAfter": 68,
+   "ovrAfter": 69,
    "ovrBefore": 65,
    "pos": "K",
-   "residualZ": 1.35,
-   "sample": 14,
+   "residualZ": 1.52,
+   "sample": 16,
    "tid": 6
-  },
-  "5": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.S": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Minkah Fitzpatrick",
-   "ovrAfter": 69,
-   "ovrBefore": 68,
-   "pos": "S",
-   "residualZ": 0.23,
-   "sample": 485,
-   "tid": 24
   },
   "502": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": 1,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Kenny Clark",
-   "ovrAfter": 57,
+   "ovrAfter": 56,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": -0.77,
-   "sample": 449,
+   "residualZ": -0.82,
+   "sample": 481,
    "tid": 8
   },
   "505": {
@@ -5057,7 +5235,7 @@
    "ovrAfter": 92,
    "ovrBefore": 88,
    "pos": "QB",
-   "residualZ": 1.65,
+   "residualZ": 1.64,
    "sample": 123,
    "tid": 2
   },
@@ -5075,9 +5253,27 @@
    "ovrAfter": 79,
    "ovrBefore": 80,
    "pos": "DL",
-   "residualZ": -0.25,
+   "residualZ": -0.29,
    "sample": 407,
    "tid": 12
+  },
+  "509": {
+   "applied": {
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.TE": 1,
+    "pot": 1,
+    "rbk": 1,
+    "rtr": 1
+   },
+   "delta": 1,
+   "name": "Dallas Goedert",
+   "ovrAfter": 68,
+   "ovrBefore": 67,
+   "pos": "TE",
+   "residualZ": 0.29,
+   "sample": 42,
+   "tid": 25
   },
   "511": {
    "applied": {
@@ -5093,26 +5289,26 @@
    "ovrAfter": 59,
    "ovrBefore": 57,
    "pos": "DL",
-   "residualZ": 0.78,
+   "residualZ": 0.8,
    "sample": 231,
    "tid": 1
   },
   "52": {
    "applied": {
-    "hnd": 2,
-    "ovr": 2,
-    "ovrs.TE": 2,
-    "pot": 2,
-    "rbk": 2,
-    "rtr": 2
+    "hnd": 3,
+    "ovr": 3,
+    "ovrs.TE": 3,
+    "pot": 3,
+    "rbk": 3,
+    "rtr": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "Darren Waller",
-   "ovrAfter": 57,
+   "ovrAfter": 58,
    "ovrBefore": 55,
    "pos": "TE",
-   "residualZ": 0.86,
-   "sample": 39,
+   "residualZ": 1.06,
+   "sample": 42,
    "tid": 4
   },
   "520": {
@@ -5129,7 +5325,7 @@
    "ovrAfter": 79,
    "ovrBefore": 80,
    "pos": "S",
-   "residualZ": -0.27,
+   "residualZ": -0.26,
    "sample": 603,
    "tid": 21
   },
@@ -5147,8 +5343,8 @@
    "ovrAfter": 57,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": -0.42,
-   "sample": 288,
+   "residualZ": -0.44,
+   "sample": 318,
    "tid": 2
   },
   "53": {
@@ -5165,7 +5361,7 @@
    "ovrAfter": 86,
    "ovrBefore": 88,
    "pos": "QB",
-   "residualZ": -0.47,
+   "residualZ": -0.52,
    "sample": 404,
    "tid": 18
   },
@@ -5183,8 +5379,8 @@
    "ovrAfter": 60,
    "ovrBefore": 59,
    "pos": "WR",
-   "residualZ": 0.7,
-   "sample": 23,
+   "residualZ": 0.41,
+   "sample": 27,
    "tid": 27
   },
   "537": {
@@ -5200,8 +5396,8 @@
    "ovrAfter": 61,
    "ovrBefore": 63,
    "pos": "WR",
-   "residualZ": -0.7,
-   "sample": 65,
+   "residualZ": -0.63,
+   "sample": 69,
    "tid": 27
   },
   "541": {
@@ -5217,7 +5413,7 @@
    "ovrAfter": 65,
    "ovrBefore": 69,
    "pos": "P",
-   "residualZ": -1.63,
+   "residualZ": -1.58,
    "sample": 30,
    "tid": 19
   },
@@ -5235,26 +5431,26 @@
    "ovrAfter": 70,
    "ovrBefore": 66,
    "pos": "S",
-   "residualZ": 1.6,
-   "sample": 519,
+   "residualZ": 1.67,
+   "sample": 591,
    "tid": 23
   },
   "555": {
    "applied": {
-    "bsc": -2,
-    "elu": -2,
+    "bsc": -3,
+    "elu": -3,
     "hnd": -1,
-    "ovr": -2,
-    "ovrs.RB": -2,
-    "pot": -2
+    "ovr": -3,
+    "ovrs.RB": -3,
+    "pot": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Devin Singletary",
-   "ovrAfter": 51,
+   "ovrAfter": 50,
    "ovrBefore": 53,
    "pos": "RB",
-   "residualZ": -1.31,
-   "sample": 50,
+   "residualZ": -1.47,
+   "sample": 52,
    "tid": 23
   },
   "5551": {
@@ -5271,26 +5467,26 @@
    "ovrAfter": 58,
    "ovrBefore": 59,
    "pos": "QB",
-   "residualZ": -0.33,
+   "residualZ": -0.19,
    "sample": 270,
    "tid": 19
   },
   "5559": {
    "applied": {
-    "ovr": 6,
-    "ovrs.QB": 6,
-    "pot": 6,
-    "tha": 6,
-    "thp": 6,
-    "thv": 6
+    "ovr": 7,
+    "ovrs.QB": 7,
+    "pot": 7,
+    "tha": 7,
+    "thp": 7,
+    "thv": 7
    },
-   "delta": 6,
+   "delta": 7,
    "name": "Brock Purdy",
-   "ovrAfter": 85,
+   "ovrAfter": 86,
    "ovrBefore": 79,
    "pos": "QB",
-   "residualZ": 1.66,
-   "sample": 318,
+   "residualZ": 1.89,
+   "sample": 345,
    "tid": 27
   },
   "5568": {
@@ -5307,7 +5503,7 @@
    "ovrAfter": 75,
    "ovrBefore": 68,
    "pos": "RB",
-   "residualZ": 2.62,
+   "residualZ": 2.7,
    "sample": 185,
    "tid": 15
   },
@@ -5325,7 +5521,7 @@
    "ovrAfter": 70,
    "ovrBefore": 68,
    "pos": "RB",
-   "residualZ": 0.52,
+   "residualZ": 0.56,
    "sample": 177,
    "tid": 18
   },
@@ -5343,9 +5539,27 @@
    "ovrAfter": 84,
    "ovrBefore": 80,
    "pos": "RB",
-   "residualZ": 1.35,
-   "sample": 199,
+   "residualZ": 1.3,
+   "sample": 223,
    "tid": 3
+  },
+  "5573": {
+   "applied": {
+    "bsc": -1,
+    "elu": -1,
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.RB": -1,
+    "pot": -1
+   },
+   "delta": -1,
+   "name": "Tyler Allgeier",
+   "ovrAfter": 54,
+   "ovrBefore": 55,
+   "pos": "RB",
+   "residualZ": -0.28,
+   "sample": 124,
+   "tid": 0
   },
   "5580": {
    "applied": {
@@ -5360,7 +5574,7 @@
    "ovrAfter": 44,
    "ovrBefore": 45,
    "pos": "RB",
-   "residualZ": -0.85,
+   "residualZ": -0.98,
    "sample": 44,
    "tid": 25
   },
@@ -5378,26 +5592,26 @@
    "ovrAfter": 66,
    "ovrBefore": 65,
    "pos": "WR",
-   "residualZ": 0.3,
-   "sample": 77,
+   "residualZ": 0.23,
+   "sample": 82,
    "tid": 24
   },
   "5605": {
    "applied": {
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.WR": 1,
-    "pot": 1,
-    "rtr": 1
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Jameson Williams",
-   "ovrAfter": 71,
+   "ovrAfter": 72,
    "ovrBefore": 70,
    "pos": "WR",
-   "residualZ": 0.49,
-   "sample": 53,
+   "residualZ": 0.89,
+   "sample": 57,
    "tid": 10
   },
   "5606": {
@@ -5414,8 +5628,8 @@
    "ovrAfter": 49,
    "ovrBefore": 48,
    "pos": "WR",
-   "residualZ": 0.79,
-   "sample": 25,
+   "residualZ": 0.77,
+   "sample": 28,
    "tid": 31
   },
   "5607": {
@@ -5432,8 +5646,8 @@
    "ovrAfter": 76,
    "ovrBefore": 75,
    "pos": "WR",
-   "residualZ": 0.41,
-   "sample": 87,
+   "residualZ": 0.42,
+   "sample": 102,
    "tid": 22
   },
   "5608": {
@@ -5450,7 +5664,7 @@
    "ovrAfter": 76,
    "ovrBefore": 74,
    "pos": "WR",
-   "residualZ": 0.51,
+   "residualZ": 0.53,
    "sample": 79,
    "tid": 1
   },
@@ -5468,9 +5682,27 @@
    "ovrAfter": 56,
    "ovrBefore": 55,
    "pos": "WR",
-   "residualZ": 0.25,
+   "residualZ": 0.34,
    "sample": 38,
    "tid": 1
+  },
+  "5610": {
+   "applied": {
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.WR": 1,
+    "pot": 1,
+    "rtr": 1
+   },
+   "delta": 1,
+   "name": "George Pickens",
+   "ovrAfter": 81,
+   "ovrBefore": 80,
+   "pos": "WR",
+   "residualZ": 0.3,
+   "sample": 90,
+   "tid": 8
   },
   "5611": {
    "applied": {
@@ -5486,7 +5718,7 @@
    "ovrAfter": 61,
    "ovrBefore": 60,
    "pos": "WR",
-   "residualZ": 0.78,
+   "residualZ": 0.76,
    "sample": 24,
    "tid": 21
   },
@@ -5503,7 +5735,7 @@
    "ovrAfter": 60,
    "ovrBefore": 64,
    "pos": "WR",
-   "residualZ": -1.44,
+   "residualZ": -1.41,
    "sample": 54,
    "tid": 30
   },
@@ -5521,8 +5753,8 @@
    "ovrAfter": 60,
    "ovrBefore": 59,
    "pos": "WR",
-   "residualZ": 0.44,
-   "sample": 45,
+   "residualZ": 0.57,
+   "sample": 54,
    "tid": 3
   },
   "5615": {
@@ -5539,7 +5771,7 @@
    "ovrAfter": 67,
    "ovrBefore": 60,
    "pos": "WR",
-   "residualZ": 2.24,
+   "residualZ": 2.3,
    "sample": 79,
    "tid": 11
   },
@@ -5557,8 +5789,8 @@
    "ovrAfter": 52,
    "ovrBefore": 53,
    "pos": "WR",
-   "residualZ": -0.58,
-   "sample": 23,
+   "residualZ": -0.64,
+   "sample": 26,
    "tid": 4
   },
   "563": {
@@ -5575,26 +5807,44 @@
    "ovrAfter": 58,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": 1.24,
+   "residualZ": 1.25,
    "sample": 265,
    "tid": 21
   },
   "5655": {
    "applied": {
-    "hnd": -3,
-    "ovr": -3,
-    "ovrs.WR": -3,
-    "pot": -3,
-    "rtr": -3
+    "hnd": -4,
+    "ovr": -4,
+    "ovrs.WR": -4,
+    "pot": -4,
+    "rtr": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "Jalen Nailor",
-   "ovrAfter": 48,
+   "ovrAfter": 47,
    "ovrBefore": 51,
    "pos": "WR",
-   "residualZ": -1.75,
-   "sample": 32,
+   "residualZ": -1.77,
+   "sample": 37,
    "tid": 16
+  },
+  "5657": {
+   "applied": {
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.TE": -1,
+    "pot": -1,
+    "rbk": -1,
+    "rtr": -1
+   },
+   "delta": -1,
+   "name": "Trey McBride",
+   "ovrAfter": 81,
+   "ovrBefore": 82,
+   "pos": "TE",
+   "residualZ": -0.3,
+   "sample": 113,
+   "tid": 0
   },
   "5659": {
    "applied": {
@@ -5610,8 +5860,8 @@
    "ovrAfter": 65,
    "ovrBefore": 60,
    "pos": "TE",
-   "residualZ": 1.55,
-   "sample": 80,
+   "residualZ": 1.46,
+   "sample": 83,
    "tid": 23
   },
   "566": {
@@ -5628,7 +5878,7 @@
    "ovrAfter": 77,
    "ovrBefore": 75,
    "pos": "WR",
-   "residualZ": 0.81,
+   "residualZ": 0.83,
    "sample": 49,
    "tid": 18
   },
@@ -5646,26 +5896,26 @@
    "ovrAfter": 42,
    "ovrBefore": 43,
    "pos": "TE",
-   "residualZ": -0.8,
-   "sample": 23,
+   "residualZ": -0.75,
+   "sample": 24,
    "tid": 17
   },
   "5662": {
    "applied": {
-    "hnd": -3,
-    "ovr": -3,
-    "ovrs.TE": -3,
-    "pot": -3,
-    "rbk": -3,
-    "rtr": -3
+    "hnd": -4,
+    "ovr": -4,
+    "ovrs.TE": -4,
+    "pot": -4,
+    "rbk": -4,
+    "rtr": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "Cade Otton",
-   "ovrAfter": 56,
+   "ovrAfter": 55,
    "ovrBefore": 59,
    "pos": "TE",
-   "residualZ": -1.3,
-   "sample": 38,
+   "residualZ": -1.41,
+   "sample": 41,
    "tid": 29
   },
   "5664": {
@@ -5682,11 +5932,11 @@
    "ovrAfter": 63,
    "ovrBefore": 66,
    "pos": "TE",
-   "residualZ": -1.68,
+   "residualZ": -1.69,
    "sample": 27,
    "tid": 8
   },
-  "5671": {
+  "5665": {
    "applied": {
     "hnd": -1,
     "ovr": -1,
@@ -5696,48 +5946,84 @@
     "rtr": -1
    },
    "delta": -1,
+   "name": "Greg Dulcich",
+   "ovrAfter": 51,
+   "ovrBefore": 52,
+   "pos": "TE",
+   "residualZ": -0.3,
+   "sample": 41,
+   "tid": 19
+  },
+  "567": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.DL": -1,
+    "pot": -1,
+    "prs": -1,
+    "rns": -1,
+    "tck": -1
+   },
+   "delta": -1,
+   "name": "Khalil Mack",
+   "ovrAfter": 70,
+   "ovrBefore": 71,
+   "pos": "DL",
+   "residualZ": -0.28,
+   "sample": 449,
+   "tid": 17
+  },
+  "5671": {
+   "applied": {
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.TE": -2,
+    "pot": -2,
+    "rbk": -2,
+    "rtr": -2
+   },
+   "delta": -2,
    "name": "Daniel Bellinger",
-   "ovrAfter": 34,
+   "ovrAfter": 33,
    "ovrBefore": 35,
    "pos": "TE",
-   "residualZ": -0.93,
-   "sample": 18,
+   "residualZ": -0.94,
+   "sample": 19,
    "tid": 30
   },
   "569": {
    "applied": {
-    "ovr": 1,
-    "ovrs.QB": 1,
-    "pot": 1,
-    "tha": 1,
-    "thp": 1,
-    "thv": 1
+    "ovr": 2,
+    "ovrs.QB": 2,
+    "pot": 2,
+    "tha": 2,
+    "thp": 2,
+    "thv": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Patrick Mahomes II",
-   "ovrAfter": 87,
+   "ovrAfter": 88,
    "ovrBefore": 86,
    "pos": "QB",
-   "residualZ": 0.41,
-   "sample": 335,
+   "residualZ": 0.6,
+   "sample": 375,
    "tid": 15
   },
   "571": {
    "applied": {
-    "bsc": -2,
-    "elu": -2,
-    "hnd": -2,
-    "ovr": -2,
-    "ovrs.RB": -2,
-    "pot": -2
+    "bsc": -3,
+    "elu": -3,
+    "hnd": -3,
+    "ovr": -3,
+    "ovrs.RB": -3,
+    "pot": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Saquon Barkley",
-   "ovrAfter": 79,
+   "ovrAfter": 78,
    "ovrBefore": 81,
    "pos": "RB",
-   "residualZ": -1.15,
-   "sample": 76,
+   "residualZ": -1.1,
+   "sample": 93,
    "tid": 25
   },
   "572": {
@@ -5754,8 +6040,8 @@
    "ovrAfter": 76,
    "ovrBefore": 82,
    "pos": "QB",
-   "residualZ": -1.89,
-   "sample": 327,
+   "residualZ": -1.74,
+   "sample": 362,
    "tid": 17
   },
   "574": {
@@ -5771,7 +6057,7 @@
    "ovrAfter": 78,
    "ovrBefore": 74,
    "pos": "K",
-   "residualZ": 1.18,
+   "residualZ": 1.24,
    "sample": 22,
    "tid": 29
   },
@@ -5789,8 +6075,8 @@
    "ovrAfter": 58,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": -0.41,
-   "sample": 323,
+   "residualZ": -0.53,
+   "sample": 358,
    "tid": 14
   },
   "5743": {
@@ -5807,8 +6093,8 @@
    "ovrAfter": 54,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": 0.68,
-   "sample": 421,
+   "residualZ": 0.58,
+   "sample": 486,
    "tid": 14
   },
   "5745": {
@@ -5825,27 +6111,9 @@
    "ovrAfter": 65,
    "ovrBefore": 63,
    "pos": "DL",
-   "residualZ": 1.07,
-   "sample": 220,
+   "residualZ": 1.05,
+   "sample": 242,
    "tid": 12
-  },
-  "5748": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Travis Jones",
-   "ovrAfter": 55,
-   "ovrBefore": 56,
-   "pos": "DL",
-   "residualZ": -0.42,
-   "sample": 377,
-   "tid": 2
   },
   "5754": {
    "applied": {
@@ -5861,8 +6129,8 @@
    "ovrAfter": 36,
    "ovrBefore": 35,
    "pos": "DL",
-   "residualZ": 0.34,
-   "sample": 303,
+   "residualZ": 0.31,
+   "sample": 327,
    "tid": 8
   },
   "5761": {
@@ -5879,8 +6147,8 @@
    "ovrAfter": 48,
    "ovrBefore": 50,
    "pos": "DL",
-   "residualZ": -1.02,
-   "sample": 177,
+   "residualZ": -1.08,
+   "sample": 199,
    "tid": 16
   },
   "5763": {
@@ -5897,7 +6165,7 @@
    "ovrAfter": 87,
    "ovrBefore": 85,
    "pos": "DL",
-   "residualZ": 0.58,
+   "residualZ": 0.51,
    "sample": 506,
    "tid": 10
   },
@@ -5915,8 +6183,8 @@
    "ovrAfter": 55,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": -0.85,
-   "sample": 436,
+   "residualZ": -0.84,
+   "sample": 488,
    "tid": 23
   },
   "5765": {
@@ -5933,8 +6201,8 @@
    "ovrAfter": 72,
    "ovrBefore": 66,
    "pos": "DL",
-   "residualZ": 1.9,
-   "sample": 504,
+   "residualZ": 2.4,
+   "sample": 538,
    "tid": 15
   },
   "5767": {
@@ -5951,8 +6219,8 @@
    "ovrAfter": 59,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": 0.44,
-   "sample": 398,
+   "residualZ": 0.26,
+   "sample": 438,
    "tid": 30
   },
   "5768": {
@@ -5969,26 +6237,26 @@
    "ovrAfter": 52,
    "ovrBefore": 55,
    "pos": "DL",
-   "residualZ": -1.1,
-   "sample": 300,
+   "residualZ": -1.08,
+   "sample": 328,
    "tid": 25
   },
   "5770": {
    "applied": {
-    "ovr": 2,
-    "ovrs.DL": 2,
-    "pot": 2,
-    "prs": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Kingsley \"JJ\" Enagbare",
-   "ovrAfter": 54,
+   "ovrAfter": 53,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": 0.58,
-   "sample": 403,
+   "residualZ": 0.45,
+   "sample": 440,
    "tid": 24
   },
   "5771": {
@@ -6005,7 +6273,7 @@
    "ovrAfter": 50,
    "ovrBefore": 48,
    "pos": "DL",
-   "residualZ": 0.63,
+   "residualZ": 0.68,
    "sample": 429,
    "tid": 1
   },
@@ -6023,8 +6291,8 @@
    "ovrAfter": 78,
    "ovrBefore": 77,
    "pos": "DL",
-   "residualZ": 0.32,
-   "sample": 387,
+   "residualZ": 0.18,
+   "sample": 434,
    "tid": 9
   },
   "5774": {
@@ -6041,27 +6309,45 @@
    "ovrAfter": 57,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": 0.24,
+   "residualZ": 0.25,
    "sample": 236,
    "tid": 7
   },
   "5775": {
    "applied": {
-    "ovr": 4,
-    "ovrs.DL": 4,
-    "pot": 4,
-    "prs": 4,
-    "rns": 4,
-    "tck": 4
+    "ovr": 6,
+    "ovrs.DL": 6,
+    "pot": 6,
+    "prs": 6,
+    "rns": 6,
+    "tck": 6
    },
-   "delta": 4,
+   "delta": 6,
    "name": "Boye Mafe",
-   "ovrAfter": 68,
+   "ovrAfter": 70,
    "ovrBefore": 64,
    "pos": "DL",
-   "residualZ": 1.29,
-   "sample": 445,
+   "residualZ": 1.86,
+   "sample": 508,
    "tid": 6
+  },
+  "5781": {
+   "applied": {
+    "ovr": -2,
+    "ovrs.DL": -2,
+    "pot": -2,
+    "prs": -2,
+    "rns": -2,
+    "tck": -2
+   },
+   "delta": -2,
+   "name": "Dominique Robinson",
+   "ovrAfter": 41,
+   "ovrBefore": 43,
+   "pos": "DL",
+   "residualZ": -1.23,
+   "sample": 126,
+   "tid": 12
   },
   "579": {
    "applied": {
@@ -6076,11 +6362,29 @@
    "ovrAfter": 50,
    "ovrBefore": 51,
    "pos": "LB",
-   "residualZ": -0.46,
+   "residualZ": -0.53,
    "sample": 121,
    "tid": 28
   },
   "5791": {
+   "applied": {
+    "ovr": 4,
+    "ovrs.LB": 4,
+    "pcv": 4,
+    "pot": 4,
+    "rns": 4,
+    "tck": 4
+   },
+   "delta": 4,
+   "name": "Nakobe Dean",
+   "ovrAfter": 78,
+   "ovrBefore": 74,
+   "pos": "LB",
+   "residualZ": 0.99,
+   "sample": 736,
+   "tid": 16
+  },
+  "5792": {
    "applied": {
     "ovr": 2,
     "ovrs.LB": 2,
@@ -6090,103 +6394,31 @@
     "tck": 2
    },
    "delta": 2,
-   "name": "Nakobe Dean",
-   "ovrAfter": 76,
-   "ovrBefore": 74,
-   "pos": "LB",
-   "residualZ": 0.68,
-   "sample": 663,
-   "tid": 16
-  },
-  "5792": {
-   "applied": {
-    "ovr": 3,
-    "ovrs.LB": 3,
-    "pcv": 3,
-    "pot": 3,
-    "rns": 3,
-    "tck": 3
-   },
-   "delta": 3,
    "name": "Devin Lloyd",
-   "ovrAfter": 76,
+   "ovrAfter": 75,
    "ovrBefore": 73,
    "pos": "LB",
-   "residualZ": 0.93,
-   "sample": 511,
+   "residualZ": 0.73,
+   "sample": 576,
    "tid": 4
-  },
-  "5794": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.LB": -1,
-    "pcv": -1,
-    "pot": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Quay Walker",
-   "ovrAfter": 63,
-   "ovrBefore": 64,
-   "pos": "LB",
-   "residualZ": -0.15,
-   "sample": 660,
-   "tid": 16
-  },
-  "5802": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Terrel Bernard",
-   "ovrAfter": 52,
-   "ovrBefore": 51,
-   "pos": "LB",
-   "residualZ": 0.17,
-   "sample": 546,
-   "tid": 3
   },
   "5811": {
    "applied": {
-    "ovr": -2,
-    "ovrs.LB": -2,
-    "pcv": -2,
-    "pot": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.LB": -3,
+    "pcv": -3,
+    "pot": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "D'Marco Jackson",
-   "ovrAfter": 37,
+   "ovrAfter": 36,
    "ovrBefore": 39,
    "pos": "LB",
-   "residualZ": -1.14,
+   "residualZ": -1.3,
    "sample": 218,
    "tid": 5
-  },
-  "5817": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.LB": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Micah McFadden",
-   "ovrAfter": 52,
-   "ovrBefore": 51,
-   "pos": "LB",
-   "residualZ": 0.44,
-   "sample": 202,
-   "tid": 23
   },
   "582": {
    "applied": {
@@ -6202,7 +6434,7 @@
    "ovrAfter": 55,
    "ovrBefore": 56,
    "pos": "LB",
-   "residualZ": -0.29,
+   "residualZ": -0.28,
    "sample": 445,
    "tid": 13
   },
@@ -6220,8 +6452,8 @@
    "ovrAfter": 49,
    "ovrBefore": 51,
    "pos": "QB",
-   "residualZ": -1.41,
-   "sample": 80,
+   "residualZ": -1.19,
+   "sample": 85,
    "tid": 20
   },
   "5858": {
@@ -6238,27 +6470,45 @@
    "ovrAfter": 82,
    "ovrBefore": 81,
    "pos": "S",
-   "residualZ": 0.44,
-   "sample": 591,
+   "residualZ": 0.35,
+   "sample": 660,
    "tid": 2
   },
   "5861": {
    "applied": {
-    "ovr": 2,
-    "ovrs.S": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Jaquan Brisker",
-   "ovrAfter": 58,
+   "ovrAfter": 57,
    "ovrBefore": 56,
    "pos": "S",
-   "residualZ": 0.53,
-   "sample": 573,
+   "residualZ": 0.37,
+   "sample": 612,
    "tid": 26
+  },
+  "5862": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.S": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
+   },
+   "delta": -1,
+   "name": "Jalen Pitre",
+   "ovrAfter": 70,
+   "ovrBefore": 71,
+   "pos": "S",
+   "residualZ": -0.25,
+   "sample": 492,
+   "tid": 12
   },
   "5863": {
    "applied": {
@@ -6274,8 +6524,8 @@
    "ovrAfter": 45,
    "ovrBefore": 46,
    "pos": "S",
-   "residualZ": -0.34,
-   "sample": 483,
+   "residualZ": -0.42,
+   "sample": 547,
    "tid": 6
   },
   "587": {
@@ -6292,26 +6542,26 @@
    "ovrAfter": 76,
    "ovrBefore": 75,
    "pos": "DL",
-   "residualZ": 0.49,
+   "residualZ": 0.44,
    "sample": 358,
    "tid": 28
   },
   "5871": {
    "applied": {
-    "ovr": 2,
-    "ovrs.S": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Nick Cross",
-   "ovrAfter": 73,
+   "ovrAfter": 72,
    "ovrBefore": 71,
    "pos": "S",
-   "residualZ": 0.69,
-   "sample": 373,
+   "residualZ": 0.35,
+   "sample": 431,
    "tid": 31
   },
   "5872": {
@@ -6328,7 +6578,7 @@
    "ovrAfter": 51,
    "ovrBefore": 47,
    "pos": "S",
-   "residualZ": 2.68,
+   "residualZ": 2.84,
    "sample": 613,
    "tid": 18
   },
@@ -6346,8 +6596,8 @@
    "ovrAfter": 69,
    "ovrBefore": 68,
    "pos": "S",
-   "residualZ": 0.63,
-   "sample": 342,
+   "residualZ": 0.34,
+   "sample": 391,
    "tid": 12
   },
   "588": {
@@ -6364,8 +6614,8 @@
    "ovrAfter": 57,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": -0.31,
-   "sample": 286,
+   "residualZ": -0.36,
+   "sample": 324,
    "tid": 16
   },
   "5885": {
@@ -6381,8 +6631,8 @@
    "ovrAfter": 73,
    "ovrBefore": 72,
    "pos": "K",
-   "residualZ": 0.18,
-   "sample": 20,
+   "residualZ": 0.29,
+   "sample": 21,
    "tid": 17
   },
   "5890": {
@@ -6398,43 +6648,61 @@
    "ovrAfter": 64,
    "ovrBefore": 65,
    "pos": "P",
-   "residualZ": -0.39,
-   "sample": 32,
+   "residualZ": -0.26,
+   "sample": 35,
    "tid": 15
   },
   "5892": {
    "applied": {
-    "ovr": 3,
-    "ovrs.P": 3,
-    "pac": 3,
-    "pot": 3,
-    "ppw": 3
+    "ovr": 4,
+    "ovrs.P": 4,
+    "pac": 4,
+    "pot": 4,
+    "ppw": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Jordan Stout",
-   "ovrAfter": 68,
+   "ovrAfter": 69,
    "ovrBefore": 65,
    "pos": "P",
-   "residualZ": 1.02,
-   "sample": 38,
+   "residualZ": 1.2,
+   "sample": 42,
    "tid": 23
+  },
+  "5897": {
+   "applied": {
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.TE": 1,
+    "pot": 1,
+    "rbk": 1,
+    "rtr": 1
+   },
+   "delta": 1,
+   "name": "Chig Okonkwo",
+   "ovrAfter": 51,
+   "ovrBefore": 50,
+   "pos": "TE",
+   "residualZ": 0.31,
+   "sample": 44,
+   "tid": 31
   },
   "5962": {
    "applied": {
-    "bsc": 6,
-    "elu": 6,
-    "hnd": 6,
-    "ovr": 6,
-    "ovrs.RB": 6,
-    "pot": 6
+    "bsc": 5,
+    "elu": 5,
+    "hnd": 5,
+    "ovr": 5,
+    "ovrs.RB": 5,
+    "pot": 5
    },
-   "delta": 6,
+   "delta": 5,
    "name": "Jaylen Warren",
-   "ovrAfter": 68,
+   "ovrAfter": 67,
    "ovrBefore": 62,
    "pos": "RB",
-   "residualZ": 2.07,
-   "sample": 156,
+   "residualZ": 1.75,
+   "sample": 167,
    "tid": 26
   },
   "598": {
@@ -6451,8 +6719,8 @@
    "ovrAfter": 63,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": 1.64,
-   "sample": 442,
+   "residualZ": 1.54,
+   "sample": 501,
    "tid": 9
   },
   "600": {
@@ -6469,27 +6737,9 @@
    "ovrAfter": 55,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": 0.83,
+   "residualZ": 0.84,
    "sample": 388,
    "tid": 28
-  },
-  "605": {
-   "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
-   },
-   "delta": -2,
-   "name": "Tim Settle Jr.",
-   "ovrAfter": 41,
-   "ovrBefore": 43,
-   "pos": "DL",
-   "residualZ": -0.79,
-   "sample": 249,
-   "tid": 31
   },
   "606": {
    "applied": {
@@ -6504,8 +6754,8 @@
    "ovrAfter": 64,
    "ovrBefore": 68,
    "pos": "WR",
-   "residualZ": -1.64,
-   "sample": 46,
+   "residualZ": -1.75,
+   "sample": 48,
    "tid": 9
   },
   "608": {
@@ -6521,8 +6771,8 @@
    "ovrAfter": 64,
    "ovrBefore": 67,
    "pos": "WR",
-   "residualZ": -0.89,
-   "sample": 70,
+   "residualZ": -1.06,
+   "sample": 74,
    "tid": 26
   },
   "61": {
@@ -6539,7 +6789,7 @@
    "ovrAfter": 76,
    "ovrBefore": 78,
    "pos": "QB",
-   "residualZ": -0.78,
+   "residualZ": -0.79,
    "sample": 190,
    "tid": 25
   },
@@ -6557,7 +6807,7 @@
    "ovrAfter": 75,
    "ovrBefore": 76,
    "pos": "S",
-   "residualZ": -0.51,
+   "residualZ": -0.55,
    "sample": 193,
    "tid": 17
   },
@@ -6574,80 +6824,80 @@
    "ovrAfter": 58,
    "ovrBefore": 63,
    "pos": "P",
-   "residualZ": -1.85,
-   "sample": 41,
+   "residualZ": -1.47,
+   "sample": 45,
    "tid": 29
   },
   "631": {
    "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.DL": 2,
+    "pot": 2,
+    "prs": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Montez Sweat",
-   "ovrAfter": 67,
+   "ovrAfter": 68,
    "ovrBefore": 66,
    "pos": "DL",
-   "residualZ": 0.45,
-   "sample": 274,
+   "residualZ": 0.88,
+   "sample": 331,
    "tid": 5
   },
   "632": {
    "applied": {
-    "ovr": 6,
-    "ovrs.QB": 6,
-    "pot": 6,
-    "tha": 6,
-    "thp": 6,
-    "thv": 6
+    "ovr": 4,
+    "ovrs.QB": 4,
+    "pot": 4,
+    "tha": 4,
+    "thp": 4,
+    "thv": 4
    },
-   "delta": 6,
+   "delta": 4,
    "name": "Trevor Lawrence",
-   "ovrAfter": 80,
+   "ovrAfter": 78,
    "ovrBefore": 74,
    "pos": "QB",
-   "residualZ": 1.74,
-   "sample": 298,
+   "residualZ": 1.28,
+   "sample": 351,
    "tid": 14
   },
   "638": {
    "applied": {
-    "ovr": 3,
-    "ovrs.DL": 3,
-    "pot": 3,
-    "prs": 3,
-    "rns": 3,
-    "tck": 3
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 3,
+   "delta": 5,
    "name": "Jeffery Simmons",
-   "ovrAfter": 79,
+   "ovrAfter": 81,
    "ovrBefore": 76,
    "pos": "DL",
-   "residualZ": 0.94,
-   "sample": 546,
+   "residualZ": 1.36,
+   "sample": 609,
    "tid": 5
   },
   "64": {
    "applied": {
-    "hnd": 2,
-    "ovr": 2,
-    "ovrs.TE": 2,
-    "pot": 2,
-    "rbk": 2,
-    "rtr": 2
+    "hnd": 3,
+    "ovr": 3,
+    "ovrs.TE": 3,
+    "pot": 3,
+    "rbk": 3,
+    "rtr": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "George Kittle",
-   "ovrAfter": 81,
+   "ovrAfter": 82,
    "ovrBefore": 79,
    "pos": "TE",
-   "residualZ": 0.66,
-   "sample": 62,
+   "residualZ": 0.84,
+   "sample": 65,
    "tid": 27
   },
   "644": {
@@ -6664,7 +6914,7 @@
    "ovrAfter": 62,
    "ovrBefore": 65,
    "pos": "S",
-   "residualZ": -1.1,
+   "residualZ": -1.16,
    "sample": 555,
    "tid": 22
   },
@@ -6682,8 +6932,8 @@
    "ovrAfter": 66,
    "ovrBefore": 64,
    "pos": "S",
-   "residualZ": 0.65,
-   "sample": 654,
+   "residualZ": 0.51,
+   "sample": 714,
    "tid": 24
   },
   "6449": {
@@ -6700,7 +6950,7 @@
    "ovrAfter": 36,
    "ovrBefore": 35,
    "pos": "DL",
-   "residualZ": 0.49,
+   "residualZ": 0.57,
    "sample": 303,
    "tid": 9
   },
@@ -6718,26 +6968,44 @@
    "ovrAfter": 55,
    "ovrBefore": 57,
    "pos": "LB",
-   "residualZ": -1.14,
-   "sample": 209,
+   "residualZ": -0.81,
+   "sample": 264,
    "tid": 10
   },
   "6471": {
    "applied": {
-    "ovr": -3,
-    "ovrs.S": -3,
-    "pcv": -3,
-    "pot": -3,
-    "tck": -3
+    "ovr": -4,
+    "ovrs.S": -4,
+    "pcv": -4,
+    "pot": -4,
+    "tck": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "Theo Jackson",
-   "ovrAfter": 53,
+   "ovrAfter": 52,
    "ovrBefore": 56,
    "pos": "S",
-   "residualZ": -1.55,
-   "sample": 293,
+   "residualZ": -1.66,
+   "sample": 322,
    "tid": 20
+  },
+  "6478": {
+   "applied": {
+    "ovr": 4,
+    "ovrs.DL": 4,
+    "pot": 4,
+    "prs": 4,
+    "rns": 4,
+    "tck": 4
+   },
+   "delta": 4,
+   "name": "James Houston",
+   "ovrAfter": 60,
+   "ovrBefore": 56,
+   "pos": "DL",
+   "residualZ": 2.61,
+   "sample": 139,
+   "tid": 8
   },
   "6492": {
    "applied": {
@@ -6753,26 +7021,26 @@
    "ovrAfter": 45,
    "ovrBefore": 48,
    "pos": "S",
-   "residualZ": -1.61,
+   "residualZ": -1.55,
    "sample": 266,
    "tid": 28
   },
   "658": {
    "applied": {
-    "ovr": -1,
-    "ovrs.S": -1,
-    "pcv": -1,
-    "pot": -1,
-    "rns": -1,
-    "tck": -1
+    "ovr": -2,
+    "ovrs.S": -2,
+    "pcv": -2,
+    "pot": -2,
+    "rns": -2,
+    "tck": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Jessie Bates III",
-   "ovrAfter": 82,
+   "ovrAfter": 81,
    "ovrBefore": 83,
    "pos": "S",
-   "residualZ": -0.39,
-   "sample": 589,
+   "residualZ": -0.63,
+   "sample": 655,
    "tid": 14
   },
   "66": {
@@ -6789,7 +7057,7 @@
    "ovrAfter": 71,
    "ovrBefore": 75,
    "pos": "WR",
-   "residualZ": -2.24,
+   "residualZ": -2.21,
    "sample": 26,
    "tid": 21
   },
@@ -6807,8 +7075,8 @@
    "ovrAfter": 64,
    "ovrBefore": 65,
    "pos": "S",
-   "residualZ": -0.55,
-   "sample": 355,
+   "residualZ": -0.39,
+   "sample": 408,
    "tid": 8
   },
   "667": {
@@ -6824,8 +7092,8 @@
    "ovrAfter": 83,
    "ovrBefore": 86,
    "pos": "WR",
-   "residualZ": -1.01,
-   "sample": 64,
+   "residualZ": -0.93,
+   "sample": 73,
    "tid": 20
   },
   "668": {
@@ -6841,8 +7109,8 @@
    "ovrAfter": 66,
    "ovrBefore": 63,
    "pos": "K",
-   "residualZ": 1.15,
-   "sample": 20,
+   "residualZ": 0.99,
+   "sample": 25,
    "tid": 3
   },
   "670": {
@@ -6859,8 +7127,8 @@
    "ovrAfter": 55,
    "ovrBefore": 56,
    "pos": "RB",
-   "residualZ": -0.87,
-   "sample": 43,
+   "residualZ": -0.71,
+   "sample": 52,
    "tid": 31
   },
   "675": {
@@ -6877,8 +7145,8 @@
    "ovrAfter": 69,
    "ovrBefore": 67,
    "pos": "LB",
-   "residualZ": 0.68,
-   "sample": 573,
+   "residualZ": 0.55,
+   "sample": 626,
    "tid": 26
   },
   "6797": {
@@ -6894,8 +7162,8 @@
    "ovrAfter": 68,
    "ovrBefore": 70,
    "pos": "P",
-   "residualZ": -0.75,
-   "sample": 39,
+   "residualZ": -0.65,
+   "sample": 41,
    "tid": 17
   },
   "681": {
@@ -6912,26 +7180,26 @@
    "ovrAfter": 56,
    "ovrBefore": 54,
    "pos": "DL",
-   "residualZ": 0.76,
-   "sample": 329,
+   "residualZ": 0.63,
+   "sample": 376,
    "tid": 4
   },
   "683": {
    "applied": {
-    "ovr": -1,
-    "ovrs.S": -1,
-    "pcv": -1,
-    "pot": -1,
-    "rns": -1,
-    "tck": -1
+    "ovr": -2,
+    "ovrs.S": -2,
+    "pcv": -2,
+    "pot": -2,
+    "rns": -2,
+    "tck": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Nick Scott",
-   "ovrAfter": 49,
+   "ovrAfter": 48,
    "ovrBefore": 50,
    "pos": "S",
-   "residualZ": -0.55,
-   "sample": 439,
+   "residualZ": -0.81,
+   "sample": 461,
    "tid": 4
   },
   "69": {
@@ -6948,8 +7216,8 @@
    "ovrAfter": 56,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": -0.81,
-   "sample": 350,
+   "residualZ": -0.71,
+   "sample": 406,
    "tid": 5
   },
   "695": {
@@ -6966,26 +7234,26 @@
    "ovrAfter": 86,
    "ovrBefore": 83,
    "pos": "S",
-   "residualZ": 0.94,
+   "residualZ": 1.03,
    "sample": 673,
    "tid": 11
   },
   "697": {
    "applied": {
-    "ovr": 2,
-    "ovrs.DL": 2,
-    "pot": 2,
-    "prs": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Maxx Crosby",
-   "ovrAfter": 86,
+   "ovrAfter": 85,
    "ovrBefore": 84,
    "pos": "DL",
-   "residualZ": 0.65,
-   "sample": 594,
+   "residualZ": 0.37,
+   "sample": 660,
    "tid": 16
   },
   "709": {
@@ -7002,7 +7270,7 @@
    "ovrAfter": 71,
    "ovrBefore": 74,
    "pos": "S",
-   "residualZ": -1.08,
+   "residualZ": -1.11,
    "sample": 571,
    "tid": 18
   },
@@ -7020,43 +7288,61 @@
    "ovrAfter": 45,
    "ovrBefore": 42,
    "pos": "S",
-   "residualZ": 0.89,
-   "sample": 521,
+   "residualZ": 1.08,
+   "sample": 579,
    "tid": 31
+  },
+  "7161": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Tony Adams",
+   "ovrAfter": 54,
+   "ovrBefore": 53,
+   "pos": "S",
+   "residualZ": 0.28,
+   "sample": 254,
+   "tid": 30
   },
   "7185": {
    "applied": {
-    "ovr": 3,
-    "ovrs.P": 3,
-    "pac": 3,
-    "pot": 3,
-    "ppw": 3
+    "ovr": 4,
+    "ovrs.P": 4,
+    "pac": 4,
+    "pot": 4,
+    "ppw": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Corliss Waitman",
-   "ovrAfter": 54,
+   "ovrAfter": 55,
    "ovrBefore": 51,
    "pos": "P",
-   "residualZ": 1.3,
-   "sample": 25,
+   "residualZ": 1.36,
+   "sample": 29,
    "tid": 27
   },
   "719": {
    "applied": {
-    "ovr": 1,
-    "ovrs.QB": 1,
-    "pot": 1,
-    "tha": 1,
-    "thp": 1,
-    "thv": 1
+    "ovr": 2,
+    "ovrs.QB": 2,
+    "pot": 2,
+    "tha": 2,
+    "thp": 2,
+    "thv": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Dak Prescott",
-   "ovrAfter": 83,
+   "ovrAfter": 84,
    "ovrBefore": 82,
    "pos": "QB",
-   "residualZ": 0.22,
-   "sample": 431,
+   "residualZ": 0.48,
+   "sample": 468,
    "tid": 8
   },
   "7197": {
@@ -7073,8 +7359,8 @@
    "ovrAfter": 36,
    "ovrBefore": 35,
    "pos": "LB",
-   "residualZ": 0.51,
-   "sample": 403,
+   "residualZ": 0.46,
+   "sample": 435,
    "tid": 12
   },
   "72": {
@@ -7091,8 +7377,8 @@
    "ovrAfter": 64,
    "ovrBefore": 62,
    "pos": "DL",
-   "residualZ": 0.84,
-   "sample": 392,
+   "residualZ": 0.6,
+   "sample": 423,
    "tid": 31
   },
   "720": {
@@ -7109,60 +7395,77 @@
    "ovrAfter": 55,
    "ovrBefore": 54,
    "pos": "QB",
-   "residualZ": 0.2,
+   "residualZ": 0.38,
    "sample": 385,
    "tid": 7
   },
   "721": {
    "applied": {
-    "kac": -2,
-    "kpw": -2,
-    "ovr": -2,
-    "ovrs.K": -2,
-    "pot": -2
+    "kac": -3,
+    "kpw": -3,
+    "ovr": -3,
+    "ovrs.K": -3,
+    "pot": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Jason Myers",
-   "ovrAfter": 73,
+   "ovrAfter": 72,
    "ovrBefore": 75,
    "pos": "K",
-   "residualZ": -0.8,
+   "residualZ": -0.93,
    "sample": 19,
    "tid": 28
   },
+  "722": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.P": 1,
+    "pac": 1,
+    "pot": 1,
+    "ppw": 1
+   },
+   "delta": 1,
+   "name": "Braden Mann",
+   "ovrAfter": 69,
+   "ovrBefore": 68,
+   "pos": "P",
+   "residualZ": 0.26,
+   "sample": 53,
+   "tid": 25
+  },
   "7229": {
    "applied": {
-    "ovr": -1,
-    "ovrs.P": -1,
-    "pac": -1,
-    "pot": -1,
-    "ppw": -1
+    "ovr": -3,
+    "ovrs.P": -3,
+    "pac": -3,
+    "pot": -3,
+    "ppw": -3
    },
-   "delta": -1,
+   "delta": -3,
    "name": "Ryan Wright",
-   "ovrAfter": 52,
+   "ovrAfter": 50,
    "ovrBefore": 53,
    "pos": "P",
-   "residualZ": -0.32,
-   "sample": 35,
+   "residualZ": -0.84,
+   "sample": 38,
    "tid": 22
   },
   "7239": {
    "applied": {
-    "bsc": -1,
-    "elu": -1,
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.RB": -1,
-    "pot": -1
+    "bsc": -2,
+    "elu": -2,
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.RB": -2,
+    "pot": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Jordan Mason",
-   "ovrAfter": 59,
+   "ovrAfter": 58,
    "ovrBefore": 60,
    "pos": "RB",
-   "residualZ": -0.74,
-   "sample": 62,
+   "residualZ": -0.82,
+   "sample": 74,
    "tid": 20
   },
   "7317": {
@@ -7178,96 +7481,79 @@
    "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "WR",
-   "residualZ": -1.79,
+   "residualZ": -1.72,
    "sample": 32,
    "tid": 28
   },
-  "736": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.P": 1,
-    "pac": 1,
-    "pot": 1,
-    "ppw": 1
-   },
-   "delta": 1,
-   "name": "Logan Cooke",
-   "ovrAfter": 73,
-   "ovrBefore": 72,
-   "pos": "P",
-   "residualZ": 0.24,
-   "sample": 29,
-   "tid": 14
-  },
   "74": {
    "applied": {
-    "elu": 3,
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.WR": 3,
-    "pot": 3,
-    "rtr": 3
+    "elu": 4,
+    "hnd": 4,
+    "ovr": 4,
+    "ovrs.WR": 4,
+    "pot": 4,
+    "rtr": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Mike Evans",
-   "ovrAfter": 74,
+   "ovrAfter": 75,
    "ovrBefore": 71,
    "pos": "WR",
-   "residualZ": 1.42,
-   "sample": 39,
+   "residualZ": 1.78,
+   "sample": 46,
    "tid": 27
   },
   "741": {
    "applied": {
-    "ovr": -4,
-    "ovrs.DL": -4,
-    "pot": -4,
-    "prs": -4,
-    "rns": -4,
-    "tck": -4
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -4,
+   "delta": -3,
    "name": "Vita Vea",
-   "ovrAfter": 67,
+   "ovrAfter": 68,
    "ovrBefore": 71,
    "pos": "DL",
-   "residualZ": -1.25,
-   "sample": 392,
+   "residualZ": -1.14,
+   "sample": 430,
    "tid": 29
   },
   "7417": {
    "applied": {
-    "ovr": 2,
-    "ovrs.QB": 2,
-    "pot": 2,
-    "tha": 2,
-    "thp": 2,
-    "thv": 2
+    "ovr": 1,
+    "ovrs.QB": 1,
+    "pot": 1,
+    "tha": 1,
+    "thp": 1,
+    "thv": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "C.J. Stroud",
-   "ovrAfter": 83,
+   "ovrAfter": 82,
    "ovrBefore": 81,
    "pos": "QB",
-   "residualZ": 0.48,
-   "sample": 360,
+   "residualZ": 0.41,
+   "sample": 394,
    "tid": 12
   },
   "7421": {
    "applied": {
-    "ovr": -2,
-    "ovrs.QB": -2,
-    "pot": -2,
-    "tha": -2,
-    "thp": -2,
-    "thv": -2
+    "ovr": -1,
+    "ovrs.QB": -1,
+    "pot": -1,
+    "tha": -1,
+    "thp": -1,
+    "thv": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Tanner McKee",
-   "ovrAfter": 45,
+   "ovrAfter": 46,
    "ovrBefore": 47,
    "pos": "QB",
-   "residualZ": -0.73,
+   "residualZ": -0.52,
    "sample": 130,
    "tid": 25
   },
@@ -7284,7 +7570,7 @@
    "ovrAfter": 90,
    "ovrBefore": 89,
    "pos": "RB",
-   "residualZ": 0.35,
+   "residualZ": 0.39,
    "sample": 220,
    "tid": 1
   },
@@ -7302,8 +7588,8 @@
    "ovrAfter": 87,
    "ovrBefore": 80,
    "pos": "RB",
-   "residualZ": 2.1,
-   "sample": 240,
+   "residualZ": 2.18,
+   "sample": 267,
    "tid": 10
   },
   "7429": {
@@ -7320,7 +7606,7 @@
    "ovrAfter": 74,
    "ovrBefore": 76,
    "pos": "RB",
-   "residualZ": -1.44,
+   "residualZ": -1.52,
    "sample": 41,
    "tid": 19
   },
@@ -7338,7 +7624,7 @@
    "ovrAfter": 74,
    "ovrBefore": 76,
    "pos": "LB",
-   "residualZ": -0.76,
+   "residualZ": -0.57,
    "sample": 408,
    "tid": 27
   },
@@ -7356,26 +7642,26 @@
    "ovrAfter": 90,
    "ovrBefore": 83,
    "pos": "WR",
-   "residualZ": 2.08,
+   "residualZ": 2.1,
    "sample": 109,
    "tid": 28
   },
   "7435": {
    "applied": {
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.WR": 1,
-    "pot": 1,
-    "rtr": 1
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Kayshon Boutte",
-   "ovrAfter": 55,
+   "ovrAfter": 56,
    "ovrBefore": 54,
    "pos": "WR",
-   "residualZ": 0.73,
-   "sample": 29,
+   "residualZ": 1.05,
+   "sample": 31,
    "tid": 12
   },
   "7436": {
@@ -7391,7 +7677,7 @@
    "ovrAfter": 59,
    "ovrBefore": 61,
    "pos": "WR",
-   "residualZ": -0.78,
+   "residualZ": -0.76,
    "sample": 36,
    "tid": 20
   },
@@ -7409,9 +7695,26 @@
    "ovrAfter": 60,
    "ovrBefore": 56,
    "pos": "WR",
-   "residualZ": 1.57,
-   "sample": 64,
+   "residualZ": 1.42,
+   "sample": 81,
    "tid": 14
+  },
+  "7440": {
+   "applied": {
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.WR": -1,
+    "pot": -1,
+    "rtr": -1
+   },
+   "delta": -1,
+   "name": "Quentin Johnston",
+   "ovrAfter": 55,
+   "ovrBefore": 56,
+   "pos": "WR",
+   "residualZ": -0.26,
+   "sample": 33,
+   "tid": 17
   },
   "7441": {
    "applied": {
@@ -7427,26 +7730,26 @@
    "ovrAfter": 50,
    "ovrBefore": 51,
    "pos": "WR",
-   "residualZ": -0.3,
-   "sample": 54,
+   "residualZ": -0.38,
+   "sample": 57,
    "tid": 12
   },
   "7442": {
    "applied": {
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.WR": 1,
-    "pot": 1,
-    "rtr": 1
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Zay Flowers",
-   "ovrAfter": 73,
+   "ovrAfter": 74,
    "ovrBefore": 72,
    "pos": "WR",
-   "residualZ": 0.4,
-   "sample": 71,
+   "residualZ": 0.49,
+   "sample": 82,
    "tid": 2
   },
   "7446": {
@@ -7463,7 +7766,7 @@
    "ovrAfter": 51,
    "ovrBefore": 50,
    "pos": "WR",
-   "residualZ": 0.75,
+   "residualZ": 0.76,
    "sample": 32,
    "tid": 25
   },
@@ -7481,26 +7784,9 @@
    "ovrAfter": 60,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": 0.8,
-   "sample": 358,
+   "residualZ": 0.68,
+   "sample": 404,
    "tid": 6
-  },
-  "7450": {
-   "applied": {
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.WR": -1,
-    "pot": -1,
-    "rtr": -1
-   },
-   "delta": -1,
-   "name": "Josh Downs",
-   "ovrAfter": 55,
-   "ovrBefore": 56,
-   "pos": "WR",
-   "residualZ": -0.25,
-   "sample": 62,
-   "tid": 15
   },
   "7454": {
    "applied": {
@@ -7516,8 +7802,8 @@
    "ovrAfter": 57,
    "ovrBefore": 56,
    "pos": "TE",
-   "residualZ": 0.51,
-   "sample": 49,
+   "residualZ": 0.22,
+   "sample": 53,
    "tid": 16
   },
   "7456": {
@@ -7534,8 +7820,8 @@
    "ovrAfter": 68,
    "ovrBefore": 66,
    "pos": "TE",
-   "residualZ": 0.61,
-   "sample": 53,
+   "residualZ": 0.68,
+   "sample": 59,
    "tid": 10
   },
   "7457": {
@@ -7552,7 +7838,7 @@
    "ovrAfter": 71,
    "ovrBefore": 66,
    "pos": "TE",
-   "residualZ": 1.82,
+   "residualZ": 1.91,
    "sample": 41,
    "tid": 3
   },
@@ -7569,8 +7855,8 @@
    "ovrAfter": 55,
    "ovrBefore": 57,
    "pos": "DL",
-   "residualZ": -0.79,
-   "sample": 250,
+   "residualZ": -0.85,
+   "sample": 285,
    "tid": 29
   },
   "7460": {
@@ -7587,47 +7873,11 @@
    "ovrAfter": 50,
    "ovrBefore": 48,
    "pos": "TE",
-   "residualZ": 0.74,
-   "sample": 31,
+   "residualZ": 0.7,
+   "sample": 34,
    "tid": 26
   },
   "747": {
-   "applied": {
-    "ovr": 2,
-    "ovrs.DL": 2,
-    "pot": 2,
-    "prs": 2,
-    "rns": 2,
-    "tck": 2
-   },
-   "delta": 2,
-   "name": "Jaelan Phillips",
-   "ovrAfter": 76,
-   "ovrBefore": 74,
-   "pos": "DL",
-   "residualZ": 0.74,
-   "sample": 281,
-   "tid": 4
-  },
-  "7498": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Myles Murphy",
-   "ovrAfter": 65,
-   "ovrBefore": 66,
-   "pos": "DL",
-   "residualZ": -0.52,
-   "sample": 407,
-   "tid": 6
-  },
-  "7499": {
    "applied": {
     "ovr": 1,
     "ovrs.DL": 1,
@@ -7637,31 +7887,31 @@
     "tck": 1
    },
    "delta": 1,
-   "name": "Jalen Carter",
-   "ovrAfter": 68,
-   "ovrBefore": 67,
+   "name": "Jaelan Phillips",
+   "ovrAfter": 75,
+   "ovrBefore": 74,
    "pos": "DL",
-   "residualZ": 0.21,
-   "sample": 526,
-   "tid": 25
+   "residualZ": 0.41,
+   "sample": 336,
+   "tid": 4
   },
-  "7501": {
+  "7498": {
    "applied": {
-    "ovr": -3,
-    "ovrs.DL": -3,
-    "pot": -3,
-    "prs": -3,
-    "rns": -3,
-    "tck": -3
+    "ovr": -2,
+    "ovrs.DL": -2,
+    "pot": -2,
+    "prs": -2,
+    "rns": -2,
+    "tck": -2
    },
-   "delta": -3,
-   "name": "Byron Young",
-   "ovrAfter": 47,
-   "ovrBefore": 50,
+   "delta": -2,
+   "name": "Myles Murphy",
+   "ovrAfter": 64,
+   "ovrBefore": 66,
    "pos": "DL",
-   "residualZ": -1.58,
-   "sample": 167,
-   "tid": 25
+   "residualZ": -0.55,
+   "sample": 467,
+   "tid": 6
   },
   "7503": {
    "applied": {
@@ -7677,8 +7927,8 @@
    "ovrAfter": 60,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": 0.55,
-   "sample": 307,
+   "residualZ": 0.31,
+   "sample": 341,
    "tid": 24
   },
   "7505": {
@@ -7695,7 +7945,7 @@
    "ovrAfter": 36,
    "ovrBefore": 34,
    "pos": "DL",
-   "residualZ": 0.81,
+   "residualZ": 0.89,
    "sample": 217,
    "tid": 1
   },
@@ -7713,7 +7963,7 @@
    "ovrAfter": 65,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": 1.45,
+   "residualZ": 1.43,
    "sample": 432,
    "tid": 11
   },
@@ -7731,8 +7981,8 @@
    "ovrAfter": 57,
    "ovrBefore": 60,
    "pos": "DL",
-   "residualZ": -1.16,
-   "sample": 353,
+   "residualZ": -1.1,
+   "sample": 383,
    "tid": 29
   },
   "7513": {
@@ -7749,27 +7999,45 @@
    "ovrAfter": 89,
    "ovrBefore": 83,
    "pos": "DL",
-   "residualZ": 2.27,
-   "sample": 469,
+   "residualZ": 2.4,
+   "sample": 507,
    "tid": 12
   },
   "7515": {
    "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.DL": 2,
+    "pot": 2,
+    "prs": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Nolan Smith Jr.",
-   "ovrAfter": 70,
+   "ovrAfter": 71,
    "ovrBefore": 69,
    "pos": "DL",
-   "residualZ": 0.51,
-   "sample": 359,
+   "residualZ": 0.66,
+   "sample": 396,
    "tid": 25
+  },
+  "7516": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.LB": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
+   },
+   "delta": -1,
+   "name": "Henry To'oto'o",
+   "ovrAfter": 54,
+   "ovrBefore": 55,
+   "pos": "LB",
+   "residualZ": -0.29,
+   "sample": 367,
+   "tid": 12
   },
   "7517": {
    "applied": {
@@ -7785,7 +8053,7 @@
    "ovrAfter": 65,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": 1.52,
+   "residualZ": 1.49,
    "sample": 336,
    "tid": 28
   },
@@ -7803,8 +8071,8 @@
    "ovrAfter": 57,
    "ovrBefore": 56,
    "pos": "LB",
-   "residualZ": 0.74,
-   "sample": 158,
+   "residualZ": 0.52,
+   "sample": 179,
    "tid": 8
   },
   "7522": {
@@ -7821,11 +8089,47 @@
    "ovrAfter": 36,
    "ovrBefore": 33,
    "pos": "DL",
-   "residualZ": 0.98,
+   "residualZ": 1.05,
    "sample": 316,
    "tid": 11
   },
   "7529": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.LB": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Trenton Simpson",
+   "ovrAfter": 61,
+   "ovrBefore": 60,
+   "pos": "LB",
+   "residualZ": 0.49,
+   "sample": 460,
+   "tid": 2
+  },
+  "7531": {
+   "applied": {
+    "ovr": -3,
+    "ovrs.LB": -3,
+    "pcv": -3,
+    "pot": -3,
+    "rns": -3,
+    "tck": -3
+   },
+   "delta": -3,
+   "name": "Jack Campbell",
+   "ovrAfter": 78,
+   "ovrBefore": 81,
+   "pos": "LB",
+   "residualZ": -0.99,
+   "sample": 486,
+   "tid": 10
+  },
+  "7534": {
    "applied": {
     "ovr": 2,
     "ovrs.LB": 2,
@@ -7835,84 +8139,30 @@
     "tck": 2
    },
    "delta": 2,
-   "name": "Trenton Simpson",
-   "ovrAfter": 62,
-   "ovrBefore": 60,
-   "pos": "LB",
-   "residualZ": 0.7,
-   "sample": 400,
-   "tid": 2
-  },
-  "7531": {
-   "applied": {
-    "ovr": -4,
-    "ovrs.LB": -4,
-    "pcv": -4,
-    "pot": -4,
-    "rns": -4,
-    "tck": -4
-   },
-   "delta": -4,
-   "name": "Jack Campbell",
-   "ovrAfter": 77,
-   "ovrBefore": 81,
-   "pos": "LB",
-   "residualZ": -1.26,
-   "sample": 486,
-   "tid": 10
-  },
-  "7534": {
-   "applied": {
-    "ovr": 3,
-    "ovrs.LB": 3,
-    "pcv": 3,
-    "pot": 3,
-    "rns": 3,
-    "tck": 3
-   },
-   "delta": 3,
    "name": "Ventrell Miller",
-   "ovrAfter": 44,
+   "ovrAfter": 43,
    "ovrBefore": 41,
    "pos": "LB",
-   "residualZ": 0.93,
-   "sample": 393,
-   "tid": 14
-  },
-  "7545": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.S": -1,
-    "pcv": -1,
-    "pot": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Antonio Johnson Jr.",
-   "ovrAfter": 52,
-   "ovrBefore": 53,
-   "pos": "S",
-   "residualZ": -0.46,
-   "sample": 427,
+   "residualZ": 0.79,
+   "sample": 444,
    "tid": 14
   },
   "7565": {
    "applied": {
-    "ovr": 1,
-    "ovrs.S": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.S": 2,
+    "pcv": 2,
+    "pot": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Brian Branch",
-   "ovrAfter": 75,
+   "ovrAfter": 76,
    "ovrBefore": 74,
    "pos": "S",
-   "residualZ": 0.93,
-   "sample": 184,
+   "residualZ": 1.21,
+   "sample": 252,
    "tid": 10
   },
   "7571": {
@@ -7929,8 +8179,8 @@
    "ovrAfter": 71,
    "ovrBefore": 67,
    "pos": "S",
-   "residualZ": 1.71,
-   "sample": 583,
+   "residualZ": 1.45,
+   "sample": 651,
    "tid": 6
   },
   "759": {
@@ -7947,43 +8197,42 @@
    "ovrAfter": 55,
    "ovrBefore": 49,
    "pos": "QB",
-   "residualZ": 2.78,
+   "residualZ": 3.05,
    "sample": 111,
    "tid": 28
   },
-  "7590": {
+  "7596": {
    "applied": {
-    "ovr": 1,
-    "ovrs.S": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": -1,
+    "ovrs.P": -1,
+    "pac": -1,
+    "pot": -1,
+    "ppw": -1
    },
-   "delta": 1,
-   "name": "Chamarri Conner",
-   "ovrAfter": 48,
-   "ovrBefore": 47,
-   "pos": "S",
-   "residualZ": 0.25,
-   "sample": 392,
-   "tid": 15
+   "delta": -1,
+   "name": "Ethan Evans",
+   "ovrAfter": 43,
+   "ovrBefore": 44,
+   "pos": "P",
+   "residualZ": -0.2,
+   "sample": 33,
+   "tid": 18
   },
   "760": {
    "applied": {
-    "kac": 3,
-    "kpw": 3,
-    "ovr": 3,
-    "ovrs.K": 3,
-    "pot": 3
+    "kac": 4,
+    "kpw": 4,
+    "ovr": 4,
+    "ovrs.K": 4,
+    "pot": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Joey Slye",
-   "ovrAfter": 68,
+   "ovrAfter": 69,
    "ovrBefore": 65,
    "pos": "K",
-   "residualZ": 1.31,
-   "sample": 16,
+   "residualZ": 1.34,
+   "sample": 19,
    "tid": 30
   },
   "7614": {
@@ -8000,27 +8249,9 @@
    "ovrAfter": 69,
    "ovrBefore": 68,
    "pos": "DL",
-   "residualZ": 0.32,
+   "residualZ": 0.29,
    "sample": 301,
    "tid": 26
-  },
-  "7618": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Felix Anudike-Uzomah",
-   "ovrAfter": 45,
-   "ovrBefore": 44,
-   "pos": "DL",
-   "residualZ": 0.2,
-   "sample": 312,
-   "tid": 15
   },
   "762": {
    "applied": {
@@ -8036,8 +8267,8 @@
    "ovrAfter": 87,
    "ovrBefore": 84,
    "pos": "DL",
-   "residualZ": 1.08,
-   "sample": 377,
+   "residualZ": 0.87,
+   "sample": 420,
    "tid": 26
   },
   "7626": {
@@ -8054,8 +8285,8 @@
    "ovrAfter": 65,
    "ovrBefore": 64,
    "pos": "LB",
-   "residualZ": 0.7,
-   "sample": 123,
+   "residualZ": 0.42,
+   "sample": 141,
    "tid": 20
   },
   "7629": {
@@ -8072,7 +8303,7 @@
    "ovrAfter": 42,
    "ovrBefore": 40,
    "pos": "LB",
-   "residualZ": 0.79,
+   "residualZ": 0.6,
    "sample": 417,
    "tid": 28
   },
@@ -8090,7 +8321,7 @@
    "ovrAfter": 41,
    "ovrBefore": 43,
    "pos": "RB",
-   "residualZ": -1.03,
+   "residualZ": -1.14,
    "sample": 49,
    "tid": 28
   },
@@ -8108,9 +8339,27 @@
    "ovrAfter": 49,
    "ovrBefore": 50,
    "pos": "RB",
-   "residualZ": -0.56,
-   "sample": 67,
+   "residualZ": -0.67,
+   "sample": 68,
    "tid": 17
+  },
+  "7649": {
+   "applied": {
+    "bsc": 1,
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.RB": 1,
+    "pot": 1
+   },
+   "delta": 1,
+   "name": "Chris Rodriguez Jr.",
+   "ovrAfter": 52,
+   "ovrBefore": 51,
+   "pos": "RB",
+   "residualZ": 0.41,
+   "sample": 68,
+   "tid": 14
   },
   "766": {
    "applied": {
@@ -8126,7 +8375,7 @@
    "ovrAfter": 54,
    "ovrBefore": 56,
    "pos": "S",
-   "residualZ": -1.09,
+   "residualZ": -1.13,
    "sample": 315,
    "tid": 2
   },
@@ -8144,26 +8393,80 @@
    "ovrAfter": 66,
    "ovrBefore": 65,
    "pos": "S",
-   "residualZ": 0.23,
+   "residualZ": 0.24,
    "sample": 588,
    "tid": 7
   },
+  "7670": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.LB": -1,
+    "pcv": -1,
+    "pot": -1,
+    "rns": -1,
+    "tck": -1
+   },
+   "delta": -1,
+   "name": "Dee Winters",
+   "ovrAfter": 45,
+   "ovrBefore": 46,
+   "pos": "LB",
+   "residualZ": -0.22,
+   "sample": 370,
+   "tid": 8
+  },
+  "7671": {
+   "applied": {
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.WR": 1,
+    "pot": 1,
+    "rtr": 1
+   },
+   "delta": 1,
+   "name": "Rashee Rice",
+   "ovrAfter": 66,
+   "ovrBefore": 65,
+   "pos": "WR",
+   "residualZ": 0.32,
+   "sample": 44,
+   "tid": 15
+  },
+  "7674": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Ji'Ayir Brown",
+   "ovrAfter": 55,
+   "ovrBefore": 54,
+   "pos": "S",
+   "residualZ": 0.38,
+   "sample": 590,
+   "tid": 27
+  },
   "7676": {
    "applied": {
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.TE": 3,
-    "pot": 3,
-    "rbk": 3,
-    "rtr": 3
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.TE": 2,
+    "pot": 2,
+    "rbk": 2,
+    "rtr": 2
    },
-   "delta": 3,
+   "delta": 2,
    "name": "Brenton Strange",
-   "ovrAfter": 60,
+   "ovrAfter": 59,
    "ovrBefore": 57,
    "pos": "TE",
-   "residualZ": 1.07,
-   "sample": 40,
+   "residualZ": 0.88,
+   "sample": 43,
    "tid": 14
   },
   "768": {
@@ -8179,26 +8482,26 @@
    "ovrAfter": 68,
    "ovrBefore": 73,
    "pos": "K",
-   "residualZ": -1.81,
-   "sample": 19,
+   "residualZ": -1.66,
+   "sample": 21,
    "tid": 15
   },
   "7684": {
    "applied": {
-    "bsc": -2,
-    "elu": -2,
-    "hnd": -2,
-    "ovr": -2,
-    "ovrs.RB": -2,
-    "pot": -2
+    "bsc": -3,
+    "elu": -3,
+    "hnd": -3,
+    "ovr": -3,
+    "ovrs.RB": -3,
+    "pot": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Chase Brown",
-   "ovrAfter": 68,
+   "ovrAfter": 67,
    "ovrBefore": 70,
    "pos": "RB",
-   "residualZ": -0.6,
-   "sample": 160,
+   "residualZ": -0.83,
+   "sample": 171,
    "tid": 6
   },
   "7685": {
@@ -8233,7 +8536,7 @@
    "ovrAfter": 77,
    "ovrBefore": 75,
    "pos": "DL",
-   "residualZ": 0.6,
+   "residualZ": 0.55,
    "sample": 489,
    "tid": 18
   },
@@ -8251,45 +8554,27 @@
    "ovrAfter": 58,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": 0.65,
-   "sample": 365,
+   "residualZ": 0.56,
+   "sample": 398,
    "tid": 27
   },
   "7692": {
    "applied": {
-    "ovr": 2,
-    "ovrs.DL": 2,
-    "pot": 2,
-    "prs": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 3,
+    "ovrs.DL": 3,
+    "pot": 3,
+    "prs": 3,
+    "rns": 3,
+    "tck": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "Colby Wooden",
-   "ovrAfter": 43,
+   "ovrAfter": 44,
    "ovrBefore": 41,
    "pos": "DL",
-   "residualZ": 0.87,
-   "sample": 287,
+   "residualZ": 1.21,
+   "sample": 324,
    "tid": 22
-  },
-  "7706": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.QB": -1,
-    "pot": -1,
-    "tha": -1,
-    "thp": -1,
-    "thv": -1
-   },
-   "delta": -1,
-   "name": "Tyson Bagent",
-   "ovrAfter": 34,
-   "ovrBefore": 35,
-   "pos": "QB",
-   "residualZ": -0.38,
-   "sample": 75,
-   "tid": 5
   },
   "7710": {
    "applied": {
@@ -8305,7 +8590,7 @@
    "ovrAfter": 49,
    "ovrBefore": 52,
    "pos": "RB",
-   "residualZ": -1.37,
+   "residualZ": -1.45,
    "sample": 66,
    "tid": 8
   },
@@ -8323,7 +8608,7 @@
    "ovrAfter": 55,
    "ovrBefore": 53,
    "pos": "WR",
-   "residualZ": 0.66,
+   "residualZ": 0.68,
    "sample": 49,
    "tid": 21
   },
@@ -8341,8 +8626,8 @@
    "ovrAfter": 53,
    "ovrBefore": 51,
    "pos": "WR",
-   "residualZ": 0.77,
-   "sample": 58,
+   "residualZ": 0.56,
+   "sample": 68,
    "tid": 16
   },
   "7725": {
@@ -8358,7 +8643,7 @@
    "ovrAfter": 87,
    "ovrBefore": 86,
    "pos": "WR",
-   "residualZ": 0.19,
+   "residualZ": 0.23,
    "sample": 93,
    "tid": 18
   },
@@ -8375,44 +8660,44 @@
    "ovrAfter": 67,
    "ovrBefore": 69,
    "pos": "WR",
-   "residualZ": -0.72,
+   "residualZ": -0.68,
    "sample": 88,
    "tid": 0
   },
   "7736": {
    "applied": {
-    "ovr": 3,
-    "ovrs.DL": 3,
-    "pot": 3,
-    "prs": 3,
-    "rns": 3,
-    "tck": 3
+    "ovr": 4,
+    "ovrs.DL": 4,
+    "pot": 4,
+    "prs": 4,
+    "rns": 4,
+    "tck": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Adetomiwa Adebawore",
-   "ovrAfter": 53,
+   "ovrAfter": 54,
    "ovrBefore": 50,
    "pos": "DL",
-   "residualZ": 1.28,
-   "sample": 327,
+   "residualZ": 1.49,
+   "sample": 374,
    "tid": 13
   },
   "7739": {
    "applied": {
-    "ovr": 3,
-    "ovrs.DL": 3,
-    "pot": 3,
-    "prs": 3,
-    "rns": 3,
-    "tck": 3
+    "ovr": 4,
+    "ovrs.DL": 4,
+    "pot": 4,
+    "prs": 4,
+    "rns": 4,
+    "tck": 4
    },
-   "delta": 3,
+   "delta": 4,
    "name": "Jalen Redmond",
-   "ovrAfter": 33,
+   "ovrAfter": 34,
    "ovrBefore": 30,
    "pos": "DL",
-   "residualZ": 1.09,
-   "sample": 464,
+   "residualZ": 1.37,
+   "sample": 500,
    "tid": 20
   },
   "7747": {
@@ -8433,23 +8718,6 @@
    "sample": 17,
    "tid": 18
   },
-  "776": {
-   "applied": {
-    "kac": 1,
-    "kpw": 1,
-    "ovr": 1,
-    "ovrs.K": 1,
-    "pot": 1
-   },
-   "delta": 1,
-   "name": "Cairo Santos",
-   "ovrAfter": 58,
-   "ovrBefore": 57,
-   "pos": "K",
-   "residualZ": 0.24,
-   "sample": 19,
-   "tid": 5
-  },
   "780": {
    "applied": {
     "kac": 1,
@@ -8463,8 +8731,8 @@
    "ovrAfter": 69,
    "ovrBefore": 68,
    "pos": "K",
-   "residualZ": 0.17,
-   "sample": 28,
+   "residualZ": 0.28,
+   "sample": 30,
    "tid": 24
   },
   "787": {
@@ -8499,8 +8767,8 @@
    "ovrAfter": 56,
    "ovrBefore": 58,
    "pos": "S",
-   "residualZ": -1.26,
-   "sample": 195,
+   "residualZ": -1.38,
+   "sample": 200,
    "tid": 10
   },
   "791": {
@@ -8516,7 +8784,7 @@
    "ovrAfter": 72,
    "ovrBefore": 73,
    "pos": "P",
-   "residualZ": -0.38,
+   "residualZ": -0.37,
    "sample": 48,
    "tid": 7
   },
@@ -8534,8 +8802,8 @@
    "ovrAfter": 83,
    "ovrBefore": 77,
    "pos": "DL",
-   "residualZ": 2.4,
-   "sample": 449,
+   "residualZ": 2.58,
+   "sample": 483,
    "tid": 3
   },
   "797": {
@@ -8552,25 +8820,25 @@
    "ovrAfter": 68,
    "ovrBefore": 64,
    "pos": "DL",
-   "residualZ": 1.44,
-   "sample": 446,
+   "residualZ": 1.25,
+   "sample": 487,
    "tid": 22
   },
   "8018": {
    "applied": {
-    "ovr": 5,
-    "ovrs.LB": 5,
-    "pcv": 5,
-    "pot": 5,
-    "rns": 5,
-    "tck": 5
+    "ovr": 4,
+    "ovrs.LB": 4,
+    "pcv": 4,
+    "pot": 4,
+    "rns": 4,
+    "tck": 4
    },
-   "delta": 5,
+   "delta": 4,
    "name": "Dorian Williams",
-   "ovrAfter": 44,
+   "ovrAfter": 43,
    "ovrBefore": 39,
    "pos": "LB",
-   "residualZ": 1.82,
+   "residualZ": 1.54,
    "sample": 375,
    "tid": 3
   },
@@ -8588,27 +8856,45 @@
    "ovrAfter": 70,
    "ovrBefore": 69,
    "pos": "DL",
-   "residualZ": 0.51,
-   "sample": 263,
+   "residualZ": 0.31,
+   "sample": 292,
    "tid": 29
   },
   "8028": {
    "applied": {
-    "ovr": 5,
-    "ovrs.DL": 5,
-    "pot": 5,
-    "prs": 5,
-    "rns": 5,
-    "tck": 5
+    "ovr": 6,
+    "ovrs.DL": 6,
+    "pot": 6,
+    "prs": 6,
+    "rns": 6,
+    "tck": 6
    },
-   "delta": 5,
+   "delta": 6,
    "name": "Tavius Robinson",
-   "ovrAfter": 36,
+   "ovrAfter": 37,
    "ovrBefore": 31,
    "pos": "DL",
-   "residualZ": 2.26,
+   "residualZ": 2.33,
    "sample": 280,
    "tid": -1
+  },
+  "803": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.QB": 1,
+    "pot": 1,
+    "tha": 1,
+    "thp": 1,
+    "thv": 1
+   },
+   "delta": 1,
+   "name": "Jameis Winston",
+   "ovrAfter": 52,
+   "ovrBefore": 51,
+   "pos": "QB",
+   "residualZ": 0.18,
+   "sample": 206,
+   "tid": 23
   },
   "8033": {
    "applied": {
@@ -8624,7 +8910,7 @@
    "ovrAfter": 45,
    "ovrBefore": 42,
    "pos": "DL",
-   "residualZ": 1.04,
+   "residualZ": 1.08,
    "sample": 420,
    "tid": 7
   },
@@ -8642,8 +8928,8 @@
    "ovrAfter": 29,
    "ovrBefore": 26,
    "pos": "DL",
-   "residualZ": 1.04,
-   "sample": 380,
+   "residualZ": 1.07,
+   "sample": 410,
    "tid": 0
   },
   "8036": {
@@ -8660,8 +8946,8 @@
    "ovrAfter": 59,
    "ovrBefore": 60,
    "pos": "DL",
-   "residualZ": -0.48,
-   "sample": 377,
+   "residualZ": -0.49,
+   "sample": 428,
    "tid": 25
   },
   "8037": {
@@ -8678,8 +8964,8 @@
    "ovrAfter": 60,
    "ovrBefore": 62,
    "pos": "DL",
-   "residualZ": -0.56,
-   "sample": 346,
+   "residualZ": -0.55,
+   "sample": 382,
    "tid": 26
   },
   "8052": {
@@ -8695,8 +8981,8 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "S",
-   "residualZ": -0.75,
-   "sample": 382,
+   "residualZ": -0.87,
+   "sample": 425,
    "tid": 31
   },
   "8053": {
@@ -8713,9 +8999,26 @@
    "ovrAfter": 54,
    "ovrBefore": 56,
    "pos": "S",
-   "residualZ": -1.06,
+   "residualZ": -1.04,
    "sample": 244,
    "tid": 1
+  },
+  "8054": {
+   "applied": {
+    "ovr": -2,
+    "ovrs.S": -2,
+    "pcv": -2,
+    "pot": -2,
+    "tck": -2
+   },
+   "delta": -2,
+   "name": "Jordan Howden",
+   "ovrAfter": 30,
+   "ovrBefore": 32,
+   "pos": "S",
+   "residualZ": -1.37,
+   "sample": 152,
+   "tid": 22
   },
   "8058": {
    "applied": {
@@ -8730,8 +9033,8 @@
    "ovrAfter": 23,
    "ovrBefore": 24,
    "pos": "S",
-   "residualZ": -0.97,
-   "sample": 152,
+   "residualZ": -0.48,
+   "sample": 172,
    "tid": 14
   },
   "81": {
@@ -8748,8 +9051,8 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -1.02,
-   "sample": 177,
+   "residualZ": -1.01,
+   "sample": 210,
    "tid": 6
   },
   "815": {
@@ -8765,9 +9068,27 @@
    "ovrAfter": 66,
    "ovrBefore": 65,
    "pos": "P",
-   "residualZ": 0.2,
+   "residualZ": 0.19,
    "sample": 38,
    "tid": 1
+  },
+  "821": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Jerry Tillery",
+   "ovrAfter": 38,
+   "ovrBefore": 37,
+   "pos": "DL",
+   "residualZ": 0.27,
+   "sample": 204,
+   "tid": 13
   },
   "825": {
    "applied": {
@@ -8783,44 +9104,44 @@
    "ovrAfter": 74,
    "ovrBefore": 72,
    "pos": "DL",
-   "residualZ": 0.77,
-   "sample": 399,
+   "residualZ": 0.61,
+   "sample": 453,
    "tid": 6
   },
   "828": {
    "applied": {
-    "ovr": -3,
-    "ovrs.DL": -3,
-    "pot": -3,
-    "prs": -3,
-    "rns": -3,
-    "tck": -3
+    "ovr": -4,
+    "ovrs.DL": -4,
+    "pot": -4,
+    "prs": -4,
+    "rns": -4,
+    "tck": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "Cameron Jordan",
-   "ovrAfter": 65,
+   "ovrAfter": 64,
    "ovrBefore": 68,
    "pos": "DL",
-   "residualZ": -1.62,
-   "sample": 218,
+   "residualZ": -1.69,
+   "sample": 234,
    "tid": 22
   },
   "829": {
    "applied": {
-    "hnd": 4,
-    "ovr": 4,
-    "ovrs.TE": 4,
-    "pot": 4,
-    "rbk": 4,
-    "rtr": 4
+    "hnd": 5,
+    "ovr": 5,
+    "ovrs.TE": 5,
+    "pot": 5,
+    "rbk": 5,
+    "rtr": 5
    },
-   "delta": 4,
+   "delta": 5,
    "name": "Travis Kelce",
-   "ovrAfter": 70,
+   "ovrAfter": 71,
    "ovrBefore": 66,
    "pos": "TE",
-   "residualZ": 1.5,
-   "sample": 50,
+   "residualZ": 1.87,
+   "sample": 57,
    "tid": 15
   },
   "833": {
@@ -8837,25 +9158,25 @@
    "ovrAfter": 73,
    "ovrBefore": 74,
    "pos": "DL",
-   "residualZ": -0.29,
-   "sample": 358,
+   "residualZ": -0.45,
+   "sample": 397,
    "tid": 26
   },
   "8438": {
    "applied": {
-    "ovr": -3,
-    "ovrs.DL": -3,
-    "pot": -3,
-    "prs": -3,
-    "rns": -3,
-    "tck": -3
+    "ovr": -2,
+    "ovrs.DL": -2,
+    "pot": -2,
+    "prs": -2,
+    "rns": -2,
+    "tck": -2
    },
-   "delta": -3,
+   "delta": -2,
    "name": "Kobie Turner",
-   "ovrAfter": 58,
+   "ovrAfter": 59,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": -1.17,
+   "residualZ": -1.14,
    "sample": 232,
    "tid": 18
   },
@@ -8872,7 +9193,7 @@
    "ovrAfter": 59,
    "ovrBefore": 56,
    "pos": "K",
-   "residualZ": 0.89,
+   "residualZ": 0.92,
    "sample": 24,
    "tid": 0
   },
@@ -8890,7 +9211,7 @@
    "ovrAfter": 38,
    "ovrBefore": 35,
    "pos": "DL",
-   "residualZ": 0.93,
+   "residualZ": 1.0,
    "sample": 422,
    "tid": 11
   },
@@ -8907,8 +9228,8 @@
    "ovrAfter": 50,
    "ovrBefore": 51,
    "pos": "K",
-   "residualZ": -0.52,
-   "sample": 11,
+   "residualZ": -0.31,
+   "sample": 12,
    "tid": 2
   },
   "852": {
@@ -8943,8 +9264,8 @@
    "ovrAfter": 62,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": 0.36,
-   "sample": 429,
+   "residualZ": 0.41,
+   "sample": 462,
    "tid": 27
   },
   "868": {
@@ -8961,25 +9282,25 @@
    "ovrAfter": 53,
    "ovrBefore": 50,
    "pos": "DL",
-   "residualZ": 1.11,
-   "sample": 405,
+   "residualZ": 0.92,
+   "sample": 434,
    "tid": 12
   },
   "869": {
    "applied": {
-    "ovr": 1,
-    "ovrs.QB": 1,
-    "pot": 1,
-    "tha": 1,
-    "thp": 1,
-    "thv": 1
+    "ovr": 2,
+    "ovrs.QB": 2,
+    "pot": 2,
+    "tha": 2,
+    "thp": 2,
+    "thv": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Tyler Huntley",
-   "ovrAfter": 49,
+   "ovrAfter": 50,
    "ovrBefore": 48,
    "pos": "QB",
-   "residualZ": 0.43,
+   "residualZ": 0.65,
    "sample": 139,
    "tid": 2
   },
@@ -8998,7 +9319,7 @@
    "ovrBefore": 78,
    "pos": "DL",
    "residualZ": -0.79,
-   "sample": 438,
+   "sample": 472,
    "tid": 15
   },
   "874": {
@@ -9015,25 +9336,25 @@
    "ovrAfter": 60,
    "ovrBefore": 62,
    "pos": "DL",
-   "residualZ": -0.63,
-   "sample": 332,
+   "residualZ": -0.71,
+   "sample": 359,
    "tid": 30
   },
   "8776": {
    "applied": {
-    "ovr": 4,
-    "ovrs.LB": 4,
-    "pcv": 4,
-    "pot": 4,
-    "rns": 4,
-    "tck": 4
+    "ovr": 3,
+    "ovrs.LB": 3,
+    "pcv": 3,
+    "pot": 3,
+    "rns": 3,
+    "tck": 3
    },
-   "delta": 4,
+   "delta": 3,
    "name": "Christian Elliss",
-   "ovrAfter": 30,
+   "ovrAfter": 29,
    "ovrBefore": 26,
    "pos": "LB",
-   "residualZ": 1.14,
+   "residualZ": 0.82,
    "sample": 604,
    "tid": 21
   },
@@ -9050,62 +9371,62 @@
    "ovrAfter": 60,
    "ovrBefore": 62,
    "pos": "WR",
-   "residualZ": -1.03,
-   "sample": 38,
+   "residualZ": -1.05,
+   "sample": 41,
    "tid": 29
   },
-  "881": {
+  "8851": {
    "applied": {
-    "elu": -1,
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.WR": -1,
-    "pot": -1,
-    "rtr": -1
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.WR": 1,
+    "pot": 1,
+    "rtr": 1
    },
-   "delta": -1,
-   "name": "Jerry Jeudy",
-   "ovrAfter": 52,
-   "ovrBefore": 53,
+   "delta": 1,
+   "name": "Isaiah Williams",
+   "ovrAfter": 43,
+   "ovrBefore": 42,
    "pos": "WR",
-   "residualZ": -0.3,
-   "sample": 32,
-   "tid": 7
+   "residualZ": 0.34,
+   "sample": 22,
+   "tid": 24
   },
   "887": {
    "applied": {
-    "bsc": -1,
-    "elu": -1,
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.RB": -1,
-    "pot": -1
+    "bsc": -2,
+    "elu": -2,
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.RB": -2,
+    "pot": -2
    },
-   "delta": -1,
+   "delta": -2,
    "name": "Jonathan Taylor",
-   "ovrAfter": 84,
+   "ovrAfter": 83,
    "ovrBefore": 85,
    "pos": "RB",
-   "residualZ": -0.37,
-   "sample": 205,
+   "residualZ": -0.7,
+   "sample": 220,
    "tid": 13
   },
   "888": {
    "applied": {
-    "elu": 3,
-    "hnd": 3,
-    "ovr": 3,
-    "ovrs.WR": 3,
-    "pot": 3,
-    "rtr": 3
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
    },
-   "delta": 3,
+   "delta": 2,
    "name": "Ja'Marr Chase",
-   "ovrAfter": 90,
+   "ovrAfter": 89,
    "ovrBefore": 87,
    "pos": "WR",
-   "residualZ": 1.01,
-   "sample": 87,
+   "residualZ": 0.63,
+   "sample": 96,
    "tid": 6
   },
   "8884": {
@@ -9122,8 +9443,8 @@
    "ovrAfter": 43,
    "ovrBefore": 44,
    "pos": "DL",
-   "residualZ": -0.4,
-   "sample": 241,
+   "residualZ": -0.38,
+   "sample": 259,
    "tid": 17
   },
   "8897": {
@@ -9140,8 +9461,8 @@
    "ovrAfter": 50,
    "ovrBefore": 51,
    "pos": "DL",
-   "residualZ": -0.73,
-   "sample": 199,
+   "residualZ": -0.61,
+   "sample": 221,
    "tid": 3
   },
   "8902": {
@@ -9158,7 +9479,7 @@
    "ovrAfter": 57,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": -0.99,
+   "residualZ": -0.95,
    "sample": 147,
    "tid": 3
   },
@@ -9176,27 +9497,27 @@
    "ovrAfter": 34,
    "ovrBefore": 33,
    "pos": "RB",
-   "residualZ": 0.92,
-   "sample": 44,
+   "residualZ": 0.75,
+   "sample": 46,
    "tid": 10
   },
-  "8962": {
+  "896": {
    "applied": {
     "ovr": -1,
-    "ovrs.S": -1,
+    "ovrs.LB": -1,
     "pcv": -1,
     "pot": -1,
     "rns": -1,
     "tck": -1
    },
    "delta": -1,
-   "name": "Cole Bishop",
-   "ovrAfter": 58,
-   "ovrBefore": 59,
-   "pos": "S",
-   "residualZ": -0.19,
-   "sample": 591,
-   "tid": 3
+   "name": "Devin Bush Jr.",
+   "ovrAfter": 69,
+   "ovrBefore": 70,
+   "pos": "LB",
+   "residualZ": -0.17,
+   "sample": 551,
+   "tid": 5
   },
   "8964": {
    "applied": {
@@ -9212,7 +9533,7 @@
    "ovrAfter": 66,
    "ovrBefore": 62,
    "pos": "S",
-   "residualZ": 2.1,
+   "residualZ": 2.18,
    "sample": 691,
    "tid": 11
   },
@@ -9230,26 +9551,26 @@
    "ovrAfter": 51,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": -0.9,
-   "sample": 251,
+   "residualZ": -0.91,
+   "sample": 282,
    "tid": 14
   },
   "8985": {
    "applied": {
-    "ovr": 5,
-    "ovrs.LB": 5,
-    "pcv": 5,
-    "pot": 5,
-    "rns": 5,
-    "tck": 5
+    "ovr": 4,
+    "ovrs.LB": 4,
+    "pcv": 4,
+    "pot": 4,
+    "rns": 4,
+    "tck": 4
    },
-   "delta": 5,
+   "delta": 4,
    "name": "Payton Wilson",
-   "ovrAfter": 50,
+   "ovrAfter": 49,
    "ovrBefore": 45,
    "pos": "LB",
-   "residualZ": 1.62,
-   "sample": 500,
+   "residualZ": 1.24,
+   "sample": 544,
    "tid": 26
   },
   "8988": {
@@ -9266,7 +9587,7 @@
    "ovrAfter": 43,
    "ovrBefore": 46,
    "pos": "LB",
-   "residualZ": -1.38,
+   "residualZ": -1.39,
    "sample": 219,
    "tid": 13
   },
@@ -9284,8 +9605,8 @@
    "ovrAfter": 46,
    "ovrBefore": 48,
    "pos": "S",
-   "residualZ": -0.95,
-   "sample": 327,
+   "residualZ": -1.04,
+   "sample": 346,
    "tid": 15
   },
   "900": {
@@ -9302,26 +9623,44 @@
    "ovrAfter": 78,
    "ovrBefore": 81,
    "pos": "QB",
-   "residualZ": -1.0,
+   "residualZ": -1.09,
    "sample": 239,
    "tid": 28
   },
+  "9000": {
+   "applied": {
+    "ovr": -1,
+    "ovrs.QB": -1,
+    "pot": -1,
+    "tha": -1,
+    "thp": -1,
+    "thv": -1
+   },
+   "delta": -1,
+   "name": "Joe Milton",
+   "ovrAfter": 50,
+   "ovrBefore": 51,
+   "pos": "QB",
+   "residualZ": -0.86,
+   "sample": 79,
+   "tid": 25
+  },
   "9004": {
    "applied": {
-    "hnd": -2,
-    "ovr": -2,
-    "ovrs.TE": -2,
-    "pot": -2,
-    "rbk": -2,
-    "rtr": -2
+    "hnd": -1,
+    "ovr": -1,
+    "ovrs.TE": -1,
+    "pot": -1,
+    "rbk": -1,
+    "rtr": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Theo Johnson",
-   "ovrAfter": 55,
+   "ovrAfter": 56,
    "ovrBefore": 57,
    "pos": "TE",
-   "residualZ": -1.46,
-   "sample": 12,
+   "residualZ": -1.13,
+   "sample": 13,
    "tid": 23
   },
   "9005": {
@@ -9338,7 +9677,7 @@
    "ovrAfter": 54,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": 0.44,
+   "residualZ": 0.47,
    "sample": 356,
    "tid": 18
   },
@@ -9356,7 +9695,7 @@
    "ovrAfter": 49,
    "ovrBefore": 47,
    "pos": "LB",
-   "residualZ": 0.91,
+   "residualZ": 0.74,
    "sample": 280,
    "tid": 11
   },
@@ -9374,26 +9713,26 @@
    "ovrAfter": 48,
    "ovrBefore": 51,
    "pos": "LB",
-   "residualZ": -1.05,
-   "sample": 317,
+   "residualZ": -1.17,
+   "sample": 360,
    "tid": 25
   },
   "9014": {
    "applied": {
-    "ovr": 6,
-    "ovrs.DL": 6,
-    "pot": 6,
-    "prs": 6,
-    "rns": 6,
-    "tck": 6
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 6,
+   "delta": 5,
    "name": "Austin Booker",
-   "ovrAfter": 44,
+   "ovrAfter": 43,
    "ovrBefore": 38,
    "pos": "DL",
-   "residualZ": 2.23,
-   "sample": 314,
+   "residualZ": 1.98,
+   "sample": 370,
    "tid": 5
   },
   "9019": {
@@ -9410,26 +9749,44 @@
    "ovrAfter": 46,
    "ovrBefore": 44,
    "pos": "DL",
-   "residualZ": 0.57,
+   "residualZ": 0.62,
    "sample": 373,
    "tid": 1
   },
+  "902": {
+   "applied": {
+    "elu": 1,
+    "hnd": 1,
+    "ovr": 1,
+    "ovrs.WR": 1,
+    "pot": 1,
+    "rtr": 1
+   },
+   "delta": 1,
+   "name": "Rashod Bateman",
+   "ovrAfter": 57,
+   "ovrBefore": 56,
+   "pos": "WR",
+   "residualZ": 0.38,
+   "sample": 42,
+   "tid": 2
+  },
   "9020": {
    "applied": {
-    "ovr": -2,
-    "ovrs.QB": -2,
-    "pot": -2,
-    "tha": -2,
-    "thp": -2,
-    "thv": -2
+    "ovr": -3,
+    "ovrs.QB": -3,
+    "pot": -3,
+    "tha": -3,
+    "thp": -3,
+    "thv": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Bo Nix",
-   "ovrAfter": 75,
+   "ovrAfter": 74,
    "ovrBefore": 77,
    "pos": "QB",
-   "residualZ": -0.71,
-   "sample": 335,
+   "residualZ": -0.73,
+   "sample": 377,
    "tid": 9
   },
   "9021": {
@@ -9446,7 +9803,7 @@
    "ovrAfter": 59,
    "ovrBefore": 54,
    "pos": "RB",
-   "residualZ": 1.76,
+   "residualZ": 1.86,
    "sample": 116,
    "tid": 18
   },
@@ -9464,7 +9821,7 @@
    "ovrAfter": 51,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": -0.3,
+   "residualZ": -0.26,
    "sample": 366,
    "tid": 1
   },
@@ -9482,8 +9839,8 @@
    "ovrAfter": 36,
    "ovrBefore": 38,
    "pos": "LB",
-   "residualZ": -0.98,
-   "sample": 165,
+   "residualZ": -1.16,
+   "sample": 169,
    "tid": 16
   },
   "903": {
@@ -9500,26 +9857,9 @@
    "ovrAfter": 89,
    "ovrBefore": 86,
    "pos": "QB",
-   "residualZ": 0.97,
-   "sample": 380,
+   "residualZ": 0.85,
+   "sample": 425,
    "tid": 6
-  },
-  "904": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1
-   },
-   "delta": -1,
-   "name": "Tommy Togiai",
-   "ovrAfter": 44,
-   "ovrBefore": 45,
-   "pos": "DL",
-   "residualZ": -0.23,
-   "sample": 381,
-   "tid": 12
   },
   "9051": {
    "applied": {
@@ -9535,7 +9875,7 @@
    "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "TE",
-   "residualZ": -1.25,
+   "residualZ": -1.27,
    "sample": 41,
    "tid": 28
   },
@@ -9553,25 +9893,25 @@
    "ovrAfter": 65,
    "ovrBefore": 66,
    "pos": "LB",
-   "residualZ": -0.23,
-   "sample": 295,
+   "residualZ": -0.38,
+   "sample": 360,
    "tid": 30
   },
   "9069": {
    "applied": {
-    "ovr": -3,
-    "ovrs.DL": -3,
-    "pot": -3,
-    "prs": -3,
-    "rns": -3,
-    "tck": -3
+    "ovr": -2,
+    "ovrs.DL": -2,
+    "pot": -2,
+    "prs": -2,
+    "rns": -2,
+    "tck": -2
    },
-   "delta": -3,
+   "delta": -2,
    "name": "T'Vondre Sweat",
-   "ovrAfter": 55,
+   "ovrAfter": 56,
    "ovrBefore": 58,
    "pos": "DL",
-   "residualZ": -1.17,
+   "residualZ": -1.14,
    "sample": 229,
    "tid": 24
   },
@@ -9589,27 +9929,9 @@
    "ovrAfter": 46,
    "ovrBefore": 49,
    "pos": "RB",
-   "residualZ": -1.28,
+   "residualZ": -1.23,
    "sample": 77,
    "tid": 11
-  },
-  "9074": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "DeWayne Carter",
-   "ovrAfter": 43,
-   "ovrBefore": 44,
-   "pos": "DL",
-   "residualZ": -0.25,
-   "sample": 238,
-   "tid": 3
   },
   "9075": {
    "applied": {
@@ -9625,26 +9947,26 @@
    "ovrAfter": 39,
    "ovrBefore": 35,
    "pos": "S",
-   "residualZ": 1.93,
-   "sample": 351,
+   "residualZ": 1.87,
+   "sample": 400,
    "tid": 27
   },
   "9076": {
    "applied": {
-    "ovr": 1,
-    "ovrs.S": 1,
-    "pcv": 1,
-    "pot": 1,
-    "rns": 1,
-    "tck": 1
+    "ovr": 2,
+    "ovrs.S": 2,
+    "pcv": 2,
+    "pot": 2,
+    "rns": 2,
+    "tck": 2
    },
-   "delta": 1,
+   "delta": 2,
    "name": "Tykee Smith",
-   "ovrAfter": 65,
+   "ovrAfter": 66,
    "ovrBefore": 64,
    "pos": "S",
-   "residualZ": 0.48,
-   "sample": 527,
+   "residualZ": 0.72,
+   "sample": 581,
    "tid": 29
   },
   "9086": {
@@ -9661,26 +9983,26 @@
    "ovrAfter": 66,
    "ovrBefore": 67,
    "pos": "DL",
-   "residualZ": -0.27,
-   "sample": 492,
+   "residualZ": -0.41,
+   "sample": 539,
    "tid": 13
   },
   "9094": {
    "applied": {
-    "ovr": -3,
-    "ovrs.LB": -3,
-    "pcv": -3,
-    "pot": -3,
-    "rns": -3,
-    "tck": -3
+    "ovr": -2,
+    "ovrs.LB": -2,
+    "pcv": -2,
+    "pot": -2,
+    "rns": -2,
+    "tck": -2
    },
-   "delta": -3,
+   "delta": -2,
    "name": "Danny Stutsman",
-   "ovrAfter": 47,
+   "ovrAfter": 48,
    "ovrBefore": 50,
    "pos": "LB",
-   "residualZ": -1.15,
-   "sample": 304,
+   "residualZ": -0.59,
+   "sample": 361,
    "tid": 22
   },
   "9095": {
@@ -9697,8 +10019,8 @@
    "ovrAfter": 65,
    "ovrBefore": 63,
    "pos": "RB",
-   "residualZ": 0.55,
-   "sample": 148,
+   "residualZ": 0.6,
+   "sample": 165,
    "tid": 24
   },
   "9098": {
@@ -9715,7 +10037,7 @@
    "ovrAfter": 67,
    "ovrBefore": 62,
    "pos": "LB",
-   "residualZ": 2.31,
+   "residualZ": 2.15,
    "sample": 227,
    "tid": 11
   },
@@ -9733,27 +10055,9 @@
    "ovrAfter": 64,
    "ovrBefore": 63,
    "pos": "WR",
-   "residualZ": 0.61,
-   "sample": 24,
+   "residualZ": 0.52,
+   "sample": 32,
    "tid": 17
-  },
-  "9105": {
-   "applied": {
-    "ovr": 1,
-    "ovrs.DL": 1,
-    "pot": 1,
-    "prs": 1,
-    "rns": 1,
-    "tck": 1
-   },
-   "delta": 1,
-   "name": "Kris Jenkins Jr.",
-   "ovrAfter": 55,
-   "ovrBefore": 54,
-   "pos": "DL",
-   "residualZ": 0.35,
-   "sample": 132,
-   "tid": 6
   },
   "9114": {
    "applied": {
@@ -9769,7 +10073,7 @@
    "ovrAfter": 72,
    "ovrBefore": 75,
    "pos": "DL",
-   "residualZ": -1.11,
+   "residualZ": -1.13,
    "sample": 428,
    "tid": 7
   },
@@ -9787,26 +10091,26 @@
    "ovrAfter": 58,
    "ovrBefore": 57,
    "pos": "LB",
-   "residualZ": 0.46,
-   "sample": 260,
+   "residualZ": 0.21,
+   "sample": 331,
    "tid": 25
   },
   "9124": {
    "applied": {
-    "ovr": 4,
-    "ovrs.DL": 4,
-    "pot": 4,
-    "prs": 4,
-    "rns": 4,
-    "tck": 4
+    "ovr": 3,
+    "ovrs.DL": 3,
+    "pot": 3,
+    "prs": 3,
+    "rns": 3,
+    "tck": 3
    },
-   "delta": 4,
+   "delta": 3,
    "name": "Chop Robinson",
-   "ovrAfter": 71,
+   "ovrAfter": 70,
    "ovrBefore": 67,
    "pos": "DL",
-   "residualZ": 1.37,
-   "sample": 325,
+   "residualZ": 1.02,
+   "sample": 383,
    "tid": 19
   },
   "9127": {
@@ -9823,7 +10127,7 @@
    "ovrAfter": 54,
    "ovrBefore": 51,
    "pos": "S",
-   "residualZ": 0.94,
+   "residualZ": 1.02,
    "sample": 491,
    "tid": 11
   },
@@ -9841,8 +10145,8 @@
    "ovrAfter": 76,
    "ovrBefore": 73,
    "pos": "RB",
-   "residualZ": 1.01,
-   "sample": 189,
+   "residualZ": 0.97,
+   "sample": 210,
    "tid": 29
   },
   "9132": {
@@ -9859,7 +10163,7 @@
    "ovrAfter": 71,
    "ovrBefore": 69,
    "pos": "DL",
-   "residualZ": 0.65,
+   "residualZ": 0.61,
    "sample": 433,
    "tid": 28
   },
@@ -9877,8 +10181,8 @@
    "ovrAfter": 53,
    "ovrBefore": 51,
    "pos": "QB",
-   "residualZ": 1.01,
-   "sample": 129,
+   "residualZ": 0.86,
+   "sample": 175,
    "tid": 23
   },
   "9139": {
@@ -9894,96 +10198,78 @@
    "ovrAfter": 62,
    "ovrBefore": 64,
    "pos": "WR",
-   "residualZ": -1.42,
-   "sample": 25,
+   "residualZ": -1.29,
+   "sample": 28,
    "tid": 14
   },
   "9144": {
    "applied": {
-    "hnd": -3,
-    "ovr": -3,
-    "ovrs.WR": -3,
-    "pot": -3,
-    "rtr": -3
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.WR": -2,
+    "pot": -2,
+    "rtr": -2
    },
-   "delta": -3,
+   "delta": -2,
    "name": "Xavier Worthy",
-   "ovrAfter": 52,
+   "ovrAfter": 53,
    "ovrBefore": 55,
    "pos": "WR",
-   "residualZ": -1.05,
-   "sample": 50,
+   "residualZ": -0.81,
+   "sample": 54,
    "tid": 15
   },
   "9146": {
    "applied": {
-    "kac": 3,
-    "kpw": 3,
-    "ovr": 3,
-    "ovrs.K": 3,
-    "pot": 3
-   },
-   "delta": 3,
-   "name": "Will Reichard",
-   "ovrAfter": 77,
-   "ovrBefore": 74,
-   "pos": "K",
-   "residualZ": 0.87,
-   "sample": 25,
-   "tid": 20
-  },
-  "9150": {
-   "applied": {
-    "elu": 1,
-    "hnd": 1,
+    "kac": 1,
+    "kpw": 1,
     "ovr": 1,
-    "ovrs.WR": 1,
-    "pot": 1,
-    "rtr": 1
+    "ovrs.K": 1,
+    "pot": 1
    },
    "delta": 1,
-   "name": "Roman Wilson",
-   "ovrAfter": 48,
-   "ovrBefore": 47,
-   "pos": "WR",
-   "residualZ": 0.31,
-   "sample": 25,
-   "tid": 26
+   "name": "Will Reichard",
+   "ovrAfter": 75,
+   "ovrBefore": 74,
+   "pos": "K",
+   "residualZ": 0.38,
+   "sample": 28,
+   "tid": 20
   },
   "9159": {
    "applied": {
-    "ovr": 6,
-    "ovrs.DL": 6,
-    "pot": 6,
-    "prs": 6,
-    "rns": 6,
-    "tck": 6
+    "ovr": 5,
+    "ovrs.DL": 5,
+    "pot": 5,
+    "prs": 5,
+    "rns": 5,
+    "tck": 5
    },
-   "delta": 6,
+   "delta": 5,
    "name": "Dallas Turner",
-   "ovrAfter": 74,
+   "ovrAfter": 73,
    "ovrBefore": 68,
    "pos": "DL",
-   "residualZ": 2.05,
-   "sample": 456,
+   "residualZ": 1.73,
+   "sample": 493,
    "tid": 20
   },
   "9161": {
    "applied": {
-    "ovr": 2,
-    "ovrs.S": 2,
-    "pcv": 2,
-    "pot": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 1,
+    "ovrs.S": 1,
+    "pcv": 1,
+    "pot": 1,
+    "rns": 1,
+    "tck": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Calen Bullock",
-   "ovrAfter": 67,
+   "ovrAfter": 66,
    "ovrBefore": 65,
    "pos": "S",
-   "residualZ": 0.56,
-   "sample": 591,
+   "residualZ": 0.49,
+   "sample": 641,
    "tid": 12
   },
   "9162": {
@@ -10000,7 +10286,7 @@
    "ovrAfter": 84,
    "ovrBefore": 78,
    "pos": "TE",
-   "residualZ": 2.1,
+   "residualZ": 2.18,
    "sample": 71,
    "tid": 16
   },
@@ -10018,8 +10304,8 @@
    "ovrAfter": 58,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": 0.75,
-   "sample": 246,
+   "residualZ": 0.69,
+   "sample": 277,
    "tid": 0
   },
   "9169": {
@@ -10036,24 +10322,24 @@
    "ovrAfter": 66,
    "ovrBefore": 64,
    "pos": "WR",
-   "residualZ": 0.61,
-   "sample": 51,
+   "residualZ": 0.6,
+   "sample": 55,
    "tid": 5
   },
   "9170": {
    "applied": {
-    "kac": -3,
-    "kpw": -3,
-    "ovr": -3,
-    "ovrs.K": -3,
-    "pot": -3
+    "kac": -4,
+    "kpw": -4,
+    "ovr": -4,
+    "ovrs.K": -4,
+    "pot": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "Harrison Mevis",
-   "ovrAfter": 53,
+   "ovrAfter": 52,
    "ovrBefore": 56,
    "pos": "K",
-   "residualZ": -1.7,
+   "residualZ": -1.91,
    "sample": 9,
    "tid": 2
   },
@@ -10069,8 +10355,8 @@
    "ovrAfter": 75,
    "ovrBefore": 74,
    "pos": "K",
-   "residualZ": 0.5,
-   "sample": 20,
+   "residualZ": 0.48,
+   "sample": 24,
    "tid": 14
   },
   "9174": {
@@ -10087,27 +10373,9 @@
    "ovrAfter": 51,
    "ovrBefore": 50,
    "pos": "WR",
-   "residualZ": 0.47,
-   "sample": 42,
+   "residualZ": 0.44,
+   "sample": 45,
    "tid": 24
-  },
-  "9175": {
-   "applied": {
-    "elu": 1,
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.WR": 1,
-    "pot": 1,
-    "rtr": 1
-   },
-   "delta": 1,
-   "name": "Keon Coleman",
-   "ovrAfter": 56,
-   "ovrBefore": 55,
-   "pos": "WR",
-   "residualZ": 0.27,
-   "sample": 36,
-   "tid": 3
   },
   "9176": {
    "applied": {
@@ -10123,7 +10391,7 @@
    "ovrAfter": 62,
    "ovrBefore": 64,
    "pos": "DL",
-   "residualZ": -0.93,
+   "residualZ": -0.91,
    "sample": 249,
    "tid": 9
   },
@@ -10141,8 +10409,8 @@
    "ovrAfter": 77,
    "ovrBefore": 76,
    "pos": "QB",
-   "residualZ": 0.35,
-   "sample": 240,
+   "residualZ": 0.25,
+   "sample": 269,
    "tid": 5
   },
   "9180": {
@@ -10175,7 +10443,7 @@
    "ovrAfter": 86,
    "ovrBefore": 85,
    "pos": "QB",
-   "residualZ": 0.27,
+   "residualZ": 0.21,
    "sample": 345,
    "tid": 21
   },
@@ -10193,26 +10461,26 @@
    "ovrAfter": 47,
    "ovrBefore": 48,
    "pos": "DL",
-   "residualZ": -0.41,
-   "sample": 318,
+   "residualZ": -0.31,
+   "sample": 363,
    "tid": 23
   },
   "9212": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Kenneth Grant",
-   "ovrAfter": 54,
+   "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "DL",
-   "residualZ": -1.56,
-   "sample": 127,
+   "residualZ": -1.47,
+   "sample": 179,
    "tid": 19
   },
   "9213": {
@@ -10229,8 +10497,8 @@
    "ovrAfter": 49,
    "ovrBefore": 48,
    "pos": "TE",
-   "residualZ": 0.6,
-   "sample": 15,
+   "residualZ": 0.83,
+   "sample": 20,
    "tid": 4
   },
   "9253": {
@@ -10247,8 +10515,8 @@
    "ovrAfter": 56,
    "ovrBefore": 55,
    "pos": "WR",
-   "residualZ": 0.74,
-   "sample": 20,
+   "residualZ": 0.58,
+   "sample": 23,
    "tid": 29
   },
   "9264": {
@@ -10265,27 +10533,9 @@
    "ovrAfter": 55,
    "ovrBefore": 53,
    "pos": "DL",
-   "residualZ": 0.8,
-   "sample": 329,
+   "residualZ": 0.6,
+   "sample": 377,
    "tid": 15
-  },
-  "929": {
-   "applied": {
-    "hnd": 1,
-    "ovr": 1,
-    "ovrs.TE": 1,
-    "pot": 1,
-    "rbk": 1,
-    "rtr": 1
-   },
-   "delta": 1,
-   "name": "Juwan Johnson",
-   "ovrAfter": 61,
-   "ovrBefore": 60,
-   "pos": "TE",
-   "residualZ": 0.33,
-   "sample": 42,
-   "tid": 22
   },
   "9305": {
    "applied": {
@@ -10301,7 +10551,7 @@
    "ovrAfter": 46,
    "ovrBefore": 47,
    "pos": "S",
-   "residualZ": -0.7,
+   "residualZ": -0.6,
    "sample": 162,
    "tid": 1
   },
@@ -10319,43 +10569,61 @@
    "ovrAfter": 30,
    "ovrBefore": 29,
    "pos": "DL",
-   "residualZ": 0.52,
-   "sample": 143,
+   "residualZ": 0.38,
+   "sample": 168,
    "tid": 9
-  },
-  "9321": {
-   "applied": {
-    "bsc": -1,
-    "elu": -1,
-    "hnd": -1,
-    "ovr": -1,
-    "ovrs.RB": -1,
-    "pot": -1
-   },
-   "delta": -1,
-   "name": "Omarion Hampton",
-   "ovrAfter": 58,
-   "ovrBefore": 59,
-   "pos": "RB",
-   "residualZ": -0.37,
-   "sample": 136,
-   "tid": 17
   },
   "934": {
    "applied": {
-    "bsc": -3,
-    "elu": -3,
-    "ovr": -3,
-    "ovrs.RB": -3,
-    "pot": -3
+    "bsc": -4,
+    "elu": -4,
+    "ovr": -4,
+    "ovrs.RB": -4,
+    "pot": -4
    },
-   "delta": -3,
+   "delta": -4,
    "name": "JK Dobbins",
-   "ovrAfter": 59,
+   "ovrAfter": 58,
    "ovrBefore": 62,
    "pos": "RB",
-   "residualZ": -1.27,
-   "sample": 107,
+   "residualZ": -1.46,
+   "sample": 108,
+   "tid": 9
+  },
+  "9342": {
+   "applied": {
+    "ovr": 1,
+    "ovrs.DL": 1,
+    "pot": 1,
+    "prs": 1,
+    "rns": 1,
+    "tck": 1
+   },
+   "delta": 1,
+   "name": "Josaiah Stewart",
+   "ovrAfter": 47,
+   "ovrBefore": 46,
+   "pos": "DL",
+   "residualZ": 0.2,
+   "sample": 395,
+   "tid": 18
+  },
+  "9350": {
+   "applied": {
+    "elu": 2,
+    "hnd": 2,
+    "ovr": 2,
+    "ovrs.WR": 2,
+    "pot": 2,
+    "rtr": 2
+   },
+   "delta": 2,
+   "name": "Pat Bryant",
+   "ovrAfter": 54,
+   "ovrBefore": 52,
+   "pos": "WR",
+   "residualZ": 1.29,
+   "sample": 21,
    "tid": 9
   },
   "9351": {
@@ -10372,7 +10640,7 @@
    "ovrAfter": 48,
    "ovrBefore": 47,
    "pos": "DL",
-   "residualZ": 0.26,
+   "residualZ": 0.31,
    "sample": 334,
    "tid": 11
   },
@@ -10390,26 +10658,26 @@
    "ovrAfter": 66,
    "ovrBefore": 67,
    "pos": "S",
-   "residualZ": -0.23,
+   "residualZ": -0.25,
    "sample": 665,
    "tid": 1
   },
   "9371": {
    "applied": {
-    "ovr": 2,
-    "ovrs.DL": 2,
-    "pot": 2,
-    "prs": 2,
-    "rns": 2,
-    "tck": 2
+    "ovr": 3,
+    "ovrs.DL": 3,
+    "pot": 3,
+    "prs": 3,
+    "rns": 3,
+    "tck": 3
    },
-   "delta": 2,
+   "delta": 3,
    "name": "Princely Umanmielen",
-   "ovrAfter": 61,
+   "ovrAfter": 62,
    "ovrBefore": 59,
    "pos": "DL",
-   "residualZ": 0.77,
-   "sample": 284,
+   "residualZ": 1.34,
+   "sample": 302,
    "tid": 4
   },
   "9381": {
@@ -10426,8 +10694,8 @@
    "ovrAfter": 52,
    "ovrBefore": 51,
    "pos": "S",
-   "residualZ": 0.35,
-   "sample": 482,
+   "residualZ": 0.27,
+   "sample": 547,
    "tid": 30
   },
   "9383": {
@@ -10444,8 +10712,8 @@
    "ovrAfter": 62,
    "ovrBefore": 64,
    "pos": "LB",
-   "residualZ": -0.81,
-   "sample": 410,
+   "residualZ": -0.65,
+   "sample": 468,
    "tid": 25
   },
   "9389": {
@@ -10462,62 +10730,44 @@
    "ovrAfter": 53,
    "ovrBefore": 51,
    "pos": "RB",
-   "residualZ": 0.64,
-   "sample": 138,
+   "residualZ": 0.71,
+   "sample": 151,
    "tid": 19
   },
   "939": {
    "applied": {
-    "ovr": 2,
-    "ovrs.P": 2,
-    "pac": 2,
-    "pot": 2,
-    "ppw": 2
+    "ovr": 1,
+    "ovrs.P": 1,
+    "pac": 1,
+    "pot": 1,
+    "ppw": 1
    },
-   "delta": 2,
+   "delta": 1,
    "name": "Cameron Johnston",
-   "ovrAfter": 64,
+   "ovrAfter": 63,
    "ovrBefore": 62,
    "pos": "P",
-   "residualZ": 0.77,
-   "sample": 37,
+   "residualZ": 0.36,
+   "sample": 43,
    "tid": 26
   },
   "9403": {
    "applied": {
-    "ovr": 4,
-    "ovrs.LB": 4,
-    "pcv": 4,
-    "pot": 4,
-    "rns": 4,
-    "tck": 4
+    "ovr": 3,
+    "ovrs.LB": 3,
+    "pcv": 3,
+    "pot": 3,
+    "rns": 3,
+    "tck": 3
    },
-   "delta": 4,
+   "delta": 3,
    "name": "Barrett Carter",
-   "ovrAfter": 55,
+   "ovrAfter": 54,
    "ovrBefore": 51,
    "pos": "LB",
-   "residualZ": 1.15,
-   "sample": 589,
+   "residualZ": 0.89,
+   "sample": 657,
    "tid": 6
-  },
-  "9410": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.DL": -1,
-    "pot": -1,
-    "prs": -1,
-    "rns": -1,
-    "tck": -1
-   },
-   "delta": -1,
-   "name": "Walter Nolen",
-   "ovrAfter": 56,
-   "ovrBefore": 57,
-   "pos": "DL",
-   "residualZ": -0.32,
-   "sample": 310,
-   "tid": 0
   },
   "944": {
    "applied": {
@@ -10532,8 +10782,8 @@
    "ovrAfter": 36,
    "ovrBefore": 38,
    "pos": "DL",
-   "residualZ": -1.08,
-   "sample": 180,
+   "residualZ": -1.06,
+   "sample": 194,
    "tid": 4
   },
   "9440": {
@@ -10550,8 +10800,8 @@
    "ovrAfter": 63,
    "ovrBefore": 64,
    "pos": "TE",
-   "residualZ": -0.49,
-   "sample": 57,
+   "residualZ": -0.36,
+   "sample": 60,
    "tid": 5
   },
   "9444": {
@@ -10567,8 +10817,8 @@
    "ovrAfter": 63,
    "ovrBefore": 67,
    "pos": "WR",
-   "residualZ": -1.52,
-   "sample": 54,
+   "residualZ": -1.57,
+   "sample": 59,
    "tid": 29
   },
   "9447": {
@@ -10585,8 +10835,8 @@
    "ovrAfter": 53,
    "ovrBefore": 54,
    "pos": "S",
-   "residualZ": -0.58,
-   "sample": 174,
+   "residualZ": -0.61,
+   "sample": 175,
    "tid": 4
   },
   "9448": {
@@ -10603,9 +10853,27 @@
    "ovrAfter": 49,
    "ovrBefore": 52,
    "pos": "DL",
-   "residualZ": -1.09,
-   "sample": 301,
+   "residualZ": -1.07,
+   "sample": 331,
    "tid": 10
+  },
+  "9462": {
+   "applied": {
+    "ovr": 2,
+    "ovrs.DL": 2,
+    "pot": 2,
+    "prs": 2,
+    "rns": 2,
+    "tck": 2
+   },
+   "delta": 2,
+   "name": "Abdul Carter",
+   "ovrAfter": 66,
+   "ovrBefore": 64,
+   "pos": "DL",
+   "residualZ": 0.47,
+   "sample": 558,
+   "tid": 23
   },
   "9474": {
    "applied": {
@@ -10620,8 +10888,8 @@
    "ovrAfter": 58,
    "ovrBefore": 59,
    "pos": "S",
-   "residualZ": -0.22,
-   "sample": 619,
+   "residualZ": -0.26,
+   "sample": 685,
    "tid": 2
   },
   "9478": {
@@ -10638,8 +10906,8 @@
    "ovrAfter": 70,
    "ovrBefore": 69,
    "pos": "WR",
-   "residualZ": 0.36,
-   "sample": 78,
+   "residualZ": 0.38,
+   "sample": 87,
    "tid": 4
   },
   "9483": {
@@ -10656,7 +10924,7 @@
    "ovrAfter": 61,
    "ovrBefore": 63,
    "pos": "RB",
-   "residualZ": -0.64,
+   "residualZ": -0.73,
    "sample": 151,
    "tid": 7
   },
@@ -10674,8 +10942,8 @@
    "ovrAfter": 59,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": -1.27,
-   "sample": 184,
+   "residualZ": -0.83,
+   "sample": 223,
    "tid": 26
   },
   "9487": {
@@ -10692,7 +10960,7 @@
    "ovrAfter": 59,
    "ovrBefore": 63,
    "pos": "TE",
-   "residualZ": -1.67,
+   "residualZ": -1.74,
    "sample": 30,
    "tid": 17
   },
@@ -10710,8 +10978,8 @@
    "ovrAfter": 45,
    "ovrBefore": 47,
    "pos": "DL",
-   "residualZ": -1.54,
-   "sample": 133,
+   "residualZ": -1.22,
+   "sample": 158,
    "tid": 29
   },
   "9536": {
@@ -10728,8 +10996,8 @@
    "ovrAfter": 44,
    "ovrBefore": 48,
    "pos": "LB",
-   "residualZ": -1.37,
-   "sample": 437,
+   "residualZ": -1.33,
+   "sample": 498,
    "tid": 8
   },
   "9538": {
@@ -10746,7 +11014,7 @@
    "ovrAfter": 61,
    "ovrBefore": 63,
    "pos": "RB",
-   "residualZ": -1.1,
+   "residualZ": -1.2,
    "sample": 57,
    "tid": 21
   },
@@ -10764,8 +11032,8 @@
    "ovrAfter": 56,
    "ovrBefore": 53,
    "pos": "WR",
-   "residualZ": 1.21,
-   "sample": 65,
+   "residualZ": 0.96,
+   "sample": 69,
    "tid": 5
   },
   "956": {
@@ -10781,8 +11049,8 @@
    "ovrAfter": 53,
    "ovrBefore": 56,
    "pos": "P",
-   "residualZ": -0.96,
-   "sample": 46,
+   "residualZ": -0.95,
+   "sample": 52,
    "tid": 0
   },
   "9563": {
@@ -10799,45 +11067,45 @@
    "ovrAfter": 64,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": 1.26,
+   "residualZ": 1.24,
    "sample": 323,
    "tid": 7
   },
-  "9570": {
-   "applied": {
-    "ovr": -1,
-    "ovrs.QB": -1,
-    "pot": -1,
-    "tha": -1,
-    "thp": -1,
-    "thv": -1
-   },
-   "delta": -1,
-   "name": "Cam Ward",
-   "ovrAfter": 57,
-   "ovrBefore": 58,
-   "pos": "QB",
-   "residualZ": -0.4,
-   "sample": 330,
-   "tid": 30
-  },
   "9579": {
    "applied": {
-    "bsc": -3,
-    "elu": -3,
-    "hnd": -3,
-    "ovr": -3,
-    "ovrs.RB": -3,
-    "pot": -3
+    "bsc": -2,
+    "elu": -2,
+    "hnd": -2,
+    "ovr": -2,
+    "ovrs.RB": -2,
+    "pot": -2
    },
-   "delta": -3,
+   "delta": -2,
    "name": "Ashton Jeanty",
-   "ovrAfter": 66,
+   "ovrAfter": 67,
    "ovrBefore": 69,
    "pos": "RB",
-   "residualZ": -0.96,
-   "sample": 169,
+   "residualZ": -0.47,
+   "sample": 185,
    "tid": 16
+  },
+  "9630": {
+   "applied": {
+    "ovr": -3,
+    "ovrs.QB": -3,
+    "pot": -3,
+    "tha": -3,
+    "thp": -3,
+    "thv": -3
+   },
+   "delta": -3,
+   "name": "Kyle McCord",
+   "ovrAfter": 40,
+   "ovrBefore": 43,
+   "pos": "QB",
+   "residualZ": -1.63,
+   "sample": 74,
+   "tid": 19
   },
   "969": {
    "applied": {
@@ -10853,7 +11121,7 @@
    "ovrAfter": 51,
    "ovrBefore": 48,
    "pos": "DL",
-   "residualZ": 1.67,
+   "residualZ": 1.69,
    "sample": 147,
    "tid": 5
   },
@@ -10871,25 +11139,25 @@
    "ovrAfter": 47,
    "ovrBefore": 48,
    "pos": "DL",
-   "residualZ": -0.24,
-   "sample": 294,
+   "residualZ": -0.28,
+   "sample": 330,
    "tid": 0
   },
   "983": {
    "applied": {
-    "kac": 1,
-    "kpw": 1,
-    "ovr": 1,
-    "ovrs.K": 1,
-    "pot": 1
+    "kac": 3,
+    "kpw": 3,
+    "ovr": 3,
+    "ovrs.K": 3,
+    "pot": 3
    },
-   "delta": 1,
+   "delta": 3,
    "name": "Jake Elliott",
-   "ovrAfter": 71,
+   "ovrAfter": 73,
    "ovrBefore": 70,
    "pos": "K",
-   "residualZ": 0.63,
-   "sample": 8,
+   "residualZ": 1.16,
+   "sample": 12,
    "tid": 25
   },
   "99": {
@@ -10906,25 +11174,25 @@
    "ovrAfter": 45,
    "ovrBefore": 48,
    "pos": "DL",
-   "residualZ": -1.25,
-   "sample": 231,
+   "residualZ": -1.07,
+   "sample": 268,
    "tid": 30
   },
   "990": {
    "applied": {
-    "kac": -2,
-    "kpw": -2,
-    "ovr": -2,
-    "ovrs.K": -2,
-    "pot": -2
+    "kac": -1,
+    "kpw": -1,
+    "ovr": -1,
+    "ovrs.K": -1,
+    "pot": -1
    },
-   "delta": -2,
+   "delta": -1,
    "name": "Chris Boswell",
-   "ovrAfter": 73,
+   "ovrAfter": 74,
    "ovrBefore": 75,
    "pos": "K",
-   "residualZ": -0.53,
-   "sample": 24,
+   "residualZ": -0.39,
+   "sample": 27,
    "tid": 26
   },
   "992": {
@@ -10941,25 +11209,25 @@
    "ovrBefore": 74,
    "pos": "K",
    "residualZ": 1.2,
-   "sample": 20,
+   "sample": 21,
    "tid": 12
   },
   "993": {
    "applied": {
-    "ovr": -2,
-    "ovrs.DL": -2,
-    "pot": -2,
-    "prs": -2,
-    "rns": -2,
-    "tck": -2
+    "ovr": -3,
+    "ovrs.DL": -3,
+    "pot": -3,
+    "prs": -3,
+    "rns": -3,
+    "tck": -3
    },
-   "delta": -2,
+   "delta": -3,
    "name": "Arik Armstead",
-   "ovrAfter": 59,
+   "ovrAfter": 58,
    "ovrBefore": 61,
    "pos": "DL",
-   "residualZ": -0.83,
-   "sample": 366,
+   "residualZ": -0.87,
+   "sample": 412,
    "tid": 14
   },
   "995": {
@@ -10976,8 +11244,8 @@
    "ovrAfter": 74,
    "ovrBefore": 77,
    "pos": "QB",
-   "residualZ": -0.91,
-   "sample": 357,
+   "residualZ": -0.9,
+   "sample": 411,
    "tid": 26
   }
  },
