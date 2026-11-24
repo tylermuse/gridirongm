@@ -11,6 +11,7 @@ import { simulatePlayByPlay, liveGameToGameResult, livePlayerStatsAtEvent, deriv
 import { isPlayerSuspended } from '@/lib/engine/discipline';
 import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetry';
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
+import { lineupDepthChart } from '@/lib/engine/lineup';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { LiveSim3D, useSim3DMode, readSim3DPref, sim3dTestArm } from '@/components/game/LiveSim3D';
@@ -814,8 +815,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // with the auto-sim filter at store.ts so a suspended starter doesn't
     // appear in the Watch Live box score after a discipline event fires.
     const roster = players.filter(p => p.teamId === game.homeTeamId && !isPlayerSuspended(p));
-    const dc = homeTeam?.depthChart;
-    if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
+    if (!homeTeam?.depthChart) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
+    // Lined up so each formation slot's player starts — the 3D lineup reads
+    // the first N at each position (lineup.ts).
+    const dc = lineupDepthChart(homeTeam, roster);
     return [...roster].sort((a, b) => {
       const ai = dc[a.position as Position]?.indexOf(a.id) ?? -1;
       const bi = dc[b.position as Position]?.indexOf(b.id) ?? -1;
@@ -825,8 +828,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const awayPlayers = useMemo(() => {
     if (!game) return [];
     const roster = players.filter(p => p.teamId === game.awayTeamId && !isPlayerSuspended(p));
-    const dc = awayTeam?.depthChart;
-    if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
+    if (!awayTeam?.depthChart) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
+    // Lined up so each formation slot's player starts — the 3D lineup reads
+    // the first N at each position (lineup.ts).
+    const dc = lineupDepthChart(awayTeam, roster);
     return [...roster].sort((a, b) => {
       const ai = dc[a.position as Position]?.indexOf(a.id) ?? -1;
       const bi = dc[b.position as Position]?.indexOf(b.id) ?? -1;

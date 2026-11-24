@@ -2,6 +2,7 @@ import type { Player, PlayerStats, GameResult, Team } from '@/types';
 import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
 import { fieldGoalMakeProbability, stripSackLossChance, catchFumbleLossChance } from './simulate';
 import { getBestReturner } from './specialTeams';
+import { lineupDepthChart } from './lineup';
 import { DEEP_PICK_SHARE, resolveReturn, returnNote, returnSpotLabel, rollPickAirYards, rollReturn, type ReturnOutcome } from './returns';
 import {
   CLOCK_STOPPED_TAIL, OOB_PLAY_SECS, OOB_SPOT_SECS, catchOutOfBoundsNote, oobStopsClockUntilSnap, rollCatchOutOfBounds,
@@ -887,8 +888,9 @@ export function simulatePlayByPlay(
     nextEventId: number;
   },
 ): LiveGameResult {
-  const homeKey = extractKeyPlayers(homePlayers, homeTeam.depthChart);
-  const awayKey = extractKeyPlayers(awayPlayers, awayTeam.depthChart);
+  // Lined up per game so each formation slot's player starts (lineup.ts).
+  const homeKey = extractKeyPlayers(homePlayers, lineupDepthChart(homeTeam, homePlayers));
+  const awayKey = extractKeyPlayers(awayPlayers, lineupDepthChart(awayTeam, awayPlayers));
 
   // QB tier modifiers: ±3% on completion probability
   const homeQBTierMod = homeKey.qb ? getQBTierModifier(computeQBTier(homeKey.qb)) : 0;
