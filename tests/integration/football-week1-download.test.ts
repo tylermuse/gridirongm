@@ -70,4 +70,37 @@ describe('FBGM Week 1 start download', () => {
     expect(years(week1)).toEqual(years(vanilla));
     expect(week1.meta.week1).toMatch(/Week 1 start/);
   });
+
+  // The main file keeps BS Football's contract.exp (year of free agency); stock
+  // FBGM reads exp as the last season under contract. Reddit, Nov 2026: every
+  // deal in the downloads ran a season long (a 2026 rookie "thru 2030").
+  it('converts contract years to FBGM’s last-season-under-contract convention', () => {
+    type P = { pid: number; tid: number; firstName: string; lastName: string; contract: { exp: number }; salaries?: { season: number }[] };
+    const vanilla = JSON.parse(readFileSync('public/rosters/FBGM_NFL_Roster_2026_Vanilla.json', 'utf8'));
+    const mainExp = new Map<number, number>(main.players.map((p: P) => [p.pid, p.contract.exp]));
+    for (const d of [vanilla, week1]) {
+      for (const p of d.players as P[]) {
+        if (p.tid < -1) continue;
+        expect(p.contract.exp, String(p.pid)).toBe(Math.max(2026, mainExp.get(p.pid)! - 1));
+        for (const s of p.salaries ?? []) expect(s.season, String(p.pid)).toBeLessThanOrEqual(p.contract.exp);
+      }
+    }
+    const thru = (name: string) =>
+      (vanilla.players as P[]).find((p) => p.tid >= 0 && `${p.firstName} ${p.lastName}` === name)?.contract.exp;
+    expect(thru('Josh Allen')).toBe(2030); // 6-year extension, 2025-2030
+    expect(thru('Fernando Mendoza')).toBe(2029); // 2026 #1 pick, 4-year rookie deal
+  });
+
+  it('main file: nobody on a roster is on an expired, placeholder or typo deal', () => {
+    type P = { tid: number; pid: number; bsRosterStatus?: string; draft: { year?: number; round?: number }; contract: { exp: number } };
+    for (const p of main.players as P[]) {
+      if (p.tid < 0) continue;
+      // BS reads exp <= season as already a free agent and drops him off the roster.
+      expect(p.contract.exp, String(p.pid)).toBeGreaterThan(2026);
+      expect(p.contract.exp, String(p.pid)).toBeLessThanOrEqual(2036);
+      if (p.draft.year === 2026 && (p.draft.round ?? 0) >= 1 && p.bsRosterStatus !== 'ps') {
+        expect(p.contract.exp, `2026 draftee ${p.pid}`).toBeGreaterThanOrEqual(2029);
+      }
+    }
+  });
 });

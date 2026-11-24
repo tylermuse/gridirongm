@@ -23,6 +23,10 @@ file stays untouched; these variants shift every future draft class and
 draft pick down one year so the first draft a vanilla-FBGM user reaches is
 the real one.
 
+Contract years (both files): the main file keeps BS Football's contract.exp
+(year of free agency); stock FBGM reads exp as the last season under
+contract, so to_fbgm_contract_years() moves every deal back one season.
+
 Served by the rosters-page download buttons (used almost exclusively for
 FBGM). The in-app "Play in BS Football" link keeps the original file.
 Run after build_midseason_start.py so both derive from the final roster.
@@ -58,6 +62,28 @@ def shift_drafts(d):
             dp["season"] -= 1
             ndp += 1
     return npros, ndp
+
+
+def to_fbgm_contract_years(d):
+    """The main file stores contract.exp the way BS Football reads it: the year
+    the player reaches free agency, one past his last paid season. Stock FBGM
+    reads exp as the LAST season under contract (its salary log runs through
+    exp), so loaded as-is every deal ran a season long there: Josh Allen thru
+    2031 instead of 2030, a 2026 rookie thru 2030. Move rostered players and
+    free agents back a year, never before the current season (anyone on a
+    roster now is at least in his final year), and drop salary rows past the
+    new end so the player page agrees. Draft prospects keep theirs: FBGM writes
+    the rookie deal at the draft. releasedPlayers were never on BS's scale."""
+    n = 0
+    for p in d["players"]:
+        c = p.get("contract") or {}
+        if p.get("tid", -3) < -1 or not isinstance(c.get("exp"), int):
+            continue
+        c["exp"] = max(SEASON, c["exp"] - 1)
+        n += 1
+        if p.get("salaries"):
+            p["salaries"] = [s for s in p["salaries"] if not (isinstance(s.get("season"), int) and s["season"] > c["exp"])]
+    return n
 
 
 FBGM_MAX_ROSTER = 90  # 53-man + practice squad + IR; teams carry 69-87 players
@@ -133,14 +159,17 @@ def main():
     week1 = copy.deepcopy(d)
     w1 = rewind_to_week1(week1)
     npros_w1, ndp_w1 = shift_drafts(week1)
+    ncon_w1 = to_fbgm_contract_years(week1)
     strip_bs_blocks(week1)
     json.dump(week1, open(DST_WEEK1, "w"), ensure_ascii=False, allow_nan=False)
 
     npros, ndp = shift_drafts(d)
+    ncon = to_fbgm_contract_years(d)
     strip_bs_blocks(d)
     json.dump(d, open(DST_VANILLA, "w"), ensure_ascii=False, allow_nan=False)
-    assert (npros, ndp) == (npros_w1, ndp_w1)
-    print(json.dumps({"vanilla": DST_VANILLA, "week1": DST_WEEK1, "prospectsShifted": npros, "draftPicksShifted": ndp, **w1}))
+    assert (npros, ndp, ncon) == (npros_w1, ndp_w1, ncon_w1)
+    print(json.dumps({"vanilla": DST_VANILLA, "week1": DST_WEEK1, "prospectsShifted": npros, "draftPicksShifted": ndp,
+                      "contractsShifted": ncon, **w1}))
 
 
 if __name__ == "__main__":
