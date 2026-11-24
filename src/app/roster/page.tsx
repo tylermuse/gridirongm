@@ -12,6 +12,7 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateSchemeFit, schemeFitDot, schemeFitColor, OFFENSIVE_SCHEME_LABELS, DEFENSIVE_SCHEME_LABELS } from '@/lib/engine/coaching';
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
 import { getSubPosition, deriveSubPosition } from '@/types';
+import { OFFENSE_SLOTS, defenseSlots as formationDefenseSlots, fillSlots, type LineupSlot } from '@/lib/engine/lineup';
 import type { Player, Position, SubPosition, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS, PRACTICE_SQUAD_LIMIT, isPracticeSquadEligible } from '@/types';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
@@ -1163,104 +1164,24 @@ export default function RosterPage() {
                   </div>
                   {(() => {
                     const formation = userTeam?.baseFormation ?? '4-3';
-                    // Offense: same across formations.
-                    const offenseSlots: { label: string; pos: Position; idx: number; subPos?: SubPosition }[] = [
-                      { label: 'QB', pos: 'QB', idx: 0 },
-                      { label: 'RB', pos: 'RB', idx: 0 },
-                      { label: 'WR1', pos: 'WR', idx: 0 },
-                      { label: 'WR2', pos: 'WR', idx: 1 },
-                      { label: 'TE', pos: 'TE', idx: 0 },
-                      // OL slots route by sub-position, same as the defensive
-                      // slots below — otherwise renderSlot indexes into the
-                      // OVR-sorted OL pool and the highest-rated lineman lands
-                      // at LT regardless of his real spot (bryangrove 6/11:
-                      // Brewer, a 71-OVR center, showing at LT). subPos +
-                      // index mirrors assignOlSlots: LT/RT from OT, LG/RG
-                      // from OG, C from C. The fallback layer in renderSlot
-                      // fills a slot from the parent OL pool when a team lacks
-                      // a labeled player for it.
-                      { label: 'LT', pos: 'OL', idx: 0, subPos: 'OT' },
-                      { label: 'LG', pos: 'OL', idx: 0, subPos: 'OG' },
-                      { label: 'C',  pos: 'OL', idx: 0, subPos: 'C'  },
-                      { label: 'RG', pos: 'OL', idx: 1, subPos: 'OG' },
-                      { label: 'RT', pos: 'OL', idx: 1, subPos: 'OT' },
-                    ];
-                    // Defense: formation-specific slot counts plus a preferred
-                    // sub-position per slot. renderSlot uses the sub-pos to
-                    // route the RIGHT player to each slot (e.g. an OLB into
-                    // LOLB even if his raw OVR is lower than a stacked MLB).
-                    type DefSlot = { label: string; pos: Position; idx: number; subPos?: SubPosition };
-                    const defenseSlots: DefSlot[] =
-                      formation === '3-4' ? [
-                        { label: 'LDE', pos: 'DL', idx: 0, subPos: 'EDGE' },
-                        { label: 'NT',  pos: 'DL', idx: 0, subPos: 'DT' },
-                        { label: 'RDE', pos: 'DL', idx: 1, subPos: 'EDGE' },
-                        { label: 'LOLB', pos: 'LB', idx: 0, subPos: 'OLB' },
-                        { label: 'LILB', pos: 'LB', idx: 0, subPos: 'MLB' },
-                        { label: 'RILB', pos: 'LB', idx: 1, subPos: 'MLB' },
-                        { label: 'ROLB', pos: 'LB', idx: 1, subPos: 'OLB' },
-                        { label: 'LCB', pos: 'CB', idx: 0, subPos: 'CB' },
-                        { label: 'RCB', pos: 'CB', idx: 1, subPos: 'CB' },
-                        { label: 'FS',  pos: 'S',  idx: 0, subPos: 'FS' },
-                        { label: 'SS',  pos: 'S',  idx: 0, subPos: 'SS' },
-                      ] : formation === 'Nickel' ? [
-                        { label: 'LDE', pos: 'DL', idx: 0, subPos: 'EDGE' },
-                        { label: 'LDT', pos: 'DL', idx: 0, subPos: 'DT' },
-                        { label: 'RDT', pos: 'DL', idx: 1, subPos: 'DT' },
-                        { label: 'RDE', pos: 'DL', idx: 1, subPos: 'EDGE' },
-                        { label: 'WLB', pos: 'LB', idx: 0, subPos: 'OLB' },
-                        { label: 'MLB', pos: 'LB', idx: 0, subPos: 'MLB' },
-                        { label: 'LCB', pos: 'CB', idx: 0, subPos: 'CB' },
-                        { label: 'RCB', pos: 'CB', idx: 1, subPos: 'CB' },
-                        { label: 'NCB', pos: 'CB', idx: 2, subPos: 'CB' },
-                        { label: 'FS',  pos: 'S',  idx: 0, subPos: 'FS' },
-                        { label: 'SS',  pos: 'S',  idx: 0, subPos: 'SS' },
-                      ] : [
-                        // 4-3 default
-                        { label: 'LDE', pos: 'DL', idx: 0, subPos: 'EDGE' },
-                        { label: 'LDT', pos: 'DL', idx: 0, subPos: 'DT' },
-                        { label: 'RDT', pos: 'DL', idx: 1, subPos: 'DT' },
-                        { label: 'RDE', pos: 'DL', idx: 1, subPos: 'EDGE' },
-                        { label: 'WLB', pos: 'LB', idx: 0, subPos: 'OLB' },
-                        { label: 'MLB', pos: 'LB', idx: 0, subPos: 'MLB' },
-                        { label: 'SLB', pos: 'LB', idx: 1, subPos: 'OLB' },
-                        { label: 'LCB', pos: 'CB', idx: 0, subPos: 'CB' },
-                        { label: 'RCB', pos: 'CB', idx: 1, subPos: 'CB' },
-                        { label: 'FS',  pos: 'S',  idx: 0, subPos: 'FS' },
-                        { label: 'SS',  pos: 'S',  idx: 0, subPos: 'SS' },
-                      ];
-
-                    const renderSlot = (slot: { label: string; pos: Position; idx: number; subPos?: SubPosition }) => {
-                      // Defensive + OL slots filter by sub-position; imported
-                      // FBGM rosters or older saves may have p.subPosition
-                      // undefined, so derive from ratings as a fallback (4/23
-                      // fix). Tofftanaut + bryangrove flagged 4/24 that
-                      // some defensive slots STILL render empty on fresh
-                      // saves — root cause is roster imbalance: a team
-                      // with 4 EDGEs and 0 DT-rated DLs would empty the
-                      // DT slots even though every DL has a valid sub-pos.
-                      // Layer-2 fallback: when the sub-pos filter yields
-                      // no match for this slot index, take the next best
-                      // player from the parent-position pool. Slot labels
-                      // stay accurate (LDE / LDT) but the slot is filled
-                      // with whoever the team actually has at the position.
-                      const baseList = getDepthGroup(slot.pos);
-                      const subPosList = slot.subPos
-                        ? baseList.filter(p => effectiveSubPos(p) === slot.subPos)
-                        : baseList;
-                      let player: Player | undefined = subPosList[slot.idx];
-                      if (!player && slot.subPos) {
-                        // Find the highest-OVR parent-position player not
-                        // already rendered in an earlier slot of the same
-                        // formation. We can't see other slots from here, so
-                        // the simple stand-in: pick by OVR from baseList,
-                        // skipping anyone the sub-pos filter has already
-                        // claimed at indexes 0..idx-1 across all sub-pos
-                        // slots for this position.
-                        const claimedIds = new Set(subPosList.slice(0, slot.idx).map(p => p.id));
-                        const fallback = baseList.find(p => !claimedIds.has(p.id) && effectiveSubPos(p) !== slot.subPos);
-                        player = fallback;
+                    // Slots + who fills them come from lineup.ts, the same
+                    // helper every game engine lines up with, so the players
+                    // this card starts are the ones who play. Each slot takes
+                    // the top player(s) of its sub-position row; a slot the
+                    // roster can't fill at that sub-position (one DT in a 4-3)
+                    // takes the next player at the position not already starting.
+                    const offenseSlots = OFFENSE_SLOTS;
+                    const defenseSlots = formationDefenseSlots(formation);
+                    const slotFill = new Map<LineupSlot, Player | undefined>();
+                    for (const slots of [offenseSlots, defenseSlots]) {
+                      for (const pos of new Set(slots.map(sl => sl.pos))) {
+                        const posSlots = slots.filter(sl => sl.pos === pos);
+                        fillSlots(getDepthGroup(pos), posSlots).forEach((p, i) => slotFill.set(posSlots[i], p));
                       }
+                    }
+
+                    const renderSlot = (slot: LineupSlot) => {
+                      const player = slotFill.get(slot);
                       return (
                         <div key={slot.label} className="bg-[var(--surface-2)] rounded-md px-2 py-1.5 min-h-[2.5rem]">
                           <div className="text-[9px] uppercase tracking-wider text-[var(--text-sec)] font-bold">{slot.label}</div>
