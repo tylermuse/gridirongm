@@ -193,7 +193,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b21g'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22a'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -2246,11 +2246,21 @@ function mocapFall(a,t){
 // Arm frame from the torso itself (forward/right/up of the spine), for posing arms on a body that is pitched over by a clip
 function torsoFrame(a){ const q=a.bones.Spine1.getWorldQuaternion(new THREE.Quaternion()); const F=new THREE.Vector3(0,0,1).applyQuaternion(q), R=new THREE.Vector3(-1,0,0).applyQuaternion(q), U=new THREE.Vector3().crossVectors(R,F); return {F,R,U}; }
 function torsoPose(fr,p,m){ const v=x=>new THREE.Vector3().addScaledVector(fr.F,x[0]).addScaledVector(fr.R,x[1]*m).addScaledVector(fr.U,x[2]).normalize(); return {du:v(p[0]),df:v(p[1]),0:p[0],1:p[1]}; }
+const THROWS=['football_throw','football_throw_b','football_throw_c','football_throw_d','football_throw_e'];   /* five captured throws, all cut to the same length, release time and aim (scripts/playerlab/add_clips.py) */
+const hasClip=n=>!!(BOT && BOT.animations.some(c=>c.name===n));
+// Which throw this is: each quarterback has his own motion and uses it on most throws, so the two QBs in a game do not throw alike and neither repeats one clip all day.
+function throwClip(a){
+  if(window.__throwClip) return window.__throwClip;
+  if(a._throwFor!==a.throwT0){ a._throwFor=a.throwT0; const have=THROWS.filter(hasClip); if(!have.length) return 'football_throw';
+    const own=have[((a.num||0)*7+String(a.teamId||'').length*3)%have.length], r=x=>{ const v=Math.sin(a.throwT0*x+(a.num||0))*43758.5453; return v-Math.floor(v); };   /* picked from the throw's own start time, not Math.random: the seeded realism harness replays the same plays */
+    a._throwClip = r(91.7)<.6? own : have[Math.floor(r(37.3)*have.length)]; }
+  return a._throwClip||'football_throw';
+}
 function throwBody(a,p){
   const blend=smooth01((p+.08)/.18)*(1-smooth01((p-.92)/.23));
   const sourceTime=p<=.5?Math.max(0,p)*(.666666667/.5):.666666667+(p-.5)*(.933333333/.65);
   const heading=a.aimAt?Math.atan2(a.aimAt[0]-a.x,a.aimAt[1]-a.z)-a.face:0;
-  if(footballMotion(a,'football_throw',sourceTime,blend,heading)){a.mocapThrow=true;return;}
+  if(footballMotion(a,throwClip(a),sourceTime,blend,heading)){a.mocapThrow=true;return;}
   const B=a.bones,set=smooth01((p+.08)/.18),fade=1-smooth01((p-.82)/.33),w=set*fade;
   const load=smooth01(p/.28)*(1-smooth01((p-.30)/.23)),drive=smooth01((p-.25)/.30);
   const cm=100, shift=(-.13*load+.17*drive)*w;
@@ -3051,7 +3061,7 @@ selA.addEventListener('change', retheme); selB.addEventListener('change', rethem
 // boot: draw once fonts are ready so canvas text uses the display face
 $('hint').textContent='Loading players…';
 const botReady = new Promise((res,rej)=>{
-  const sc=document.createElement('script'); sc.src=({repaired:'player.js',fp27:'player-fp27.js',mh1:'player-mh1.js',mh2:'player-mh2.js',procedural:'player-procedural.js',original:'player-original.js'})[modelChoice] || 'player.js'; sc.onerror=rej; document.head.appendChild(sc);
+  const sc=document.createElement('script'); sc.src=({repaired:'player.js',fp27:'player-fp27.js',mh1:'player-mh1.js',mh2:'player-mh2.js',procedural:'player-procedural.js',original:'player-original.js'})[modelChoice] || 'player.js'; sc.src += '?v='+SIM_BUILD;   /* the player file carries the clips: a stale cached one would be missing the newest */ sc.onerror=rej; document.head.appendChild(sc);
   const b64 = str => { const bin=atob(str), buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); return buf; };
   sc.onload=async()=>{ try {
     // textures are decoded from bytes (no image fetches, which the hosted page's policy may block) and attached by material name
