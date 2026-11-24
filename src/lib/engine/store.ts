@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { useSyncExternalStore } from 'react';
 import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
 import { hasDraftableProspect } from './draftStatus';
+import { lineupDepthChart } from './lineup';
 import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites, getWriteFailure, onWriteResult, type WriteFailure } from '@bs/core/storage';
 import { isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { scheduleCloudAutosavePush } from '@/lib/data/cloudAutosave';
@@ -491,6 +492,16 @@ function sortRosterByDepthChart(
     const bi = bRaw < 0 ? 999 : bRaw;
     return ai - bi;
   });
+}
+
+/** A team's game roster in lineup order, plus the depth chart it was sorted
+ *  by (pass it on to simulateGame). The saved chart is lined up per game so
+ *  each formation slot's player starts — the same players the roster page's
+ *  formation card shows (see lineup.ts). */
+function gameLineup(team: Team | undefined, roster: Player[]): { roster: Player[]; depthChart?: Record<Position, string[]> } {
+  if (!team?.depthChart) return { roster };
+  const depthChart = lineupDepthChart(team, roster);
+  return { roster: sortRosterByDepthChart(roster, depthChart), depthChart };
 }
 
 // ---------------------------------------------------------------------------
@@ -2507,12 +2518,10 @@ export function simulateScheduledGame(state: LeagueState, resortedTeams: Team[],
     // every lineup-construction site in lockstep — see discipline.ts).
     const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId && !isPlayerSuspended(p));
     const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId && !isPlayerSuspended(p));
-    const homeRoster = homeTeam?.depthChart
-      ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
-      : homeRosterRaw;
-    const awayRoster = awayTeam?.depthChart
-      ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
-      : awayRosterRaw;
+    const homeLineup = gameLineup(homeTeam, homeRosterRaw);
+    const awayLineup = gameLineup(awayTeam, awayRosterRaw);
+    const homeRoster = homeLineup.roster;
+    const awayRoster = awayLineup.roster;
 
     // Coaching bonus applied to team power
     let homeCoachBonus = homeTeam ? coachingBonus(homeTeam, homeRosterRaw) : 0;
@@ -2564,7 +2573,7 @@ export function simulateScheduledGame(state: LeagueState, resortedTeams: Team[],
       };
     }
 
-    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity, bsMode, mcafeeMode, userGamePlan, homeTeam?.depthChart, awayTeam?.depthChart);
+    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity, bsMode, mcafeeMode, userGamePlan, homeLineup.depthChart, awayLineup.depthChart);
 
     // Compute ATS coverage
     const scoreDiff = result.homeScore - result.awayScore;
@@ -3903,12 +3912,8 @@ export const useGameStore = create<GameStore>()(
         const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
         const homeRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.homeTeamId && !isPlayerSuspended(p));
         const awayRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.awayTeamId && !isPlayerSuspended(p));
-        const homeRoster = homeTeam?.depthChart
-          ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
-          : homeRosterRaw;
-        const awayRoster = awayTeam?.depthChart
-          ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
-          : awayRosterRaw;
+        const homeRoster = gameLineup(homeTeam, homeRosterRaw).roster;
+        const awayRoster = gameLineup(awayTeam, awayRosterRaw).roster;
 
         const tempGame: GameResult = {
           id: matchupId,
@@ -4087,8 +4092,8 @@ export const useGameStore = create<GameStore>()(
           const awayRosterRaw = accumulatedPlayers.filter(p => p.teamId === next.awayTeamId && !isPlayerSuspended(p));
           const homeTeam = state.teams.find(t => t.id === next.homeTeamId);
           const awayTeam = state.teams.find(t => t.id === next.awayTeamId);
-          const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
-          const awayRoster = awayTeam?.depthChart ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart) : awayRosterRaw;
+          const homeRoster = gameLineup(homeTeam, homeRosterRaw).roster;
+          const awayRoster = gameLineup(awayTeam, awayRosterRaw).roster;
 
           const tempGame: GameResult = {
             id: next.id, week: 99, season: state.season,
@@ -4214,8 +4219,8 @@ export const useGameStore = create<GameStore>()(
           const awayRosterRaw = roundPlayers.filter(p => p.teamId === matchup.awayTeamId && !isPlayerSuspended(p));
           const homeTeam = state.teams.find(t => t.id === matchup.homeTeamId);
           const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
-          const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
-          const awayRoster = awayTeam?.depthChart ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart) : awayRosterRaw;
+          const homeRoster = gameLineup(homeTeam, homeRosterRaw).roster;
+          const awayRoster = gameLineup(awayTeam, awayRosterRaw).roster;
 
           const tempGame: GameResult = {
             id: matchup.id, week: 99, season: state.season,
