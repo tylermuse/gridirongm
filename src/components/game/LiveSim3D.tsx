@@ -39,13 +39,14 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b21b';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b21e';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 /** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used by the scoring-play replay too.
  *  `speed` is the playback rate. The sim's clock is in real seconds (b21a), so 1 is real time: a play then averages 7.5 s on screen against 4.6 s
  *  before b21a, and a whole game drags (Tyler: "crazy slow"). 1.5, the rate the game ran at before b21a, averages 5.2 s; 1.75 matches the old 4.6 s.
  *  The timing between players stays real at any rate (throw, handoff, routes); everything is just fast-forwarded by this much.
  *  `run` fast-forwards handoff runs by that much more (1.33 on top of 1.5 is 2x) up to the line, and to the tackle on a short gain: at 1.5x passes read fine
- *  but runs still looked slow (Tyler), because a real back takes 2.5 s to reach the line. It is 1 (off) when left out. */
+ *  but runs still looked slow (Tyler), because a real back takes 2.5 s to reach the line. Play action gets the same rate through the fake and the drop (b21e):
+ *  the fake is a handoff's timing plus the drop, so at 1.5x it crawled next to the runs (Tyler: "play action is super slow"). It is 1 (off) when left out. */
 export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&speed=1.5&run=1.33&v=${SIM_BUILD}`;
 /** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.
  *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=fp27` (the previous player), `?simMotion=0`, `?simSpeed=1` (playback rate; 1 is real time), `?simRun=1.5` (extra rate for handoff runs; 1 is off). */
