@@ -1437,6 +1437,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // 3D telemetry: one row per game-page visit saying whether 3D was on (device cohort for admin_sim3d_cohorts) and the default-on test arm
   const sim3dViewSentRef = useRef(false);
   const sim3dGamesRef = useRef(0);
+  /** Count this visit as one of this browser's 3D games (SIM3D_GAMES_KEY), at most once per visit. */
+  const noteSim3dGame = () => {
+    if (sim3dGamesRef.current > 0) return;
+    try {
+      const n = (parseInt(window.localStorage.getItem(SIM3D_GAMES_KEY) || '0', 10) || 0) + 1;
+      window.localStorage.setItem(SIM3D_GAMES_KEY, String(n));
+      sim3dGamesRef.current = n;
+    } catch { /* storage blocked */ }
+  };
   useEffect(() => {
     if (sim3dViewSentRef.current || !game) return;
     sim3dViewSentRef.current = true;
@@ -1444,15 +1453,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // readSim3DPref() first: it assigns the default-on test arm for a qualifying new device, which sim3dTestArm() then reports
     const on = sim3dAllowed && readSim3DPref();
     trackEvent('sim3d_game_view', { game_id: id, on, allowed: sim3dAllowed, premium: isPremium, arm: sim3dTestArm(), cap_arm: isPremium ? null : sim3dCapArm(), exhibition: isExhibition });
-    if (on) {
-      try {
-        const n = (parseInt(window.localStorage.getItem(SIM3D_GAMES_KEY) || '0', 10) || 0) + 1;
-        window.localStorage.setItem(SIM3D_GAMES_KEY, String(n));
-        sim3dGamesRef.current = n;
-      } catch { /* storage blocked */ }
-    }
+    if (on) noteSim3dGame();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per visit
   }, [game]);
+  // 3D switched on after the game opened in 2D: from then on it's a 3D game like one that opened in 3D, so it counts
+  // toward the weekly allowance (src/lib/sim3dQuota.ts) and past the first-3D-game skip. Without this, a capped player
+  // who turned 3D off in one game opened the next in 2D, turned 3D back on, and never used a free game. Exhibitions
+  // never count. Before the view row is sent, that effect reads the saved choice (now on) and counts the visit itself.
+  const noteSim3dTurnedOn = () => {
+    if (isExhibition || !sim3dViewSentRef.current) return;
+    noteSim3dGame();
+  };
 
   // Premium card inside the 3D sim, for free players. Never a hard stop: the game keeps running and the card is a
   // dismissible strip under the controls. It shows at the breaks between quarters (end of Q1, halftime, end of Q3),
@@ -2847,7 +2858,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           )}
           {!isFinished && sim3dAllowed && (
             <button
-              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium, arm: sim3dTestArm(), exhibition: isExhibition }); toggleSim3d(!sim3dOn); }}
+              onClick={() => { trackEvent('sim3d_toggled', { game_id: id, on: !sim3dOn, premium: isPremium, arm: sim3dTestArm(), exhibition: isExhibition }); if (!sim3dOn) noteSim3dTurnedOn(); toggleSim3d(!sim3dOn); }}
               className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 sim3dOn
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
