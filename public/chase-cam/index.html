@@ -1147,6 +1147,48 @@ function choreograph(res){
     ? P([snap,a.x,a.z],[snap+.45+dRun*.6,a.x+Math.sign(res.gap ?? 1)*1.6,a.z-.4],[snap+.95+dRun,a.x+Math.sign(res.gap ?? 1)*3.2+(i-1)*.8,a.z-1.6])   // read, scrape to the play-side gap, fill
     : PR([snap,a.x,a.z],[snap+2.0,a.x*1.3,a.z+4.5,1],[snap+3.0,a.x*1.3+(i-1)*2.2,a.z+5.5,1],[snap+4.4,a.x*1.1,a.z+6.5]); });   /* real backers drop at 2 to 3 yd/s */
 
+  /* Blitz (the Live Coach look; Tyler 11/24: "when I call blitz they don't actually blitz, they seem to back off"): the look walked the
+     backers up to the line, then at the snap all three ran the base coverage drop above. On a dropback the two outside backers now come.
+     A back who stays in to protect steps up and takes one on in the B gap; the other is the free man and gets to the QB as the ball
+     leaves (or as he goes down): the engine already decided whose play this is, so he is never early. He shoots the B gap when the ball
+     comes out fast, loops outside the end when it is held, and shows it for a beat first when it is held longer still. The middle backer
+     keeps his drop: the catch, tip and pick choreography all use him.
+     sendBlitz(tArr, at, o): tArr / at = when and where the QB lets it go or goes down. o.skip: a backer with another job (the screen's
+     cover man). o.pickSide: the side the back takes. o.rbBusy / o.fbBusy: that back has somewhere else to be. o.tRel: when the blocks
+     let go. o.off: where the free man ends up relative to the QB (sd: his side). */
+  const sendBlitz = (tArr, at, o={}) => { if(G.look!=='blitz' || runBlock) return;
+    const pickSide = o.pickSide ?? 1, rbIn = !o.rbBusy, fbIn = !!FM.fb && !o.fbBusy, tRel = o.tRel ?? tArr+.4;
+    const len = p => { let L=0; for(let i=1;i<p.length;i++) L += Math.hypot(p[i][0]-p[i-1][0], p[i][1]-p[i-1][1]); return L; };
+    [D.lb[0], D.lb[2]].forEach(lb=>{ if(lb===o.skip) return;
+      const sd = Math.sign(lb.x)||1, gx = sd*3.9;   /* the B gap: between the guard's man and the tackle's, where the look lines him up */
+      const blk = sd===pickSide? (rbIn? O.rb : fbIn? O.slot : null) : (rbIn && fbIn? O.slot : null);
+      lb.blitzing = true; lb.faceLock = null; lb.engage = null;
+      if(blk){ /* picked up: the back meets him in the hole and they lock up until the ball is gone */
+        const mx = sd*2.7, mz = z0-3.3, tMeet = snap+1.15;
+        lb.behav = P([snap,lb.x,lb.z],[snap+.6,gx,z0+.1],[tMeet,mx,mz+.5]);
+        blk.behav = P([snap,blk.x,blk.z],[snap+.3,blk.x,blk.z],[tMeet,mx,mz-.45]); blk.faceLock = {angle:0, until:99};
+        ev(tMeet, ()=>{ const pr={bx:mx, bz:mz, dv:-.9, dur:1.5, seed:R(0,3), start:playT};
+          blk.behav={type:'line', pr, side:-1, x0:blk.x, z0:blk.z, dx:0}; lb.behav={type:'line', pr, side:1, x0:lb.x, z0:lb.z, dx:0};
+          blk.engage=lb; lb.engage=blk; lb.faceLock={angle:Math.PI, until:tRel}; sndThump(.3,.25); });
+        ev(tRel, ()=>{ if(lb.engage!==blk) return; lb.engage=null; blk.engage=null; lb.faceLock=null; blk.faceLock=null;
+          [lb, blk].forEach(a=>{ if(a.behav?.type==='line') a.behav = {type:'coast', vx:0, vz:0, t0:playT}; }); });
+        return; }
+      /* the free man: the route and the head start whose running speed is closest to a real rush (about 6.4 yd/s) for the time there is */
+      const off = o.off? o.off(sd) : [sd*1.15, .75], E = [at[0]+off[0], at[1]+off[1]], T = tArr-snap; let best = null;
+      for(const w of [0, 7.6, 8.4, 9.2]) for(const d of [0, .25, .5, .75, 1.0]){   /* no wider than 9.2: the slot (or a split tight end) releases at 10 to 11 */
+        const pts = w? [[lb.x,lb.z],[sd*w,z0+.4],[sd*(w+.3),z0-1.7],E] : [[lb.x,lb.z],[gx,z0+.1],E];
+        const v = len(pts)/Math.max(.4, T-d-.3), cost = Math.abs(v-6.4)*(v>6.4? 2 : 1) + d*.9 + (w? .1 : 0);
+        if(!best || cost<best.cost) best = {cost, pts, d}; }
+      const pts = best.pts, tGo = snap+best.d, k = [[snap,lb.x,lb.z]];
+      if(best.d){ const w1 = pts[1], d1 = Math.hypot(w1[0]-lb.x, w1[1]-lb.z)||1, c = Math.min(.9*best.d, d1*.4);   /* the beat he shows it: creeping at the gap, not standing */
+        pts[0] = [lb.x+(w1[0]-lb.x)/d1*c, lb.z+(w1[1]-lb.z)/d1*c]; k.push([tGo, ...pts[0]]); }
+      const L = len(pts);
+      let s = 0; for(let i=1;i<pts.length;i++){ s += Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+        k.push([tGo + .3*Math.min(1, s/2) + (tArr-tGo-.3)*s/L, pts[i][0], pts[i][1]]); }
+      const a0 = pts[pts.length-2], dl = Math.hypot(E[0]-a0[0], E[1]-a0[1])||1;   /* then he runs on a couple of strides past the QB's shoulder and pulls up */
+      k.push([tArr+.55, E[0]+(E[0]-a0[0])/dl*1.2+Math.sign(off[0]||sd)*.4, E[1]+(E[1]-a0[1])/dl*1.2]);
+      lb.behav = P(...k); }); };
+
   /* Play action (Tyler 11/20: "supposed to take the handoff to the RB and then throw — right now it's just a throw"): the QB opens to
      the back and puts the ball in his belly at the mesh (the spot and timing of a real handoff), rides him a beat, pulls it and drops
      to throw. The back carries out the fake into the line empty-handed; the backers bite — a step downhill at the fake — before they
@@ -1434,6 +1476,7 @@ function choreograph(res){
     O.ol[0].behav = P([snap,-4.1,z0-.75],[snap+1.0,-5.2,z0-2],[snap+2.3,-4,z0-3]); O.ol[0].engage = null;
     carrier = O.qb; tackler = sacker; tackleT = tEnd = tSack; endPos=[.6,z0+Y];
     }
+    sendBlitz(tSack+.25, endPos, {rbBusy:true, fbBusy: pa || !!res.blitz, tRel: tSack+.6, off: sd=>[sd*1.6, 1.9]});   /* a blitz was called: the outside backers come too and get there as he goes down */
   } else { // passes: complete / incomplete / int
     const deep = res.depth==='deep';
     /* batted at the line (reference: DAL @ IND on FOX, Tyler 11/8): the play-by-play said it was batted down / tipped at the line */
@@ -1536,6 +1579,9 @@ function choreograph(res){
       ev(tThrow+.08, qbHit); }
     ev(tThrow,()=>{flightSeg.captureHand=O.qb;});
     const cover = rec===O.rb? D.lb[res.screenSide<0? 0 : 2] : rec===O.wrL? D.cbL : rec===O.wrR? D.cbR : rec===O.te? D.lb[1] : D.sL;
+    /* a blitz was called: the outside backers rush (see sendBlitz). A screen keeps its cover man and the back is the receiver; a play-action
+       fake takes both backs out of the protection; on a roll-out the back takes the back-side man and the roll-side one comes off the edge at him */
+    sendBlitz(tThrow+.12, [hx,hz], {skip: scn? cover : null, pickSide: roll? -rSide : 1, rbBusy: scn || pa, fbBusy: pa, tRel: tThrow+.5, off: roll? sd=>[-sd*.5, 1.5] : null});
     rec.catchT = tCatch;
     // contested ball: deep shots, picks, breakups and tight coverage -> both players elevate for it
     let contested = res.kind!=='complete' || (deep && !res.fumble && Math.random() < .4); if(window.__contest!=null && res.kind==='complete') contested = window.__contest;   /* QA override */   /* short completions are a man who won separation (the DB plays off); only deep balls are contested */   /* a completion is usually a receiver who won separation; sometimes a contested catch */
@@ -1571,7 +1617,7 @@ function choreograph(res){
         ev(tBat, ()=>{ batter.swat = playT; sndThump(.3,.25); sndRoar(.3,.2,.6,1.8,'cheer'); });
         /* the backer who goes for it: the pick is the middle backer (the page puts the named defender on him); otherwise whoever is nearest */
         const isInt = res.kind==='int', lbAt = a => a.behav?.type==='path'? pathAt(a.behav.k, tBat) : [a.x, a.z];
-        const g = isInt? D.lb[1] : D.lb.map(a=>({a, p:lbAt(a)})).sort((u,v)=>Math.hypot(u.p[0]-bx,u.p[1]-bz-3.5)-Math.hypot(v.p[0]-bx,v.p[1]-bz-3.5))[0].a;
+        const g = isInt? D.lb[1] : D.lb.filter(a=>!a.blitzing).map(a=>({a, p:lbAt(a)})).sort((u,v)=>Math.hypot(u.p[0]-bx,u.p[1]-bz-3.5)-Math.hypot(v.p[0]-bx,v.p[1]-bz-3.5))[0].a;
         const gp = lbAt(g), T = R(1.15, 1.4), h = 1.225*T*T;   /* a real pop-up: apex height and hang time agree (g/8·T²) */
         const uK = isInt? 1 : .77;   /* when the ball comes down through his reach: at his hands for the pick, on the way down past his fingertips for the miss */
         const gx = gp[0]-bx, gz = gp[1]-bz, gd = Math.hypot(gx,gz)||1, dir = [gx/gd, Math.max(.35, gz/gd)], dl = Math.hypot(dir[0],dir[1]);
