@@ -45,6 +45,25 @@ MANUAL_OVERRIDES = {
     "amani hooker": 3,       # S, Titans -> Bills
     "keenan allen": 27,      # WR, Colts -> 49ers
 }
+# Contract years in this file follow BS Football's convention: contract.exp is the
+# year the player reaches free agency, one past his last paid season (a 1-year deal
+# for 2026 has exp 2027; src/lib/data/leagueImport.ts reads it that way).
+# build_vanilla_fbgm.py converts to stock FBGM's convention for the downloads.
+# reconcile() moves players onto teams without touching contracts, so a signing can
+# arrive with an expired deal (BS then drops him straight to free agency) and a
+# drafted rookie can arrive on a 1-year placeholder. Repair both every run.
+def fix_contracts(d, season=2026):
+    n=0
+    for p in d['players']:
+        tid=p.get('tid'); c=p.get('contract') or {}
+        if not (isinstance(tid,int) and 0<=tid<=31 and isinstance(c.get('exp'),int)): continue
+        dr=p.get('draft') or {}
+        draftee=dr.get('year')==season and (dr.get('round') or 0)>=1 and p.get('bsRosterStatus')!='ps'
+        if draftee and c['exp']<=season+1: new=season+4  # this year's pick: 4-year rookie deal
+        elif c['exp']<=season or c['exp']>season+10: new=season+1  # in-season signing on a stale deal, or a typo (2207)
+        else: continue
+        c['exp']=new; n+=1
+    return n
 def _rawkey(p):
     import re as _re
     return _re.sub(r'[^a-z0-9 ]','',((p.get('firstName') or '')+' '+(p.get('lastName') or '')).lower()).strip()
@@ -502,6 +521,7 @@ def main():
     npk = apply_pick_trades(d)
     ninj = apply_injuries(d, injured, week, today)
     ncoach = apply_coaches(d)
+    ncon = fix_contracts(d)
     assert len(d['players'])==n0
     json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
     cb = update_page(week, teams, today)
@@ -510,7 +530,7 @@ def main():
     subprocess.run([sys.executable,"scripts/build_vanilla_fbgm.py"],check=True)  # FBGM download variants (Current + Week 1 start)
     subprocess.run([sys.executable,"scripts/build_mock_draft.py"],check=True)  # /mock-draft data: 2027 class, draft order, pick owners, team needs
     append_rating_changes(fn)
-    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"pickTrades":npk,"injuries":ninj,"coaches":ncoach,"cacheBust":cb,"changelog":fn,"players":n0}))
+    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"pickTrades":npk,"injuries":ninj,"coaches":ncoach,"contractFixes":ncon,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":
     main()
