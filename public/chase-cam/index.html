@@ -190,7 +190,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b21b'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b21d'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1071,7 +1071,7 @@ function choreograph(res){
   ballPlan = [{t0:-1, t1:snap, held:O.ol[2], off:[0,.25,.45]}];
   const qbRecv = snap + (UC? .1 : .28);
   ballPlan.push({t0:snap, t1:qbRecv, flight: UC? {x0:0,y0:.4,z0:z0-.3, x1:0,y1:1.05,z1:qbAt[1]+.35, h:.03} : {x0:0,y0:.4,z0:z0-.3, x1:0,y1:1.2,z1:z0-4.7, h:.2}});
-  let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, holdOn=null, tHole=0, tackleAtFn=null, play_oob=false;
+  let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, holdOn=null, tHole=0, tackleAtFn=null, play_oob=false, oobChaser=null;   /* oobChaser: the DB who runs a back out of bounds (keeps his own path) */
   const climbed = new Set();   /* backers picked up by a climbing blocker on a run: they don't join the pursuit until they shed */
 
   const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = (res.kind==='complete' || res.kind==='incomplete' || res.kind==='int') && res.style==='screen';   /* an incomplete screen is still thrown to the back in the flat */
@@ -1271,7 +1271,10 @@ function choreograph(res){
       const room = g => Math.min(...front.map(d=>Math.abs(d.x-g)/d.w)); const sc = gaps.map(g=>({g, r:room(g)+R(0,.6)})).sort((a,b)=>b.r-a.r);
       return y>0? sc[Math.random()<.7? 0 : 1].g : sc[sc.length-1].g; };
     const C = scr? O.qb : O.rb;   /* the carrier */
-    const gapX = scr? (res.gap ?? (Math.random()<.5?-1:1)*R(2.5,4.5)) : (res.gap ?? pickGap(Y));
+    /* the game already decided this run ends out of bounds (it stopped the clock for it): the back bounces it outside the end man
+       instead of hitting an inside gap, so he has the edge to turn up (b21d, Tyler 11/23: "ran diagonally straight out of bounds") */
+    const oobCall = !scr && !td && !res.fumble && Y>=10 && res.gap==null && (res.oob ?? window.__oob)===true;
+    const gapX = scr? (res.gap ?? (Math.random()<.5?-1:1)*R(2.5,4.5)) : (res.gap ?? (oobCall? (Math.random()<.5?-1:1)*R(7,9) : pickGap(Y)));
     /* under center the back takes it about three yards deep on the play side (the QB opens to him) instead of beside a shotgun QB */
     const tHand = snap+HAND, meshAt = UC? [(Math.sign(gapX)||1)*.55, z0-3.1] : [.7, z0-4.4];
     tHole = scr? snap+(UC? 1.35 : 2.0) : tHand + Math.max(UC? .6 : .7, Math.hypot(gapX-meshAt[0], (z0-.6)-meshAt[1])/4.2);   /* real backs reach the line about 2.5 s after the snap, at about 5 yd/s */   // mesh -> hole at a real speed (was a 12-20 yd/s burst); scramble: snap and go, at the line by ~1.45 s (a keeper from under center: ~1.05 s)
@@ -1282,17 +1285,24 @@ function choreograph(res){
     /* only a gain long enough to look like "beat the edge, turn up the sideline": a 3-6 yd sideline run had him sprint ~24 yds sideways for a couple of yards (Tyler: wide open, never turned upfield). Only long gains (scramble 15+, outside run 10+) end out of bounds; shorter ones get tackled. */
     const oob = !td && !res.fumble && Y>=(scr? 15 : 10) && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
     const oobSide = Math.sign(gapX) || (Math.random()<.5? -1 : 1);
-    if(oob){ endX = oobSide*28.2; tEnd = tHole + Math.max(.6, Math.hypot(endX-gapX, Y+.6)/6.9); res.oob = true; }
+    if(oob){ endX = oobSide*27.4; tEnd = tHole + Math.max(.6, Math.hypot(endX-gapX, Y+.6)/6.9); res.oob = true; }
+    let oobPlan = null;   /* the alley he runs up and when he starts out of it, for the DB who forces him out */
     carrier = C;
     const keys = scr
       ? (UC? [[qbRecv,...qbAt],[snap+.8,gapX*.45,z0-1.8],[tHole,gapX,z0-.6]]                  // under center: a keeper — a step out, then into the gap
         : [[qbRecv,0,z0-4.7],[snap+1.3,gapX*.3,z0-2.3],[tHole,gapX,z0-.6]])                  // straight downhill from the snap, a slide to the gap at the line, then upfield
       : [[0,rbX0,rbZ0],[snap,rbX0,rbZ0],[tHand,...meshAt],[tHole,gapX,z0-.6]];
-    if(oob){ /* gets outside the contain, squares his shoulders and runs UP the sideline, then steps out at the spot - not a straight diagonal to the boundary */
-      /* measured on b17d: the QB was still 22 yds wide for 6 yds gained - so break contain just outside the tackle box, run UPFIELD first, and only drift to the boundary over the back half */
-      const pts = [[oobSide*Math.max(Math.abs(gapX), 9), z0+1], [oobSide*15, z0+Y*.55], [oobSide*24.3, z0+Y*.92], [endX, zEnd]]; let t=tHole, px=gapX, pz=z0-.6;
-      pts.forEach(([x,z],i)=>{ t += Math.max(.25, Math.hypot(x-px, z-pz)/(i===0? 6.4 : 7.3)); keys.push([t, x, z]); px=x; pz=z; });
-      tEnd = t;
+    if(oob){ /* gets the edge, squares his shoulders and runs UP the field in the alley a few yards inside the sideline, then bends out over the
+         last few yards as the DB closes - not a diagonal at the boundary. b21d: the old waypoints (x 9 -> 15 -> 24.3 -> out) had him heading at the
+         sideline for the whole back half of a 10-20 yd gain, with the nearest defender ~7 yds away when he stepped out (Tyler 11/23) */
+      const s = oobSide, g = Math.abs(gapX);
+      const outZ = clamp(Y*.3, 3.2, 5.5);                 /* downfield yards he takes to get out of the alley: at most ~43 deg off upfield */
+      const A = 27.4 - outZ*.95;                          /* the alley: 2.3-3.5 yds inside the sideline */
+      const turnZ = clamp(Y*.22, 1.8, 5);                  /* where he has turned the corner and is running straight upfield */
+      const pts = [[s*(g + (A-g)*.6), z0 + turnZ*.45, 6.4], [s*A, z0 + turnZ, 6.8], [s*A, zEnd - outZ, Y>20? 8.0 : 7.6], [endX, zEnd, 7.0]];
+      let t=tHole, px=gapX, pz=z0-.6;
+      pts.forEach(([x,z,v])=>{ t += Math.max(.25, Math.hypot(x-px, z-pz)/v); keys.push([t, x, z]); px=x; pz=z; });
+      tEnd = t; oobPlan = {s, A, outZ, tOut: keys[keys.length-2][0]};
     } else {
       if(Y>4) keys.push([tHole+(tEnd-tHole)*.45, gapX+(endX-gapX)*.3 + R(-1.2,1.2), z0+Y*.45]);
       keys.push([tEnd, endX, zEnd]);
@@ -1315,10 +1325,17 @@ function choreograph(res){
       let pool = Y<=0? [...D.dl,...D.lb] : [...D.lb, D.sL, D.sR, D.cbL, D.cbR];
       if(res.fumble) pool = pool.filter(a=>a!==D.lb[1]);   /* fumble: the middle backer (lineup lb[0]) is the man who falls on the ball, not the tackler */
       if(Y>0 && Y<=4) pool = [[...D.lb].filter(a=>!res.fumble || a!==D.lb[1]).sort((p,q)=>Math.abs(p.x-gapX)-Math.abs(q.x-gapX))[0]];   /* short gain: the backer filling that gap makes the stop, not one from across the field */
-      if(oob){ // nobody makes the tackle: the nearest DB on that side runs him out and pulls up at the line; the whistle blows as he crosses
+      if(oob){ // nobody makes the tackle: a DB keeps contain in front of him up the sideline and drives on him as he bends out; the whistle blows as he crosses
         C.behav = P(...keys); endPos=[endX,zEnd];
-        const chaser = [D.cbL, D.cbR, D.sL, D.sR, ...D.lb].sort((a,b)=>Math.hypot(a.x-oobSide*24,a.z-zEnd)-Math.hypot(b.x-oobSide*24,b.z-zEnd))[0];
-        chaser.behav = P([snap+.35, chaser.x, chaser.z], [tEnd-.35, oobSide*25.3, zEnd+.9], [tEnd+.6, oobSide*26.1, zEnd+.4]); chaser.faceLock=null;
+        /* b21d: the old chaser walked a straight line from his pre-snap spot to the boundary and was ~7 yds off the back when he stepped out.
+           Now the corner or a safety on that side flows to a spot inside and in front of him in the alley (Q) by the time he starts out of it,
+           then closes to a step inside and ahead of him (M) as he crosses: the back bends out because he's there. */
+        const pl = oobPlan || {s:oobSide, A:24, outZ:3.5, tOut:Math.max(tHole+.4, tEnd-.6)}, sg = pl.s;
+        const Q = [sg*(pl.A-3), zEnd - pl.outZ + 2.4], M = [sg*25.9, zEnd + .7];
+        const tRead = Math.max(snap+.6, tHole-.3), tQ = Math.max(tRead+.4, pl.tOut);
+        const need = d => Math.hypot(Q[0]-d.x, Q[1]-d.z)/(tQ-tRead) + (d.z < Q[1]-12? 2 : 0);   /* yd/s to get there; one well short of the spot would be running away up the field in front of him */
+        const chaser = (sg<0? [D.cbL, D.sL, D.sR] : [D.cbR, D.sR, D.sL]).sort((a,b)=>need(a)-need(b))[0];
+        chaser.behav = P([snap+.35, chaser.x, chaser.z], [tRead, chaser.x, chaser.z+.4], [tQ, ...Q], [tEnd-.08, ...M], [tEnd+.6, sg*26.6, zEnd+1.4]); chaser.faceLock=null; oobChaser = chaser;
         ev(tEnd-.2, ()=>{ C.behav = {type:'coast', vx:(C.vx||0)*.8, vz:(C.vz||0)*.8, t0:playT}; });
         tackler = null; tackleT = null; play_oob = true;
       } else if(Y>0){
@@ -1916,7 +1933,7 @@ function choreograph(res){
     }
   }
   // everyone else pursues after the ball carrier changes hands (runs)
-  if(isRun && carrier){ ev(snap+.9+dRun, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d) && !climbed.has(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
+  if(isRun && carrier){ ev(snap+.9+dRun, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && d!==oobChaser && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d) && !climbed.has(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
   /* Off coverage holds its cushion: the corner (and the safety over the slot) gives ground at a backpedal until the receiver has closed to him, then
      turns and runs with him. He used to sprint up to meet the receiver at the snap; real corners are moving 2 yd/s a second after it (2023 tracking). */
   [[D.cbL,O.wrL],[D.cbR,O.wrR],[D.sL,O.slot]].forEach(([c,w])=>{ const b=c.behav;

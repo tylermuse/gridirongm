@@ -39,7 +39,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b21b';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b21d';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 /** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used by the scoring-play replay too.
  *  `speed` is the playback rate. The sim's clock is in real seconds (b21a), so 1 is real time: a play then averages 7.5 s on screen against 4.6 s
  *  before b21a, and a whole game drags (Tyler: "crazy slow"). 1.5, the rate the game ran at before b21a, averages 5.2 s; 1.75 matches the old 4.6 s.
