@@ -58,9 +58,39 @@ export interface RefPlayer {
 export const POS_ORDER = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'];
 const POS_RANK: Record<string, number> = Object.fromEntries(POS_ORDER.map((p, i) => [p, i]));
 
+/** The slice of a Football GM export these pages read. */
+interface RawTeam {
+  tid: number;
+  region?: string;
+  name?: string;
+  abbrev: string;
+  colors?: string[];
+  imgURL?: string;
+  disabled?: boolean;
+  seasons?: Array<{ won?: number; lost?: number; tied?: number }>;
+}
+
+interface RawPlayer {
+  pid: number;
+  tid: number;
+  firstName?: string;
+  lastName?: string;
+  pos?: string;
+  college?: string;
+  jerseyNumber?: string | number | null;
+  hgt?: number;
+  weight?: number;
+  born?: { year?: number };
+  contract?: { amount?: number; exp?: number };
+  injury?: { type?: string; gamesRemaining?: number };
+  draft?: { year?: number; round?: number; pick?: number; tid?: number; originalTid?: number };
+  ratings?: Array<Record<string, number | string | undefined> & { ovr?: number; pot?: number; pos?: string }>;
+  stats?: Array<Record<string, unknown>>;
+}
+
 interface RawLeague {
-  teams: any[];
-  players: any[];
+  teams: RawTeam[];
+  players: RawPlayer[];
 }
 
 const cache: Record<string, RawLeague> = {};
@@ -83,7 +113,7 @@ export function getEraMeta(era: string): EraMeta | null {
   return ERAS[era] ?? null;
 }
 
-function toRefTeam(t: any): RefTeam {
+function toRefTeam(t: RawTeam): RefTeam {
   const season = Array.isArray(t.seasons) && t.seasons.length ? t.seasons[t.seasons.length - 1] : undefined;
   return {
     tid: t.tid,
@@ -124,7 +154,7 @@ export function getRoster(era: string, tid: number): RefPlayer[] {
   const players: RefPlayer[] = raw.players
     .filter((p) => p.tid === tid && Array.isArray(p.ratings) && p.ratings.length)
     .map((p) => {
-      const r = p.ratings[p.ratings.length - 1];
+      const r = p.ratings![p.ratings!.length - 1]; // non-empty: filtered above
       const bornYear = p.born?.year;
       return {
         pid: p.pid,
@@ -246,12 +276,12 @@ export function getPlayerDetails(era: string): RefPlayerDetail[] {
   const rows = raw.players
     .filter((p) => teams.has(p.tid) && Array.isArray(p.ratings) && p.ratings.length)
     .map((p) => {
-      const r = p.ratings[p.ratings.length - 1];
+      const r = p.ratings![p.ratings!.length - 1]; // non-empty: filtered above
       const pos: string = r.pos ?? p.pos ?? '';
       const ratings: Record<string, number> = {};
       for (const k of Object.keys(RATING_LABELS)) if (typeof r[k] === 'number') ratings[k] = Math.round(r[k]);
       let stats: Record<string, number> | null = null;
-      for (const s of (p.stats ?? []) as Array<Record<string, unknown>>) {
+      for (const s of p.stats ?? []) {
         if (s.season !== meta.season || s.playoffs) continue;
         stats ??= Object.fromEntries(STAT_KEYS.map((k) => [k, 0]));
         for (const k of STAT_KEYS) {
@@ -260,12 +290,12 @@ export function getPlayerDetails(era: string): RefPlayerDetail[] {
         }
       }
       if (stats && !stats.gp) stats = null;
-      const inj = p.injury && p.injury.type && p.injury.type !== 'Healthy' && p.injury.gamesRemaining > 0
+      const inj = p.injury && p.injury.type && p.injury.type !== 'Healthy' && (p.injury.gamesRemaining ?? 0) > 0
         ? { type: String(p.injury.type), games: Number(p.injury.gamesRemaining) }
         : null;
       const d = p.draft;
-      const draft = d && d.year && d.round > 0
-        ? { year: d.year, round: d.round, pick: d.pick, team: abbrevByTid.get(d.originalTid ?? d.tid) ?? null }
+      const draft = d && d.year && d.round && d.round > 0
+        ? { year: d.year, round: d.round, pick: d.pick ?? 0, team: abbrevByTid.get(d.originalTid ?? d.tid ?? -1) ?? null }
         : null;
       const bornYear = p.born?.year;
       return {
