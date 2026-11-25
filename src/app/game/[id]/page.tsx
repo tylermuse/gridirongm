@@ -26,7 +26,7 @@ import type { DefensiveLook } from '@/lib/engine/defensiveLooks';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
-import { broadcastClipLines, teaserEndIndex } from '@/lib/engine/gameBroadcast';
+import { broadcastClipLines, simAllows, teaserEndIndex } from '@/lib/engine/gameBroadcast';
 import { UNLOCK_AUDIO } from '@/lib/engine/unlockAudio';
 import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
 import { useExhibition, isExhibitionGameId, stashUploadForSeason } from '@/lib/engine/exhibition';
@@ -1362,7 +1362,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const fromIndex = Math.max(0, revealedCount - 1);
     const homeAbbr = homeTeam.abbreviation, awayAbbr = awayTeam.abbreviation;
     const homeName = homeTeam.city, awayName = awayTeam.city;
-    const BROADCAST_DWELL: Record<Speed, number> = { '0.5x': 4000, '1x': 2000, '2x': 800, '5x': 200, 'max': 0 };
+    // The breath between one call ending and the next snap. Short: the call already runs the length of the play.
+    const BROADCAST_DWELL: Record<Speed, number> = { '0.5x': 2000, '1x': 600, '2x': 250, '5x': 0, 'max': 0 };
     if (teaser) {
       teaserRunningRef.current = true;
       setTeaserUsedToday(true);
@@ -1390,12 +1391,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setIsPlaying(false);
       },
       postClipDelayMs: () => BROADCAST_DWELL[speedRef.current] ?? 0,
-      // With the 3D sim on, the call waits for the whistle (no spoiling a play
-      // still running) and the next play waits for the sim to finish this one.
-      gate: (stage, i) => {
-        if (!sim3dActiveRef.current) return true;
-        return stage === 'call' && sim3dDeadIdRef.current === allEventsRef.current[i]?.id;
-      },
+      // With the 3D sim on, Marcus calls the play as it runs, from the snap, and
+      // the next play waits for both the call and the sim to finish. A score,
+      // turnover or field goal is held to the whistle so the voice doesn't give
+      // the ending away before it's on screen.
+      gate: (stage, i) => simAllows(stage, allEventsRef.current[i], { active: sim3dActiveRef.current, deadId: sim3dDeadIdRef.current }),
       willAnimate: () => sim3dOnRef.current,
     });
   }, [broadcastOn, broadcast, homeTeam, awayTeam, revealedCount, isFinished, canBroadcast, canTeaser, id, sim3dOn]);

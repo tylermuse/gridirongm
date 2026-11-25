@@ -1,10 +1,11 @@
 /**
  * Live game audio broadcast (Premium).
  *
- * Mirrors /api/spotlight-audio: takes one play's commentary lines, renders each
- * with the matching ElevenLabs voice, concatenates the MP3 frames, and caches
- * the result in Supabase Storage keyed by content hash. The client requests
- * clips generate-ahead so the voice stays in step with the game.
+ * Takes one play's commentary lines and voices them in a single ElevenLabs
+ * dialogue pass (the Team Spotlight show's model), so Tony's reaction is
+ * performed as a reply to Marcus's call rather than read on its own. The clip is
+ * cached in Supabase Storage keyed by content hash. The client requests clips
+ * generate-ahead so the voice stays in step with the game.
  *
  * Failures carry a `code` the client acts on: tts_quota, premium_required,
  * auth_required, not_configured and teaser_used end the broadcast; anything else
@@ -22,16 +23,10 @@ import crypto from 'crypto';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
 import { readCredits, getServiceClient } from '@bs/core/podcast';
+import { ELEVENLABS_API_KEY, VOICES, generateDialogue } from '@/lib/spotlight/tts';
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_BASE = 'https://api.elevenlabs.io/v1';
-
-const VOICES = {
-  marcus: 'NKI4WPSf2OjKR4G4fadW', // Marcus Cole — measured play-by-play
-  tony: 'aGw6gMq5DRXPll7WVlNn',   // Tony Blaze — energetic color
-} as const;
-
-const MODEL_ID = 'eleven_multilingual_v2';
+/** Part of the cache key. Bump when the voicing changes, so clips rendered the old way aren't reused. */
+const VOICE_VERSION = 'call-v4t-1';
 /** Free-tier broadcast teaser: freshly rendered lines per user per UTC day (one drive is ~10–40 lines). */
 const TEASER_LINES_PER_DAY = 50;
 const CACHE_BUCKET = 'game-audio';
@@ -71,25 +66,6 @@ function normalizeTtsText(text: string): string {
   t = t.replace(/\byds\b/gi, 'yards');
   t = t.replace(/\bvs\.?\b/gi, 'versus');
   return t;
-}
-
-async function generateSpeech(text: string, voiceId: string): Promise<Buffer> {
-  const res = await fetch(`${ELEVENLABS_BASE}/text-to-speech/${voiceId}`, {
-    method: 'POST',
-    headers: { 'xi-api-key': ELEVENLABS_API_KEY!, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, model_id: MODEL_ID, output_format: 'mp3_44100_128' }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    if (res.status === 401 || res.status === 402 || res.status === 429) {
-      const error = new Error(`ElevenLabs quota/auth error (${res.status}): ${err}`) as Error & { status: number; code: string };
-      error.status = 402;
-      error.code = 'tts_quota';
-      throw error;
-    }
-    throw new Error(`ElevenLabs TTS failed (${res.status}): ${err}`);
-  }
-  return Buffer.from(await res.arrayBuffer());
 }
 
 interface Line {
@@ -133,7 +109,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const hash = contentHash(lines);
+    const hash = contentHash({ v: VOICE_VERSION, lines });
     const sb = supabaseAdmin();
 
     if (sb) {
@@ -167,13 +143,18 @@ export async function POST(request: Request) {
       }
     }
 
-    // Cache miss → render each line and concat (MP3 frames concat cleanly).
-    const buffers: Buffer[] = [];
-    for (const line of lines) {
-      const voiceId = VOICES[line.speaker] ?? VOICES.marcus;
-      buffers.push(await generateSpeech(normalizeTtsText(line.text), voiceId));
+    // Cache miss → voice the whole play in one dialogue pass.
+    let finalBuffer: Buffer;
+    try {
+      ({ audio: finalBuffer } = await generateDialogue(lines.map(line => ({
+        voiceId: VOICES[line.speaker] ?? VOICES.marcus,
+        text: normalizeTtsText(line.text),
+      }))));
+    } catch (e) {
+      // ElevenLabs quota/auth failures come back as 402: tell the client to stop asking.
+      if ((e as { status?: number }).status === 402) (e as { code?: string }).code = 'tts_quota';
+      throw e;
     }
-    const finalBuffer = Buffer.concat(buffers);
 
     if (sb) {
       await sb.storage.from(CACHE_BUCKET).upload(`${hash}.mp3`, finalBuffer, {
@@ -182,7 +163,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return new NextResponse(finalBuffer, {
+    return new NextResponse(new Uint8Array(finalBuffer), {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Content-Length': String(finalBuffer.length),
