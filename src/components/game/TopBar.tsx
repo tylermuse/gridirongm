@@ -7,6 +7,7 @@ import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { isDraftOver } from '@/lib/engine/draftStatus';
 import { Button } from '@/components/ui/Button';
 import { useBusyAction, afterPaint } from '@/components/ui/useBusyAction';
+import { MobileActionBar, type BarAction } from './MobileActionBar';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
@@ -193,6 +194,104 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     }
   }, [router]);
 
+  const handleSimPreseason = useCallback(() => {
+    const before = useGameStore.getState().phase;
+    useGameStore.getState().simPreseasonWeek();
+    const after = useGameStore.getState().phase;
+    console.log('[TopBar.sim-preseason]', { before, after });
+    if (after === 'regular') router.push('/roster');
+  }, [router]);
+
+  const handleSkipPreseason = useCallback(() => {
+    const before = useGameStore.getState().phase;
+    useGameStore.getState().skipPreseason();
+    const after = useGameStore.getState().phase;
+    console.log('[TopBar.skip-preseason]', { before, after });
+    router.push('/roster');
+  }, [router]);
+
+  const handleAdvanceToResigning = useCallback(async () => {
+    const store = useGameStore.getState();
+    if (store.phase !== 'resigning') {
+      store.advanceToResigning();
+    }
+    await flushToStorage();
+    // A firing blocks the offseason: stay put and let
+    // FiredModal (in GameShell) offer the way forward.
+    if (useGameStore.getState().firedState?.fired) return;
+    router.push('/re-sign');
+  }, [router]);
+
+  const handleAdvanceToFreeAgency = useCallback(async () => {
+    const store = useGameStore.getState();
+    if (store.phase !== 'freeAgency') {
+      store.advanceToFreeAgency();
+    }
+    await flushToStorage();
+    router.push('/free-agency');
+  }, [router]);
+
+  const handleAdvanceToDraft = useCallback(async () => {
+    let saved = true;
+    try {
+      const store = useGameStore.getState();
+      if (store.phase !== 'draft') {
+        store.advanceToDraft();
+      }
+      saved = await flushToStorage();
+    } catch (err) {
+      console.error('[AdvanceToDraft] error:', err);
+    }
+    goToDraft(saved);
+  }, [goToDraft]);
+
+  const handleEndFAEarly = useCallback(async () => {
+    if (!window.confirm('End free agency early? AI teams will stop making moves and you\'ll advance to the draft.')) return;
+    let saved = true;
+    try {
+      const store = useGameStore.getState();
+      store.advanceToDraft();
+      saved = await flushToStorage();
+    } catch (err) {
+      console.error('[EndFAEarly] advanceToDraft error:', err);
+    }
+    goToDraft(saved);
+  }, [goToDraft]);
+
+  const handleAutoDraftAll = useCallback(async () => {
+    simToEndDraft({ skipAdvance: true });
+    await flushToStorage();
+    router.push('/draft-recap');
+  }, [simToEndDraft, router]);
+
+  const handleStartNewSeason = useCallback(async () => {
+    if (isStartingSeason) return;
+    setIsStartingSeason(true);
+    try {
+      await afterPaint();
+      // 5/16 instrumentation widening (bige08676 + marioalsosa
+      // cross-tester). Outer try/catch + router.push guarantee
+      // even on startNewSeason crash.
+      try {
+        startNewSeason();
+      } catch (err) {
+        console.error('[TopBar] startNewSeason escaped its own catch:', err);
+        try {
+          localStorage.setItem('gg-rollover-outer-error', JSON.stringify({
+            ts: new Date().toISOString(),
+            source: 'TopBar',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack?.split('\n').slice(0, 6).join('\n') : undefined,
+          }));
+        } catch { /* best-effort */ }
+      }
+      try { await flushToStorage(); } catch (err) { console.error('[TopBar] flushToStorage failed', err); }
+      router.push('/roster');
+    } finally {
+      setIsStartingSeason(false);
+    }
+  }, [isStartingSeason, startNewSeason, router]);
+
   // Phase banner context
   let bannerText = '';
   let phoneStatus: string | null = null;
@@ -253,6 +352,154 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     phoneStatus = `Day ${faDay}/30\n$${Math.round(capSpace * 10) / 10}M cap`;
   }
 
+  // ── Phone action bar ──────────────────────────────────────────────────
+  // The same buttons as the desktop row above for each phase, with the main
+  // action last (blue, under the thumb). Full desktop labels when the row has
+  // room; the short phone labels when three or more share it.
+  const onGame = pathname.startsWith('/game/');
+  const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+  const barActions: BarAction[] = [];
+  let barNotice: React.ReactNode = null;
+  const liveLabel = (
+    <>
+      <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse mr-1.5 align-middle" />
+      Live
+    </>
+  );
+
+  if (onGame) {
+    // The live game owns the whole screen.
+  } else if (phase === 'preseason') {
+    barActions.push(
+      { key: 'skip-pre', label: 'Skip to Regular Season', variant: 'soft', onClick: handleSkipPreseason },
+      { key: 'sim-pre', label: 'Sim Preseason Game', variant: 'primary', onClick: handleSimPreseason },
+    );
+  } else if (phase === 'regular') {
+    const userGame = !isSpectator ? schedule.find(g =>
+      g.week === week && !g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId)) : undefined;
+    if (userGame) {
+      barActions.push({ key: 'live', label: liveLabel, variant: 'live', onClick: () => router.push(`/game/${userGame.id}`), grow: 0.7 });
+    }
+    if (week <= deadlineWeek + 1) {
+      barActions.push({
+        key: 'sim-deadline', label: 'To Deadline', variant: 'outline',
+        onClick: () => runSim('sim-deadline', handleSimToDeadline),
+        busy: simBusy === 'sim-deadline', disabled: !!simBusy || !!simProgress,
+      });
+    }
+    barActions.push(
+      {
+        key: 'sim-season',
+        label: simProgress ? `${simProgress.week}/${simProgress.total}…` : 'Sim Season',
+        variant: 'outline',
+        onClick: () => runSim('sim-season', handleSimSeason),
+        busy: simBusy === 'sim-season',
+        disabled: !!simProgress || rosterOverBy > 0 || !!simBusy,
+      },
+      {
+        key: 'sim-week',
+        label: simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Wk ${week}`,
+        variant: 'primary',
+        onClick: () => runSim('sim-week', handleSimWeek),
+        busy: simBusy === 'sim-week',
+        disabled: weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress,
+      },
+    );
+    const showTrades = !isSpectator && pendingTradeCount > 0 && !pathname.startsWith('/trades');
+    if (rosterOverBy > 0 || showTrades) {
+      barNotice = (
+        <div className="flex items-center justify-between gap-3">
+          {rosterOverBy > 0 && (
+            <span className="text-red-600">Roster {53 + rosterOverBy}/53 · cut {rosterOverBy} to sim</span>
+          )}
+          {showTrades && (
+            <Link href="/trades" className="ml-auto text-blue-600">
+              Trades ({pendingTradeCount}) →
+            </Link>
+          )}
+        </div>
+      );
+    }
+  } else if (phase === 'playoffs') {
+    if (superBowlDone) {
+      barActions.push({
+        key: 'to-resign', label: 'Advance to Re-signing →', variant: 'primary',
+        onClick: handleAdvanceToResigning, disabled: isFired,
+      });
+    } else {
+      if (!isSpectator && userPlayoffGame) {
+        barActions.push({ key: 'live', label: liveLabel, variant: 'live', onClick: () => router.push(`/game/${userPlayoffGame.id}`), grow: 0.7 });
+      }
+      barActions.push(
+        {
+          key: 'playoff-all', label: 'Sim All', variant: 'outline',
+          onClick: () => runSim('playoff-all', simAllPlayoffGames),
+          busy: simBusy === 'playoff-all', disabled: !nextPlayoffGame || !!simBusy,
+        },
+        {
+          key: 'playoff-round', label: onlyUserGameLeftInRound ? 'Sim My Game' : 'Sim Round', variant: 'soft',
+          onClick: () => runSim('playoff-round', onlyUserGameLeftInRound ? simNextPlayoffGame : simPlayoffRound),
+          busy: simBusy === 'playoff-round', disabled: !nextPlayoffGame || !!simBusy,
+        },
+        {
+          key: 'playoff-next', label: 'Next Game', variant: 'primary',
+          onClick: () => runSim('playoff-next', simNextPlayoffGame),
+          busy: simBusy === 'playoff-next', disabled: !nextPlayoffGame || !!simBusy,
+        },
+      );
+    }
+  } else if (phase === 'resigning') {
+    const onPage = pathname.startsWith('/re-sign');
+    barActions.push({
+      key: 'to-fa',
+      label: resigningPlayers.length === 0 ? 'Advance to Free Agency →' : 'Skip to Free Agency',
+      variant: onPage ? 'primary' : 'soft',
+      onClick: handleAdvanceToFreeAgency,
+    });
+    if (!onPage) barActions.push({ key: 'go-resign', label: 'Go to Re-signing', variant: 'primary', href: '/re-sign' });
+  } else if (phase === 'freeAgency') {
+    const onPage = pathname.startsWith('/free-agency');
+    if (faDay >= 30) {
+      if (!onPage) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'soft', href: '/free-agency' });
+      barActions.push({ key: 'to-draft', label: 'Advance to Draft →', variant: 'primary', onClick: handleAdvanceToDraft });
+    } else {
+      barActions.push({ key: 'end-fa', label: 'End Free Agency Early', variant: onPage ? 'soft' : 'outline', onClick: handleEndFAEarly });
+      if (!onPage) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'primary', href: '/free-agency' });
+    }
+  } else if (phase === 'draft') {
+    const onPage = pathname === '/draft';
+    const userOnClock = draftOrder[0] === userTeamId;
+    if (draftOver) {
+      barActions.push(
+        { key: 'recap', label: 'Draft Recap', variant: 'soft', href: '/draft-recap' },
+        { key: 'new-season', label: 'Start New Season →', variant: 'primary', onClick: handleStartNewSeason, busy: isStartingSeason },
+      );
+    } else {
+      barActions.push({
+        key: 'draft-all', label: 'Auto All', variant: 'outline',
+        onClick: () => runSim('draft-all', handleAutoDraftAll), busy: simBusy === 'draft-all', disabled: !!simBusy,
+      });
+      if (!userOnClock) {
+        barActions.push(
+          {
+            key: 'draft-to-mine', label: 'To My Pick', variant: 'soft',
+            onClick: () => runSim('draft-to-mine', simToUserDraftPick), busy: simBusy === 'draft-to-mine', disabled: !!simBusy,
+          },
+          {
+            key: 'draft-pick', label: 'Sim Pick', variant: 'primary',
+            onClick: () => runSim('draft-pick', simDraftPick), busy: simBusy === 'draft-pick', disabled: !!simBusy,
+          },
+        );
+      }
+      if (!onPage) {
+        barActions.push({
+          key: 'go-draft', label: userOnClock ? "You're up — Go to Draft" : 'Go to Draft',
+          variant: userOnClock ? 'primary' : 'soft', href: '/draft',
+        });
+      }
+    }
+  }
+
   return (
     <>
       {/* On the live game page, the TopBar row is empty on mobile (all phase
@@ -260,12 +507,14 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           free that vertical space — hide the header on mobile only when the
           user is inside a game, so phone screens don't waste 56px. */}
       <header className={`${pathname.startsWith('/game/') ? 'hidden md:block' : ''} border-b border-[var(--border)] bg-[var(--surface)]`}>
-        <div className="h-12 sm:h-14 flex items-center justify-between gap-2 px-3 md:px-6">
-          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)] shrink-0">
-            {/* Phones: the status strip's facts live here instead of costing a
-                second sticky row. */}
-            <span className="sm:hidden text-[11px] font-semibold leading-tight whitespace-pre-line max-w-[5.5rem] line-clamp-2">
-              {phoneStatus ?? bannerText}
+        <div className="h-9 sm:h-14 flex items-center justify-between gap-2 px-3 md:px-6">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)] min-w-0 sm:shrink-0">
+            {/* Phones: one line of where the league is. The phase's buttons
+                sit in the action bar at the bottom of the screen. */}
+            <span className="sm:hidden text-xs font-semibold truncate">
+              {phase === 'preseason'
+                ? `Preseason Game ${useGameStore.getState().preseasonWeek ?? 1}`
+                : (phoneStatus ?? bannerText).replace(/\n/g, ' · ')}
             </span>
             <span className="hidden sm:inline">
               {phase === 'preseason' && `Preseason Game ${(useGameStore.getState().preseasonWeek ?? 1)}`}
@@ -280,26 +529,14 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
           {/* One row on phones, always: extra actions scroll sideways rather than
               wrapping and pushing the page further down. */}
-          <div className="flex items-center gap-1 md:gap-2 flex-nowrap sm:flex-wrap sm:justify-end min-w-0 overflow-x-auto sm:overflow-visible no-scrollbar [&_button]:whitespace-nowrap [&>*]:shrink-0">
+          <div className="hidden sm:flex items-center gap-1 md:gap-2 flex-wrap justify-end min-w-0 [&_button]:whitespace-nowrap [&>*]:shrink-0">
             {phase === 'preseason' && (
               <>
-                <Button onClick={() => {
-                  const before = useGameStore.getState().phase;
-                  useGameStore.getState().simPreseasonWeek();
-                  const after = useGameStore.getState().phase;
-                  console.log('[TopBar.sim-preseason]', { before, after });
-                  if (after === 'regular') router.push('/roster');
-                }} size="sm" className="active:scale-95 transition-transform">
+                <Button onClick={handleSimPreseason} size="sm" className="active:scale-95 transition-transform">
                   <span className="hidden sm:inline">Sim Preseason Game</span>
                   <span className="sm:hidden">Sim Game</span>
                 </Button>
-                <Button onClick={() => {
-                  const before = useGameStore.getState().phase;
-                  useGameStore.getState().skipPreseason();
-                  const after = useGameStore.getState().phase;
-                  console.log('[TopBar.skip-preseason]', { before, after });
-                  router.push('/roster');
-                }} size="sm" variant="secondary" className="active:scale-95 transition-transform">
+                <Button onClick={handleSkipPreseason} size="sm" variant="secondary" className="active:scale-95 transition-transform">
                   <span className="hidden sm:inline">Skip to Regular Season</span>
                   <span className="sm:hidden">Skip →</span>
                 </Button>
@@ -433,17 +670,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 )}
                 {superBowlDone && (
                   <Button
-                    onClick={async () => {
-                      const store = useGameStore.getState();
-                      if (store.phase !== 'resigning') {
-                        store.advanceToResigning();
-                      }
-                      await flushToStorage();
-                      // A firing blocks the offseason: stay put and let
-                      // FiredModal (in GameShell) offer the way forward.
-                      if (useGameStore.getState().firedState?.fired) return;
-                      router.push('/re-sign');
-                    }}
+                    onClick={handleAdvanceToResigning}
                     disabled={isFired}
                     size="sm"
                     className="relative z-20"
@@ -465,14 +692,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   </Link>
                 )}
                 <Button
-                  onClick={async () => {
-                    const store = useGameStore.getState();
-                    if (store.phase !== 'freeAgency') {
-                      store.advanceToFreeAgency();
-                    }
-                    await flushToStorage();
-                    router.push('/free-agency');
-                  }}
+                  onClick={handleAdvanceToFreeAgency}
                   variant="secondary"
                   size="sm"
                 >
@@ -490,37 +710,14 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   </Link>
                 )}
                 {faDay >= 30 ? (
-                  <Button onClick={async () => {
-                    let saved = true;
-                    try {
-                      const store = useGameStore.getState();
-                      if (store.phase !== 'draft') {
-                        store.advanceToDraft();
-                      }
-                      saved = await flushToStorage();
-                    } catch (err) {
-                      console.error('[AdvanceToDraft] error:', err);
-                    }
-                    goToDraft(saved);
-                  }} variant="secondary" size="sm">
+                  <Button onClick={handleAdvanceToDraft} variant="secondary" size="sm">
                     <span className="hidden sm:inline">Advance to Draft</span>
                     <span className="sm:hidden">Draft</span>
                     {' '}→
                   </Button>
                 ) : (
                   <Button
-                    onClick={async () => {
-                      if (!window.confirm('End free agency early? AI teams will stop making moves and you\'ll advance to the draft.')) return;
-                      let saved = true;
-                      try {
-                        const store = useGameStore.getState();
-                        store.advanceToDraft();
-                        saved = await flushToStorage();
-                      } catch (err) {
-                        console.error('[EndFAEarly] advanceToDraft error:', err);
-                      }
-                      goToDraft(saved);
-                    }}
+                    onClick={handleEndFAEarly}
                     variant="secondary"
                     size="sm"
                   >
@@ -553,11 +750,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       </Button>
                     )}
                     <Button
-                      onClick={() => runSim('draft-all', async () => {
-                        simToEndDraft({ skipAdvance: true });
-                        await flushToStorage();
-                        router.push('/draft-recap');
-                      })}
+                      onClick={() => runSim('draft-all', handleAutoDraftAll)}
                       size="sm"
                       variant="secondary"
                       busy={simBusy === 'draft-all'}
@@ -574,33 +767,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                         Draft Recap
                       </Button>
                     </Link>
-                    <Button size="sm" busy={isStartingSeason} onClick={async () => {
-                      if (isStartingSeason) return;
-                      setIsStartingSeason(true);
-                      try {
-                      await afterPaint();
-                      // 5/16 instrumentation widening (bige08676 + marioalsosa
-                      // cross-tester). Outer try/catch + router.push guarantee
-                      // even on startNewSeason crash.
-                      try {
-                        startNewSeason();
-                      } catch (err) {
-                        console.error('[TopBar] startNewSeason escaped its own catch:', err);
-                        try {
-                          localStorage.setItem('gg-rollover-outer-error', JSON.stringify({
-                            ts: new Date().toISOString(),
-                            source: 'TopBar',
-                            error: err instanceof Error ? err.message : String(err),
-                            stack: err instanceof Error ? err.stack?.split('\n').slice(0, 6).join('\n') : undefined,
-                          }));
-                        } catch { /* best-effort */ }
-                      }
-                      try { await flushToStorage(); } catch (err) { console.error('[TopBar] flushToStorage failed', err); }
-                      router.push('/roster');
-                      } finally {
-                        setIsStartingSeason(false);
-                      }
-                    }}>
+                    <Button size="sm" busy={isStartingSeason} onClick={handleStartNewSeason}>
                       <span className="hidden sm:inline">Start New Season</span>
                       <span className="sm:hidden">New Season</span>
                       {' '}→
@@ -621,54 +788,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
         )}
       </header>
 
-      {/* Mobile bottom action bar — thumb-accessible */}
-      {phase === 'regular' && !pathname.startsWith('/game/') && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)] border-t border-[var(--border)] px-3 py-2 flex items-center justify-center gap-2 sm:hidden safe-bottom">
-          {rosterOverBy > 0 && (
-            <span className="text-[11px] font-semibold text-red-600 leading-tight shrink-0">
-              Cut {rosterOverBy}<br />to sim
-            </span>
-          )}
-          <Button
-            onClick={() => runSim('sim-week', handleSimWeek)}
-            size="sm"
-            className="flex-1 active:scale-95 transition-transform"
-            busy={simBusy === 'sim-week'}
-            disabled={weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress}
-          >
-            {simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Wk ${week}`}
-          </Button>
-          {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
-            <Button
-              onClick={() => runSim('sim-deadline', handleSimToDeadline)}
-              size="sm"
-              variant="secondary"
-              className="flex-1 active:scale-95 transition-transform"
-              busy={simBusy === 'sim-deadline'}
-              disabled={!!simBusy || !!simProgress}
-            >
-              To Deadline
-            </Button>
-          )}
-          <Button
-            onClick={() => runSim('sim-season', handleSimSeason)}
-            size="sm"
-            variant="secondary"
-            className="flex-1 active:scale-95 transition-transform"
-            busy={simBusy === 'sim-season'}
-            disabled={!!simProgress || rosterOverBy > 0 || !!simBusy}
-          >
-            {simProgress ? `${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
-          </Button>
-          {pendingTradeCount > 0 && !pathname.startsWith('/trades') && (
-            <Link href="/trades">
-              <Button size="sm" variant="secondary">
-                Trades {pendingTradeCount}
-              </Button>
-            </Link>
-          )}
-        </div>
-      )}
+      {/* Phones: this phase's actions, pinned to the bottom of the screen. */}
+      <MobileActionBar actions={barActions} notice={barNotice} />
 
       {/* Trade proposal popup — disabled, user prefers inline notifications */}
 

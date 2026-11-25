@@ -17,7 +17,7 @@
 const IN_SEASON = `
 NAVIGATION
 - The sidebar has: Dashboard, Standings, Playoffs, Stats, Rankings, Player Search, News, History (League); Roster, Staff, Finances (Team); Re-signing, Draft Preview, Draft, Draft Recap, Free Agency, Trades (Players); Settings (Other). At the bottom: "Feedback & questions", the account area, "Save/Load" and "New League".
-- On a phone the sidebar is hidden: tap the three-line menu button at the top-left to open it. In the regular season the sim buttons sit in a bar at the bottom of the screen, and many labels are shortened ("Sim Wk", "To Deadline", "Live", "Depth", "Practice").
+- On a phone the sidebar is hidden: tap the three-line menu button at the top-left to open it. The buttons the help calls "the top bar" (sim, advance, draft) sit in a bar at the bottom of the screen in every phase, and many labels are shortened ("Sim Wk", "To Deadline", "Live", "Next Game", "Sim All", "To My Pick", "Auto All", "Depth", "Practice").
 - "Trades" disappears from the sidebar after the trade deadline and during the playoffs. "Draft Recap" appears only after a draft. "Expansion" appears only in the offseason.
 
 CUTTING / RELEASING PLAYERS
