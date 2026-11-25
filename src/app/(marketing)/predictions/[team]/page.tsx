@@ -343,6 +343,17 @@ export default async function TeamPredictionsPage({ params }: { params: Params }
           </Link>
         </div>
 
+        <Link
+          href={`/predictions/playoff-machine?team=${team.abbrev.toLowerCase()}`}
+          className="mt-8 flex items-center justify-between gap-4 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 hover:bg-blue-100 transition-colors"
+        >
+          <span>
+            <span className="block font-bold text-gray-900">What do the {team.name} need?</span>
+            <span className="block text-sm text-gray-600">Pick their remaining games, and everyone else&apos;s, in the playoff machine.</span>
+          </span>
+          <span className="text-blue-600 font-semibold whitespace-nowrap">Run scenarios →</span>
+        </Link>
+
         <section className="mt-10">
           <h2 className="text-xl font-bold text-gray-900 mb-3">More on the {team.name}</h2>
           <ul className="list-disc pl-5 text-gray-700 space-y-1">

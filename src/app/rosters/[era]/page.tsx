@@ -43,7 +43,12 @@ export default async function EraRosterIndex({ params }: Props) {
         </nav>
 
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">{meta.label}</h1>
-        <p className="text-lg text-gray-600 mb-10 max-w-3xl">{meta.blurb}</p>
+        <p className="text-lg text-gray-600 mb-4 max-w-3xl">{meta.blurb}</p>
+        <p className="mb-10">
+          <Link href={`/rosters/${era}/players`} className="text-blue-600 font-semibold hover:underline">
+            See the top-rated players at every position →
+          </Link>
+        </p>
 
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
           {teams.map((t) => (
