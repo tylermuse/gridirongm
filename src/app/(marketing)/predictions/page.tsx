@@ -146,6 +146,17 @@ export default async function PredictionsPage() {
           </div>
         </section>
 
+        <Link
+          href="/predictions/playoff-machine"
+          className="mt-8 flex items-center justify-between gap-4 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 hover:bg-blue-100 transition-colors"
+        >
+          <span>
+            <span className="block font-bold text-gray-900">Try the NFL Playoff Machine</span>
+            <span className="block text-sm text-gray-600">Pick winners for the games left and watch every team&apos;s odds change.</span>
+          </span>
+          <span className="text-blue-600 font-semibold whitespace-nowrap">Pick games →</span>
+        </Link>
+
         <ConferenceTable conference="AFC" teams={afc} />
         <ConferenceTable conference="NFC" teams={nfc} />
 

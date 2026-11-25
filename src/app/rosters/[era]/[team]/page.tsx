@@ -8,6 +8,7 @@ import {
   getTeams,
   getTeamByAbbrev,
   getRoster,
+  getPlayerDetails,
   formatContract,
 } from '@/lib/data/referenceRosters';
 
@@ -47,6 +48,7 @@ export default async function TeamRosterPage({ params }: Props) {
   if (!meta || !t) notFound();
 
   const roster = getRoster(era, t.tid);
+  const slugByPid = new Map(getPlayerDetails(era).map((p) => [p.pid, p.slug]));
   const byOvr = [...roster].sort((a, b) => b.ovr - a.ovr);
   const leaders = byOvr.slice(0, 3);
   const allTeams = getTeams(era);
@@ -100,7 +102,11 @@ export default async function TeamRosterPage({ params }: Props) {
               {roster.map((p) => (
                 <tr key={p.pid} className="border-t border-gray-100">
                   <td className="p-3 text-gray-400 tabular-nums">{p.jersey ?? '—'}</td>
-                  <td className="p-3 font-medium text-gray-900">{p.name}</td>
+                  <td className="p-3 font-medium text-gray-900">
+                    {slugByPid.has(p.pid)
+                      ? <Link href={`/rosters/${era}/players/${slugByPid.get(p.pid)}`} className="hover:text-blue-600 hover:underline">{p.name}</Link>
+                      : p.name}
+                  </td>
                   <td className="p-3 text-gray-600">{p.pos}</td>
                   <td className="p-3 tabular-nums font-semibold text-gray-900">{p.ovr}</td>
                   <td className="p-3 tabular-nums text-gray-600">{p.age ?? '—'}</td>
