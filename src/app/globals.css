@@ -178,3 +178,65 @@ html[data-theme="dark"] .team-color-text {
   from { width: 100%; }
   to { width: 0%; }
 }
+
+/* ── Phone contract-offer sheet (src/components/game/OfferSheet.tsx) ── */
+.offer-label {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-sec);
+}
+.offer-num {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.offer-sheet-safe-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+@keyframes offer-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.offer-sheet { animation: offer-sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .offer-sheet { animation: none; }
+}
+.offer-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  touch-action: pan-y;
+}
+.offer-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, #2563eb var(--offer-fill, 50%), var(--surface-2) var(--offer-fill, 50%));
+}
+.offer-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, #2563eb var(--offer-fill, 50%), var(--surface-2) var(--offer-fill, 50%));
+}
+.offer-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border-radius: 9999px;
+  background: var(--surface);
+  border: 2px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+}
+.offer-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--surface);
+  border: 2px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+}
