@@ -163,7 +163,7 @@ function PlayersPageInner() {
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-4">Player Search</h1>
+        <h1 className="sr-only sm:not-sr-only text-2xl font-bold mb-4">Player Search</h1>
 
         {/* Filters */}
         <Card className="mb-4 p-4">

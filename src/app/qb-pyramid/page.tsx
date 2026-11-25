@@ -122,9 +122,9 @@ export default function QBPyramidPage() {
       <div className="max-w-5xl mx-auto space-y-2">
         {/* Header */}
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-black text-[var(--text)]">QB Tier Pyramid</h1>
+          <h1 className="sr-only sm:not-sr-only text-2xl font-black text-[var(--text)]">QB Tier Pyramid</h1>
           <p className="text-sm text-[var(--text-sec)] mt-1">
-            Every team's starting QB, ranked by tier. Elite QBs get a performance boost; Camp Arms get a penalty.
+            Every team&apos;s starting QB, ranked by tier. Elite QBs get a performance boost; Camp Arms get a penalty.
           </p>
         </div>
 

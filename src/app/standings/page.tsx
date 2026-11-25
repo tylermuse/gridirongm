@@ -254,7 +254,7 @@ export default function StandingsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <TeamQuickNav currentPage="standings" />
-            <h2 className="text-2xl font-black font-display uppercase tracking-tight">Standings & Schedule</h2>
+            <h2 className="sr-only sm:not-sr-only text-2xl font-black font-display uppercase tracking-tight">Standings & Schedule</h2>
           </div>
           <div className="flex bg-[var(--surface-2)] rounded-lg p-0.5">
             <button

@@ -95,7 +95,7 @@ export default function FinancesPage() {
     <GameShell>
       <div className="max-w-5xl mx-auto space-y-6">
         <TeamQuickNav currentPage="finances" />
-        <h2 className="text-2xl font-black mb-6">Finances & Cap Management</h2>
+        <h2 className="sr-only sm:not-sr-only text-2xl font-black mb-6">Finances & Cap Management</h2>
 
         {/* Top-line P&L — matches the Dashboard Finances card with an
             expanded revenue breakdown so users can see where the money

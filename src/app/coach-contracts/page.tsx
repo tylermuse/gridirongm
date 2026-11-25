@@ -30,7 +30,7 @@ export default function CoachContractsPage() {
       <div className="max-w-3xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-6">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black">Coaching Contracts</h2>
+            <h2 className="sr-only sm:not-sr-only text-xl sm:text-2xl font-black">Coaching Contracts</h2>
             <p className="text-xs sm:text-sm text-[var(--text-sec)] mt-1">
               Extend or release coaches whose contracts expire at season end.
             </p>

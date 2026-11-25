@@ -94,7 +94,7 @@ export default function ReSignPage() {
             <div className="text-3xl mb-3">✍️</div>
             <h2 className="text-xl font-black mb-1">Re-signing Window — Read-only</h2>
             <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto mb-5">
-              AI teams handle their own re-signings in spectator mode. Skip ahead to free agency when you're ready.
+              AI teams handle their own re-signings in spectator mode. Skip ahead to free agency when you&apos;re ready.
             </p>
             <Button onClick={() => { advanceToFreeAgency(); router.push('/free-agency'); }}>
               Advance to Free Agency
@@ -238,7 +238,7 @@ export default function ReSignPage() {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-6">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black">Re-signing Window</h2>
+            <h2 className="sr-only sm:not-sr-only text-xl sm:text-2xl font-black">Re-signing Window</h2>
             <p className="text-xs sm:text-sm text-[var(--text-sec)] mt-1">
               Extend or restructure your expiring contracts before they hit free agency.
             </p>
@@ -411,7 +411,7 @@ export default function ReSignPage() {
                 <div className="bg-red-50 border border-red-600 rounded-lg p-4 text-center mb-3">
                   <div className="text-lg font-black text-red-600">REJECTED</div>
                   <div className="text-sm text-red-600">
-                    {negotiation.playerName} rejected your offer. They'll hit free agency.
+                    {negotiation.playerName} rejected your offer. They&apos;ll hit free agency.
                   </div>
                   <Button size="sm" variant="secondary" onClick={closeNegotiation} className="mt-3">Dismiss</Button>
                 </div>

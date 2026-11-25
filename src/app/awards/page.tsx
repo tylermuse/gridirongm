@@ -43,7 +43,7 @@ export default function AwardsPage() {
         <SpectatorBanner />
         <RankingsTabs />
         <div className="mb-5">
-          <h2 className="text-2xl font-black font-display uppercase tracking-tight">Award Race</h2>
+          <h2 className="sr-only sm:not-sr-only text-2xl font-black font-display uppercase tracking-tight">Award Race</h2>
           <p className="text-xs text-[var(--text-sec)] mt-1">
             Season {season} · Week {week} · Live ranking; leader updates after every week.
             {isPostRegularSeason && ' Season-end winners marked with 🏆.'}

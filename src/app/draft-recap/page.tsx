@@ -134,7 +134,7 @@ export default function DraftRecapPage() {
         <div className="mb-2">
           <div className="flex items-center gap-3 mb-1">
             <span className="text-3xl">📋</span>
-            <h2 className="text-2xl font-black">Draft Recap</h2>
+            <h2 className="sr-only sm:not-sr-only text-2xl font-black">Draft Recap</h2>
           </div>
           <p className="text-sm text-[var(--text-sec)]">
             Season {season} Draft Results — Grades, analysis, and post-draft pressers.

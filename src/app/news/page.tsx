@@ -95,7 +95,7 @@ export default function NewsPage() {
     <GameShell>
       <div className="max-w-3xl mx-auto">
         <NewsTabs />
-        <h2 className="text-2xl font-black mb-6">League News</h2>
+        <h2 className="sr-only sm:not-sr-only text-2xl font-black mb-6">League News</h2>
 
         {/* Filter tabs */}
         <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit">
