@@ -961,10 +961,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // coaches their roster from the first snap (the call menu is kept in view, below).
   const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null);
   const [liveCoachPaused, setLiveCoachPaused] = useState(false);
-  // In an exhibition, keep the call menu on screen when the game stops for the
-  // user's call: off screen, a paused 3D game just looks frozen.
+  // Keep the call menu on screen when the game stops for the user's call: off
+  // screen, a paused 3D game just looks frozen, and on phones the menu sat
+  // below the field so every play meant scrolling down to call it. Only the
+  // in-flow slot (below lg) moves the page; the desktop sidebar slot is sticky.
   useEffect(() => {
-    if (!isExhibition || !liveCoachPaused) return;
+    if (!liveCoachPaused) return;
     const id = requestAnimationFrame(() => {
       const slot = [...document.querySelectorAll<HTMLElement>('[data-play-call-slot]')]
         .find(el => el.offsetParent !== null && el.childElementCount > 0);
@@ -973,7 +975,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       if (r.top < 0 || r.bottom > window.innerHeight) slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
     return () => cancelAnimationFrame(id);
-  }, [isExhibition, liveCoachPaused]);
+  }, [liveCoachPaused]);
   // Live Coach engine — generates events one-at-a-time after takeover
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
   const [liveExtraEvents, setLiveExtraEvents] = useState<PlayEvent[]>([]);
@@ -2508,7 +2510,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
         {/* Animated field + outcome chip overlay. While the 3D sim is on (desktop) the box is 16:9 so the
             sim gets a real broadcast frame instead of the field's wide, short box. */}
-        <div className={`relative ${sim3dOn && !pregameOpen ? 'aspect-square sm:aspect-[4/3] md:aspect-video' : ''}`}>   {/* phones get a square frame: the field's short box left the 3D sim a letterbox strip */}
+        {/* Phones get a square frame (the field's short box left the 3D sim a
+            letterbox strip), dropping to widescreen while the game waits for
+            your call so the field and the whole call menu fit on one screen.
+            The 3D page refits its camera when the frame resizes. */}
+        <div className={`relative ${sim3dOn && !pregameOpen ? `${liveCoachPaused ? 'aspect-video' : 'aspect-square'} sm:aspect-[4/3] md:aspect-video` : ''}`}>
           <AnimatedField
             event={engineSnapshot ? {
               id: -1,
