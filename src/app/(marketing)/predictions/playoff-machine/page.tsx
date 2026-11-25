@@ -34,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function PlayoffMachinePage() {
   const odds = await getNflOdds();
-  const colors = new Map(getMockDraftData().teams.map((t) => [t.abbrev, t.colors[0] ?? '']));
+  const look = new Map(getMockDraftData().teams.map((t) => [t.abbrev, t]));
   const teams: PlayoffMachineTeam[] = odds.teams.map((t) => ({
     abbrev: t.abbrev,
     city: t.city,
@@ -43,7 +43,9 @@ export default async function PlayoffMachinePage() {
     division: t.division,
     rating: t.rating,
     slug: teamSlug(t),
-    color: colors.get(t.abbrev) ?? '',
+    color: look.get(t.abbrev)?.colors[0] ?? '',
+    color2: look.get(t.abbrev)?.colors[1] ?? '',
+    logo: look.get(t.abbrev)?.imgURL ?? '',
   }));
   const games: MachineGame[] = (odds.games ?? []).map((g) => ({
     week: g.week, date: g.date, home: g.home, away: g.away, neutral: g.neutral,
@@ -76,7 +78,7 @@ export default async function PlayoffMachinePage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
-      <article className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+      <article className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
         <nav className="text-sm text-gray-500 mb-6">
           <Link href="/" className="hover:text-gray-700">Home</Link>
           <span className="mx-2">/</span>
@@ -85,13 +87,10 @@ export default async function PlayoffMachinePage() {
           <span className="text-gray-900">Playoff Machine</span>
         </nav>
 
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 leading-tight mb-3">NFL Playoff Machine {odds.season}</h1>
-        <p className="text-lg text-gray-700 max-w-3xl mb-2">
-          Pick the winners of any of the {odds.remainingGames} games left, and we re-simulate the rest of the season on the spot. You&apos;ll see
-          every team&apos;s playoff, division, #1 seed and Super Bowl chances under your scenario.
-        </p>
-        <p className="text-sm text-gray-500 mb-8">
-          Week {odds.week} edition · real results and schedule, updated every Tuesday · <Link href="/predictions" className="text-blue-600 hover:underline">see the no-picks odds</Link>
+        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 leading-tight">NFL Playoff Machine {odds.season}</h1>
+        <p className="text-gray-600 mt-2 mb-5 max-w-2xl">
+          Pick winners for the {odds.remainingGames} games left and see the playoff picture, the standings and every team&apos;s odds change.{' '}
+          <span className="text-gray-400">Through Week {odds.week - 1}. Updated Tuesdays.</span>
         </p>
 
         {games.length ? (
@@ -100,11 +99,12 @@ export default async function PlayoffMachinePage() {
           <p className="text-gray-600">The schedule is updating. Check back shortly, or see the <Link href="/predictions" className="text-blue-600 hover:underline">current playoff odds</Link>.</p>
         )}
 
-        <div className="mt-12 py-8 px-6 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 text-center">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Don&apos;t like how it plays out? Run the team yourself.</h2>
-          <p className="text-gray-600 mb-5">Take over any NFL team with its real, current roster. Make the trades, set the lineup and play out the rest of the season, in 3D if you want. Free, in your browser.</p>
-          <Link href="/" className="inline-block px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-            Take Over a Team — It&apos;s Free
+        <div className="mt-14 flex flex-wrap items-center gap-4 border-t border-gray-200 pt-6">
+          <p className="text-gray-700 flex-1 min-w-64">
+            <strong className="text-gray-900">Rather play it out yourself?</strong> Take over any team with its real roster and run the rest of the season in BS Football. Free, in your browser.
+          </p>
+          <Link href="/" className="h-10 inline-flex items-center px-5 bg-gray-900 text-white text-sm font-semibold hover:bg-gray-700">
+            Play BS Football
           </Link>
         </div>
 
@@ -125,9 +125,11 @@ export default async function PlayoffMachinePage() {
 
           <h2>Frequently asked questions</h2>
           <h3>Can I share my scenario?</h3>
-          <p>Yes. Your picks are saved in the page address as you go. Hit <strong>Share scenario</strong> to copy the link, and anyone who opens it sees the same picks.</p>
+          <p>Yes. Your picks are saved in the page address as you go. Hit <strong>Copy link</strong> to copy it, and anyone who opens it sees the same picks.</p>
+          <h3>Why does the playoff picture differ from the odds?</h3>
+          <p>The playoff picture is one season: your picks, plus the favorite winning every game you haven&apos;t picked. The playoff % numbers come from 2,000 simulated seasons in which those other games can go either way, so an underdog can still sneak in.</p>
           <h3>What does &quot;Win out&quot; do?</h3>
-          <p>Pick your team, then <strong>Win out</strong> marks them as the winner of every game they have left, so you can see if that gets them in.</p>
+          <p>Choose a team under <strong>Follow a team</strong>, then <strong>Win out</strong> marks them as the winner of every game they have left, so you can see if that gets them in.</p>
           <h3>How is this different from the playoff odds page?</h3>
           <p>
             The <Link href="/predictions">playoff odds page</Link> is our straight forecast with no picks, run 10,000 times. Each team also has its own page, like the{' '}
