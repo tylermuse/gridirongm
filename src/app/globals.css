@@ -178,3 +178,7 @@ html[data-theme="dark"] .team-color-text {
   from { width: 100%; }
   to { width: 0%; }
 }
+
+/* Phone action bar (src/components/game/MobileActionBar.tsx) clears the
+ * home indicator. */
+.action-bar-safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
