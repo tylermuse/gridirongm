@@ -68,3 +68,28 @@ describe('playoff machine', () => {
     expect(decodePicks(games, `${encoded}.99XXX.garbage.1KC`)).toEqual(picks);
   });
 });
+
+describe('projectSeason (bracket view)', () => {
+  it('gives every team 17 games, 7 seeds per conference with 4 division winners on top', async () => {
+    const { projectSeason } = await import('@/lib/predictions/playoffMachine');
+    const p = projectSeason(teams, games, {});
+    for (const t of p.teams.values()) expect(t.w + t.l + t.t).toBe(17);
+    for (const c of ['AFC', 'NFC']) {
+      expect(p.seeds[c]).toHaveLength(7);
+      expect(p.rest[c]).toHaveLength(9);
+      expect(p.seeds[c].slice(0, 4).every((a) => p.teams.get(a)!.divRank === 1)).toBe(true);
+      expect(p.seeds[c].slice(4).every((a) => p.teams.get(a)!.divRank !== 1)).toBe(true);
+    }
+  });
+
+  it('a pick flips the projected result of that game', async () => {
+    const { projectSeason } = await import('@/lib/predictions/playoffMachine');
+    const g = remaining[0];
+    const fav = (g.homeWinProb ?? 0.5) >= 0.5 ? g.home : g.away;
+    const dog = fav === g.home ? g.away : g.home;
+    const base = projectSeason(teams, games, {});
+    const flipped = projectSeason(teams, games, { [gameKey(g)]: dog });
+    expect(flipped.teams.get(dog)!.w).toBe(base.teams.get(dog)!.w + 1);
+    expect(flipped.teams.get(fav)!.l).toBe(base.teams.get(fav)!.l + 1);
+  });
+});

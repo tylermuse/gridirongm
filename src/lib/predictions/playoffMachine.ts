@@ -257,3 +257,100 @@ export function recordWithPicks(abbrev: string, games: MachineGame[], picks: Pic
   }
   return { w, l, t, picked };
 }
+
+// ─── Deterministic projection (the bracket view) ────────────────────────
+
+export interface ProjectedTeam {
+  abbrev: string;
+  w: number;
+  l: number;
+  t: number;
+  /** 1-7 if in the playoffs, else null. */
+  seed: number | null;
+  /** 1-4 within the division. */
+  divRank: number;
+  /** Conference rank 1-16 (seeds first, then the rest in tiebreak order). */
+  confRank: number;
+}
+
+export interface Projection {
+  teams: Map<string, ProjectedTeam>;
+  /** Abbrevs in seed order (index 0 = #1 seed), per conference. */
+  seeds: Record<string, string[]>;
+  /** Non-playoff teams in order, per conference ("in the hunt" first). */
+  rest: Record<string, string[]>;
+  /** Teams in finishing order, per division. */
+  divisions: Record<string, string[]>;
+}
+
+/**
+ * One concrete season: played results, then the user's picks, then every
+ * other game to the model's favorite (ESPN-machine style). Same simplified
+ * tiebreakers as the simulation, with team rating instead of a coin flip.
+ */
+export function projectSeason(teamsIn: MachineTeam[], games: MachineGame[], picks: Picks): Projection {
+  const teams = [...teamsIn].sort((a, b) => a.abbrev.localeCompare(b.abbrev));
+  const idx = new Map(teams.map((t, i) => [t.abbrev, i]));
+  const conf = teams.map((t) => t.conference);
+  const div = teams.map((t) => t.division);
+  const rec = teams.map(() => ({ w: 0, l: 0, t: 0, dw: 0, dl: 0, cw: 0, cl: 0 }));
+  const h2h: number[][] = teams.map(() => teams.map(() => 0));
+  for (const g of games) {
+    const h = idx.get(g.home);
+    const a = idx.get(g.away);
+    if (h === undefined || a === undefined) continue;
+    let win: number, lose: number;
+    if (g.done) {
+      if (g.homePts === g.awayPts) { rec[h].t++; rec[a].t++; continue; }
+      [win, lose] = g.homePts > g.awayPts ? [h, a] : [a, h];
+    } else {
+      const pick = picks[gameKey(g)] ?? ((g.homeWinProb ?? 0.5) >= 0.5 ? g.home : g.away);
+      [win, lose] = pick === g.home ? [h, a] : [a, h];
+    }
+    rec[win].w++; rec[lose].l++; h2h[win][lose]++;
+    if (div[h] === div[a]) { rec[win].dw++; rec[lose].dl++; }
+    if (conf[h] === conf[a]) { rec[win].cw++; rec[lose].cl++; }
+  }
+  const pct = (wi: number, lo: number, ti = 0) => (wi + lo + ti === 0 ? 0 : (wi + 0.5 * ti) / (wi + lo + ti));
+  const better = (a: number, b: number) => {
+    const d = pct(rec[b].w, rec[b].l, rec[b].t) - pct(rec[a].w, rec[a].l, rec[a].t);
+    if (d !== 0) return d;
+    const hh = h2h[b][a] - h2h[a][b];
+    if (hh !== 0) return hh;
+    if (div[a] === div[b]) {
+      const dd = pct(rec[b].dw, rec[b].dl) - pct(rec[a].dw, rec[a].dl);
+      if (dd !== 0) return dd;
+    }
+    const cc = pct(rec[b].cw, rec[b].cl) - pct(rec[a].cw, rec[a].cl);
+    if (cc !== 0) return cc;
+    return teams[b].rating - teams[a].rating;
+  };
+
+  const out: Projection = { teams: new Map(), seeds: {}, rest: {}, divisions: {} };
+  const divRank = new Map<number, number>();
+  for (const d of [...new Set(div)]) {
+    const order = teams.map((_, i) => i).filter((i) => div[i] === d).sort(better);
+    order.forEach((i, k) => divRank.set(i, k + 1));
+    out.divisions[d] = order.map((i) => teams[i].abbrev);
+  }
+  const confRank = new Map<number, number>();
+  const seedOf = new Map<number, number>();
+  for (const c of [...new Set(conf)]) {
+    const members = teams.map((_, i) => i).filter((i) => conf[i] === c);
+    const winners = members.filter((i) => divRank.get(i) === 1).sort(better);
+    const others = members.filter((i) => divRank.get(i) !== 1).sort(better);
+    const seeds = [...winners, ...others.slice(0, 3)];
+    const rest = others.slice(3);
+    seeds.forEach((i, k) => seedOf.set(i, k + 1));
+    [...seeds, ...rest].forEach((i, k) => confRank.set(i, k + 1));
+    out.seeds[c] = seeds.map((i) => teams[i].abbrev);
+    out.rest[c] = rest.map((i) => teams[i].abbrev);
+  }
+  teams.forEach((t, i) => {
+    out.teams.set(t.abbrev, {
+      abbrev: t.abbrev, w: rec[i].w, l: rec[i].l, t: rec[i].t,
+      seed: seedOf.get(i) ?? null, divRank: divRank.get(i)!, confRank: confRank.get(i)!,
+    });
+  });
+  return out;
+}
