@@ -233,19 +233,19 @@ function BarButton({ action, compact }: { action: BarAction; compact: boolean })
 }
 
 // Bars currently on screen (the shell's, or a page's own). The tallest one
-// sets --m2-bar-h; with none mounted the variable is removed.
+// sets --action-bar-h; with none mounted the variable is removed.
 const liveBars = new Set<HTMLElement>();
 function publishBarHeight() {
   const root = document.documentElement;
   let h = 0;
   liveBars.forEach(el => { h = Math.max(h, el.offsetHeight); });
-  if (h > 0) root.style.setProperty('--m2-bar-h', `${h}px`);
-  else root.style.removeProperty('--m2-bar-h');
+  if (h > 0) root.style.setProperty('--action-bar-h', `${h}px`);
+  else root.style.removeProperty('--action-bar-h');
 }
 
 /**
  * The one sticky bar at the bottom of a phone screen. Rows of actions, an
- * optional notice line above them. Publishes its height as `--m2-bar-h` on
+ * optional notice line above them. Publishes its height as `--action-bar-h` on
  * <html> so page padding and floating buttons can clear it.
  */
 export function ActionBar({

@@ -192,12 +192,12 @@ export function GlobalBooth() {
     : null;
 
   // Phones: sit just above the sticky action bar, whatever its height (it
-  // publishes --m2-bar-h; absent when no bar is showing).
+  // publishes --action-bar-h; absent when no bar is showing).
 
   return (
     <>
       {!open && !onLiveGame && (
-        <div className={`fixed right-4 bottom-[calc(var(--m2-bar-h,0px)+1rem)] sm:bottom-5 sm:right-5 z-50 flex flex-col items-end gap-2 transition-all duration-200 ${tucked && !showCallout ? 'translate-y-28 opacity-0 pointer-events-none sm:translate-y-0 sm:opacity-100 sm:pointer-events-auto' : ''}`}>
+        <div className={`fixed right-4 bottom-[calc(var(--action-bar-h,0px)+1rem)] sm:bottom-5 sm:right-5 z-50 flex flex-col items-end gap-2 transition-all duration-200 ${tucked && !showCallout ? 'translate-y-28 opacity-0 pointer-events-none sm:translate-y-0 sm:opacity-100 sm:pointer-events-auto' : ''}`}>
           {showCallout && (
             <div
               ref={calloutRef}
