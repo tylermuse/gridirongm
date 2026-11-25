@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useGameStore, computeFranchiseTagSalary, flushToStorage } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { OfferSalaryInput } from '@/components/game/OfferSalaryInput';
+import { OfferSheet } from '@/components/game/OfferSheet';
 import { LEAGUE_MINIMUM_SALARY, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
@@ -94,7 +95,7 @@ export default function ReSignPage() {
             <div className="text-3xl mb-3">✍️</div>
             <h2 className="text-xl font-black mb-1">Re-signing Window — Read-only</h2>
             <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto mb-5">
-              AI teams handle their own re-signings in spectator mode. Skip ahead to free agency when you're ready.
+              AI teams handle their own re-signings in spectator mode. Skip ahead to free agency when you&apos;re ready.
             </p>
             <Button onClick={() => { advanceToFreeAgency(); router.push('/free-agency'); }}>
               Advance to Free Agency
@@ -348,7 +349,7 @@ export default function ReSignPage() {
 
         {/* Negotiation panel */}
         {negotiation && (
-          <Card className="mb-4">
+          <Card className="hidden sm:block mb-4">
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -411,7 +412,7 @@ export default function ReSignPage() {
                 <div className="bg-red-50 border border-red-600 rounded-lg p-4 text-center mb-3">
                   <div className="text-lg font-black text-red-600">REJECTED</div>
                   <div className="text-sm text-red-600">
-                    {negotiation.playerName} rejected your offer. They'll hit free agency.
+                    {negotiation.playerName} rejected your offer. They&apos;ll hit free agency.
                   </div>
                   <Button size="sm" variant="secondary" onClick={closeNegotiation} className="mt-3">Dismiss</Button>
                 </div>
@@ -735,6 +736,44 @@ export default function ReSignPage() {
           </Card>
         )}
       </div>
+      {/* Phones: the offer sheet. Same negotiation as the card above; it
+          steps aside while the player card is open and comes back after. */}
+      {(() => {
+        const np = activePlayerId ? players.find(p => p.id === activePlayerId) : undefined;
+        const current = np?.contract.salary ?? 0;
+        const saving = Math.round((current - offerSalary) * 10) / 10;
+        const isExtend = negMode === 'extend';
+        return (
+          <OfferSheet
+            negotiation={negotiation}
+            open={!selectedPlayerId}
+            onClose={closeNegotiation}
+            offerSalary={offerSalary}
+            onSalaryChange={setOfferSalary}
+            offerYears={offerYears}
+            onYearsChange={setOfferYears}
+            maxYears={6}
+            minSalary={LEAGUE_MINIMUM_SALARY}
+            maxSalary={Math.max((negotiation?.askingSalary ?? 0) * 2, 5)}
+            capAfter={np ? Math.round((capSpace + current - offerSalary) * 10) / 10 : undefined}
+            kicker={isExtend ? 'Extension' : 'Restructure'}
+            note={!isExtend && np ? (
+              saving > 0
+                ? <span className="text-green-600">Saves ${saving.toFixed(1)}M/yr in cap space</span>
+                : <span className="text-red-600">Adds ${Math.abs(saving).toFixed(1)}M/yr to the cap hit</span>
+            ) : undefined}
+            acceptedTitle={isExtend ? 'Extended!' : 'Restructured!'}
+            acceptedText={negotiation ? `${negotiation.playerName} agreed to $${negotiation.currentOfferSalary}M/yr for ${negotiation.currentOfferYears} year${negotiation.currentOfferYears > 1 ? 's' : ''}` : ''}
+            rejectedText={negotiation ? `${negotiation.playerName} rejected your offer. They'll hit free agency.` : ''}
+            onSubmit={submitOffer}
+            onWalkAway={walkAway}
+            walkAwayLabel="Let Walk"
+            onDone={closeNegotiation}
+            onDismiss={closeNegotiation}
+            onPlayerCard={np ? () => setSelectedPlayerId(np.id) : undefined}
+          />
+        );
+      })()}
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
