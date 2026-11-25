@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 const NAV_ITEMS = [
   { label: 'NFL Playoff Odds', href: '/predictions' },
+  { label: 'Playoff Machine', href: '/predictions/playoff-machine' },
   { label: 'Mock Draft', href: '/mock-draft' },
   { label: 'Blog', href: '/blog' },
   { label: 'vs Competitors', href: '/vs/football-gm' },
@@ -31,7 +32,9 @@ const FOOTER_COLS = [
     title: 'Learn',
     links: [
       { label: 'NFL Playoff Odds', href: '/predictions' },
+      { label: 'NFL Playoff Machine', href: '/predictions/playoff-machine' },
       { label: '2026 Team Rosters', href: '/rosters/2026' },
+      { label: '2026 NFL Player Ratings', href: '/rosters/2026/players' },
       { label: 'Blog', href: '/blog' },
       { label: 'Draft Strategy Guide', href: '/blog/draft-strategy-guide' },
       { label: 'Salary Cap Tips', href: '/blog/salary-cap-management-tips' },

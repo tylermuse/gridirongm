@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { blogPosts } from '@/lib/content/posts';
 import { seoPages } from '@/lib/content/pages';
-import { listEras, getTeams } from '@/lib/data/referenceRosters';
+import { listEras, getTeams, getPlayerDetails, isIndexablePlayer } from '@/lib/data/referenceRosters';
 import { teamSlug } from '@/lib/mockDraft/engine';
 import { getMockDraftData } from '@/lib/mockDraft/serverData';
 
@@ -16,6 +16,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/pricing`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE_URL}/rosters`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${BASE_URL}/predictions`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${BASE_URL}/predictions/playoff-machine`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE_URL}/mock-draft`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE_URL}/mock-draft/2027`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE_URL}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
@@ -43,6 +44,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     rosterPages.push({ url: `${BASE_URL}/rosters/${e.slug}`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 });
     for (const t of getTeams(e.slug)) {
       rosterPages.push({ url: `${BASE_URL}/rosters/${e.slug}/${t.abbrev.toLowerCase()}`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 });
+    }
+    rosterPages.push({ url: `${BASE_URL}/rosters/${e.slug}/players`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 });
+    // Only players who've played this season; the rest are noindex (see the player page).
+    for (const p of getPlayerDetails(e.slug).filter(isIndexablePlayer)) {
+      rosterPages.push({ url: `${BASE_URL}/rosters/${e.slug}/players/${p.slug}`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 });
     }
   }
 

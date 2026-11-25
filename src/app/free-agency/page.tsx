@@ -8,6 +8,7 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { coarseOvrBucket } from '@bs/core/billing';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { OfferSalaryInput } from '@/components/game/OfferSalaryInput';
+import { OfferSheet } from '@/components/game/OfferSheet';
 import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { SpectatorBanner } from '@/components/game/SpectatorBanner';
@@ -19,7 +20,7 @@ import { getActiveRoster } from '@/lib/engine/roster';
 import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engine/negotiation';
 import { generateFAEvaluation, type FAEvaluation } from '@/lib/engine/personnelReport';
 import { POSITIONS, ROSTER_LIMITS, type Position, type Player } from '@/types';
-import { BottomSheet, Chip, M2Card, M2Label, Meter, OvrBadge } from '@/components/mobile/m2';
+import { M2Card, M2Label, OvrBadge } from '@/components/mobile/m2';
 
 /**
  * Determines if a free agent will accept a veteran minimum deal.
@@ -173,9 +174,6 @@ export default function FreeAgencyPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   // Feature: un-retire a player. Toggle between the FA pool and retired players.
   const [faView, setFaView] = useState<'available' | 'retired'>('available');
-  // Phones (mobile v2 offer sheet): which quick-offer chip is lit. Cleared as
-  // soon as the slider moves or the player counters.
-  const [offerPreset, setOfferPreset] = useState<'85' | '95' | 'ask' | '110' | null>(null);
   const [retiredError, setRetiredError] = useState<string | null>(null);
   const msgFeedRef = useRef<HTMLDivElement>(null);
   // The negotiation panel renders above the FA table, so clicking Negotiate on a
@@ -419,14 +417,12 @@ export default function FreeAgencyPage() {
     // Default offer to asking price (or league minimum if over cap)
     setOfferSalary(overCap ? LEAGUE_MINIMUM_SALARY : neg.askingSalary);
     setOfferYears(neg.askingYears);
-    setOfferPreset(overCap ? null : 'ask');
   }
 
   function submitOffer() {
     if (!negotiation || negotiation.outcome !== 'pending') return;
     const updated = processOffer(negotiation, offerSalary, offerYears);
     setNegotiation(updated);
-    setOfferPreset(null);
     // If accepted, sign the player
     if (updated.outcome === 'accepted') {
       const error = signFreeAgent(updated.playerId, updated.currentOfferSalary, updated.currentOfferYears);
@@ -457,8 +453,8 @@ export default function FreeAgencyPage() {
     setNegotiation(null);
   }
 
-  /** A free agent's intel report (or the button to run one): the same content
-   *  under a table row (sm+) and inside the offer sheet (phones). */
+  /** A free agent's intel report (or the button to run one): under his table
+   *  row, and inside the phone offer sheet. */
   const renderAgentDetails = (p: Player, salary: number) => (
     <>
                             {/* Intel Report — no report yet. */}
@@ -1320,179 +1316,53 @@ export default function FreeAgencyPage() {
           </div>
         </div>
       </div>
-      {/* ── Phones: offer sheet (mobile v2, screen 3c). Same negotiation as
-          the sm+ card, driven by the same state. ── */}
-      <BottomSheet
-        open={!!negotiation}
-        onClose={negotiation?.outcome === 'rejected' ? walkAway : closeNegotiation}
-        label={negotiation ? `Offer to ${negotiation.playerName}` : 'Offer'}
-      >
-        {negotiation && (() => {
-          const np = players.find(p => p.id === negotiation.playerId);
-          const report = effectivePursuitState?.intelReports[negotiation.playerId];
-          const ask = negotiation.askingSalary;
-          const minSalary = LEAGUE_MINIMUM_SALARY;
-          const maxSalary = Math.max(ask * 2, 5);
-          const clampSalary = (n: number) => Math.min(maxSalary, Math.max(minSalary, Math.round(n * 10) / 10));
-          const fillPct = Math.max(0, Math.min(100, ((offerSalary - minSalary) / (maxSalary - minSalary)) * 100));
-          const capAfter = Math.round((capSpace - offerSalary) * 10) / 10;
-          // The same score the player's side uses to judge an offer.
-          const satisfaction = (offerSalary / ask) * 0.7
-            + (negotiation.askingYears > 0 ? offerYears / negotiation.askingYears : 1) * 0.3;
-          const interest = satisfaction >= 0.95 ? { label: 'Likely', tone: 'green' as const, text: 'text-green-600' }
-            : satisfaction >= 0.88 ? { label: 'Maybe', tone: 'amber' as const, text: 'text-amber-600' }
-            : satisfaction >= 0.75 ? { label: 'Unlikely', tone: 'red' as const, text: 'text-red-600' }
-            : { label: 'Long shot', tone: 'red' as const, text: 'text-red-600' };
-          const lastPlayerMsg = [...negotiation.messages].reverse().find(m => m.sender === 'player');
-          const lastNegative = [...negotiation.messages].reverse().find(m => m.type === 'negative');
-          const presets: { id: NonNullable<typeof offerPreset>; label: string; pct: number }[] = [
-            { id: '85', label: '85%', pct: 0.85 },
-            { id: '95', label: '95%', pct: 0.95 },
-            { id: 'ask', label: 'Ask', pct: 1 },
-            { id: '110', label: '110%', pct: 1.1 },
-          ];
-          const wants = report ? ({ money: 'Money', winning: 'Winning', role: 'A role', loyalty: 'Loyalty' } as Record<string, string>)[report.priority] : null;
-          return (
-            <div className="pb-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-display text-2xl leading-none truncate">{negotiation.playerName}</div>
-                  <div className="mt-1 text-xs text-[var(--text-sec)]">
-                    {negotiation.position} · {negotiation.playerAge}
-                    {wants && <> · Wants: <span className="font-bold text-[var(--text)]">{wants}</span></>}
-                  </div>
-                </div>
-                {hasScouting
-                  ? <OvrBadge ovr={negotiation.playerOverall} className="shrink-0" />
-                  : <OvrBadge ovr={negotiation.playerOverall} text={ovrBand(negotiation.playerOverall)} className="shrink-0" />}
-              </div>
-
-              {lastPlayerMsg && negotiation.outcome === 'pending' && (
-                <div className={`mt-3 rounded-lg px-3 py-2 text-sm ${
-                  lastPlayerMsg.type === 'counter' ? 'bg-amber-50 border border-amber-200 text-amber-700'
-                    : lastPlayerMsg.type === 'negative' ? 'bg-red-50 border border-red-200 text-red-600'
-                    : 'bg-[var(--surface-2)] text-[var(--text)]'
-                }`}>
-                  {lastPlayerMsg.text}
-                </div>
-              )}
-
-              {negotiation.outcome === 'accepted' && (
-                <div className="mt-4 bg-green-50 border border-green-600 rounded-xl p-4 text-center">
-                  <div className="font-display text-2xl text-green-600">Signed!</div>
-                  <div className="text-sm text-green-600">
-                    ${negotiation.currentOfferSalary}M/yr for {negotiation.currentOfferYears} year{negotiation.currentOfferYears > 1 ? 's' : ''}
-                  </div>
-                  <button type="button" onClick={closeNegotiation} className="mt-3 h-11 w-full rounded-lg bg-[var(--surface)] border border-green-600/40 text-sm font-bold text-green-700">
-                    Done
-                  </button>
-                </div>
-              )}
-
-              {negotiation.outcome === 'rejected' && (
-                <div className="mt-4 bg-red-50 border border-red-600 rounded-xl p-4 text-center">
-                  <div className="font-display text-2xl text-red-600">Rejected</div>
-                  <div className="text-sm text-red-600">
-                    {lastNegative?.text ?? lastPlayerMsg?.text ?? `${negotiation.playerName} rejected your offer and walked away.`}
-                  </div>
-                  <button type="button" onClick={walkAway} className="mt-3 h-11 w-full rounded-lg bg-[var(--surface)] border border-red-600/40 text-sm font-bold text-red-700">
-                    Dismiss
-                  </button>
-                </div>
-              )}
-
-              {negotiation.outcome === 'pending' && (
-                <>
-                  <div className="mt-4 flex items-end justify-between gap-3">
-                    <M2Label className="pb-1.5">Salary / yr</M2Label>
-                    <div className="m2-num text-[32px] leading-none">${offerSalary.toFixed(1)}M</div>
-                  </div>
-                  {overCap ? (
-                    <div className="mt-2 text-xs text-red-600">
-                      Locked at the league minimum (${LEAGUE_MINIMUM_SALARY}M/yr) while you&apos;re over the cap.
-                    </div>
-                  ) : (
-                    <>
-                      <input
-                        type="range"
-                        className="m2-range mt-1"
-                        min={minSalary}
-                        max={maxSalary}
-                        step={0.1}
-                        value={offerSalary}
-                        aria-label="Offer salary ($M per year)"
-                        style={{ '--m2-fill': `${fillPct}%` } as React.CSSProperties}
-                        onChange={e => { setOfferSalary(clampSalary(parseFloat(e.target.value))); setOfferPreset(null); }}
-                      />
-                      <div className="flex items-center justify-between text-xs text-[var(--text-sec)]">
-                        <span>Asking <span className="font-bold text-amber-600">${Math.round(ask * 10) / 10}M</span></span>
-                        <span>Cap after: <span className={`font-bold ${capAfter >= 0 ? 'text-green-600' : 'text-red-600'}`}>{capAfter < 0 ? '−' : ''}${Math.abs(capAfter).toFixed(1)}M</span></span>
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        {presets.map(pr => (
-                          <Chip
-                            key={pr.id}
-                            active={offerPreset === pr.id}
-                            onClick={() => { setOfferSalary(clampSalary(ask * pr.pct)); setOfferPreset(pr.id); }}
-                          >
-                            {pr.label}
-                          </Chip>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  <M2Label className="mt-4 mb-2">Years</M2Label>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(yr => (
-                      <Chip key={yr} tone="solid" active={offerYears === yr} onClick={() => setOfferYears(yr)}>{yr}</Chip>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 flex items-center gap-3">
-                    <span className="text-xs text-[var(--text-sec)]">Interest</span>
-                    <Meter className="flex-1" tone={interest.tone} pct={((satisfaction - 0.6) / 0.45) * 100} />
-                    <span className={`text-xs font-bold ${interest.text}`}>{interest.label}</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={submitOffer}
-                    className="mt-4 h-12 w-full rounded-lg bg-blue-600 text-white text-[15px] font-bold shadow-sm shadow-blue-600/30 active:bg-blue-700 touch-manipulation"
-                  >
-                    Make Offer · {offerYears} yr{offerYears > 1 ? 's' : ''} / ${(offerSalary * offerYears).toFixed(1)}M
-                  </button>
-                  <div className="mt-1 flex items-center justify-between">
-                    <button type="button" onClick={walkAway} className="h-10 px-1 text-sm font-semibold text-[var(--text-sec)]">
-                      Walk Away
-                    </button>
-                    {np && (
-                      <button
-                        type="button"
-                        onClick={() => { closeNegotiation(); setSelectedPlayerId(np.id); }}
-                        className="h-10 px-1 text-sm font-semibold text-blue-600"
-                      >
-                        Player card →
-                      </button>
-                    )}
-                  </div>
-
-                  {np && effectivePursuitState && (
-                    <details className="mt-1 border-t border-[var(--border)] pt-2">
-                      <summary className="m2-label cursor-pointer py-1.5 list-none [&::-webkit-details-marker]:hidden flex items-center justify-between">
-                        <span>Intel report{report ? ' ✅' : ''}</span>
-                        <span aria-hidden="true">›</span>
-                      </summary>
-                      {renderAgentDetails(np, marketSalaryOf(np))}
-                    </details>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })()}
-      </BottomSheet>
+      {/* Phones: the offer sheet. Same negotiation as the card above; it
+          steps aside while the player card is open and comes back after. */}
+      {(() => {
+        const np = negotiation ? players.find(p => p.id === negotiation.playerId) : undefined;
+        const report = negotiation ? effectivePursuitState?.intelReports[negotiation.playerId] : undefined;
+        const wants = report
+          ? ({ money: 'Money', winning: 'Winning', role: 'A role', loyalty: 'Loyalty' } as Record<string, string>)[report.priority] ?? null
+          : null;
+        const ovr = negotiation?.playerOverall ?? 0;
+        return (
+          <OfferSheet
+            negotiation={negotiation}
+            open={!selectedPlayerId}
+            onClose={negotiation?.outcome === 'rejected' ? walkAway : closeNegotiation}
+            offerSalary={offerSalary}
+            onSalaryChange={setOfferSalary}
+            offerYears={offerYears}
+            onYearsChange={setOfferYears}
+            minSalary={LEAGUE_MINIMUM_SALARY}
+            maxSalary={Math.max((negotiation?.askingSalary ?? 0) * 2, 5)}
+            salaryLockedNote={overCap ? <>Locked at the league minimum (${LEAGUE_MINIMUM_SALARY}M/yr) while you&apos;re over the cap.</> : undefined}
+            capAfter={Math.round((capSpace - offerSalary) * 10) / 10}
+            wants={wants}
+            ovrText={hasScouting ? undefined : (ovr >= 75 ? '75+' : ovr >= 65 ? '65–74' : ovr >= 55 ? '55–64' : '<55')}
+            acceptedTitle="Signed!"
+            acceptedText={negotiation ? `$${negotiation.currentOfferSalary}M/yr for ${negotiation.currentOfferYears} year${negotiation.currentOfferYears > 1 ? 's' : ''}` : ''}
+            rejectedText={negotiation ? `${negotiation.playerName} rejected your offer and walked away.` : ''}
+            onSubmit={submitOffer}
+            onWalkAway={walkAway}
+            onDone={closeNegotiation}
+            onDismiss={walkAway}
+            onPlayerCard={np ? () => setSelectedPlayerId(np.id) : undefined}
+          >
+            {np && effectivePursuitState && (
+              <details className="mt-1 border-t border-[var(--border)] pt-2">
+                <summary className="offer-label cursor-pointer py-1.5 list-none [&::-webkit-details-marker]:hidden flex items-center justify-between">
+                  <span>Intel report{report ? ' ✅' : ''}</span>
+                  <span aria-hidden="true">›</span>
+                </summary>
+                {renderAgentDetails(np, Math.round(estimateSalary(np.ratings.overall, np.position, np.age, np.potential, ci, np.subPosition) * decay * 10) / 10)}
+              </details>
+            )}
+          </OfferSheet>
+        );
+      })()}
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
+
     </GameShell>
   );
 }
