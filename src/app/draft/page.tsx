@@ -27,6 +27,7 @@ import { FilmReviewContent } from '@/components/draft/FilmReviewContent';
 import { InPersonEvalContent } from '@/components/draft/InPersonEvalContent';
 import { FullEvalContent } from '@/components/draft/FullEvalContent';
 import { TradePickModal } from '@/components/draft/TradePickModal';
+import { ActionBar, M2Card, RangeBar, UnderlineTabs, ovrTone } from '@/components/mobile/m2';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -1201,6 +1202,10 @@ export default function DraftPage() {
   const [prospectFilter, setProspectFilter] = useState<'all' | 'starred' | 'scouted'>('all');
   const [showImportModal, setShowImportModal] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
+  // Phones (mobile v2): which list tab is showing, and the prospect picked
+  // for the sticky Draft button.
+  const [mobileTab, setMobileTab] = useState<'best' | 'needs' | 'board'>('best');
+  const [draftSelectionId, setDraftSelectionId] = useState<string | null>(null);
 
   // Spectator early-return placed AFTER all hooks. Same hooks-rule fix as
   // /trades — was crashing the GameShell error boundary on /draft when an
@@ -1471,12 +1476,174 @@ export default function DraftPage() {
       return { pick, player, team };
     });
 
+  // Starred-first, then by projected rank: spends 1 point per unscouted
+  // prospect until the points or the board run out.
+  const autoScoutBoard = () => {
+    const queue = [...allProspects].sort((a, b) => {
+      const aS = a.isStarred ? 0 : 1;
+      const bS = b.isStarred ? 0 : 1;
+      if (aS !== bS) return aS - bS;
+      return (a.projectedRank ?? 999) - (b.projectedRank ?? 999);
+    });
+    let spent = 0;
+    for (const p of queue) {
+      // Honor unlimited-tier vs explicit point check via the action's own gating
+      if (isPlayerScouted(p.id)) continue;
+      const ok = scoutPlayer(p.id);
+      if (!ok) break;
+      spent++;
+      // Safety cap so even an unlimited tier can't run away
+      if (spent >= 500) break;
+    }
+  };
+
+  /** A prospect's expanded report: the same content under a board row (sm+)
+   *  and inside a prospect card (phones). */
+  const renderProspectDetails = (player: Player, lo: number, hi: number) => (
+    <>
+                          {!hasScouting ? (
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                              <div className="text-[var(--text-sec)]">
+                                <strong className="text-[var(--text)]">{player.firstName} {player.lastName}</strong>
+                                {' · '}{player.position}{' · '}Age {player.age}{player.college ? ` · ${player.college}` : ''}
+                                <div className="text-xs mt-1">Detailed scouting (exact OVR, ratings, film review, in-person observations) is a Premium feature.</div>
+                              </div>
+                              <Link href="/pricing" className="text-xs font-bold text-blue-600 hover:underline whitespace-nowrap">
+                                Unlock Premium →
+                              </Link>
+                            </div>
+                          ) : (() => {
+                            // Premium users always see the full evaluation —
+                            // no scout-points gate. filmData/inPersonData/
+                            // fullData fall back to the always-generated
+                            // evaluation if the user hasn't manually opened
+                            // those modals yet.
+                            const filmData = ss?.filmReviews?.[player.id];
+                            const inPersonData = ss?.inPersonEvals?.[player.id];
+                            const fullData = ss?.fullEvals?.[player.id];
+                            const evaluation = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, 2);
+                            return (
+                              <div className="space-y-3">
+                                {/* Prospect Tag in expanded view */}
+                                {(() => {
+                                  const tag = getProspectTag(player, true);
+                                  if (!tag) return null;
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-xs font-bold px-2 py-1 rounded ${tag.bg} ${tag.color}`}>{tag.label}</span>
+                                      <span className="text-[10px] text-[var(--text-sec)]">
+                                        {tag.label === 'Generational' ? 'Rare, franchise-altering talent.' :
+                                         tag.label === 'Pro-Ready' ? 'Can contribute from Day 1.' :
+                                         tag.label === 'High Ceiling' ? 'Needs development but sky-high upside.' :
+                                         tag.label === 'Diamond in the Rough' ? 'Undervalued — could outperform draft position.' :
+                                         tag.label === 'Project' ? 'Raw prospect who needs time.' :
+                                         tag.label === 'Safe Pick' ? 'What you see is what you get.' :
+                                         tag.label === 'Bust Risk' ? 'Scouts have concerns about long-term viability.' : ''}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                                {/* Full evaluation at top (or film review summary if full eval failed) */}
+                                {fullData ? (
+                                  <FullEvalContent evalData={fullData} player={player} fitBadge={evaluation.fitBadge} />
+                                ) : filmData ? (
+                                  <FilmReviewContent data={filmData} evaluation={evaluation} />
+                                ) : null}
+
+                                {/* Scout's Take + Roster Comparison */}
+                                <div className="grid grid-cols-2 gap-3 text-xs border-t border-[var(--border)] pt-3">
+                                  <div>
+                                    <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-0.5">Scout&apos;s Take</div>
+                                    <p className="text-[var(--text)] leading-relaxed">{evaluation.scoutsTake}</p>
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-0.5">Roster Comparison</div>
+                                    <p className="text-[var(--text)] leading-relaxed">{evaluation.rosterComparison}</p>
+                                  </div>
+                                </div>
+
+                                {/* Collapsible Film Review */}
+                                {filmData && (
+                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden">
+                                    <summary className="px-3 py-2 bg-sky-50 text-sky-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-sky-100 transition-colors">
+                                      📋 Film Review
+                                    </summary>
+                                    <div className="px-3 py-2.5 border-t border-[var(--border)]">
+                                      <FilmReviewContent data={filmData} evaluation={evaluation} />
+                                    </div>
+                                  </details>
+                                )}
+
+                                {/* Collapsible In-Person Observations */}
+                                {inPersonData && (
+                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden">
+                                    <summary className="px-3 py-2 bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-indigo-100 transition-colors">
+                                      👁 In-Person Observations
+                                    </summary>
+                                    <div className="px-3 py-2.5 border-t border-[var(--border)]">
+                                      <InPersonEvalContent evalData={inPersonData!} filmData={filmData!} player={player} />
+                                    </div>
+                                  </details>
+                                )}
+
+                                {/* College stats — 305mike 4/29: panel was
+                                    disappearing once the prospect was scouted
+                                    because the post-scout view replaced the
+                                    pre-scout panel entirely. Now stacked
+                                    below the eval surfaces and visible in
+                                    both states. */}
+                                {player.collegeStats && (
+                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden" open>
+                                    <summary className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-amber-100 transition-colors">
+                                      🏫 College Stats {player.heismanWinner ? '· 🏆 Heisman Winner' : player.heismanFinalist ? '· 🏆 Heisman Finalist' : ''}
+                                    </summary>
+                                    <div className="px-3 py-2.5 border-t border-[var(--border)] flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text)]">
+                                      <span className="text-[var(--text-sec)]">{player.college ?? 'Unknown'} · {player.collegeStats.seasons}yr · {player.collegeStats.gamesPlayed}G</span>
+                                      {player.collegeStats.passYards != null && <span>Pass: {player.collegeStats.passYards.toLocaleString()} yds / {player.collegeStats.passTDs} TD / {player.collegeStats.passINTs} INT</span>}
+                                      {player.collegeStats.rushYards != null && player.position !== 'QB' && <span>Rush: {player.collegeStats.rushYards.toLocaleString()} yds / {player.collegeStats.rushTDs} TD</span>}
+                                      {player.collegeStats.receptions != null && <span>Rec: {player.collegeStats.receptions} / {player.collegeStats.recYards?.toLocaleString()} yds / {player.collegeStats.recTDs} TD</span>}
+                                      {player.collegeStats.tackles != null && <span>TKL: {player.collegeStats.tackles}</span>}
+                                      {player.collegeStats.sacks != null && <span>SCK: {player.collegeStats.sacks}</span>}
+                                      {player.collegeStats.interceptions != null && <span>INT: {player.collegeStats.interceptions}</span>}
+                                      {player.collegeStats.fieldGoalPct != null && <span>FG%: {player.collegeStats.fieldGoalPct}%</span>}
+                                    </div>
+                                  </details>
+                                )}
+                              </div>
+                            );
+                          })()}
+    </>
+  );
+
+  // ── Phones (mobile v2) ────────────────────────────────────────────────
+  // Positions the roster is genuinely short at: same rule as the board's
+  // "Fills Need" tag.
+  const realNeedPositions = allMyNeeds
+    .filter(n => {
+      const target = Math.ceil((n.limits.min + n.limits.max) / 2);
+      return n.count < n.limits.min || (n.count < target && n.starterOvr < 72);
+    })
+    .map(n => n.position);
+  const needTabPositions = realNeedPositions.length > 0 ? realNeedPositions : myNeeds.slice(0, 3).map(n => n.position);
+  const mobileProspects = allProspects
+    .filter(p => positionFilter === 'ALL' || p.position === positionFilter)
+    .filter(p => {
+      if (mobileTab === 'needs' && !needTabPositions.includes(p.position)) return false;
+      if (mobileTab === 'board' && !p.isStarred) return false;
+      const query = searchQuery.trim().toLowerCase();
+      return !query || `${p.firstName} ${p.lastName}`.toLowerCase().includes(query);
+    })
+    .slice(0, 50);
+  const draftSelection = draftSelectionId ? allProspects.find(p => p.id === draftSelectionId) ?? null : null;
+  const scoutPointsLeft = ss?.scoutPoints ?? 0;
+  const picksUntilUser = draftOrder.indexOf(userTeamId);
+
   return (
     <GameShell>
       {/* Phones: the board comes straight after On The Clock; mock draft,
           import/export and the ad slot move below it. */}
       <div className="max-w-7xl mx-auto flex flex-col gap-4 sm:block sm:space-y-4">
-        <h2 className="text-2xl font-black">Draft</h2>
+        <h2 className="hidden sm:block text-2xl font-black">Draft</h2>
 
         {/* Import Draft Class Modal */}
         {showImportModal && (
@@ -1547,7 +1714,9 @@ export default function DraftPage() {
           </div>
         )}
 
-        {/* On The Clock */}
+        {/* On The Clock — sm and up. Phones get the hero + cards below, and
+            the sim / draft actions in the sticky bar. */}
+        <div className="hidden sm:block">
         <OnTheClockSection
           currentTeam={currentTeam}
           currentRound={currentRound}
@@ -1596,6 +1765,198 @@ export default function DraftPage() {
             router.push('/roster');
           } : undefined}
         />
+        </div>
+
+        {/* ── Phones: hero, tabs, prospect cards (mobile v2, screen 3b) ── */}
+        <div className="sm:hidden flex flex-col gap-3">
+          <div className={`rounded-xl px-4 py-3 flex items-end justify-between gap-3 text-white ${isUserPick && !draftComplete ? 'bg-blue-600' : 'bg-slate-800'}`}>
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-80">
+                {draftComplete ? `Season ${draftYear}` : `Round ${currentRound} · Pick ${currentPickInRound}`}
+              </div>
+              <div className="font-display text-2xl leading-tight truncate">
+                {draftComplete ? 'Draft complete' : isUserPick ? "You're on the clock" : `${currentTeam?.abbreviation ?? '—'} on the clock`}
+              </div>
+              {!draftComplete && !isUserPick && (
+                <div className="text-[11px] opacity-80">
+                  {picksUntilUser > 0 ? `Your pick is ${picksUntilUser} away` : 'You have no picks left'}
+                </div>
+              )}
+            </div>
+            {ss && (
+              <div className="shrink-0 text-right">
+                <div className="m2-num text-2xl leading-none">{scoutingAllocations.isUnlimited ? '∞' : scoutPointsLeft}</div>
+                <div className="text-[10px] opacity-80 mt-0.5">scout pts left</div>
+              </div>
+            )}
+          </div>
+
+          {!draftComplete && (
+            <>
+              <UnderlineTabs
+                className="px-1"
+                value={mobileTab}
+                onChange={setMobileTab}
+                tabs={[
+                  { id: 'best', label: 'Best available' },
+                  { id: 'needs', label: needTabPositions.length > 0 ? `Needs: ${needTabPositions.slice(0, 2).join(' · ')}` : 'Needs' },
+                  { id: 'board', label: 'My board' },
+                ]}
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search player"
+                  className="h-10 min-w-0 flex-1 px-3 text-sm rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+                />
+                <select
+                  value={positionFilter}
+                  onChange={(event) => setPositionFilter(event.target.value as Position | 'ALL')}
+                  aria-label="Position"
+                  className="h-10 px-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+                >
+                  <option value="ALL">All</option>
+                  {POSITIONS.map((position) => (
+                    <option key={position} value={position}>{position}</option>
+                  ))}
+                </select>
+                {ss && (scoutingAllocations.isUnlimited || scoutPointsLeft > 0) && (
+                  <button
+                    type="button"
+                    onClick={autoScoutBoard}
+                    className="h-10 px-3 shrink-0 text-xs font-bold rounded-lg bg-[var(--surface-2)] text-[var(--text)] active:bg-[var(--border)]"
+                  >
+                    Auto-scout
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {mobileProspects.map((player) => {
+                  const scout = draftScoutingData[player.id];
+                  const isScouted = scout?.deepScouted === true || isPlayerScouted(player.id);
+                  const err = scout?.error ?? 8;
+                  const lo = scout ? Math.max(20, scout.scoutedOvr - err) : Math.max(20, player.ratings.overall - err);
+                  const hi = scout ? Math.min(99, scout.scoutedOvr + err) : Math.min(99, player.ratings.overall + err);
+                  const fullD = ss?.fullEvals?.[player.id];
+                  // What the board shows for this account: an exact rating once
+                  // scouted (or on Premium), otherwise only the coarse bucket.
+                  const exact = fullD ? fullD.exactOvr : hasScouting ? player.ratings.overall : null;
+                  const bucket = player.ratings.overall >= 75 ? { lo: 75, hi: 99, text: '75+' }
+                    : player.ratings.overall >= 65 ? { lo: 65, hi: 74, text: '65–74' }
+                    : player.ratings.overall >= 55 ? { lo: 55, hi: 64, text: '55–64' }
+                    : { lo: 40, hi: 54, text: 'Under 55' };
+                  const isSelected = draftSelectionId === player.id;
+                  const isExpanded = expandedProspectId === player.id;
+                  const outOfPoints = scoutPointsLeft <= 0;
+                  const need = realNeedPositions.includes(player.position);
+                  const rec = !isUserPick ? null
+                    : player.id === bestAvailable?.id ? 'Best available'
+                    : player.id === bestFit?.id ? (bestFitResult.isNeedMatch ? 'Best fit' : null)
+                    : player.id === scoutsPick?.id ? 'Scouts like him'
+                    : null;
+                  const tag = getProspectTag(player, isScouted);
+                  const size = [player.height, player.weight ? `${player.weight}` : null].filter(Boolean).join(' ');
+                  return (
+                    <M2Card
+                      key={player.id}
+                      selected={isSelected}
+                      className="px-3 py-2.5"
+                      onClick={() => {
+                        setDraftSelectionId(player.id);
+                        setExpandedProspectId(isExpanded ? null : player.id);
+                      }}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        {hasScouting && (
+                          <div className="w-6 shrink-0 pt-0.5 text-center text-sm text-[var(--text-sec)] tabular-nums">
+                            {player.projectedRank ?? '—'}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[15px] font-semibold leading-tight truncate">{player.firstName[0]}. {player.lastName}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleStarProspect(player.id); }}
+                              className="shrink-0 w-8 h-8 -my-1.5 flex items-center justify-center"
+                              aria-label={player.isStarred ? 'Unstar prospect' : 'Star prospect'}
+                            >
+                              <span className={`text-base leading-none ${player.isStarred ? 'text-amber-500' : 'text-[var(--text-sec)]/40'}`}>
+                                {player.isStarred ? '★' : '☆'}
+                              </span>
+                            </button>
+                          </div>
+                          <div className="text-xs text-[var(--text-sec)] truncate">
+                            {[player.position, player.college ?? player.scoutingLabel, size].filter(Boolean).join(' · ')}
+                          </div>
+                          {(need || rec || tag || player.heismanWinner || player.heismanFinalist) && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                              {rec && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600">{rec}</span>}
+                              {need && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-100 text-green-700">Fills Need</span>}
+                              {tag && <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tag.bg} ${tag.color}`}>{tag.label}</span>}
+                              {player.heismanWinner
+                                ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800">🏆 Heisman</span>
+                                : player.heismanFinalist
+                                ? <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700">🏆 Finalist</span>
+                                : null}
+                            </div>
+                          )}
+                        </div>
+                        {fullD ? (
+                          <span className="shrink-0 h-11 px-3 inline-flex flex-col items-center justify-center rounded-lg text-xs font-bold bg-[var(--surface-2)] text-[var(--text-sec)]">
+                            Scouted
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (outOfPoints) { router.push('/pricing'); return; }
+                              scoutPlayer(player.id);
+                            }}
+                            className={`shrink-0 h-11 min-w-[72px] px-3 inline-flex flex-col items-center justify-center rounded-lg border leading-tight touch-manipulation ${
+                              outOfPoints
+                                ? 'text-amber-700 bg-amber-50 border-amber-200'
+                                : 'text-blue-600 bg-blue-500/10 border-blue-500/30 active:bg-blue-500/20'
+                            }`}
+                          >
+                            <span className="text-sm font-bold">{outOfPoints ? '🔒 Scout' : 'Scout'}</span>
+                            <span className="text-[10px] font-medium opacity-80">{outOfPoints ? 'No pts left' : '1 pt'}</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className={`mt-2 flex items-center gap-3 ${hasScouting ? 'pl-[34px]' : ''}`}>
+                        <RangeBar
+                          className="flex-1"
+                          lo={exact != null ? exact - 1 : bucket.lo}
+                          hi={exact != null ? exact + 1 : bucket.hi}
+                          strong={isSelected || exact != null}
+                        />
+                        <span className={`shrink-0 w-16 text-right text-sm font-bold tabular-nums ${exact != null ? ovrTone(exact).text : ''}`}>
+                          {exact != null ? `${exact} OVR` : bucket.text}
+                        </span>
+                      </div>
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-[var(--border)]" onClick={(e) => e.stopPropagation()}>
+                          {renderProspectDetails(player, lo, hi)}
+                        </div>
+                      )}
+                    </M2Card>
+                  );
+                })}
+                {mobileProspects.length === 0 && (
+                  <div className="py-8 text-center text-sm text-[var(--text-sec)]">
+                    {mobileTab === 'board'
+                      ? 'Star a prospect (☆) to put him on your board.'
+                      : 'No prospects match.'}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Mock Draft button + dropdown */}
         {nflMockDraft && nflMockDraft.length > 0 && (
@@ -1656,8 +2017,8 @@ export default function DraftPage() {
         <AdSlot size="leaderboard" slotId="5378648863" className="order-last sm:order-none" />
 
         <div className="grid grid-cols-12 gap-4">
-          {/* Top Prospects */}
-          <Card className="col-span-12 lg:col-span-6">
+          {/* Top Prospects — sm and up (phones use the cards above) */}
+          <Card className="hidden sm:block col-span-12 lg:col-span-6">
             <CardHeader>
               <CardTitle>Draft Board</CardTitle>
               <div className="flex items-center gap-2">
@@ -1742,25 +2103,7 @@ export default function DraftPage() {
                   {(scoutingAllocations.isUnlimited || (ss.scoutPoints ?? 0) > 0) && (
                     <button
                       type="button"
-                      onClick={() => {
-                        // Starred-first, then by projected rank
-                        const queue = [...allProspects].sort((a, b) => {
-                          const aS = a.isStarred ? 0 : 1;
-                          const bS = b.isStarred ? 0 : 1;
-                          if (aS !== bS) return aS - bS;
-                          return (a.projectedRank ?? 999) - (b.projectedRank ?? 999);
-                        });
-                        let spent = 0;
-                        for (const p of queue) {
-                          // Honor unlimited-tier vs explicit point check via the action's own gating
-                          if (isPlayerScouted(p.id)) continue;
-                          const ok = scoutPlayer(p.id);
-                          if (!ok) break;
-                          spent++;
-                          // Safety cap so even an unlimited tier can't run away
-                          if (spent >= 500) break;
-                        }
-                      }}
+                      onClick={autoScoutBoard}
                       className="ml-2 px-2 py-1 text-[11px] font-bold rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                       title="Auto-scout remaining board by board priority (starred first, then projected rank)"
                     >
@@ -1975,117 +2318,7 @@ export default function DraftPage() {
                     {isExpanded && (
                       <tr className="border-t border-[var(--border)]">
                         <td colSpan={7} className="px-4 py-3 bg-[var(--surface-2)]/50">
-                          {!hasScouting ? (
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <div className="text-[var(--text-sec)]">
-                                <strong className="text-[var(--text)]">{player.firstName} {player.lastName}</strong>
-                                {' · '}{player.position}{' · '}Age {player.age}{player.college ? ` · ${player.college}` : ''}
-                                <div className="text-xs mt-1">Detailed scouting (exact OVR, ratings, film review, in-person observations) is a Premium feature.</div>
-                              </div>
-                              <Link href="/pricing" className="text-xs font-bold text-blue-600 hover:underline whitespace-nowrap">
-                                Unlock Premium →
-                              </Link>
-                            </div>
-                          ) : (() => {
-                            // Premium users always see the full evaluation —
-                            // no scout-points gate. filmData/inPersonData/
-                            // fullData fall back to the always-generated
-                            // evaluation if the user hasn't manually opened
-                            // those modals yet.
-                            const filmData = ss?.filmReviews?.[player.id];
-                            const inPersonData = ss?.inPersonEvals?.[player.id];
-                            const fullData = ss?.fullEvals?.[player.id];
-                            const evaluation = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, 2);
-                            return (
-                              <div className="space-y-3">
-                                {/* Prospect Tag in expanded view */}
-                                {(() => {
-                                  const tag = getProspectTag(player, true);
-                                  if (!tag) return null;
-                                  return (
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-xs font-bold px-2 py-1 rounded ${tag.bg} ${tag.color}`}>{tag.label}</span>
-                                      <span className="text-[10px] text-[var(--text-sec)]">
-                                        {tag.label === 'Generational' ? 'Rare, franchise-altering talent.' :
-                                         tag.label === 'Pro-Ready' ? 'Can contribute from Day 1.' :
-                                         tag.label === 'High Ceiling' ? 'Needs development but sky-high upside.' :
-                                         tag.label === 'Diamond in the Rough' ? 'Undervalued — could outperform draft position.' :
-                                         tag.label === 'Project' ? 'Raw prospect who needs time.' :
-                                         tag.label === 'Safe Pick' ? 'What you see is what you get.' :
-                                         tag.label === 'Bust Risk' ? 'Scouts have concerns about long-term viability.' : ''}
-                                      </span>
-                                    </div>
-                                  );
-                                })()}
-                                {/* Full evaluation at top (or film review summary if full eval failed) */}
-                                {fullData ? (
-                                  <FullEvalContent evalData={fullData} player={player} fitBadge={evaluation.fitBadge} />
-                                ) : filmData ? (
-                                  <FilmReviewContent data={filmData} evaluation={evaluation} />
-                                ) : null}
-
-                                {/* Scout's Take + Roster Comparison */}
-                                <div className="grid grid-cols-2 gap-3 text-xs border-t border-[var(--border)] pt-3">
-                                  <div>
-                                    <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-0.5">Scout&apos;s Take</div>
-                                    <p className="text-[var(--text)] leading-relaxed">{evaluation.scoutsTake}</p>
-                                  </div>
-                                  <div>
-                                    <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-0.5">Roster Comparison</div>
-                                    <p className="text-[var(--text)] leading-relaxed">{evaluation.rosterComparison}</p>
-                                  </div>
-                                </div>
-
-                                {/* Collapsible Film Review */}
-                                {filmData && (
-                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden">
-                                    <summary className="px-3 py-2 bg-sky-50 text-sky-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-sky-100 transition-colors">
-                                      📋 Film Review
-                                    </summary>
-                                    <div className="px-3 py-2.5 border-t border-[var(--border)]">
-                                      <FilmReviewContent data={filmData} evaluation={evaluation} />
-                                    </div>
-                                  </details>
-                                )}
-
-                                {/* Collapsible In-Person Observations */}
-                                {inPersonData && (
-                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden">
-                                    <summary className="px-3 py-2 bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-indigo-100 transition-colors">
-                                      👁 In-Person Observations
-                                    </summary>
-                                    <div className="px-3 py-2.5 border-t border-[var(--border)]">
-                                      <InPersonEvalContent evalData={inPersonData!} filmData={filmData!} player={player} />
-                                    </div>
-                                  </details>
-                                )}
-
-                                {/* College stats — 305mike 4/29: panel was
-                                    disappearing once the prospect was scouted
-                                    because the post-scout view replaced the
-                                    pre-scout panel entirely. Now stacked
-                                    below the eval surfaces and visible in
-                                    both states. */}
-                                {player.collegeStats && (
-                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden" open>
-                                    <summary className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-amber-100 transition-colors">
-                                      🏫 College Stats {player.heismanWinner ? '· 🏆 Heisman Winner' : player.heismanFinalist ? '· 🏆 Heisman Finalist' : ''}
-                                    </summary>
-                                    <div className="px-3 py-2.5 border-t border-[var(--border)] flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text)]">
-                                      <span className="text-[var(--text-sec)]">{player.college ?? 'Unknown'} · {player.collegeStats.seasons}yr · {player.collegeStats.gamesPlayed}G</span>
-                                      {player.collegeStats.passYards != null && <span>Pass: {player.collegeStats.passYards.toLocaleString()} yds / {player.collegeStats.passTDs} TD / {player.collegeStats.passINTs} INT</span>}
-                                      {player.collegeStats.rushYards != null && player.position !== 'QB' && <span>Rush: {player.collegeStats.rushYards.toLocaleString()} yds / {player.collegeStats.rushTDs} TD</span>}
-                                      {player.collegeStats.receptions != null && <span>Rec: {player.collegeStats.receptions} / {player.collegeStats.recYards?.toLocaleString()} yds / {player.collegeStats.recTDs} TD</span>}
-                                      {player.collegeStats.tackles != null && <span>TKL: {player.collegeStats.tackles}</span>}
-                                      {player.collegeStats.sacks != null && <span>SCK: {player.collegeStats.sacks}</span>}
-                                      {player.collegeStats.interceptions != null && <span>INT: {player.collegeStats.interceptions}</span>}
-                                      {player.collegeStats.fieldGoalPct != null && <span>FG%: {player.collegeStats.fieldGoalPct}%</span>}
-                                    </div>
-                                  </details>
-                                )}
-                              </div>
-                            );
-                          })()}
+                          {renderProspectDetails(player, lo, hi)}
                         </td>
                       </tr>
                     )}
@@ -2354,6 +2587,28 @@ export default function DraftPage() {
         </div>
       </div>
 
+      {/* Phones: Trade pick / Draft <player>, pinned while you're on the clock. */}
+      {isUserPick && !draftComplete && (
+        <ActionBar
+          owner="page"
+          rows={[[
+            { key: 'trade-pick', label: 'Trade pick', variant: 'soft', onClick: () => setShowTradeModal(true), grow: 0.6 },
+            {
+              key: 'draft',
+              label: draftSelection ? `Draft ${draftSelection.firstName[0]}. ${draftSelection.lastName}` : 'Tap a player to draft',
+              variant: 'primary',
+              disabled: !draftSelection,
+              onClick: () => {
+                if (!draftSelection) return;
+                draftPlayer(draftSelection.id);
+                setDraftSelectionId(null);
+                setExpandedProspectId(null);
+              },
+              grow: 1.4,
+            },
+          ]]}
+        />
+      )}
       {showTradeModal && (
         <TradePickModal
           onClose={() => setShowTradeModal(false)}

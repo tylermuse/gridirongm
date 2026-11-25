@@ -191,14 +191,13 @@ export function GlobalBooth() {
     ? { moment: MOMENT_LABEL[narrative], topics: episode, fresh, onWatch: watch }
     : null;
 
-  // TopBar renders a fixed bottom action bar (Sim Week / Sim Season) on phones
-  // during the regular season only; clear it then, otherwise sit at the bottom.
-  const mobileBottomBar = phase === 'regular';
+  // Phones: sit just above the sticky action bar, whatever its height (it
+  // publishes --m2-bar-h; absent when no bar is showing).
 
   return (
     <>
       {!open && !onLiveGame && (
-        <div className={`fixed right-4 ${mobileBottomBar ? 'bottom-20' : 'bottom-4'} sm:bottom-5 sm:right-5 z-50 flex flex-col items-end gap-2 transition-all duration-200 ${tucked && !showCallout ? 'translate-y-28 opacity-0 pointer-events-none sm:translate-y-0 sm:opacity-100 sm:pointer-events-auto' : ''}`}>
+        <div className={`fixed right-4 bottom-[calc(var(--m2-bar-h,0px)+1rem)] sm:bottom-5 sm:right-5 z-50 flex flex-col items-end gap-2 transition-all duration-200 ${tucked && !showCallout ? 'translate-y-28 opacity-0 pointer-events-none sm:translate-y-0 sm:opacity-100 sm:pointer-events-auto' : ''}`}>
           {showCallout && (
             <div
               ref={calloutRef}
