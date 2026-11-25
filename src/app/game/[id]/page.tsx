@@ -2294,8 +2294,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
     return null;
   })();
-  const renderDefenseMenu = (es: ReturnType<LiveCoachEngine['getState']>) => (
+  const renderDefenseMenu = (es: ReturnType<LiveCoachEngine['getState']>, compact = false) => (
     <DefenseCallMenu
+      compact={compact}
       state={{
         quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
         timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
@@ -2577,12 +2578,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
         </div>
-        {sim3dOn && !pregameOpen && (
-          <p className="-mt-1 text-right text-[10px] text-[var(--text-sec)]">
-            3D player model: “American Football Player” by Stuffed Dog Digital,{' '}
-            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="underline">CC BY 4.0</a>
-          </p>
-        )}
+        {/* The 3D player model's CC BY 4.0 credit ("American Football Player"
+            by Stuffed Dog Digital) lives in the Credits section of /about. */}
 
         {/* ================================================================
             CALL THE PLAY — mobile only, directly under the field / 3D sim so
@@ -2595,10 +2592,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
           const fp = es.fieldPos;
           const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
-          if (defenseCallPending(es)) return <div data-play-call-slot className="lg:hidden">{renderDefenseMenu(es)}</div>;
+          if (defenseCallPending(es)) return <div data-play-call-slot className="lg:hidden">{renderDefenseMenu(es, true)}</div>;
           return (
             <div data-play-call-slot className="lg:hidden">
               <PlayCallMenu
+                compact
                 state={{
                   quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
                   timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,

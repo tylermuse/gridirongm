@@ -38,6 +38,10 @@ interface PlayCallMenuProps {
   onAutoSimRest: () => void;
   /** Sim the rest of this quarter (the user's way past play-calling every snap); hidden when not provided */
   onSimQuarter?: () => void;
+  /** Phones, under the field: drop the title/score row and the down-and-distance
+   *  row, which the score bug on the field already shows, so the calls get the
+   *  height. */
+  compact?: boolean;
   onToggleOff: () => void;
 }
 
@@ -70,7 +74,7 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
 /** Longest field goal the menu offers (LOS + 17). The NFL record is 66; past ~62 the make rate is a few percent at best. */
 const MAX_FG_YARDS = 62;
 
-export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTwoPointCall, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, defLook, lastRead, onPlayCall, onAutoSimRest, onSimQuarter, onToggleOff }: PlayCallMenuProps) {
+export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTwoPointCall, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, defLook, lastRead, onPlayCall, onAutoSimRest, onSimQuarter, onToggleOff, compact = false }: PlayCallMenuProps) {
   const [goingForIt, setGoingForIt] = useState(false);
   const fgYards = 100 - state.fieldPos + 17;
   const fgInRange = fgYards <= MAX_FG_YARDS;
@@ -89,6 +93,7 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTw
             cut off). Switched to flex-wrap + gap-y-1 so the score wraps to a
             second line when there's no horizontal room, instead of pushing
             the card beyond its container. */}
+        {!compact && (<>
         <div className="px-3 py-2 border-b border-[var(--border)] bg-purple-600 text-white">
           <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1">
             <div className="text-sm font-black">Call the Play</div>
@@ -111,6 +116,7 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingTw
             </span>
           )}
         </div>
+        </>)}
 
         {/* What the defense is showing — every call is better or worse against it (defensiveLooks.ts) */}
         {defLook && !awaitingKickoffChoice && !awaitingXpChoice && !awaitingTwoPointCall && (
