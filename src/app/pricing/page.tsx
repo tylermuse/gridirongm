@@ -116,19 +116,29 @@ export default function PricingPage() {
   const isComplimentaryPremium = (isFoundingMember || isAdmin) && !user?.email?.endsWith('@noemail.test');
 
   return (
-    <div className="min-h-screen py-16 px-4" style={{ backgroundColor: '#f0f4f8' }}>
+    <div
+      className="min-h-screen px-4 pt-4 pb-28 md:py-16"
+      style={{ backgroundColor: '#f0f4f8' }}
+    >
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-black mb-2">
+        {/* Header. On phones the back link sits on its own row at the top so
+            the title, price and upgrade button all land in the first screen. */}
+        <div className="text-center mb-8 md:mb-12">
+          <button
+            onClick={() => router.push('/')}
+            className="md:hidden block -ml-1 mb-3 px-1 py-2 text-sm text-blue-600"
+          >
+            ← Back to game
+          </button>
+          <h1 className="text-3xl md:text-4xl font-black mb-1 md:mb-2">
             <span className="text-blue-600">BS</span> Football Premium
           </h1>
-          <p className="text-lg text-[var(--text-sec)]">
+          <p className="text-base md:text-lg text-[var(--text-sec)]">
             One simple plan. Unlock the full experience.
           </p>
           <button
             onClick={() => router.push('/')}
-            className="mt-4 text-sm text-blue-600 hover:underline"
+            className="hidden md:inline-block mt-4 text-sm text-blue-600 hover:underline"
           >
             ← Back to game
           </button>
@@ -136,7 +146,7 @@ export default function PricingPage() {
 
         {/* Founder callout */}
         {isComplimentaryPremium && (
-          <div className="bg-gradient-to-r from-amber-100 to-yellow-50 border border-amber-300 rounded-2xl p-6 mb-8 text-center">
+          <div className="bg-gradient-to-r from-amber-100 to-yellow-50 border border-amber-300 rounded-2xl p-4 md:p-6 mb-8 text-center">
             <div className="text-2xl mb-1">⭐</div>
             <h2 className="text-lg font-black text-amber-900 mb-1">
               You&apos;re a Founding Member
@@ -148,20 +158,23 @@ export default function PricingPage() {
           </div>
         )}
 
-        {/* Tier cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+        {/* Tier cards. Stacked on phones with Premium first: this is the
+            Premium page, and the Free card is eleven rows tall. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 mb-8 md:mb-12">
           {/* Free tier */}
-          <div className="rounded-2xl border-2 border-[var(--border)] bg-white p-8 flex flex-col">
-            <div className="mb-6">
+          <div className="rounded-2xl border-2 border-[var(--border)] bg-white p-5 md:p-8 flex flex-col">
+            <div className="mb-4 md:mb-6">
               <h3 className="text-xl font-black">Free</h3>
               <p className="text-sm text-[var(--text-sec)] mt-1">
                 Full game, with ads
               </p>
             </div>
-            <div className="mb-6">
+            {/* The big price line only repeats the heading, so it is kept for
+                the side-by-side layout where it lines up with $4.99. */}
+            <div className="hidden md:block mb-6">
               <div className="text-4xl font-black">Free</div>
             </div>
-            <ul className="flex-1 space-y-3 mb-8">
+            <ul className="flex-1 space-y-2.5 md:space-y-3 mb-5 md:mb-8">
               {FREE_FEATURES.map(f => (
                 <li key={f} className="flex items-start gap-2 text-sm">
                   <span className="text-green-500 mt-0.5">✓</span>
@@ -196,21 +209,23 @@ export default function PricingPage() {
           </div>
 
           {/* Premium tier */}
-          <div className="relative rounded-2xl border-2 border-blue-600 bg-white p-8 flex flex-col shadow-lg">
+          <div className="relative order-first md:order-none rounded-2xl border-2 border-blue-600 bg-white p-5 pt-6 md:p-8 flex flex-col shadow-lg">
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-4 py-1 rounded-full">
               Recommended
             </div>
-            <div className="mb-6">
+            <div className="mb-3 md:mb-6">
               <h3 className="text-xl font-black">Premium</h3>
               <p className="text-sm text-[var(--text-sec)] mt-1">
                 Everything unlocked. No ads.
               </p>
             </div>
-            <div className="mb-6">
+            <div className="mb-4 md:mb-6">
               <span className="text-4xl font-black">$4.99</span>
               <span className="text-[var(--text-sec)]">/mo</span>
             </div>
-            <ul className="flex-1 space-y-3 mb-8">
+            {/* order-last on phones puts the list under the button; from md up
+                the list comes first so both cards' buttons share a baseline. */}
+            <ul className="order-last md:order-none flex-1 space-y-2.5 md:space-y-3 mt-5 md:mt-0 md:mb-8">
               {PREMIUM_FEATURES.map(f => (
                 <li key={f} className="flex items-start gap-2 text-sm">
                   <span className="text-green-500 mt-0.5">✓</span>
