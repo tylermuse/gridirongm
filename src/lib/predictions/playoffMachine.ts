@@ -96,10 +96,13 @@ export function favoritePicks(games: MachineGame[]): Picks {
 /**
  * Share links store only what differs from the favorites default:
  * ?p=13BUF.14KC (week + winner, picks against the favorite) and
- * ?u=13BUF (week + either team, games left unpicked; ?u=all = every game unpicked).
+ * ?u=13BUF (week + either team, games left unpicked). Starting from no picks,
+ * the link is ?u=all plus every pick (?p=12GB.13KC).
  * Older links (?p= with plain picks) still decode: picks of the favorite are no-ops.
  */
-export function encodeScenario(games: MachineGame[], picks: Picks): { p: string; u: string } {
+export function encodeScenario(games: MachineGame[], picks: Picks, base: 'favorites' | 'none' = 'favorites'): { p: string; u: string } {
+  // Starting from no picks: ?u=all plus every pick made.
+  if (base === 'none') return { p: encodePicks(games, picks), u: 'all' };
   const fav = favoritePicks(games);
   const p: string[] = [];
   const u: string[] = [];
