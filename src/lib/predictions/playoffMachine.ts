@@ -84,6 +84,45 @@ export function decodePicks(games: MachineGame[], encoded: string | null | undef
   return picks;
 }
 
+/** The model's favorite for every unplayed game (the machine's default picks). */
+export function favoritePicks(games: MachineGame[]): Picks {
+  const picks: Picks = {};
+  for (const g of games) {
+    if (!g.done) picks[gameKey(g)] = (g.homeWinProb ?? 0.5) >= 0.5 ? g.home : g.away;
+  }
+  return picks;
+}
+
+/**
+ * Share links store only what differs from the favorites default:
+ * ?p=13BUF.14KC (week + winner, picks against the favorite) and
+ * ?u=13BUF (week + either team, games left unpicked). Starting from no picks,
+ * the link is ?u=all plus every pick (?p=12GB.13KC).
+ * Older links (?p= with plain picks) still decode: picks of the favorite are no-ops.
+ */
+export function encodeScenario(games: MachineGame[], picks: Picks, base: 'favorites' | 'none' = 'favorites'): { p: string; u: string } {
+  // Starting from no picks: ?u=all plus every pick made.
+  if (base === 'none') return { p: encodePicks(games, picks), u: 'all' };
+  const fav = favoritePicks(games);
+  const p: string[] = [];
+  const u: string[] = [];
+  for (const g of games) {
+    if (g.done) continue;
+    const k = gameKey(g);
+    if (!picks[k]) u.push(`${g.week}${g.home}`);
+    else if (picks[k] !== fav[k]) p.push(`${g.week}${picks[k]}`);
+  }
+  const open = games.filter((g) => !g.done).length;
+  return { p: p.join('.'), u: u.length && u.length === open ? 'all' : u.join('.') };
+}
+
+export function decodeScenario(games: MachineGame[], p: string | null | undefined, u: string | null | undefined): Picks {
+  if (u === 'all') return decodePicks(games, p);
+  const picks: Picks = { ...favoritePicks(games), ...decodePicks(games, p) };
+  for (const k of Object.keys(decodePicks(games, u))) delete picks[k];
+  return picks;
+}
+
 function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {

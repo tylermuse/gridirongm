@@ -4,8 +4,9 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSPropert
 import Link from 'next/link';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import {
-  decodePicks,
-  encodePicks,
+  decodeScenario,
+  encodeScenario,
+  favoritePicks,
   gameKey,
   projectSeason,
   runPlayoffMachine,
@@ -41,6 +42,9 @@ const SIMS = 2000;
 const CONFS = ['AFC', 'NFC'] as const;
 type Conf = (typeof CONFS)[number];
 type View = 'games' | 'picture' | 'standings';
+/** Starting point the user toggles between; picks are edited on top of it. */
+type Mode = 'favorites' | 'none';
+const NO_PICKS: Picks = {};
 
 function pct(v: number): string {
   if (v >= 99.95) return '100';
@@ -103,12 +107,14 @@ export default function PlayoffMachine({ teams, games }: Props) {
     return m;
   }, [teams, games]);
 
-  const [picks, setPicks] = useState<Picks>({});
+  // Every game starts picked for the model's favorite; the user flips or clears from there.
+  const defaultPicks = useMemo(() => favoritePicks(games), [games]);
+  const [picks, setPicks] = useState<Picks>(defaultPicks);
+  const [mode, setMode] = useState<Mode>('favorites');
   const [focus, setFocus] = useState<string>('');
   const [week, setWeek] = useState<number>(weeks[0] ?? 0);
   const [conf, setConf] = useState<Conf>('AFC');
   const [view, setView] = useState<View>('games');
-  const [copied, setCopied] = useState(false);
   // Simulated odds can differ by a point between Node and the browser
   // (floating-point), so they render only after hydration to avoid a
   // text mismatch that makes React throw away the server HTML.
@@ -117,21 +123,28 @@ export default function PlayoffMachine({ teams, games }: Props) {
   const focusRef = useRef<HTMLElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
-  const baseline = useMemo(() => runPlayoffMachine(teams, games, {}, SIMS), [teams, games]);
+  // Swings are measured against the chosen starting point.
+  const basePicks = mode === 'favorites' ? defaultPicks : NO_PICKS;
+  const baseline = useMemo(() => runPlayoffMachine(teams, games, basePicks, SIMS), [teams, games, basePicks]);
   const baseBy = useMemo(() => new Map(baseline.teams.map((t) => [t.abbrev, t])), [baseline]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const fromUrl = decodePicks(games, q.get('p'));
+    const hasScenario = q.has('p') || q.has('u');
+    const fromUrl = hasScenario ? decodeScenario(games, q.get('p'), q.get('u')) : null;
     const team = (q.get('team') ?? '').toUpperCase();
     // Reading the address bar is a one-time sync from outside React; it can't
     // happen during render without breaking hydration of the static page.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (Object.keys(fromUrl).length) setPicks(fromUrl);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (q.get('u') === 'all') {
+      setMode('none');
+      setPicks(q.get('p') ? fromUrl! : NO_PICKS);
+    } else if (fromUrl) setPicks(fromUrl);
     if (byAbbrev.has(team)) {
       setFocus(team);
       setConf(byAbbrev.get(team)!.conference === 'NFC' ? 'NFC' : 'AFC');
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
     loaded.current = true;
     setHydrated(true);
   }, [games, byAbbrev]);
@@ -140,24 +153,32 @@ export default function PlayoffMachine({ teams, games }: Props) {
   const deferredPicks = useDeferredValue(picks);
   const busy = deferredPicks !== picks;
   const result: MachineResult | null = useMemo(
-    () => (Object.keys(deferredPicks).length ? runPlayoffMachine(teams, games, deferredPicks, SIMS) : null),
-    [deferredPicks, teams, games],
+    () => (deferredPicks === basePicks ? null : runPlayoffMachine(teams, games, deferredPicks, SIMS)),
+    [deferredPicks, basePicks, teams, games],
   );
   const proj = useMemo(() => projectSeason(teams, games, picks), [teams, games, picks]);
 
   useEffect(() => {
     if (!loaded.current) return;
     const q = new URLSearchParams(window.location.search);
-    const enc = encodePicks(games, picks);
-    if (enc) q.set('p', enc); else q.delete('p');
+    const enc = encodeScenario(games, picks, mode);
+    if (enc.p) q.set('p', enc.p); else q.delete('p');
+    if (enc.u) q.set('u', enc.u); else q.delete('u');
     if (focus) q.set('team', focus.toLowerCase()); else q.delete('team');
     const s = q.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}`);
-  }, [picks, focus, games]);
+  }, [picks, focus, games, mode]);
 
   const odds = new Map((result ?? baseline).teams.map((t) => [t.abbrev, t]));
   const delta = (a: string) => (odds.get(a)?.playoffs ?? 0) - (baseBy.get(a)?.playoffs ?? 0);
   const pickCount = Object.keys(picks).length;
+  const enc = encodeScenario(games, picks, mode);
+  // Edited = the user changed picks on top of the chosen starting point.
+  const edited = mode === 'favorites' ? !!(enc.p || enc.u) : pickCount > 0;
+  const applyMode = (m: Mode) => {
+    setMode(m);
+    setPicks(m === 'favorites' ? defaultPicks : NO_PICKS);
+  };
   const oddsPct = (a: string) => (hydrated ? pct(odds.get(a)?.playoffs ?? 0) : '–');
 
   /** Teams whose playoff odds your picks moved the most. */
@@ -204,13 +225,6 @@ export default function PlayoffMachine({ teams, games }: Props) {
       for (const g of remaining) if (g.home === focus || g.away === focus) next[gameKey(g)] = focus;
       return next;
     });
-  };
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked: the address bar already has the link */ }
   };
   const goWeek = (wk: number) => {
     setWeek(wk);
@@ -323,9 +337,7 @@ export default function PlayoffMachine({ teams, games }: Props) {
             }`}
           >
             Wk {wk}
-            {complete ? (
-              <span className={active ? 'text-emerald-300' : 'text-emerald-600'}><Check /></span>
-            ) : (
+            {!complete && (
               <span className={`text-[11px] font-semibold tabular-nums ${active ? 'text-gray-300' : 'text-gray-400'}`}>{done}/{total}</span>
             )}
           </button>
@@ -350,14 +362,14 @@ export default function PlayoffMachine({ teams, games }: Props) {
       </button>
     ))
   ) : (
-    <span className="text-xs text-gray-500">Tap a team to pick it. Your swings show up here.</span>
+    <span className="text-xs text-gray-500">{mode === 'favorites' ? 'Favorites are picked. Tap the other team for an upset.' : 'Tap a team to pick it. Swings show up here.'}</span>
   );
 
   const swingsPanel = (
     <section className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-baseline justify-between mb-2">
         <h2 className="text-sm font-extrabold text-gray-900">Biggest swings</h2>
-        <span className="text-[11px] text-gray-500" aria-live="polite">{busy ? 'Simulating…' : 'Playoff odds vs. no picks'}</span>
+        <span className="text-[11px] text-gray-500" aria-live="polite">{busy ? 'Simulating…' : mode === 'favorites' ? 'Playoff odds vs. favorites winning out' : 'Playoff odds vs. no picks'}</span>
       </div>
       {movers.length ? (
         <ul className="divide-y divide-gray-100">
@@ -374,7 +386,11 @@ export default function PlayoffMachine({ teams, games }: Props) {
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-gray-500 leading-snug">Pick a winner and you&apos;ll see whose playoff odds it helps and hurts, right here.</p>
+        <p className="text-sm text-gray-500 leading-snug">
+          {mode === 'favorites'
+            ? 'Every favorite is picked. Flip a game to an upset and you\'ll see whose playoff odds it helps and hurts, right here.'
+            : 'Nothing is picked, so every game is simulated. Pick a winner and you\'ll see whose playoff odds it helps and hurts, right here.'}
+        </p>
       )}
     </section>
   );
@@ -615,7 +631,6 @@ export default function PlayoffMachine({ teams, games }: Props) {
 
   // ─── Layout ───────────────────────────────────────────────────────────
 
-  const btn = 'h-10 px-3 rounded-lg text-sm font-semibold border border-gray-200 bg-white text-gray-800 hover:border-gray-400 disabled:opacity-40 disabled:hover:border-gray-200';
   const mobileTabs: Array<[View, string]> = [['games', 'Games'], ['picture', 'Picture'], ['standings', 'Standings']];
   const sideTab: View = view === 'standings' ? 'standings' : 'picture';
 
@@ -637,20 +652,34 @@ export default function PlayoffMachine({ teams, games }: Props) {
             ))}
           </select>
         </div>
-        <div className="grid grid-cols-3 sm:flex gap-2 sm:flex-1">
-          <button type="button" onClick={() => setWeekPicks('all', 'favorites')} className={btn}>
-            <span className="sm:hidden">All favorites</span><span className="hidden sm:inline">Pick all favorites</span>
-          </button>
-          <button type="button" onClick={() => setPicks({})} disabled={!pickCount} className={btn}>Reset</button>
-          <div className="hidden sm:block flex-1" />
-          <button
-            type="button"
-            onClick={copyLink}
-            disabled={!pickCount && !focus}
-            className="h-10 px-4 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600"
-          >
-            {copied ? 'Link copied' : 'Copy link'}
-          </button>
+        <div className="flex items-center gap-2 sm:flex-1">
+          <div className="flex-1 sm:flex-none grid grid-cols-2 h-10 rounded-lg bg-gray-200/70 p-0.5" role="radiogroup" aria-label="Starting picks">
+            {([['favorites', 'Favorites picked'], ['none', 'No picks']] as const).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={mode === m}
+                onClick={() => applyMode(m)}
+                className={`px-3 sm:px-4 rounded-md text-sm font-bold whitespace-nowrap transition flex items-center justify-center gap-1.5 ${
+                  mode === m ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {mode === m && <Check />}
+                {label}
+              </button>
+            ))}
+          </div>
+          {edited && (
+            <button
+              type="button"
+              onClick={() => applyMode(mode)}
+              title={mode === 'favorites' ? 'Undo your changes: every favorite picked again' : 'Undo your picks'}
+              className="shrink-0 h-10 px-3 rounded-lg text-sm font-semibold text-gray-600 hover:text-gray-900 hover:bg-white"
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
 
