@@ -3642,11 +3642,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
       {/* Pregame Show modal — Marcus + Tony preview the matchup before kickoff.
           Wide layout (ranks + picks side by side) with Kick Off pinned in the
-          footer so it's reachable without scrolling the whole show. */}
+          footer so it's reachable without scrolling the whole show. On phones
+          it is a full-width sheet docked to the bottom edge: a centred card
+          there loses 32px of width to its own margins and floats Kick Off
+          away from the thumb. dvh, not vh, so the browser toolbar can't cover
+          the footer. */}
       {pregameOpen && pregameShow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4">
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] shrink-0">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4">
+          <div className="bg-[var(--surface)] border-t sm:border border-[var(--border)] rounded-t-2xl sm:rounded-2xl max-w-4xl w-full max-h-[92dvh] sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between pl-4 pr-2 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-xl">🎙️</span>
                 <div className="min-w-0">
@@ -3657,14 +3661,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               <button
                 onClick={closePregame}
                 aria-label="Skip pregame show"
-                className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
+                className="shrink-0 w-11 h-11 sm:w-auto sm:h-auto flex items-center justify-center text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
               >
                 ✕
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-              <div className="grid gap-3 md:grid-cols-2">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-3 sm:space-y-4">
+              <div className="grid gap-2 sm:gap-3 md:grid-cols-2">
                 {homeTeam && awayTeam && (
                   <MatchupRankings homeTeam={homeTeam} awayTeam={awayTeam} teams={teams} players={players} />
                 )}
@@ -3688,17 +3692,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               {!isPremium && (
                 <Link
                   href="/pricing"
-                  className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-3 sm:px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
                 >
                   <span className="text-xs sm:text-sm text-[var(--text)]">
-                    ✨ <span className="font-bold">Go Premium</span> for a fully AI-written, game-specific pregame show every week — plus the live audio broadcast.
+                    ✨ <span className="font-bold">Go Premium</span>
+                    <span className="sm:hidden"> for an AI-written show and live audio.</span>
+                    <span className="hidden sm:inline"> for a fully AI-written, game-specific pregame show every week — plus the live audio broadcast.</span>
                   </span>
                   <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
                 </Link>
               )}
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
                   <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">In the Booth</div>
                   {aiPregameLoading && !aiPregame && (
                     <div className="text-[10px] text-[var(--text-sec)] animate-pulse">Marcus &amp; Tony are going deeper…</div>
@@ -3706,12 +3712,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 </div>
                 {pregameShow.exchanges.map((ex, i) => {
                   const c = ex.speakerId === 'stats' ? COMMENTATORS.stats : COMMENTATORS.hottake;
+                  // A second line from the same speaker reads as one turn: no
+                  // repeated avatar and name, and it sits closer to the first.
+                  const sameSpeaker = i > 0 && pregameShow.exchanges[i - 1].speakerId === ex.speakerId;
                   return (
-                    <div key={`${pregameShow.source}-${i}`} className="flex gap-2.5">
-                      <span className="text-lg shrink-0 leading-none mt-0.5">{c.avatar}</span>
-                      <div>
-                        <div className={`text-xs font-bold ${c.id === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>{c.name}</div>
-                        <div className="text-sm">{ex.text}</div>
+                    <div key={`${pregameShow.source}-${i}`} className={`flex gap-2.5 ${i === 0 ? '' : sameSpeaker ? 'mt-1.5' : 'mt-3'}`}>
+                      <span className={`text-lg shrink-0 leading-none mt-0.5 ${sameSpeaker ? 'invisible' : ''}`} aria-hidden={sameSpeaker || undefined}>{c.avatar}</span>
+                      <div className="min-w-0">
+                        {!sameSpeaker && (
+                          <div className={`text-xs font-bold ${c.id === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>{c.name}</div>
+                        )}
+                        <div className="text-sm leading-snug">{ex.text}</div>
                       </div>
                     </div>
                   );
@@ -3719,14 +3730,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-[var(--border)] px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-[var(--surface)]">
-              <label className="flex items-center gap-2 text-xs text-[var(--text-sec)] cursor-pointer order-2 sm:order-1">
+            <div className="shrink-0 border-t border-[var(--border)] px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-[var(--surface)]">
+              <label className="flex items-center justify-center sm:justify-start gap-2 py-1 sm:py-0 text-xs text-[var(--text-sec)] cursor-pointer order-2 sm:order-1">
                 <input type="checkbox" checked={pregameAutoOff} onChange={togglePregameAutoOff} />
                 Don&apos;t show automatically
               </label>
               <button
                 onClick={closePregame}
-                className="order-1 sm:order-2 sm:ml-auto w-full sm:w-auto sm:px-10 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all"
+                className="order-1 sm:order-2 sm:ml-auto w-full sm:w-auto sm:px-10 py-3 sm:py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all"
               >
                 🏈 Kick Off
               </button>
