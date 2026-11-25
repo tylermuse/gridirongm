@@ -301,8 +301,8 @@ export default function FreeAgencyPage() {
              "Free agency isn't available right now."}
           </p>
           <div className="flex gap-3 justify-center">
-            <a href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</a>
-            <a href="/roster" className="text-sm text-blue-600 hover:underline">View Roster</a>
+            <Link href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</Link>
+            <Link href="/roster" className="text-sm text-blue-600 hover:underline">View Roster</Link>
           </div>
         </div>
       </GameShell>
@@ -410,7 +410,7 @@ export default function FreeAgencyPage() {
     const winPct = totalGames > 0 ? (userTeamData!.record.wins + (userTeamData!.record.ties ?? 0) * 0.5) / totalGames : 0.5;
     const rosterAtPos = players.filter(p => p.teamId === userTeamId && p.position === player.position && !p.retired);
     const wouldStart = rosterAtPos.length === 0 || rosterAtPos.every(p => p.ratings.overall < player.ratings.overall);
-    const wasOnTeam = (player as any).draftTeamId === userTeamId || (player as any).acquiredVia === 'draft';
+    const wasOnTeam = player.draftTeamId === userTeamId || player.acquiredVia === 'draft';
     const neg = initNegotiation(player, salary, 'freeAgency', {
       hasIntelReport: hasIntel,
       userTeamContext: { winPct, wouldStart, wasOnTeam },
