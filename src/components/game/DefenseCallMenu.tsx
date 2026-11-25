@@ -36,6 +36,10 @@ interface DefenseCallMenuProps {
   onAutoSimRest: () => void;
   /** Sim the rest of this quarter (the user's way past play-calling every snap); hidden when not provided */
   onSimQuarter?: () => void;
+  /** Phones, under the field: drop the title/score row and the down-and-distance
+   *  row, which the score bug on the field already shows, so the calls get the
+   *  height. */
+  compact?: boolean;
 }
 
 const LOOK_COLORS: Record<DefensiveLook, string> = {
@@ -50,7 +54,7 @@ const LOOK_COLORS: Record<DefensiveLook, string> = {
  * The Live Coach menu for a CPU snap when the user is calling the defense: the offense's set is the read, and the
  * five looks are the calls (defensiveLooks.ts, "Calling the defense"). Sits in the same slot as PlayCallMenu.
  */
-export function DefenseCallMenu({ state, offSet, lastRead, timeoutsRemaining, pendingRunoff, onCall, onTimeout, onStopCalling, onAutoSimRest, onSimQuarter }: DefenseCallMenuProps) {
+export function DefenseCallMenu({ state, offSet, lastRead, timeoutsRemaining, pendingRunoff, onCall, onTimeout, onStopCalling, onAutoSimRest, onSimQuarter, compact = false }: DefenseCallMenuProps) {
   const ordinals = ['1st', '2nd', '3rd', '4th'];
   const downLabel = state.down >= 1 && state.down <= 4
     ? `${ordinals[state.down - 1]} & ${state.yardsToGo <= 0 || state.fieldPos + state.yardsToGo >= 100 ? 'Goal' : state.yardsToGo}`
@@ -62,6 +66,7 @@ export function DefenseCallMenu({ state, offSet, lastRead, timeoutsRemaining, pe
   return (
     <div className="w-full min-w-0" data-track-area="defense-call-menu">
       <div className="w-full max-w-full bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden">
+        {!compact && (<>
         <div className="px-3 py-2 border-b border-[var(--border)] bg-slate-700 text-white">
           <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1">
             <div className="text-sm font-black">Call the Defense</div>
@@ -83,6 +88,7 @@ export function DefenseCallMenu({ state, offSet, lastRead, timeoutsRemaining, pe
             </span>
           )}
         </div>
+        </>)}
 
         {/* What the offense is lined up in: it leans toward the play they are about to run */}
         <div className="px-3 py-2 border-b border-[var(--border)]" data-track-area="offensive-set">

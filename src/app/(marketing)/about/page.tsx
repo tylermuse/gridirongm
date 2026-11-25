@@ -66,6 +66,14 @@ export default function AboutPage() {
           community.
         </p>
 
+        <h2>Credits</h2>
+        <p>
+          The 3D players in the live game view are built from &ldquo;American Football Player&rdquo; by
+          Stuffed Dog Digital, licensed under{' '}
+          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>
+          {' '}and modified for the game.
+        </p>
+
         <h2>Join the Community</h2>
         <p>
           The best way to shape where BS Football goes next is to jump into our{' '}
