@@ -4,8 +4,9 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSPropert
 import Link from 'next/link';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import {
-  decodePicks,
-  encodePicks,
+  decodeScenario,
+  encodeScenario,
+  favoritePicks,
   gameKey,
   projectSeason,
   runPlayoffMachine,
@@ -103,7 +104,9 @@ export default function PlayoffMachine({ teams, games }: Props) {
     return m;
   }, [teams, games]);
 
-  const [picks, setPicks] = useState<Picks>({});
+  // Every game starts picked for the model's favorite; the user flips or clears from there.
+  const defaultPicks = useMemo(() => favoritePicks(games), [games]);
+  const [picks, setPicks] = useState<Picks>(defaultPicks);
   const [focus, setFocus] = useState<string>('');
   const [week, setWeek] = useState<number>(weeks[0] ?? 0);
   const [conf, setConf] = useState<Conf>('AFC');
@@ -117,17 +120,19 @@ export default function PlayoffMachine({ teams, games }: Props) {
   const focusRef = useRef<HTMLElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
-  const baseline = useMemo(() => runPlayoffMachine(teams, games, {}, SIMS), [teams, games]);
+  // Swings are measured against the default: favorites win out.
+  const baseline = useMemo(() => runPlayoffMachine(teams, games, defaultPicks, SIMS), [teams, games, defaultPicks]);
   const baseBy = useMemo(() => new Map(baseline.teams.map((t) => [t.abbrev, t])), [baseline]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const fromUrl = decodePicks(games, q.get('p'));
+    const hasScenario = q.has('p') || q.has('u');
+    const fromUrl = hasScenario ? decodeScenario(games, q.get('p'), q.get('u')) : null;
     const team = (q.get('team') ?? '').toUpperCase();
     // Reading the address bar is a one-time sync from outside React; it can't
     // happen during render without breaking hydration of the static page.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (Object.keys(fromUrl).length) setPicks(fromUrl);
+    if (fromUrl) setPicks(fromUrl);
     if (byAbbrev.has(team)) {
       setFocus(team);
       setConf(byAbbrev.get(team)!.conference === 'NFC' ? 'NFC' : 'AFC');
@@ -140,16 +145,17 @@ export default function PlayoffMachine({ teams, games }: Props) {
   const deferredPicks = useDeferredValue(picks);
   const busy = deferredPicks !== picks;
   const result: MachineResult | null = useMemo(
-    () => (Object.keys(deferredPicks).length ? runPlayoffMachine(teams, games, deferredPicks, SIMS) : null),
-    [deferredPicks, teams, games],
+    () => (deferredPicks === defaultPicks ? null : runPlayoffMachine(teams, games, deferredPicks, SIMS)),
+    [deferredPicks, defaultPicks, teams, games],
   );
   const proj = useMemo(() => projectSeason(teams, games, picks), [teams, games, picks]);
 
   useEffect(() => {
     if (!loaded.current) return;
     const q = new URLSearchParams(window.location.search);
-    const enc = encodePicks(games, picks);
-    if (enc) q.set('p', enc); else q.delete('p');
+    const enc = encodeScenario(games, picks);
+    if (enc.p) q.set('p', enc.p); else q.delete('p');
+    if (enc.u) q.set('u', enc.u); else q.delete('u');
     if (focus) q.set('team', focus.toLowerCase()); else q.delete('team');
     const s = q.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}`);
@@ -158,6 +164,8 @@ export default function PlayoffMachine({ teams, games }: Props) {
   const odds = new Map((result ?? baseline).teams.map((t) => [t.abbrev, t]));
   const delta = (a: string) => (odds.get(a)?.playoffs ?? 0) - (baseBy.get(a)?.playoffs ?? 0);
   const pickCount = Object.keys(picks).length;
+  const enc = encodeScenario(games, picks);
+  const changed = !!(enc.p || enc.u);
   const oddsPct = (a: string) => (hydrated ? pct(odds.get(a)?.playoffs ?? 0) : '–');
 
   /** Teams whose playoff odds your picks moved the most. */
@@ -206,8 +214,13 @@ export default function PlayoffMachine({ teams, games }: Props) {
     });
   };
   const copyLink = async () => {
+    const url = window.location.href;
+    // Phones get the native share sheet; desktop copies the link.
+    if (typeof navigator.share === 'function' && window.matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share({ title: 'My NFL playoff scenario', url }); return; } catch { /* cancelled: fall back to copying */ }
+    }
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch { /* clipboard blocked: the address bar already has the link */ }
@@ -323,9 +336,7 @@ export default function PlayoffMachine({ teams, games }: Props) {
             }`}
           >
             Wk {wk}
-            {complete ? (
-              <span className={active ? 'text-emerald-300' : 'text-emerald-600'}><Check /></span>
-            ) : (
+            {!complete && (
               <span className={`text-[11px] font-semibold tabular-nums ${active ? 'text-gray-300' : 'text-gray-400'}`}>{done}/{total}</span>
             )}
           </button>
@@ -350,14 +361,14 @@ export default function PlayoffMachine({ teams, games }: Props) {
       </button>
     ))
   ) : (
-    <span className="text-xs text-gray-500">Tap a team to pick it. Your swings show up here.</span>
+    <span className="text-xs text-gray-500">Favorites are picked. Tap the other team for an upset.</span>
   );
 
   const swingsPanel = (
     <section className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-baseline justify-between mb-2">
         <h2 className="text-sm font-extrabold text-gray-900">Biggest swings</h2>
-        <span className="text-[11px] text-gray-500" aria-live="polite">{busy ? 'Simulating…' : 'Playoff odds vs. no picks'}</span>
+        <span className="text-[11px] text-gray-500" aria-live="polite">{busy ? 'Simulating…' : 'Playoff odds vs. favorites winning out'}</span>
       </div>
       {movers.length ? (
         <ul className="divide-y divide-gray-100">
@@ -374,7 +385,7 @@ export default function PlayoffMachine({ teams, games }: Props) {
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-gray-500 leading-snug">Pick a winner and you&apos;ll see whose playoff odds it helps and hurts, right here.</p>
+        <p className="text-sm text-gray-500 leading-snug">Every game starts with the favorite picked. Flip an upset, or clear games to let them be simulated, and you&apos;ll see whose playoff odds it helps and hurts, right here.</p>
       )}
     </section>
   );
@@ -638,18 +649,17 @@ export default function PlayoffMachine({ teams, games }: Props) {
           </select>
         </div>
         <div className="grid grid-cols-3 sm:flex gap-2 sm:flex-1">
-          <button type="button" onClick={() => setWeekPicks('all', 'favorites')} className={btn}>
-            <span className="sm:hidden">All favorites</span><span className="hidden sm:inline">Pick all favorites</span>
-          </button>
-          <button type="button" onClick={() => setPicks({})} disabled={!pickCount} className={btn}>Reset</button>
+          <button type="button" onClick={() => setPicks(defaultPicks)} disabled={!changed} className={btn} title="Back to every favorite winning">Reset</button>
+          <button type="button" onClick={() => setPicks({})} disabled={!pickCount} className={btn} title="Unpick every game so the rest of the season is simulated">Clear all</button>
           <div className="hidden sm:block flex-1" />
           <button
             type="button"
             onClick={copyLink}
-            disabled={!pickCount && !focus}
+            disabled={!changed && !focus}
+            title="Get a link to this scenario: your picks and the team you follow"
             className="h-10 px-4 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600"
           >
-            {copied ? 'Link copied' : 'Copy link'}
+            {copied ? 'Link copied' : 'Share picks'}
           </button>
         </div>
       </div>
