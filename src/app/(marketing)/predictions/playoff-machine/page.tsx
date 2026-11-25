@@ -78,8 +78,8 @@ export default async function PlayoffMachinePage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
-      <article className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-        <nav className="text-sm text-gray-500 mb-6">
+      <article className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-12 sm:pt-8">
+        <nav className="hidden sm:block text-sm text-gray-500 mb-4">
           <Link href="/" className="hover:text-gray-700">Home</Link>
           <span className="mx-2">/</span>
           <Link href="/predictions" className="hover:text-gray-700">NFL Playoff Odds</Link>
@@ -87,11 +87,13 @@ export default async function PlayoffMachinePage() {
           <span className="text-gray-900">Playoff Machine</span>
         </nav>
 
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 leading-tight">NFL Playoff Machine {odds.season}</h1>
-        <p className="text-gray-600 mt-2 mb-5 max-w-2xl">
-          Pick winners for the {odds.remainingGames} games left and see the playoff picture, the standings and every team&apos;s odds change.{' '}
-          <span className="text-gray-400">Through Week {odds.week - 1}. Updated Tuesdays.</span>
-        </p>
+        <div className="mb-5 sm:mb-6">
+          <h1 className="text-[1.75rem] sm:text-4xl font-extrabold tracking-tight text-gray-900 leading-tight">NFL Playoff Machine {odds.season}</h1>
+          <p className="text-gray-600 mt-1.5 max-w-2xl text-[15px] sm:text-base">
+            Pick winners for the {odds.remainingGames} games left and watch the playoff picture and every team&apos;s odds update.{' '}
+            <span className="text-gray-400 whitespace-nowrap">Through Week {odds.week - 1} · Updated Tuesdays</span>
+          </p>
+        </div>
 
         {games.length ? (
           <PlayoffMachine teams={teams} games={games} />
