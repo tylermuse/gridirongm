@@ -37,6 +37,8 @@ export interface RefTeam {
   fullName: string;
   abbrev: string;
   colors: string[];
+  /** Team logo URL from the roster file (the one the game shows); empty if none. */
+  logo: string;
   won?: number;
   lost?: number;
   tied?: number;
@@ -122,6 +124,7 @@ function toRefTeam(t: RawTeam): RefTeam {
     fullName: `${t.region ?? ''} ${t.name ?? ''}`.trim(),
     abbrev: t.abbrev ?? '',
     colors: Array.isArray(t.colors) ? t.colors : [],
+    logo: t.imgURL ?? '',
     won: season?.won,
     lost: season?.lost,
     tied: season?.tied,

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import ReferenceChrome from '@/components/reference/ReferenceChrome';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import { listEras, getEraMeta, getPlayerDetails, POS_ORDER, POS_NAMES } from '@/lib/data/referenceRosters';
 
 /** /rosters/[era]/players — the top players at every position, linking to each player page. */
@@ -65,7 +66,7 @@ export default async function PlayersHub({ params }: { params: Params }) {
                   <li key={p.pid} className="flex items-center gap-3 px-2 py-1.5 text-sm border-b border-gray-100">
                     <span className="w-8 text-gray-500 tabular-nums">#{p.posRank}</span>
                     <Link href={`/rosters/${era}/players/${p.slug}`} className="flex-1 text-blue-600 hover:underline">{p.name}</Link>
-                    <span className="text-gray-500 w-10">{p.team.abbrev}</span>
+                    <span className="flex items-center gap-1.5 text-gray-500 w-14"><TeamLogo abbreviation={p.team.abbrev} primaryColor={p.team.colors[0] || '#1f2937'} secondaryColor={p.team.colors[1] || '#ffffff'} logoUrl={p.team.logo || undefined} logoOnWhite size="xs" />{p.team.abbrev}</span>
                     <span className="w-8 text-right font-semibold tabular-nums text-gray-900">{p.ovr}</span>
                   </li>
                 ))}

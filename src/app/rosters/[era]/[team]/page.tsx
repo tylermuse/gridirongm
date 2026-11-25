@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import ReferenceChrome from '@/components/reference/ReferenceChrome';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import {
   listEras,
   getEraMeta,
@@ -73,7 +74,7 @@ export default async function TeamRosterPage({ params }: Props) {
         </nav>
 
         <div className="flex items-center gap-4 mb-4">
-          <span className="inline-block h-12 w-12 rounded-xl shrink-0" style={{ backgroundColor: t.colors[0] || '#1f2937' }} aria-hidden />
+<TeamLogo abbreviation={t.abbrev} primaryColor={t.colors[0] || '#1f2937'} secondaryColor={t.colors[1] || '#ffffff'} logoUrl={t.logo || undefined} logoOnWhite size="xl" />
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">{t.fullName} {meta.season} Roster</h1>
         </div>
 

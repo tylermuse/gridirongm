@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import ReferenceChrome from '@/components/reference/ReferenceChrome';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import { teamSlug } from '@/lib/mockDraft/engine';
 import {
   listEras,
@@ -186,7 +187,7 @@ export default async function PlayerPage({ params }: { params: Params }) {
         </nav>
 
         <div className="flex items-start gap-4 mb-4">
-          <span className="inline-block h-12 w-12 rounded-xl shrink-0 mt-1" style={{ backgroundColor: p.team.colors[0] || '#1f2937' }} aria-hidden />
+          <Link href={teamUrl} className="shrink-0 mt-1" aria-label={`${p.team.fullName} roster`}><TeamLogo abbreviation={p.team.abbrev} primaryColor={p.team.colors[0] || '#1f2937'} secondaryColor={p.team.colors[1] || '#ffffff'} logoUrl={p.team.logo || undefined} logoOnWhite size="xl" /></Link>
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 leading-tight">{p.name}</h1>
             <p className="text-gray-600 mt-1">
@@ -284,7 +285,7 @@ export default async function PlayerPage({ params }: { params: Params }) {
                   {x.pid === p.pid
                     ? <span className="flex-1 font-semibold text-gray-900">{x.name}</span>
                     : <Link href={`/rosters/${era}/players/${x.slug}`} className="flex-1 text-blue-600 hover:underline">{x.name}</Link>}
-                  <span className="text-gray-500">{x.team.abbrev}</span>
+                  <span className="flex items-center gap-1.5 text-gray-500"><TeamLogo abbreviation={x.team.abbrev} primaryColor={x.team.colors[0] || '#1f2937'} secondaryColor={x.team.colors[1] || '#ffffff'} logoUrl={x.team.logo || undefined} logoOnWhite size="xs" />{x.team.abbrev}</span>
                   <span className="w-8 text-right font-semibold tabular-nums text-gray-900">{x.ovr}</span>
                 </li>
               ))}
