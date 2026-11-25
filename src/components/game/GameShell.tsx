@@ -84,7 +84,8 @@ export function GameShell({ children }: { children: React.ReactNode }) {
         )}
         {/* Returning guests: offer an account so the league is backed up. */}
         <GuestBackupPrompt />
-        <main className="flex-1 p-3 md:p-6 overflow-auto pb-20 sm:pb-6">{children}</main>
+        {/* Phones: clear the bottom action bar, whatever its height right now. */}
+        <main className="flex-1 p-3 md:p-6 overflow-auto pb-[calc(var(--action-bar-h,0px)+1rem)] sm:pb-6">{children}</main>
       </div>
 
       <GlobalBooth />

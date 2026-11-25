@@ -613,7 +613,7 @@ export default function SettingsPage() {
 
         {/* The header Save scrolls away on a 7-screen page; keep it in reach. */}
         {isDirty && (
-          <div className="fixed bottom-0 inset-x-0 z-[55] sm:hidden flex items-center justify-between gap-3 px-3 py-2 border-t border-[var(--border)] bg-[var(--surface)]">
+          <div className="fixed bottom-[var(--action-bar-h,0px)] inset-x-0 z-[55] sm:hidden flex items-center justify-between gap-3 px-3 py-2 border-t border-[var(--border)] bg-[var(--surface)]">
             <span className="text-xs font-semibold text-[var(--text-sec)]">Unsaved changes</span>
             <Button size="sm" onClick={handleSave}>Save Changes</Button>
           </div>

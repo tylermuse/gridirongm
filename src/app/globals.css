@@ -240,3 +240,6 @@ html[data-theme="dark"] .team-color-text {
   border: 2px solid #2563eb;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
 }
+/* Phone action bar (src/components/game/MobileActionBar.tsx) clears the
+ * home indicator. */
+.action-bar-safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
