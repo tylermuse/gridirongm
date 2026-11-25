@@ -262,6 +262,30 @@ function playByPlayLine(ev: PlayEvent, prev: PlayEvent | undefined, next: PlayEv
   return `${lead}${stripCallPrefix(bare)}${tail}`;
 }
 
+/**
+ * Over the 3D sim the call runs with the play, from the snap. These are the
+ * plays whose first words are the ending ("Touchdown!", "Intercepted", "The kick
+ * is good"): the voice holds them until the whistle so it doesn't beat the picture.
+ * A stuffed run is one too: "Nothing there for Cook" was out before the handoff.
+ */
+export function callWaitsForWhistle(ev: PlayEvent | undefined): boolean {
+  if (!ev) return false;
+  if (ev.type === 'run' && ev.yardsGained <= 0 && !isNonPlayRun(ev)) return true;
+  return isTouchdown(ev) || ev.type === 'interception' || ev.type === 'fumble'
+    || ev.type === 'field_goal_good' || ev.type === 'field_goal_miss';
+}
+
+/**
+ * What the 3D sim lets the broadcast do right now (the hook's `gate`). The call
+ * starts with the play, or at the whistle for one that waits for it; the next
+ * play starts only once the sim has finished this one.
+ */
+export function simAllows(stage: 'call' | 'next', ev: PlayEvent | undefined, sim: { active: boolean; deadId: number | null }): boolean {
+  if (!sim.active) return true;
+  if (stage === 'next') return false;
+  return !callWaitsForWhistle(ev) || sim.deadId === ev?.id;
+}
+
 /** Did this score flip who's ahead? (A tie on either side isn't a lead change.) */
 function leadChanged(ev: PlayEvent, prev: PlayEvent | undefined): boolean {
   const before = ev.type === 'extra_point' ? prev : ev;
