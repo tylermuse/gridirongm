@@ -193,7 +193,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22a'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22b'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1108,7 +1108,8 @@ function choreograph(res){
   // eyes downfield: linemen never turn around, DL stay square while engaged, DBs backpedal before turning to run
   O.ol.forEach(a=>a.faceLock={angle:0, until:99});
   D.dl.forEach(a=>a.faceLock={angle:Math.PI, until: runBlock? snap+1.5+dRun : snap+3.4});
-  if(!runBlock){ [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>a.faceLock={angle:Math.PI, until:snap+.9}); D.lb.forEach(a=>a.faceLock={angle:Math.PI, until:snap+1.3}); }
+  if(!runBlock){ [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>a.faceLock={angle:Math.PI, until:snap+.9}); D.lb.forEach(a=>a.faceLock={angle:Math.PI, until:snap+1.3});
+    if(G.look==='man_press') [D.cbL,D.cbR].forEach(a=>a.faceLock={angle:Math.PI, until:snap+.45}); }   /* Man Press: a jam at the line, then the corner turns and runs with his man (no backpedal to bail into) */
   O.qb.faceLock = {angle:0, until:99};
   // linemen
   // Line play: each defensive lineman is locked up with a blocker. The pair's contact point drifts
@@ -1142,10 +1143,16 @@ function choreograph(res){
     D.cbR.behav = F(O.wrR, snap+.15, 7.3, [-1.1,1.6], 1.0);
   }
   D.sL.behav = runBlock? F(O.rb, snap+.5+dRun, 6.5) : FM.fb? P([snap,D.sL.x,D.sL.z],[snap+1.6,D.sL.x+2,D.sL.z+3],[snap+3.2,D.sL.x+5,D.sL.z+5]) : F(O.slot, snap+.35, 7, [0,3], 1.5);   /* no slot receiver to carry: he plays his deep half */
-  D.sR.behav = runBlock? F(O.rb, snap+.6+dRun, 6.5) : P([snap,D.sR.x,D.sR.z],[snap+1.6,D.sR.x-2,D.sR.z+3],[snap+3.2,D.sR.x-5,D.sR.z+5]);
+  /* Stacked Box: the safety walked down as the eighth man is a run defender. He reads for a beat and comes downhill at the ball instead of
+     standing at his depth for a second like a deep safety (the pursuit event below takes him from there) */
+  D.sR.behav = runBlock? (G.look==='stacked_box'? P([snap,D.sR.x,D.sR.z],[snap+.3,D.sR.x,D.sR.z],[snap+.9+dRun,D.sR.x*.72+Math.sign(res.gap ?? 1)*1.2,D.sR.z-2.5]) : F(O.rb, snap+.6+dRun, 6.5)) : P([snap,D.sR.x,D.sR.z],[snap+1.6,D.sR.x-2,D.sR.z+3],[snap+3.2,D.sR.x-5,D.sR.z+5]);
   D.lb.forEach((a,i)=>{ a.behav = runBlock
     ? P([snap,a.x,a.z],[snap+.45+dRun*.6,a.x+Math.sign(res.gap ?? 1)*1.6,a.z-.4],[snap+.95+dRun,a.x+Math.sign(res.gap ?? 1)*3.2+(i-1)*.8,a.z-1.6])   // read, scrape to the play-side gap, fill
     : PR([snap,a.x,a.z],[snap+2.0,a.x*1.3,a.z+4.5,1],[snap+3.0,a.x*1.3+(i-1)*2.2,a.z+5.5,1],[snap+4.4,a.x*1.1,a.z+6.5]); });   /* real backers drop at 2 to 3 yd/s */
+  /* Man Press is man coverage across the board: the middle backer takes the tight end (he is already the man who covers him when the
+     ball goes there) instead of dropping to a zone. He holds his depth until the tight end closes to him (see the cushion rule at the
+     end), then runs with him. A tight end split out wide is not his: he keeps the zone drop. */
+  if(G.look==='man_press' && !runBlock && !FM.teOut) D.lb[1].behav = F(O.te, snap+.35, 6.4, [-.9,1.8], 1.0);
 
   /* Blitz (the Live Coach look; Tyler 11/24: "when I call blitz they don't actually blitz, they seem to back off"): the look walked the
      backers up to the line, then at the snap all three ran the base coverage drop above. On a dropback the two outside backers now come.
@@ -1589,6 +1596,13 @@ function choreograph(res){
     // a long catch-and-run score is an open man in stride — never a man rolling 20 yards into the end zone
     const rollCatch = res.kind==='complete' && contested && (!td || cz >= z0+toGoal-2.5); if(res.kind==='complete' && contested && !rollCatch) contested=false;
     const side = catchX<0? 1 : -1;   /* DB works from the inside */
+    /* Man Press: the pressed man (a corner, or the safety walked down over the slot) does not bail into the off coverage below on a short
+       throw. He jams at the snap and is on the receiver's upfield hip at the catch, a yard away and inside (not underneath him: that is
+       the throwing lane, and a man standing in it looks like he let the ball go through him). offKey / offAt: the covering man's first
+       step and where he is when the ball arrives, for every short completion script. */
+    const pressMan = G.look==='man_press' && !scn && !deep && (cover===D.cbL || cover===D.cbR || cover===D.sL);
+    const offKey = pressMan? [snap+.5, cover.x, cover.z+.3] : [snap+.7, cover.x + side*.4, cover.z + 2.2];
+    const offAt = pressMan? [catchX + side*.9, cz + .7] : [catchX + side*1.6, cz + (window.__offDepth??3.2)];
     if(contested){ rec.jumpT = tCatch; flightSeg.flight.y1 = 2.05; }
     // captured catches: a contested ball is the jump-catch-and-roll (he comes down with it and is down by contact); a deep uncontested ball is the in-stride leap
     // an open receiver hit in stride just catches it (procedural hands, ball at the chest) — the leap is only for a ball a defender is also going for
@@ -1682,7 +1696,7 @@ function choreograph(res){
       /* NFL, not college: going to the ground untouched isn't down. Landed out of bounds = over; in bounds, the DB has to get there and touch him (hand on his back) before the whistle */
       const inb = Math.abs(endPos[0]) < 26.3, sgX = Math.sign(catchX)||1, tTouch = tCatch+1.15;
       const tx = endPos[0] - sgX*.75, tz = endPos[1] + .45;
-      cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], inb? [tTouch, tx, tz] : [tCatch+.9, catchX + side*.8, cz+.6]);   /* the DB plays off, then closes on the man on the ground */
+      cover.behav = P([snap, cover.x, cover.z], offKey, [tCatch, ...offAt], inb? [tTouch, tx, tz] : [tCatch+.9, catchX + side*.8, cz+.6]);   /* the DB plays off, then closes on the man on the ground */
       if(inb){ tEnd = tTouch + .35;
         ev(tTouch-.05, ()=>{ cover.faceLock = {angle:Math.atan2(endPos[0]-cover.x, endPos[1]-cover.z), until:tEnd+2}; cover.behav = {type:'coast', vx:0, vz:0, t0:playT}; cover.hold=true; sndThump(.25,.3); });   /* drops to a knee beside him and touches him down */
         ev(tEnd+1.3, ()=>{ cover.hold=false; });
@@ -1700,9 +1714,9 @@ function choreograph(res){
       if(contested){ cover.catchT = tCatch; cover.jumpT = tCatch;   /* contested catch: the DB is on his hip and a step late, never standing in front of the ball */
         ev(tCatch-.6, ()=>{ cover.behav = P([playT, cover.x, cover.z], [tCatch, catchX + side*1.0, cz - (deep? 1.3 : .9)]); }); }
       else if(deep){ cover.behav = P([snap, cover.x, cover.z], [tCatch, catchX + side*1.3, cz - 3.2]); }   /* beaten deep: trailing the catch by a few yards */
-      else { cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)]); }   /* short / out route: the DB plays off — gives up the underneath throw, stays deeper and inside so nothing gets behind him, then comes up to tackle */
+      else { cover.behav = P([snap, cover.x, cover.z], offKey, [tCatch, ...offAt]); }   /* short / out route: the DB plays off — gives up the underneath throw, stays deeper and inside so nothing gets behind him, then comes up to tackle */
       if(oobCatch){ const sg = Math.sign(catchX); res.oob = true;
-        cover.behav = P([snap, cover.x, cover.z], [snap+.7, cover.x + side*.4, cover.z + 2.2], [tCatch, catchX + side*1.6, cz + (window.__offDepth??3.2)], [tEnd-.12, endX - sg*1.05, zEnd + .35], [tEnd+.8, endX - sg*.6, zEnd + .9]);   /* drives on him and shoves him out */
+        cover.behav = P([snap, cover.x, cover.z], offKey, [tCatch, ...offAt], [tEnd-.12, endX - sg*1.05, zEnd + .35], [tEnd+.8, endX - sg*.6, zEnd + .9]);   /* drives on him and shoves him out */
         ev(tEnd-.1, ()=>{ rec.behav = {type:'coast', vx:(rec.vx||0)*.8, vz:(rec.vz||0)*.8, t0:playT}; sndThump(.35,.3); });
         tackler = null; }
       else if(!td && deep && !contested && dzRun > .8){
@@ -1715,7 +1729,7 @@ function choreograph(res){
         tackler = sf; tEnd = tackleT = tCatch + T;
       }
       else if(!td){
-        const cands = [{a:cover, t:tCatch+.1, x:catchX+side*(contested?1.0: deep? 1.3 : 1.6), z:contested? cz-(deep?1.3:.9) : deep? cz-3.2 : cz+(window.__offDepth??3.2)}, {a:D.sR, t:tCatch+.1, x:D.sR.x-2, z:D.sR.z+3}, {a:D.lb[1], t:tCatch+.1, x:0, z:z0+9}];
+        const cands = [{a:cover, t:tCatch+.1, x:contested? catchX+side*1.0 : deep? catchX+side*1.3 : offAt[0], z:contested? cz-(deep?1.3:.9) : deep? cz-3.2 : offAt[1]}, {a:D.sR, t:tCatch+.1, x:D.sR.x-2, z:D.sR.z+3}, {a:D.lb[1], t:tCatch+.1, x:0, z:z0+9}];
         const plan = planTackle(recKeys, recKeys.length-2, cands, 0, z0+toGoal-.8);
         tackler = plan.a; tEnd = tackleT = plan.tEnd;
         ev(Math.min(tCatch+.1, tEnd-.7), ()=>{ tackler.behav = plan.chase? chaseB(rec, playT, tEnd-.42, tackler) : P([playT, tackler.x, tackler.z], ...plan.path.slice(2).filter(k=>k[0]>playT+.05)); });
@@ -2010,7 +2024,7 @@ function choreograph(res){
   if(isRun && carrier){ ev(snap+.9+dRun, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && d!==oobChaser && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d) && !climbed.has(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
   /* Off coverage holds its cushion: the corner (and the safety over the slot) gives ground at a backpedal until the receiver has closed to him, then
      turns and runs with him. He used to sprint up to meet the receiver at the snap; real corners are moving 2 yd/s a second after it (2023 tracking). */
-  [[D.cbL,O.wrL],[D.cbR,O.wrR],[D.sL,O.slot]].forEach(([c,w])=>{ const b=c.behav;
+  [[D.cbL,O.wrL],[D.cbR,O.wrR],[D.sL,O.slot],[D.lb[1],O.te]].forEach(([c,w])=>{ const b=c.behav;
     if(!b || b.type!=='follow' || b.target!==w || !w.behav || w.behav.type!=='path') return;
     let tGo = snap+3; for(let t=snap; t<snap+3; t+=.05){ const q=pathAt(w.behav.k, t, w.behav.acc); if(q[1]+b.off[1] >= c.z + .8*(t-snap) - .4){ tGo=t; break; } }
     if(tGo <= b.start + .05) return;

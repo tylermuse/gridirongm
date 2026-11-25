@@ -5,6 +5,8 @@
  *   1. waits for that play's spoken call to be ready,
  *   2. reveals the play on screen (onShowPlay) as the call starts, and
  *   3. only advances to the next play when the call finishes.
+ * Over a 3D sim (a `gate`) the play is snapped first and the call runs with it;
+ * the next play waits for both the call and the sim.
  *
  * The event list is read live, because a Live Coach game generates plays one
  * at a time: when the hook catches up it reports status 'waiting' and the page
@@ -51,7 +53,8 @@ export interface StartOpts {
    *  still paces a broadcast (slower = longer gaps; a call is never cut off). */
   postClipDelayMs?: () => number;
   /** Lets a 3D sim hold the voice back: 'call' is polled before speaking play
-   *  `i` (no spoiling a play still running), 'next' before moving on. */
+   *  `i` (false = not yet, e.g. a touchdown waiting for the whistle), 'next'
+   *  before moving on (false while the sim is still running the play). */
   gate?: (stage: 'call' | 'next', index: number) => boolean;
   /** Could a 3D sim pick this play up? Only then is it given a moment to do so. */
   willAnimate?: (index: number) => boolean;
@@ -79,6 +82,8 @@ const SILENT_BEAT_MS = 500;
 const FAILED_CLIP_BEAT_MS = 1500;
 /** Only say "Buffering" if the call is actually late, so the label doesn't flicker. */
 const BUFFERING_LABEL_MS = 400;
+/** The same, when the play is already running on screen and the call only has to join it. */
+const LATE_CALL_LABEL_MS = 2500;
 const PREFETCH = 2;
 const CLIP_TIMEOUT_MS = 20_000;
 /** A call whose playhead hasn't moved for this long is dropped, not waited on forever. */
@@ -284,16 +289,32 @@ export function useGameBroadcast(): GameBroadcast {
       await whileHeld(myRun);
       if (runIdRef.current !== myRun) return;
 
-      // Have the call in hand BEFORE revealing, so voice and field land together.
       const lines = opts.linesFor(i);
       if (lines.length) ensureClip(lines); // this play's request goes out first
       prefetchAfter(i);
+
+      const reveal = async (): Promise<boolean> => {
+        await whileHeld(myRun);
+        if (runIdRef.current !== myRun) return false;
+        opts.onShowPlay(i);
+        setPlayIndex(i);
+        if (opts.gate && opts.willAnimate?.(i)) await delay(GATE_SETTLE_MS, myRun);
+        return runIdRef.current === myRun;
+      };
+
+      // Over a 3D sim the play runs for seconds: snap it now and let a call that
+      // is still on its way join in, rather than hold the snap for the audio (a
+      // Live Coach play can't be fetched ahead, so that wait came on every down).
+      // Otherwise have the call in hand BEFORE revealing, so voice and text land together.
+      const snapFirst = !!opts.gate && !!opts.willAnimate?.(i);
+      if (snapFirst && !(await reveal())) return;
+
       let url: string | null = null;
       let clipFailed = false;
       if (lines.length) {
         const label = window.setTimeout(() => {
           if (runIdRef.current === myRun && !pausedRef.current) setStatus('buffering');
-        }, BUFFERING_LABEL_MS);
+        }, snapFirst ? LATE_CALL_LABEL_MS : BUFFERING_LABEL_MS);
         try {
           url = await ensureClip(lines);
           failedClips = 0;
@@ -315,12 +336,7 @@ export function useGameBroadcast(): GameBroadcast {
         }
       }
 
-      await whileHeld(myRun);
-      if (runIdRef.current !== myRun) return;
-      opts.onShowPlay(i);
-      setPlayIndex(i);
-
-      if (opts.gate && opts.willAnimate?.(i)) await delay(GATE_SETTLE_MS, myRun);
+      if (!snapFirst && !(await reveal())) return;
 
       if (url) {
         await passGate('call', i, myRun);
