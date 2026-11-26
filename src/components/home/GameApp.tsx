@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import HeroVideo from './HeroVideo';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
@@ -525,13 +526,7 @@ function TeamPicker({ realTeams = [] }: { realTeams?: PickerTeam[] }) {
             <span>Multi-season dynasties</span>
           </div>
           <div className="max-w-2xl mx-auto rounded-xl overflow-hidden border border-[var(--border)] shadow-xl">
-            <img
-              src="/images/hero-dashboard.jpg"
-              alt="BS Football game dashboard showing a team's record, owner objectives, upcoming matchup, injury report, draft capital, standings and finances"
-              width={1200}
-              height={593}
-              className="w-full h-auto block"
-            />
+            <HeroVideo />
           </div>
           <p className="mt-4 text-xs text-[var(--text-sec)]">
             Play free as a guest. Create a free account to save your franchise across devices.

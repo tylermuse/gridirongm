@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #f5f7fb; }
+  #stage { position: relative; overflow: hidden; background: #f5f7fb;
+           font-family: "Inter Display", "Inter", system-ui, sans-serif; color: #0f172a; }
+  .wide #stage { width: 1280px; height: 720px; }
+  .square #stage { width: 720px; height: 720px; }
+  .glow { position: absolute; border-radius: 50%; filter: blur(70px); will-change: transform; }
+  .grid { position: absolute; inset: -40px;
+          background-image: linear-gradient(90deg, rgba(37,99,235,.06) 1px, transparent 1px);
+          background-size: 64px 64px; }
+  .el { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; will-change: transform, opacity; opacity: 0; }
+  .card { border-radius: 14px; overflow: hidden;
+          box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 12px 32px -8px rgba(15,23,42,.18), 0 32px 64px -24px rgba(37,99,235,.22); }
+  .card img { display: block; width: 100%; height: 100%; }
+  .h { font-weight: 800; letter-spacing: -0.035em; line-height: 1.02; }
+  .wide .h { font-size: 60px; }
+  .square .h { font-size: 50px; text-align: center; }
+  .h .w { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: .08em; margin-bottom: -.08em; }
+  .h .w > span { display: inline-block; will-change: transform; }
+  .h .blue { color: #2563eb; }
+  .kicker { font-family: "Inter", sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .14em;
+            text-transform: uppercase; color: #2563eb; }
+  .square .kicker { text-align: center; }
+  .brand { font-weight: 900; letter-spacing: -0.03em; }
+  .brand b { color: #2563eb; font-weight: 900; }
+  .pill { font-family: "Inter", sans-serif; font-weight: 600; font-size: 18px; color: #475569;
+          background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; padding: 10px 20px;
+          box-shadow: 0 6px 20px -8px rgba(15,23,42,.18); white-space: nowrap; }
+  .ring { border-radius: 16px; border: 3px solid #2563eb; box-shadow: 0 0 0 6px rgba(37,99,235,.15); }
+  .tap { width: 44px; height: 44px; border-radius: 50%; background: rgba(37,99,235,.28); border: 2px solid rgba(37,99,235,.6); }
+</style></head>
+<body>
+<script src="assets/sizes.js"></script>
+<script src="shots.js"></script>
+<div id="stage">
+  <div class="grid" id="grid"></div>
+  <div class="glow" id="g1" style="width:620px;height:620px;background:#c7dbff;opacity:.7"></div>
+  <div class="glow" id="g2" style="width:520px;height:520px;background:#dbeafe;opacity:.9"></div>
+</div>
+<script>
+const MODE = new URLSearchParams(location.search).get('mode') || 'wide';
+document.documentElement.className = MODE;
+const W = MODE === 'wide' ? 1280 : 720, H = 720;
+const stage = document.getElementById('stage');
+const A = 'assets/';
+// native sizes in CSS px (assets are 3x)
+const SZ = window.SIZES;
+
+function mk(html, cls='el') { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; stage.appendChild(d); return d; }
+function card(name, scale, radius, cropW, boxH) {
+  const [w, h] = SZ[name];
+  const d = mk(`<img src="${A}${name}.png">`, 'el card');
+  d.style.width = (cropW || w) * scale + 'px'; d.style.height = (boxH || h) * scale + 'px';
+  const img = d.querySelector('img');
+  if (cropW && !boxH) { img.style.width = w * scale + 'px'; img.style.maxWidth = 'none'; }
+  if (boxH) { img.style.objectFit = 'cover'; img.style.objectPosition = '58% 62%'; }
+  if (radius != null) d.style.borderRadius = radius + 'px';
+  return d;
+}
+function headline(lines, x, y, width, align) {
+  // lines: array of strings; words wrapped for per-word reveal; *word* = blue
+  const html = lines.map(l => l.split(' ').map(w => {
+    const blue = w.startsWith('*'); w = w.replace(/\*/g, '');
+    return `<span class="w"><span class="${blue ? 'blue' : ''}">${w}</span></span>`;
+  }).join(' ')).join('<br>');
+  const d = mk(html, 'el h'); d.style.width = width + 'px';
+  d.style.left = x + 'px'; d.style.top = y + 'px';
+  return d;
+}
+
+// ---------- easing / tween helpers ----------
+const clamp = (v, a=0, b=1) => Math.min(b, Math.max(a, v));
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const easeInOut = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+const back = t => { const c = 1.5; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+const prog = (t, a, d) => clamp((t - a) / d);
+function place(el, x, y, o=1, s=1, extra='') {
+  el.style.opacity = o; el.style.transform = `translate(${x}px, ${y}px) scale(${s}) ${extra}`;
+}
+// standard enter/exit for an element living from t0 to t1
+function life(t, t0, t1, dIn=.55, dOut=.35) {
+  const i = easeOut(prog(t, t0, dIn)), o = easeInOut(prog(t, t1 - dOut, dOut));
+  return { i, o, vis: t >= t0 && t <= t1, a: i * (1 - o) };
+}
+function words(el, t, t0, t1) {
+  const ws = el.querySelectorAll('.w > span');
+  const L = life(t, t0, t1);
+  el.style.opacity = L.vis ? 1 : 0;
+  el.style.transform = `translateY(${-24 * L.o}px)`;
+  ws.forEach((w, k) => {
+    const p = easeOut(prog(t, t0 + k * .07, .5));
+    w.style.transform = `translateY(${(1 - p) * 105}%)`;
+    w.style.opacity = 1 - L.o;
+  });
+}
+
+// ---------- scenes ----------
+const S = MODE === 'wide' ? {
+  hx: 84, hw: 470, hy: 250,
+} : { hx: 30, hw: 660, hy: 64 };
+const T = [ [0, 3.0], [3.0, 8.6], [8.6, 11.4], [11.4, 13.9], [13.9, 18.3], [18.3, 21.0] ];
+const wide = MODE === 'wide';
+
+// S1: call the play
+const h1 = wide ? headline(['Every snap.', '*Your* *call.*'], S.hx, 262, S.hw) : headline(['Every snap. *Your* *call.*'], S.hx, S.hy, S.hw);
+const k1 = mk('Live coach mode', 'el kicker');
+const sb = card('scoreboard_after', wide ? 0.86 : 0.98);
+const cp = card('callplay', wide ? 1.22 : 1.12);
+const fd = card('firstdown', wide ? 1.5 : 1.45, 999);
+const tap1 = mk('', 'el tap');
+// S2: 3D
+const h2 = wide ? headline(['Watch it unfold *in* *3D.*'], 0, 44, W) : headline(['Watch it unfold', '*in* *3D.*'], S.hx, S.hy, S.hw);
+if (wide) h2.style.textAlign = 'center';
+const d3 = mk('<img style="display:block;width:100%;height:100%;object-fit:cover">', 'el card'); d3.style.borderRadius = '18px';
+const VW3 = wide ? 1000 : 660, VH3 = wide ? 562 : 430; d3.style.width = VW3 + 'px'; d3.style.height = VH3 + 'px';
+const SHOTS = window.SHOTS || [];  // [{dir, from, n}] filled by shots.js
+// S3: trades
+const h3 = wide ? headline(['Work the', '*trade* *market.*'], S.hx, 262, S.hw) : headline(['Work the *trade* *market.*'], S.hx, S.hy, S.hw);
+const k3 = mk('Trade finder', 'el kicker');
+const TRW = 540; const tr = ['btrade0', 'btrade1', 'btrade2'].map(n => card(n, wide ? 1.0 : 1.15, 14, TRW));
+const ring3 = mk('', 'el ring');
+const tap3 = mk('', 'el tap');
+// S4: contracts
+const h4 = wide ? headline(['Negotiate', '*every* *contract.*'], S.hx, 262, S.hw) : headline(['Negotiate *every* *contract.*'], S.hx, S.hy, S.hw);
+const k4 = mk('Free agency', 'el kicker');
+const ng = card('negotiate', wide ? 1.0 : 0.92);
+const tap4 = mk('', 'el tap');
+// S5: scouting
+const h5 = wide ? headline(['Scout every', '*prospect.*'], S.hx, 262, S.hw) : headline(['Scout every *prospect.*'], S.hx, S.hy, S.hw);
+const k5 = mk('2027 draft board', 'el kicker');
+const board = mk('', 'el card'); board.style.background = '#fff';
+const PW = 658, RH = 53, BOARD_H = wide ? 500 : 470;
+board.style.width = PW + 'px'; board.style.height = BOARD_H + 'px';
+const open = document.createElement('div'); open.style.cssText = 'position:absolute;left:0;top:0;width:'+PW+'px;overflow:hidden;background:#fff';
+open.innerHTML = `<img src="${A}pros0_open.png" style="display:block;width:${PW}px">`; board.appendChild(open);
+const rows = [0,1,2,3,4,5].map(i => { const r = document.createElement('div');
+  r.style.cssText = 'position:absolute;left:0;width:'+PW+'px;height:'+RH+'px;will-change:transform,opacity';
+  r.innerHTML = `<img src="${A}pros${i}.png" style="display:block;width:100%">`; board.appendChild(r); return r; });
+const tap5 = mk('', 'el tap');
+// S6: end card
+const h6 = headline(['You\'re the GM.', '*Build* *a* *dynasty.*'], 0, wide ? 250 : 230, W);
+h6.style.textAlign = 'center';
+const brand = mk('<b>BS</b> Football', 'el brand'); brand.style.fontSize = '30px';
+const pills = ['Free', 'In your browser', 'No download'].map(s => mk(s, 'el pill'));
+
+for (const k of [k1, k3, k4, k5]) if (!wide) k.style.width = W + 'px';
+
+function hide(...els) { els.forEach(e => e.style.opacity = 0); }
+
+const pending = [];
+function setSrc(img, src) { if (img.getAttribute('src') !== src) { img.setAttribute('src', src); pending.push(img.decode().catch(() => {})); } }
+function draw(t) {
+  pending.length = 0;
+  // background drift
+  const g1 = document.getElementById('g1'), g2 = document.getElementById('g2');
+  g1.style.transform = `translate(${W*0.55 + 60*Math.sin(t*0.5)}px, ${-180 + 40*Math.cos(t*0.4)}px)`;
+  g2.style.transform = `translate(${-160 + 50*Math.cos(t*0.45)}px, ${H*0.45 + 40*Math.sin(t*0.35)}px)`;
+  document.getElementById('grid').style.transform = `translateX(${-(t*12)%64}px)`;
+  hide(...stage.querySelectorAll('.el'));
+
+  // ---- S1 ----
+  let [a, b] = T[0];
+  if (t >= a && t <= b) {
+    words(h1, t, a + .05, b);
+    const L = life(t, a, b);
+    const kx = wide ? S.hx : 0, ky = wide ? 222 : 34;
+    place(k1, kx, ky + 10 * (1 - L.i), L.a);
+    const sbL = life(t, a + .15, b, .6), cpL = life(t, a + .3, b, .7);
+    const sx = wide ? 600 : 26, sy = wide ? 126 : 206;
+    place(sb, sx, sy + 40 * (1 - sbL.i) - 30 * sbL.o, sbL.a);
+    const cx = wide ? 600 + 668 * .86 / 2 - 288 * 1.22 / 2 : 198, cy = wide ? 196 : 278;
+    place(cp, cx, cy + 60 * (1 - cpL.i) - 30 * cpL.o, cpL.a);
+    // tap on "Deep Shot" (in callplay at ~ (55,256) native)
+    const s = wide ? 1.22 : 1.12;
+    const bx = cx + 58 * s, by = cy + 228 * s;
+    const tp = prog(t, a + 1.25, .45);
+    if (tp > 0 && tp < 1) place(tap1, bx - 22, by - 22, 1 - tp, .6 + 1.2 * tp);
+    // first down badge
+    const f = back(prog(t, a + 1.55, .45)), fo = easeInOut(prog(t, b - .35, .35));
+    const fx = wide ? 640 : 52, fy = wide ? 84 : 158;
+    place(fd, fx, fy + 18 * (1 - f) - 30 * fo, clamp(f * 1.5) * (1 - fo), .7 + .3 * f, `rotate(${-3 * f}deg)`);
+  }
+  // ---- S2 ----
+  [a, b] = T[1];
+  if (t >= a && t <= b) {
+    words(h2, t, a + .05, b);
+    const L = life(t, a + .1, b, .6);
+    const x = (W - VW3) / 2, y = wide ? 138 : 214;
+    place(d3, x, y + 50 * (1 - L.i) - 30 * L.o, L.a, 0.95 + 0.05 * L.i);
+    // which shot / frame: shots play back to back at 30 fps
+    let f = Math.floor((t - a) * 30), k = 0;
+    while (k < SHOTS.length - 1 && f >= SHOTS[k].n) { f -= SHOTS[k].n; k++; }
+    if (SHOTS.length) {
+      const sh = SHOTS[k]; f = Math.min(f, sh.n - 1);
+      setSrc(d3.querySelector('img'), `${sh.dir}/${String(sh.from + f).padStart(5, '0')}.jpg`);
+    }
+  }
+  // ---- S3 ----
+  [a, b] = T[2];
+  if (t >= a && t <= b) {
+    words(h3, t, a + .05, b);
+    const L = life(t, a, b);
+    place(k3, wide ? S.hx : 0, (wide ? 222 : 34) + 10 * (1 - L.i), L.a);
+    const s = wide ? 1.0 : 1.15, cw = TRW * s, ch = 115 * s, gap = wide ? 16 : 14;
+    const x0 = wide ? W - cw - 90 : (W - cw) / 2, y0 = wide ? (H - 3 * ch - 2 * gap) / 2 + 10 : 214;
+    tr.forEach((c, i) => {
+      const cl = life(t, a + .2 + i * .14, b - (2 - i) * .05, .6);
+      place(c, x0 + 80 * (1 - cl.i), y0 + i * (ch + gap) - 30 * cl.o, cl.a);
+    });
+    const rp = easeOut(prog(t, a + 1.45, .3)), ro = easeInOut(prog(t, b - .35, .35));
+    ring3.style.width = cw + 6 + 'px'; ring3.style.height = ch + 6 + 'px';
+    if (rp > 0) place(ring3, x0 - 6, y0 - 6 - 4 * rp, rp * (1 - ro), 1);
+    const tp = prog(t, a + 1.3, .45);
+    if (tp > 0 && tp < 1) place(tap3, x0 + 150 * s - 22, y0 + 32 * s - 22, 1 - tp, .6 + 1.2 * tp);
+    if (rp > 0) {
+      tr[0].style.transform += ` translateY(${-4 * rp}px)`;
+      tr[1].style.opacity *= 1 - .4 * rp; tr[2].style.opacity *= 1 - .4 * rp;
+    }
+  }
+  // ---- S4 ----
+  [a, b] = T[3];
+  if (t >= a && t <= b) {
+    words(h4, t, a + .05, b);
+    const L = life(t, a, b);
+    place(k4, wide ? S.hx : 0, (wide ? 222 : 34) + 10 * (1 - L.i), L.a);
+    const s = wide ? 1.0 : 0.92, cw = SZ.negotiate[0] * s, ch = SZ.negotiate[1] * s;
+    const cl = life(t, a + .15, b, .7);
+    const x = wide ? W - cw - 60 : (W - cw) / 2, y = wide ? (H - ch) / 2 + 8 : 226;
+    const p = prog(t, a, b - a);
+    place(ng, x, y + 60 * (1 - cl.i) - 30 * cl.o, cl.a, 1 + .025 * p);
+    const tp = prog(t, a + 1.5, .45);  // tap "Make Offer" (~ (40,345) native)
+    if (tp > 0 && tp < 1) place(tap4, x + 90 * s - 22, y + 395 * s - 22, 1 - tp, .6 + 1.2 * tp);
+  }
+  // ---- S5 ----
+  [a, b] = T[4];
+  if (t >= a && t <= b) {
+    words(h5, t, a + .05, b);
+    const L = life(t, a, b);
+    place(k5, wide ? S.hx : 0, (wide ? 222 : 34) + 10 * (1 - L.i), L.a);
+    const bl = life(t, a + .1, b, .6);
+    const bx = wide ? W - PW - 60 : (W - PW) / 2, by = wide ? (H - BOARD_H) / 2 + 10 : 216;
+    place(board, bx, by + 50 * (1 - bl.i) - 30 * bl.o, bl.a);
+    const tOpen = a + 1.35;
+    const op = easeInOut(prog(t, tOpen, .55));               // dropdown opening
+    const openH = RH + (700 - RH) * op;
+    const scroll = easeInOut(prog(t, tOpen + 1.0, b - tOpen - 1.5)) * (wide ? 300 : 330);   // read down to the ratings
+    rows.forEach((r, i) => {
+      const rl = easeOut(prog(t, a + .25 + i * .07, .45));
+      const y = i === 0 ? 0 : i * RH + (openH - RH) - scroll;
+      r.style.transform = `translate(${40 * (1 - rl)}px, ${y}px)`;
+      r.style.opacity = i === 0 ? rl * (op > 0 ? 0 : 1) : rl;
+    });
+    open.style.height = openH + 'px'; open.style.opacity = op > 0 ? 1 : 0;
+    board.style.height = Math.min(BOARD_H, 6 * RH + (openH - RH)) + 'px';
+    open.style.transform = `translateY(${-scroll}px)`;
+    const tp = prog(t, tOpen - .2, .45);   // tap "Scout" on row 1
+    if (tp > 0 && tp < 1) place(tap5, bx + 556 - 22, by + 26 - 22, 1 - tp, .6 + 1.2 * tp);
+  }
+  // ---- S6 end card ----
+  [a, b] = T[5];
+  if (t >= a && t <= b) {
+    words(h6, t, a + .15, b + 1);
+    const fadeAll = easeInOut(prog(t, b - .45, .45));
+    h6.style.opacity = 1 - fadeAll;
+    const bl = easeOut(prog(t, a, .5));
+    const bw = brand.offsetWidth;
+    place(brand, (W - bw) / 2, (wide ? 196 : 176) + 10 * (1 - bl), bl * (1 - fadeAll));
+    const pw = pills.map(p => p.offsetWidth), total = pw.reduce((x, y) => x + y) + 2 * 12;
+    let x = (W - total) / 2;
+    pills.forEach((p, i) => {
+      const pl = back(prog(t, a + .7 + i * .1, .45));
+      place(p, x, (wide ? 410 : 388) + 16 * (1 - pl), clamp(pl * 1.4) * (1 - fadeAll), .9 + .1 * pl);
+      x += pw[i] + 12;
+    });
+  }
+}
+window.render = t => { draw(t); return Promise.all(pending); };
+window.DURATION = T[T.length - 1][1];
+window.READY = Promise.all([...document.images].map(i => i.decode().catch(() => {})));
+draw(0);
+</script>
+</body></html>
