@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, isPendingResign } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -77,6 +77,7 @@ interface PlayerModalProps {
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   const { players, teams, userTeamId, releasePlayer, editPlayer, restructureContract, champions, season, phase, week, leagueSettings, setSubPositionOverride } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
+  const resigningPlayers = useGameStore(s => s.resigningPlayers);
   const router = useRouter();
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -401,7 +402,14 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                     </Button>
                   )}
                 </div>
-                {player.contract.salary > 0 && (() => {
+                {player.contract.salary > 0 && isPendingResign({ phase, resigningPlayers }, player.id) && (
+                  // Re-signing window: his deal is over, so releasing him is the
+                  // same as letting him walk (the store routes it there).
+                  <div className="text-xs text-green-600 mt-1">
+                    Contract has ended: no dead cap
+                  </div>
+                )}
+                {player.contract.salary > 0 && !isPendingResign({ phase, resigningPlayers }, player.id) && (() => {
                   const deadCap = calculateDeadCap(player.contract);
                   const savings = calculateCapSavings(player.contract);
                   return deadCap > 0 ? (

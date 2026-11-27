@@ -96,6 +96,7 @@ OFFSEASON ORDER
 RE-SIGNING
 - In the Re-signing phase, open "Re-signing" in the sidebar. Each expiring player has "Extend" (negotiate), "Tag ($XM)" and "Let Walk". "Re-sign All" signs everyone at their asking price. Anyone left undecided when you advance becomes a free agent.
 - A player marked as refusing to re-sign can only be tagged or let go.
+- Letting an expiring player walk costs no dead cap: his contract ended with the season. The same goes for releasing him from his player card while he is still waiting on a re-sign decision. The "Projected Cap Space" on the Re-signing page already leaves out undecided players, so letting one walk does not change it.
 
 FREE AGENCY
 - To sign a free agent: open "Free Agency", click "Negotiate" on a player, set salary and years, then "Make Offer". If he accepts he signs on the spot. There is no bidding round against other teams and no waiting period.
