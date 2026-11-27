@@ -11,6 +11,7 @@
  */
 
 import { releasePlayer } from '../freeAgency';
+import { upcomingSeason } from '../draft/draft';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
@@ -81,4 +82,26 @@ export function applyRelease(league: LeagueState, playerId: string, stretch: boo
       : t,
   );
   return { ...released, teams };
+}
+
+/**
+ * Re-sign window "Let Walk": a player whose deal is over leaves at $0 — no dead
+ * cap for the contract that is ending, the same as an un-re-signed player walking
+ * at season start. Going through applyRelease instead charged his final-year
+ * salary as dead money for the season he'd just finished (shown on Finances).
+ *
+ * Only in the offseason, and only when he has no contract year in or after the
+ * season being built (upcomingSeason, the season the re-sign window and Free
+ * Agency price). Anyone else is a real cut and gets applyRelease's dead cap: a
+ * mid-contract player, an expiring one in-season with his final year still to be
+ * paid, and a one-year player in an inaugural import's first offseason (that
+ * window prices the current season, which his deal still covers).
+ */
+export function applyWalk(league: LeagueState, playerId: string): LeagueState {
+  const player = (league.players as Record<string, BasketballPlayer>)[playerId];
+  if (!player?.rosterSlot?.teamId) return league;
+  const capSeason = upcomingSeason(league);
+  const dealIsOver = league.currentPhase === 'offseason'
+    && (player.contract?.years ?? []).every(y => y.season < capSeason);
+  return dealIsOver ? releasePlayer(league, playerId as PlayerId) : applyRelease(league, playerId, false);
 }

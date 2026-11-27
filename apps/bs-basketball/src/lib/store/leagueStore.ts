@@ -71,7 +71,7 @@ import {
   type CommissionerSettings,
 } from '../rules/leagueRules';
 import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, isSeasonUnderway, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
-import { applyRelease } from '../roster/release';
+import { applyRelease, applyWalk } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
 import { negotiateExtension, acceptExtensionAsk, getTalk, openTalk, currentAsk, type OfferResponse } from '../roster/negotiation';
@@ -298,6 +298,9 @@ interface LeagueStore {
 
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string, stretch?: boolean) => Promise<boolean>;
+  /** Re-sign window "Let Walk": an expiring player leaves with no dead cap
+   *  (anyone still under contract past this season is a normal release). */
+  walkPlayer: (playerId: string) => Promise<boolean>;
   playThroughInjury: (playerId: string) => Promise<boolean>;
 
   /** Negotiate a contract extension. The player accepts a fair offer (a touch
@@ -315,7 +318,8 @@ interface LeagueStore {
   extendPlayersBulk: (signings: { playerId: string; offer: Offer }[]) => Promise<{ accepted: number; declined: number }>;
 
   /** R2-1: batch-release N players in one pass — pair to extendPlayersBulk for
-   *  the "Let All Walk" action. Returns the count released. */
+   *  the "Let All Walk" action (walk semantics: expiring players leave with no
+   *  dead cap, see walkPlayer). Returns the count released. */
   releasePlayersBulk: (playerIds: string[]) => Promise<number>;
 
   /** Expansion (offseason, after the draft): create 1-2 franchises with the
@@ -1731,6 +1735,22 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
+  async walkPlayer(playerId) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const league = applyWalk(current, playerId) as typeof current;
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] walkPlayer failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
   async playThroughInjury(playerId) {
     const current = get().league;
     if (!current) { set({ error: 'No league loaded.' }); return false; }
@@ -1864,7 +1884,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       let league = current;
       let count = 0;
       for (const playerId of playerIds) {
-        league = applyRelease(league, playerId, false) as typeof current;
+        league = applyWalk(league, playerId) as typeof current;
         count++;
       }
       await saveLeague(league);

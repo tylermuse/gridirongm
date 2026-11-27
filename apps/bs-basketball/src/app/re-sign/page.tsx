@@ -118,7 +118,8 @@ export default function ReSignPage() {
 
   // R2-1: walk is gated by ConfirmModal for 78+ OVR vets, immediate otherwise.
   async function performLetWalk(p: BasketballPlayer) {
-    const ok = await store.releasePlayer(p.id);
+    // walkPlayer, not releasePlayer: his deal is ending, so he leaves with no dead cap.
+    const ok = await store.walkPlayer(p.id);
     if (ok) setWalked(w => [...w, { id: p.id, name: `${p.firstName} ${p.lastName}` }]);
   }
   function letWalk(p: BasketballPlayer) {
@@ -460,7 +461,9 @@ export default function ReSignPage() {
         onConfirm={() => {
           const p = pendingCut;
           setPendingCut(null);
-          if (p) void store.releasePlayer(p.id);
+          // An expiring ("Exp") player cut here is just walking (no dead cap);
+          // anyone under contract past this season is charged dead cap as normal.
+          if (p) void store.walkPlayer(p.id);
         }}
       />
     </Shell>
