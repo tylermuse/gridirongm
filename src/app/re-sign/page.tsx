@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useGameStore, computeFranchiseTagSalary, flushToStorage } from '@/lib/engine/store';
+import { useGameStore, computeFranchiseTagSalary, flushToStorage, resigningPhasePayroll } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { OfferSalaryInput } from '@/components/game/OfferSalaryInput';
 import { OfferSheet } from '@/components/game/OfferSheet';
@@ -129,23 +129,17 @@ export default function ReSignPage() {
   }
 
   const userTeam = teams.find(t => t.id === userTeamId);
-  // Recalculate payroll from actual contracts to avoid drift from incremental tracking
-  const actualPayroll = userTeam ? (() => {
-    const rosterPayroll = userTeam.roster.reduce((sum, pid) => {
-      const p = players.find(pl => pl.id === pid);
-      if (!p || p.retired) return sum;
-      // Use cap hit (accounts for restructured contracts with prorated bonuses)
-      if (p.contract.contractYears && p.contract.contractYears.length > 0) {
-        const yr = p.contract.contractYears[0];
-        return sum + yr.baseSalary + yr.proratedBonus;
-      }
-      return sum + p.contract.salary;
-    }, 0);
-    const deadCap = (userTeam.deadCap ?? []).filter(dc => !dc.isCoaching).reduce((sum, dc) => sum + dc.amount, 0);
-    return Math.round((rosterPayroll + deadCap) * 10) / 10;
-  })() : 0;
-  const capSpace = userTeam ? Math.round((userTeam.salaryCap - actualPayroll) * 10) / 10 : 0;
-  const luxuryTax = userTeam ? computeLuxuryTax(actualPayroll, userTeam.salaryCap) : 0;
+  // Next season's committed payroll, recalculated from actual contracts: every
+  // deal that carries over plus dead cap, leaving out players still waiting on
+  // a decision (their deals ended with the season). It's the same function the
+  // store keeps totalPayroll with, so this matches the top bar. Pending players
+  // come from the store's queue, not this page's local results, so a rejected
+  // offer (he stays queued until Free Agency) doesn't move it either.
+  const committedPayroll = userTeam
+    ? resigningPhasePayroll(userTeam, players, resigningPlayers.map(e => e.playerId))
+    : 0;
+  const capSpace = userTeam ? Math.round((userTeam.salaryCap - committedPayroll) * 10) / 10 : 0;
+  const luxuryTax = userTeam ? computeLuxuryTax(committedPayroll, userTeam.salaryCap) : 0;
 
   function startNegotiation(playerId: string, mode: NegMode) {
     const entry = resigningPlayers.find(e => e.playerId === playerId);
@@ -290,12 +284,11 @@ export default function ReSignPage() {
           </div>
           <div className="text-left sm:text-right">
             {(() => {
-              // Cap space excluding expiring players' current contracts (they'll come off the books)
-              const expiringCurrentSalary = activeEntries.reduce((sum, e) => {
-                const p = players.find(pl => pl.id === e.playerId);
-                return sum + (p?.contract.salary ?? 0);
-              }, 0);
-              const projectedCapSpace = Math.round((capSpace + expiringCurrentSalary) * 10) / 10;
+              // Expiring deals are already off the books in capSpace. (This used
+              // to add their salaries back on top of a payroll that still held
+              // only the active-roster ones, so letting a practice-squad or IR
+              // player walk, or having an offer rejected, lowered this number.)
+              const projectedCapSpace = capSpace;
               const totalAsking = Math.round(activeEntries.reduce((sum, e) => sum + e.askingSalary, 0) * 10) / 10;
               const netAfterSigning = Math.round((projectedCapSpace - totalAsking) * 10) / 10;
 
@@ -755,7 +748,7 @@ export default function ReSignPage() {
             maxYears={6}
             minSalary={LEAGUE_MINIMUM_SALARY}
             maxSalary={Math.max((negotiation?.askingSalary ?? 0) * 2, 5)}
-            capAfter={np ? Math.round((capSpace + current - offerSalary) * 10) / 10 : undefined}
+            capAfter={np ? Math.round((capSpace - offerSalary) * 10) / 10 : undefined}
             kicker={isExtend ? 'Extension' : 'Restructure'}
             note={!isExtend && np ? (
               saving > 0

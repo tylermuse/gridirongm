@@ -961,10 +961,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // coaches their roster from the first snap (the call menu is kept in view, below).
   const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null);
   const [liveCoachPaused, setLiveCoachPaused] = useState(false);
-  // In an exhibition, keep the call menu on screen when the game stops for the
-  // user's call: off screen, a paused 3D game just looks frozen.
+  // Keep the call menu on screen when the game stops for the user's call: off
+  // screen, a paused 3D game just looks frozen, and on phones the menu sat
+  // below the field so every play meant scrolling down to call it. Only the
+  // in-flow slot (below lg) moves the page; the desktop sidebar slot is sticky.
   useEffect(() => {
-    if (!isExhibition || !liveCoachPaused) return;
+    if (!liveCoachPaused) return;
     const id = requestAnimationFrame(() => {
       const slot = [...document.querySelectorAll<HTMLElement>('[data-play-call-slot]')]
         .find(el => el.offsetParent !== null && el.childElementCount > 0);
@@ -973,7 +975,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       if (r.top < 0 || r.bottom > window.innerHeight) slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
     return () => cancelAnimationFrame(id);
-  }, [isExhibition, liveCoachPaused]);
+  }, [liveCoachPaused]);
   // Live Coach engine — generates events one-at-a-time after takeover
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
   const [liveExtraEvents, setLiveExtraEvents] = useState<PlayEvent[]>([]);
@@ -2292,8 +2294,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
     return null;
   })();
-  const renderDefenseMenu = (es: ReturnType<LiveCoachEngine['getState']>) => (
+  const renderDefenseMenu = (es: ReturnType<LiveCoachEngine['getState']>, compact = false) => (
     <DefenseCallMenu
+      compact={compact}
       state={{
         quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
         timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
@@ -2508,7 +2511,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
         {/* Animated field + outcome chip overlay. While the 3D sim is on (desktop) the box is 16:9 so the
             sim gets a real broadcast frame instead of the field's wide, short box. */}
-        <div className={`relative ${sim3dOn && !pregameOpen ? 'aspect-square sm:aspect-[4/3] md:aspect-video' : ''}`}>   {/* phones get a square frame: the field's short box left the 3D sim a letterbox strip */}
+        {/* Phones get a square frame (the field's short box left the 3D sim a
+            letterbox strip), dropping to widescreen while the game waits for
+            your call so the field and the whole call menu fit on one screen.
+            The 3D page refits its camera when the frame resizes. */}
+        <div className={`relative ${sim3dOn && !pregameOpen ? `${liveCoachPaused ? 'aspect-video' : 'aspect-square'} sm:aspect-[4/3] md:aspect-video` : ''}`}>
           <AnimatedField
             event={engineSnapshot ? {
               id: -1,
@@ -2571,12 +2578,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
         </div>
-        {sim3dOn && !pregameOpen && (
-          <p className="-mt-1 text-right text-[10px] text-[var(--text-sec)]">
-            3D player model: “American Football Player” by Stuffed Dog Digital,{' '}
-            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="underline">CC BY 4.0</a>
-          </p>
-        )}
+        {/* The 3D player model's CC BY 4.0 credit ("American Football Player"
+            by Stuffed Dog Digital) lives in the Credits section of /about. */}
 
         {/* ================================================================
             CALL THE PLAY — mobile only, directly under the field / 3D sim so
@@ -2589,10 +2592,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
           const fp = es.fieldPos;
           const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
-          if (defenseCallPending(es)) return <div data-play-call-slot className="lg:hidden">{renderDefenseMenu(es)}</div>;
+          if (defenseCallPending(es)) return <div data-play-call-slot className="lg:hidden">{renderDefenseMenu(es, true)}</div>;
           return (
             <div data-play-call-slot className="lg:hidden">
               <PlayCallMenu
+                compact
                 state={{
                   quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
                   timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
@@ -3744,15 +3748,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           take. Text now; the disabled audio button marks the ElevenLabs hook. */}
       {showHalftimeReport && halftimeBreakdown && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4"
           onClick={closeHalftimeReport}
         >
+          {/* Phones: a bottom sheet capped at the visible screen (svh, not vh:
+              on iPhone vh counts the space under Safari's toolbars, which
+              pushed the header off the top). sm and up: the centred dialog. */}
           <div
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-y-auto shadow-2xl"
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-t-2xl sm:rounded-2xl max-w-4xl w-full max-h-[90svh] sm:max-h-[85vh] overflow-y-auto shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border)]">
-              <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">📻</span>
                   <h2 className="text-lg font-black">Halftime Report</h2>
@@ -3766,7 +3773,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 </button>
               </div>
               {/* Premium breakdown CTA / audio button pinned under the title so it is visible without scrolling */}
-              <div className="px-5 pb-4">
+              <div className="px-4 sm:px-5 pb-3 sm:pb-4">
                 {isPremium ? (
                   <button
                     onClick={playHalftimeAudio}
@@ -3792,7 +3799,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 )}
               </div>
             </div>
-            <div className="p-5 space-y-5">
+            <div className="p-4 sm:p-5 space-y-5">
               <div className="text-center">
                 <div className="text-2xl font-black tabular-nums">
                   {halftimeBreakdown.awayAbbr} {halftimeBreakdown.awayScore} — {halftimeBreakdown.homeScore} {halftimeBreakdown.homeAbbr}
@@ -3806,22 +3813,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 return (
                   <div className="space-y-2">
                     <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Around the League — At the Half</div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-2 gap-y-1">
                       {others.map(g => {
                         const at = teams.find(t => t.id === g.awayTeamId);
                         const ht = teams.find(t => t.id === g.homeTeamId);
                         if (!at || !ht) return null;
                         const sp = liveScoreboard.splits[g.id];
+                        const a = sp.away[1], h = sp.home[1];
                         return (
-                          <div key={g.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium">{at.abbreviation}</span>
-                              <span className="font-mono font-bold tabular-nums">{sp.away[1]}</span>
-                            </div>
-                            <div className="flex items-center justify-between mt-0.5">
-                              <span className="font-medium">{ht.abbreviation}</span>
-                              <span className="font-mono font-bold tabular-nums">{sp.home[1]}</span>
-                            </div>
+                          <div key={g.id} className="flex items-center justify-between gap-1 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-xs tabular-nums">
+                            <span className={a > h ? 'font-bold' : 'text-[var(--text-sec)]'}>{at.abbreviation} {a}</span>
+                            <span className="text-[10px] text-[var(--text-sec)]">@</span>
+                            <span className={h > a ? 'font-bold' : 'text-[var(--text-sec)]'}>{ht.abbreviation} {h}</span>
                           </div>
                         );
                       })}
@@ -3863,6 +3866,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 })}
               </div>
 
+            </div>
+            <div className="sticky bottom-0 border-t border-[var(--border)] bg-[var(--surface)] px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <button
+                onClick={closeHalftimeReport}
+                className="w-full h-11 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 active:bg-blue-700"
+              >
+                Back to the game
+              </button>
             </div>
           </div>
         </div>

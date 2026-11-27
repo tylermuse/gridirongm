@@ -637,7 +637,7 @@ export default function FreeAgencyPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Phones: Skip Day / Skip Week live in the sticky action bar. */}
+            {/* Phones get these in the bottom action bar, next to "End FA Early". */}
             {phase === 'freeAgency' && (
               <div className="hidden sm:flex items-center gap-1.5">
                 <Button

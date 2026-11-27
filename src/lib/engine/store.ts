@@ -1333,6 +1333,39 @@ export function recalculateTeamPayroll(team: Team, allPlayers: Player[]): number
   return Math.round((rosterPayroll + deadCapTotal) * 10) / 10;
 }
 
+/**
+ * Next season's committed payroll during the re-signing window: the normal
+ * payroll (active-roster cap hits + dead cap) minus the cap hits of players
+ * still waiting on a re-sign decision, whose deals end with the season just
+ * played. This is the number the re-sign screen and the top bar show cap space
+ * against, so every re-sign action (walk, re-sign, tag) recomputes it from
+ * scratch instead of nudging totalPayroll by a delta.
+ *
+ * Only players on the active roster are subtracted: practice-squad and IR
+ * players were never in the payroll, so they must not be taken out of it
+ * either (doing that inflated cap space, which then fell back when they
+ * walked).
+ */
+export function resigningPhasePayroll(team: Team, allPlayers: Player[], pendingIds: Iterable<string>): number {
+  const pending = new Set(pendingIds);
+  const pendingCapHits = team.roster.reduce((sum, pid) => {
+    if (!pending.has(pid)) return sum;
+    const p = allPlayers.find(pl => pl.id === pid);
+    if (!p || p.retired) return sum;
+    return sum + getCapHit(p.contract);
+  }, 0);
+  return Math.round((recalculateTeamPayroll(team, allPlayers) - pendingCapHits) * 10) / 10;
+}
+
+/** True while the player is waiting on a re-sign decision: his contract ends
+ *  with the season just played, so letting him go costs no dead money. */
+export function isPendingResign(
+  state: { phase: string; resigningPlayers?: { playerId: string }[] },
+  playerId: string,
+): boolean {
+  return state.phase === 'resigning' && (state.resigningPlayers ?? []).some(e => e.playerId === playerId);
+}
+
 export function computeFranchiseTagSalary(position: Position, players: Player[], taggedPlayer?: Player): number {
   const posPlayers = players
     .filter(p => p.position === position && p.teamId && !p.retired)
@@ -4372,19 +4405,13 @@ export const useGameStore = create<GameStore>()(
         // For user's team: exclude expiring players so cap space shows "committed" payroll
         // Each re-signing will add to payroll, making cap space go down (intuitive UX)
         const expiringIds = new Set(expiringPlayers.map(p => p.id));
-        const recalcTeams = teamsAfterRetirement.map(t => {
-          const basePayroll = recalculateTeamPayroll(t, playersAfterRetirement);
-          const expiringPayroll = t.id === state.userTeamId
-            ? playersAfterRetirement
-                .filter(p => expiringIds.has(p.id) && p.teamId === t.id)
-                .reduce((sum, p) => sum + getCapHit(p.contract), 0)
-            : 0;
-          return {
-            ...t,
-            salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
-            totalPayroll: Math.round((basePayroll - expiringPayroll) * 10) / 10,
-          };
-        });
+        const recalcTeams = teamsAfterRetirement.map(t => ({
+          ...t,
+          salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
+          totalPayroll: t.id === state.userTeamId
+            ? resigningPhasePayroll(t, playersAfterRetirement, expiringIds)
+            : recalculateTeamPayroll(t, playersAfterRetirement),
+        }));
 
         // Build SeasonSummary for the just-completed season so /history shows it immediately
         const alreadyInHistory = state.seasonHistory.some(s => s.season === state.season);
@@ -4610,12 +4637,9 @@ export const useGameStore = create<GameStore>()(
             };
           }
           if (t.id !== teamId) return t;
-          const expiringPayroll = state.players
-            .filter(p => expiringIds.has(p.id))
-            .reduce((sum, p) => sum + getCapHit(p.contract), 0);
           return {
             ...t,
-            totalPayroll: Math.round((recalculateTeamPayroll(t, state.players) - expiringPayroll) * 10) / 10,
+            totalPayroll: resigningPhasePayroll(t, state.players, expiringIds),
             approval: {
               ...defaultApproval(),
               objectives: generateSeasonObjectives(t, state.players, state.season + 1, playoffResultFor(state.playoffBracket, teamId)),
@@ -4670,10 +4694,6 @@ export const useGameStore = create<GameStore>()(
           return false;
         }
 
-        // During re-signing phase, expiring salaries were already removed from payroll
-        // so we just add the new salary (no delta needed)
-        const capSpaceNeeded = salary;
-
         const newNewsItems = [...state.newsItems, makeNews({
           season: state.season,
           week: 0,
@@ -4684,26 +4704,30 @@ export const useGameStore = create<GameStore>()(
           isUserTeam: true,
         })];
 
+        const players = state.players.map(p =>
+          p.id === playerId ? { ...p, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, offseasonSigned: true } } : p,
+        );
+        const resigningPlayers = state.resigningPlayers.filter(e => e.playerId !== playerId);
         set({
-          players: state.players.map(p =>
-            p.id === playerId ? { ...p, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, offseasonSigned: true } } : p,
-          ),
+          players,
+          // His new deal now counts toward next season's committed payroll.
           teams: state.teams.map(t =>
             t.id === state.userTeamId
-              ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + capSpaceNeeded) }
+              ? { ...t, totalPayroll: resigningPhasePayroll(t, players, resigningPlayers.map(e => e.playerId)) }
               : t,
           ),
-          resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+          resigningPlayers,
           newsItems: newNewsItems,
         });
         return true;
       },
 
-      // PRD-03: User passes on re-signing (player will enter FA)
+      // PRD-03: User passes on re-signing (player will enter FA).
+      // His deal ends with the season just played, so he leaves at no cap
+      // cost: no dead money, no released-player record.
       passOnResigning: (playerId: string) => {
         const state = get();
         const player = state.players.find(p => p.id === playerId);
-        const salary = player?.contract.salary ?? 0;
 
         // bitter__pill 5/16 guard: if the player is no longer on the user's
         // team (traded away while still on the queue), just prune the dangling
@@ -4716,10 +4740,13 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
+        const players = state.players.map(p =>
+          p.id === playerId ? { ...p, teamId: null, onIR: false, contract: { ...p.contract, yearsLeft: 0 } } : p,
+        );
+        const resigningPlayers = state.resigningPlayers.filter(e => e.playerId !== playerId);
+        const pendingIds = resigningPlayers.map(e => e.playerId);
         set({
-          players: state.players.map(p =>
-            p.id === playerId ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
-          ),
+          players,
           teams: state.teams.map(t => {
             if (t.id !== state.userTeamId) return t;
             const newRoster = t.roster.filter(id => id !== playerId);
@@ -4732,10 +4759,17 @@ export const useGameStore = create<GameStore>()(
             // practiceSquad, not roster — so the roster/depthChart prune above
             // misses them and "let walk" leaves an orphan id with teamId=null.
             const newPracticeSquad = (t.practiceSquad ?? []).filter(id => id !== playerId);
-            return { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, totalPayroll: Math.max(0, t.totalPayroll - salary) };
+            // Same for an expiring player parked on IR.
+            const newInjuredReserve = (t.injuredReserve ?? []).filter(id => id !== playerId);
+            const updated = { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, injuredReserve: newInjuredReserve };
+            // Recompute rather than subtract his salary: the re-sign window's
+            // payroll already left him out, so subtracting again pushed cap
+            // space up by his salary until Free Agency recalculated it and it
+            // dropped back down.
+            return { ...updated, totalPayroll: resigningPhasePayroll(updated, players, pendingIds) };
           }),
           freeAgents: [...state.freeAgents, playerId],
-          resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+          resigningPlayers,
         });
       },
 
@@ -4753,15 +4787,14 @@ export const useGameStore = create<GameStore>()(
           else offTeam.add(id);
         }
         const allIds = new Set(playerIds);
-        const salaryMap = new Map<string, number>();
-        for (const id of onUserTeam) {
-          const p = state.players.find(pl => pl.id === id);
-          salaryMap.set(id, p?.contract.salary ?? 0);
-        }
+        const players = state.players.map(p =>
+          onUserTeam.has(p.id) ? { ...p, teamId: null, onIR: false, contract: { ...p.contract, yearsLeft: 0 } } : p,
+        );
+        // Off-team entries get pruned from the queue too — they're stale.
+        const resigningPlayers = state.resigningPlayers.filter(e => !allIds.has(e.playerId));
+        const pendingIds = resigningPlayers.map(e => e.playerId);
         set({
-          players: state.players.map(p =>
-            onUserTeam.has(p.id) ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
-          ),
+          players,
           teams: state.teams.map(t => {
             if (t.id !== state.userTeamId) return t;
             const newRoster = t.roster.filter(id => !onUserTeam.has(id));
@@ -4769,16 +4802,16 @@ export const useGameStore = create<GameStore>()(
               acc[pos] = (t.depthChart[pos] ?? []).filter(id => !onUserTeam.has(id));
               return acc;
             }, {} as Record<Position, string[]>);
-            let payrollDrop = 0;
-            for (const id of onUserTeam) payrollDrop += salaryMap.get(id) ?? 0;
             // bige08676 6/21 retest: prune walked practice-squad players too —
-            // see the single-player passOnResigning above.
+            // see the single-player passOnResigning above. Same for IR.
             const newPracticeSquad = (t.practiceSquad ?? []).filter(id => !onUserTeam.has(id));
-            return { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, totalPayroll: Math.max(0, t.totalPayroll - payrollDrop) };
+            const newInjuredReserve = (t.injuredReserve ?? []).filter(id => !onUserTeam.has(id));
+            const updated = { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, injuredReserve: newInjuredReserve };
+            // Recompute, don't subtract: see passOnResigning above.
+            return { ...updated, totalPayroll: resigningPhasePayroll(updated, players, pendingIds) };
           }),
           freeAgents: [...state.freeAgents, ...Array.from(onUserTeam)],
-          // Off-team entries get pruned from the queue too — they're stale.
-          resigningPlayers: state.resigningPlayers.filter(e => !allIds.has(e.playerId)),
+          resigningPlayers,
         });
         void offTeam; // intentionally unused; resigningPlayers filter covers prune
       },
@@ -4801,22 +4834,25 @@ export const useGameStore = create<GameStore>()(
         }
 
         const tagSalary = computeFranchiseTagSalary(player.position, state.players, player);
-        const oldSalary = player.contract.salary;
-        const capSpaceNeeded = tagSalary - oldSalary;
+        const players = state.players.map(p =>
+          p.id === playerId
+            ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1, offseasonSigned: true } }
+            : p,
+        );
+        const resigningPlayers = state.resigningPlayers.filter(e => e.playerId !== playerId);
 
         // Allow tag even if slightly over cap (franchise tags are mandatory cap hits)
         set({
-          players: state.players.map(p =>
-            p.id === playerId
-              ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1, offseasonSigned: true } }
-              : p,
-          ),
+          players,
+          // The full tag counts toward next season. (Adding tag − old salary
+          // under-counted it by his old salary, which the re-sign window had
+          // already left out.)
           teams: state.teams.map(t =>
             t.id === state.userTeamId
-              ? { ...t, totalPayroll: t.totalPayroll + capSpaceNeeded, franchiseTagUsed: true }
+              ? { ...t, totalPayroll: resigningPhasePayroll(t, players, resigningPlayers.map(e => e.playerId)), franchiseTagUsed: true }
               : t,
           ),
-          resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+          resigningPlayers,
           newsItems: [
             ...state.newsItems,
             {
@@ -6673,6 +6709,15 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const player = state.players.find(p => p.id === playerId);
         if (!player || player.teamId !== state.userTeamId) return;
+
+        // During re-signing, a player still in the re-sign queue is on a deal
+        // that ended with the season just played. Releasing him (from his
+        // player card, Finances, ...) is the same as "Let Walk": nothing is
+        // left to owe, so it must not create dead money on next season's cap.
+        if (isPendingResign(state, playerId)) {
+          get().passOnResigning(playerId);
+          return;
+        }
 
         // Ensure guaranteed is set (handles old saves where it might be missing)
         const contract = { ...player.contract };

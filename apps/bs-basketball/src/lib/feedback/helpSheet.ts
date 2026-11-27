@@ -99,7 +99,7 @@ OFFSEASON ORDER
 - "Skip to season" skips re-signing: your undecided players leave as free agents, and you land in preseason free agency, where you still press "Start the Season".
 
 RE-SIGNING
-- After the draft, open "Re-sign" in the sidebar (the "Re-signing Window" page). Each expiring player has "Re-sign" (opens a negotiation) and "Let Walk" (he becomes a free agent right away). "Re-sign All" signs everyone at their asking price; "Let All Walk" releases them all.
+- After the draft, open "Re-sign" in the sidebar (the "Re-signing Window" page). Each expiring player has "Re-sign" (opens a negotiation) and "Let Walk" (he becomes a free agent right away). "Re-sign All" signs everyone at their asking price; "Let All Walk" releases them all. Letting an expiring player walk leaves no dead cap.
 - Anyone still undecided when you move on to free agency leaves as a free agent. Nobody is re-signed automatically.
 - Re-signing your own players has no cap check, so you can always go over the cap to keep them. A player who has ended talks can still be kept with "Pay his price".
 - Not in the game: a franchise tag, restricted free agency, qualifying offers and offer sheets.

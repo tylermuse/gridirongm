@@ -515,17 +515,25 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     if (faDay >= 30) {
       if (!onFA) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'soft', href: '/free-agency' });
       barActions.push({ key: 'to-draft', label: 'Advance to Draft →', variant: 'primary', onClick: handleAdvanceToDraft, grow: 1.3 });
-    } else if (onFA) {
+    } else if (onFA && !isSpectator) {
+      // The page's "Skip Day →" / "Skip Week ⏩" live down here on phones,
+      // with Skip Day as the main action under the thumb.
       barActions.push(
-        { key: 'end-fa', label: 'End FA Early', variant: 'outline', onClick: handleEndFAEarly },
-        { key: 'skip-week', label: 'Skip Week', variant: 'soft', onClick: advanceFAWeek },
-        { key: 'skip-day', label: 'Skip Day →', variant: 'primary', onClick: advanceFADay, grow: 1.2 },
+        { key: 'end-fa', label: 'End FA Early', variant: 'soft', onClick: handleEndFAEarly, disabled: !!simBusy },
+        {
+          key: 'fa-week', label: 'Skip Week ⏩', variant: 'outline',
+          onClick: () => runSim('fa-week', advanceFAWeek),
+          busy: simBusy === 'fa-week', disabled: !!simBusy,
+        },
+        {
+          key: 'fa-day', label: 'Skip Day →', variant: 'primary',
+          onClick: () => runSim('fa-day', advanceFADay),
+          busy: simBusy === 'fa-day', disabled: !!simBusy, grow: 1.2,
+        },
       );
     } else {
-      barActions.push(
-        { key: 'end-fa', label: 'End FA Early', variant: 'outline', onClick: handleEndFAEarly },
-        { key: 'go-fa', label: 'Go to Free Agency', variant: 'primary', href: '/free-agency', grow: 1.3 },
-      );
+      barActions.push({ key: 'end-fa', label: 'End FA Early', variant: 'outline', onClick: handleEndFAEarly });
+      if (!onFA) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'primary', href: '/free-agency', grow: 1.3 });
     }
   } else if (phase === 'draft') {
     const onDraft = pathname === '/draft';

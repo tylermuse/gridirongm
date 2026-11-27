@@ -78,8 +78,8 @@ export default async function PlayoffMachinePage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
-      <article className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-        <nav className="text-sm text-gray-500 mb-6">
+      <article className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-12 sm:pt-8">
+        <nav className="hidden sm:block text-sm text-gray-500 mb-4">
           <Link href="/" className="hover:text-gray-700">Home</Link>
           <span className="mx-2">/</span>
           <Link href="/predictions" className="hover:text-gray-700">NFL Playoff Odds</Link>
@@ -87,11 +87,13 @@ export default async function PlayoffMachinePage() {
           <span className="text-gray-900">Playoff Machine</span>
         </nav>
 
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 leading-tight">NFL Playoff Machine {odds.season}</h1>
-        <p className="text-gray-600 mt-2 mb-5 max-w-2xl">
-          Pick winners for the {odds.remainingGames} games left and see the playoff picture, the standings and every team&apos;s odds change.{' '}
-          <span className="text-gray-400">Through Week {odds.week - 1}. Updated Tuesdays.</span>
-        </p>
+        <div className="mb-5 sm:mb-6">
+          <h1 className="text-[1.75rem] sm:text-4xl font-extrabold tracking-tight text-gray-900 leading-tight">NFL Playoff Machine {odds.season}</h1>
+          <p className="text-gray-600 mt-1.5 max-w-2xl text-[15px] sm:text-base">
+            Every game left starts with the favorite picked (or switch to no picks). Flip any of the {odds.remainingGames} games and watch the playoff picture and every team&apos;s odds update.{' '}
+            <span className="text-gray-400 whitespace-nowrap">Through Week {odds.week - 1} · Updated Tuesdays</span>
+          </p>
+        </div>
 
         {games.length ? (
           <PlayoffMachine teams={teams} games={games} />
@@ -111,7 +113,7 @@ export default async function PlayoffMachinePage() {
         <section className="mt-12 max-w-3xl prose prose-gray prose-p:text-gray-700 prose-li:text-gray-700 prose-headings:text-gray-900">
           <h2>How the playoff machine works</h2>
           <p>
-            Every game you pick is locked in. Every game you leave open is simulated using the same win chances as our{' '}
+            Every game starts with the favorite picked. Every game you pick is locked in. Every game you clear is simulated using the same win chances as our{' '}
             <Link href="/predictions">weekly NFL playoff odds</Link>. Those chances come from BS Football&apos;s player ratings for each team&apos;s
             healthy starters, blended with each team&apos;s real point differential. We then play out the rest of the season{' '}
             {(2000).toLocaleString('en-US')} times in your browser and count how often each team gets in.
@@ -125,9 +127,9 @@ export default async function PlayoffMachinePage() {
 
           <h2>Frequently asked questions</h2>
           <h3>Can I share my scenario?</h3>
-          <p>Yes. Your picks are saved in the page address as you go. Hit <strong>Copy link</strong> to copy it, and anyone who opens it sees the same picks.</p>
+          <p>Yes. Your picks are saved in the page address as you go. Copy the address from your browser and anyone who opens it sees the same picks.</p>
           <h3>Why does the playoff picture differ from the odds?</h3>
-          <p>The playoff picture is one season: your picks, plus the favorite winning every game you haven&apos;t picked. The playoff % numbers come from 2,000 simulated seasons in which those other games can go either way, so an underdog can still sneak in.</p>
+          <p>The playoff picture is one season: your picks, plus the favorite winning every game you haven&apos;t picked. The playoff % numbers come from 2,000 simulated seasons in which unpicked games can go either way, so an underdog can still sneak in. Because every game starts picked, the odds start at 100% or 0%. Switch to <strong>No picks</strong>, or hit <strong>Clear week</strong>, to leave games open and see real odds.</p>
           <h3>What does &quot;Win out&quot; do?</h3>
           <p>Choose a team under <strong>Follow a team</strong>, then <strong>Win out</strong> marks them as the winner of every game they have left, so you can see if that gets them in.</p>
           <h3>How is this different from the playoff odds page?</h3>
