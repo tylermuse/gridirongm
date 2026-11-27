@@ -462,6 +462,22 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     if (faDay >= 30) {
       if (!onPage) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'soft', href: '/free-agency' });
       barActions.push({ key: 'to-draft', label: 'Advance to Draft →', variant: 'primary', onClick: handleAdvanceToDraft });
+    } else if (onPage && !isSpectator) {
+      // The page's "Skip Day →" / "Skip Week ⏩" live down here on phones,
+      // with Skip Day as the main action under the thumb.
+      barActions.push(
+        { key: 'end-fa', label: 'End FA Early', variant: 'soft', onClick: handleEndFAEarly, disabled: !!simBusy },
+        {
+          key: 'fa-week', label: 'Skip Week ⏩', variant: 'outline',
+          onClick: () => runSim('fa-week', () => useGameStore.getState().advanceFAWeek()),
+          busy: simBusy === 'fa-week', disabled: !!simBusy,
+        },
+        {
+          key: 'fa-day', label: 'Skip Day →', variant: 'primary',
+          onClick: () => runSim('fa-day', () => useGameStore.getState().advanceFADay()),
+          busy: simBusy === 'fa-day', disabled: !!simBusy,
+        },
+      );
     } else {
       barActions.push({ key: 'end-fa', label: 'End Free Agency Early', variant: onPage ? 'soft' : 'outline', onClick: handleEndFAEarly });
       if (!onPage) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'primary', href: '/free-agency' });

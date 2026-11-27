@@ -17,7 +17,7 @@
 const IN_SEASON = `
 NAVIGATION
 - The sidebar has: Dashboard, Standings, Playoffs, Stats, Rankings, Player Search, News, History (League); Roster, Staff, Finances (Team); Re-signing, Draft Preview, Draft, Draft Recap, Free Agency, Trades (Players); Settings (Other). At the bottom: "Feedback & questions", the account area, "Save/Load" and "New League".
-- On a phone the sidebar is hidden: tap the three-line menu button at the top-left to open it. The buttons the help calls "the top bar" (sim, advance, draft) sit in a bar at the bottom of the screen in every phase, and many labels are shortened ("Sim Wk", "To Deadline", "Live", "Next Game", "Sim All", "To My Pick", "Auto All", "Depth", "Practice").
+- On a phone the sidebar is hidden: tap the three-line menu button at the top-left to open it. The buttons the help calls "the top bar" (sim, advance, draft) sit in a bar at the bottom of the screen in every phase, and many labels are shortened ("Sim Wk", "To Deadline", "Live", "Next Game", "Sim All", "To My Pick", "Auto All", "End FA Early", "Depth", "Practice").
 - "Trades" disappears from the sidebar after the trade deadline and during the playoffs. "Draft Recap" appears only after a draft. "Expansion" appears only in the offseason.
 
 CUTTING / RELEASING PLAYERS
@@ -100,7 +100,7 @@ RE-SIGNING
 
 FREE AGENCY
 - To sign a free agent: open "Free Agency", click "Negotiate" on a player, set salary and years, then "Make Offer". If he accepts he signs on the spot. There is no bidding round against other teams and no waiting period.
-- Offseason free agency lasts 30 days. Each signing you make uses a day; "Skip Day →" and "Skip Week ⏩" pass time without signing. AI teams sign players every day, and asking prices fall as the days go by, so waiting is cheaper but riskier.
+- Offseason free agency lasts 30 days. Each signing you make uses a day; "Skip Day →" and "Skip Week ⏩" pass time without signing (on a phone they sit in the bottom bar next to "End FA Early"). AI teams sign players every day, and asking prices fall as the days go by, so waiting is cheaper but riskier.
 - Why an offer fails: it is too far below his asking price (he may counter a few times, then walk away), you do not have the cap space, or he shows a red "Refuses" badge and will not talk to your team (some of those soften later in free agency).
 - If you are over the salary cap you can only sign players at the league minimum.
 - You can also sign free agents during the regular season on the same page (titled "Sign Free Agents"). The page is closed during the playoffs, re-signing and the draft.
