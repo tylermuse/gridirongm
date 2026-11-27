@@ -985,14 +985,18 @@ function generateWeekNews(
 // Trade value formula (PRD-04)
 // ---------------------------------------------------------------------------
 
-// Draft pick value chart — exponential decay by overall pick number.
-// Inspired by NFL draft value charts (Jimmy Johnson). Pick #1 ≈ 3000, pick #10 ≈ 1670, pick #32 ≈ 400.
-// Value = 3000 * e^(-0.065 * (pickNum - 1)) for picks 1-224.
-// Steeper decay (was -0.032) so pick #1 (3000) is ~1.8x pick #10 (1670) rather than
-// only 1.33x — the AI no longer accepts pick #1 for pick #10 with a minimal sweetener
-// (kodak6lack). Still prevents exploits like trading pick #30 for pick #2.
+// Draft pick value chart by overall pick number, shaped like the NFL charts
+// (Jimmy Johnson): steep through round 1, then a long tail so later rounds still
+// carry real value.
+//   #1 3000 · #10 1670 · #32 539 · #64 201 · #96 101 · #128 53 · #160 28 · #224 8
+// Two exponentials: a steep head that keeps pick #1 at ~1.8x pick #10 (so the AI
+// won't take #10 + a minimal sweetener for #1 — kodak6lack), plus a slow tail.
+// The single-exponential chart that did that (3000 * e^(-0.065 * (n - 1)))
+// collapsed everything after round 1: #96 ≈ 6, #128 ≈ 1, rounds 5-7 ≈ 0, so
+// a 3rd-rounder was worth less than a 55 OVR backup.
 function draftPickPointValue(overallPick: number): number {
-  return Math.round(3000 * Math.exp(-0.065 * (overallPick - 1)));
+  const n = overallPick - 1;
+  return Math.round(2350 * Math.exp(-0.0818 * n) + 650 * Math.exp(-0.0197 * n));
 }
 
 // Estimate overall pick number from round + team record
@@ -1027,8 +1031,9 @@ export function playerTradeValue(player: Player): number {
   const subPosPremium = player.position === 'OL' && player.subPosition === 'OT' ? 1.2 : 1.0;
   // Cubic curve floored at 50 OVR. Calibration follow-up from 305mike +
   // milkytoad (4/27 PM): "50s should max at 5th-rd, 60s should max at 3rd-rd."
-  // Anchored to pick-chart values (5th rd ≈ 50, 3rd rd ≈ 250-400).
-  // Targets: 59 → ~36, 65 → ~167, 69 → ~339, 75 → ~772, 80 → ~1333, 90 → ~3160.
+  // Against the pick chart (draftPickPointValue: 5th rd ≈ 28-50, 3rd rd ≈ 100-200,
+  // 2nd rd ≈ 200-520). Targets: 59 → ~36, 65 → ~167, 69 → ~339, 75 → ~772,
+  // 80 → ~1333, 90 → ~3160.
   const normalized = Math.max(0, (player.ratings.overall - 50) / 45);
   const base = Math.pow(normalized, 3) * 4500;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 5;
@@ -1153,8 +1158,8 @@ export function generateDraftClassPreview(season: number): { season: number; gro
   return { season, groups };
 }
 
-/** Pick value based on estimated overall pick number.
- *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 1670, #20 ≈ 870, #32 ≈ 400, #64 ≈ 50. */
+/** Pick value based on estimated overall pick number (see draftPickPointValue):
+ *  #1 ≈ 3000, #10 ≈ 1670, #20 ≈ 940, #32 ≈ 540, #64 ≈ 200, #96 ≈ 100, #160 ≈ 28. */
 export function pickTradeValue(pick: DraftPick, teams?: Team[], draftPickOrder?: string[]): number {
   if (draftPickOrder && draftPickOrder.length > 0) {
     const idx = draftPickOrder.indexOf(pick.id);
