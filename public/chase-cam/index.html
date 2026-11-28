@@ -153,6 +153,7 @@ select{font:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptSimplifier } from './vendor160/meshopt_simplifier.module.js';   /* MIT (meshoptimizer 0.22): builds the players' distance levels at load */
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -194,7 +195,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22c'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22d'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -748,16 +749,17 @@ function makePlayer(t, number, big, opts={}){
   }
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
+  const nums=[];
   if(!opts.ref){
   const NO = MH2? (()=>{ const o=BOT.userData.numOff||{}, k=build.morph, mix=(side)=>{ const s=o.skill?.[side]??0; return s + k[0]*((o.line?.[side]??s)-s) + k[1]*((o.power?.[side]??s)-s); };
       return window.__numOff||{back:[0,-13,mix('back')-.9], front:[0,-9,mix('front')+1.0], sb:1.0, sf:.85, tilt:-.1}; })() : MH? (window.__numOff||{back:[0,-13,-6.2], front:[0,-9,24.6], sb:1.0, sf:.85, tilt:-.1}) : modelChoice==='fp27'? (window.__numOff||{back:[0,-13,-13.5], front:[0,-9,14.5], sb:1.0, sf:.85, tilt:-.12}) : {back:[0,-8.5,-16.3], front:[0,-11.5,16.6], sb:1.05, sf:.85, tilt:-.18};
-  const numBack = new THREE.Mesh(GEO.num, numMat(number,t)); numBack.scale.set(NO.sb,NO.sb,1); attach(bones.Spine2, numBack, new THREE.Vector3(...NO.back), sc).rotation.y = Math.PI;
-  const numFront = new THREE.Mesh(GEO.num, numMat(number,t)); numFront.scale.set(NO.sf,NO.sf,1); const nf = attach(bones.Spine2, numFront, new THREE.Vector3(...NO.front), sc); nf.rotation.x = NO.tilt; }
+  const numBack = new THREE.Mesh(GEO.num, numMat(number,t)); nums.push(numBack); numBack.scale.set(NO.sb,NO.sb,1); attach(bones.Spine2, numBack, new THREE.Vector3(...NO.back), sc).rotation.y = Math.PI;
+  const numFront = new THREE.Mesh(GEO.num, numMat(number,t)); nums.push(numFront); numFront.scale.set(NO.sf,NO.sf,1); const nf = attach(bones.Spine2, numFront, new THREE.Vector3(...NO.front), sc); nf.rotation.x = NO.tilt; }
   if(kit.visor && modelChoice!=='fp27' && !MH){ const vis=new THREE.Mesh(new THREE.CylinderGeometry(.104,.104,.052,24,1,true,Math.PI*.62,Math.PI*.76), new THREE.MeshStandardMaterial({color:'#0d1218', transparent:true, opacity:.82, roughness:.08, metalness:.55, side:THREE.DoubleSide})); vis.rotation.y=Math.PI; attach(bones.Head, vis, new THREE.Vector3(0,9.5,-.5), sc); }
   if(kit.towel){ const tw=new THREE.Mesh(new THREE.PlaneGeometry(.085,.23), new THREE.MeshLambertMaterial({color:'#ececec', side:THREE.DoubleSide})); attach(bones.Hips, tw, new THREE.Vector3(-11,-15,8.5), sc).rotation.set(.1,.25,.1); }
   { const face=[], far=[], geo=[]; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; const lv=GEO_LODS.get(o.geometry); if(lv) geo.push({m:o, lv});
       if(/^MH_(EYES|BROWS|LASHES)$/.test(o.name)) face.push(o); else if(/^(frosted_glass|trim|MH_ARMSLEEVE)$/.test(o.name)) far.push(o); });
-    if(face.length || far.length || geo.length) LODS.add({root, face, far, geo, lvl:0}); }
+    if(face.length || far.length || geo.length || nums.length) LODS.add({root, face, far, geo, nums, lvl:0}); }
   const mixer = new THREE.AnimationMixer(model);
   const clip = n => BOT.animations.find(a=>a.name===n);
   const act = { idle: mixer.clipAction(clip('idle')), walk: mixer.clipAction(clip('walk')), run: mixer.clipAction(clip('run')) };
@@ -892,7 +894,20 @@ function makeRef(x,z,face,opts={}){
       limb.upper.rotation.set(x,y,z);limb.fore.rotation.x=elbow;
     }
   }};
-  r.update(0);refObjs.push(r);return r;
+  r.update(0);
+  /* PERF 11/27: the coaches, photographers and chain crew stand still (armsDown), but each was ~22 separate meshes: 15 figures were ~330 draw calls, more than
+     the 22 players on the field. A still figure is baked into ONE vertex-coloured mesh in the root's space (the root still moves and scales: the chain crew
+     walks with the sticks). They also no longer join refObjs: clearPlayers() removes every refObjs root at each new formation, and buildSideline() only
+     rebuilds when the teams change, so the whole sideline staff vanished after the first snap and the chains stood on their own. */
+  if(opts.armsDown){ try{ root.updateWorldMatrix(true,true); const inv=root.matrixWorld.clone().invert(), parts=[], rel=new THREE.Matrix4(); let ok=true;
+      root.traverse(o=>{ if(!o.isMesh) return; if(o.material.map) ok=false; const g=o.geometry.clone().applyMatrix4(rel.multiplyMatrices(inv,o.matrixWorld)); g.deleteAttribute('uv');
+        const c=o.material.color, n=g.attributes.position.count, col=new Float32Array(n*3); for(let i=0;i<n;i++){ col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; } g.setAttribute('color', new THREE.BufferAttribute(col,3)); parts.push(g); });
+      const mg = ok && parts.length? mergeGeometries(parts.map(g=>g.index? g.toNonIndexed() : g)) : null;
+      if(mg){ const dead=[]; root.traverse(o=>{ if(o.isMesh) dead.push(o); }); dead.forEach(o=>{ o.parent.remove(o); o.geometry.dispose(); o.material.dispose(); });
+        const one=new THREE.Mesh(mg, new THREE.MeshLambertMaterial({vertexColors:true})); one.receiveShadow=true; root.add(one); r.update=()=>{}; }
+      parts.forEach(g=>g.dispose()); }catch(e){ console.warn('sideline figure merge failed', e); }
+    return r; }
+  refObjs.push(r);return r;
 }
 const R = (a,b)=>a+Math.random()*(b-a);
 const gauss=(m,s)=>{ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random(); return m+s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
@@ -2838,12 +2853,15 @@ const QUALITY = (()=>{
     resetStats:()=>{ sumAll=0; nAll=0; } };
   window.__q = api; return api; })();
 function lodSweep(){ const cp=camera.position, h=renderer.domElement.clientHeight||700, k=Math.tan(camera.fov*Math.PI/360)*700/h;
-  for(const e of LODS){ if(!e.root.parent){ e.face.forEach(m=>m.visible=true); e.far.forEach(m=>m.visible=true); e.geo.forEach(x=>{ x.m.geometry=x.lv[0]; }); LODS.delete(e); continue; }
+  for(const e of LODS){ if(!e.root.parent){ e.face.forEach(m=>m.visible=true); e.far.forEach(m=>m.visible=true); e.geo.forEach(x=>{ x.m.geometry=x.lv[0]; }); e.nums.forEach(m=>m.visible=true); LODS.delete(e); continue; }
     const d=cp.distanceTo(e.root.position)*k/.445;   /* metres at the stock 48° lens on a 700 px tall view: a telephoto or a big screen shows the detail further out */
     const f=d<16, r=d<45; for(const m of e.face) if(m.visible!==f) m.visible=f; for(const m of e.far) if(m.visible!==r) m.visible=r;
     /* geometry level: full inside ~20 m, 40% to ~42 m, 14% beyond (a little hysteresis so a man on the line between two levels does not flicker) */
     const dl=d/LOD_BIAS, h0=e.lvl>0? 18:20, h1=e.lvl>1? 39:42, lvl = LOD_PIN!=null? LOD_PIN : dl<h0? 0 : dl<h1? 1 : 2;
-    if(lvl!==e.lvl){ e.lvl=lvl; for(const x of e.geo) x.m.geometry=x.lv[lvl]; } } }
+    if(lvl!==e.lvl){ e.lvl=lvl; for(const x of e.geo) x.m.geometry=x.lv[lvl]; }
+    /* a chest or back number that faces away from the lens is behind the man's own torso: 2 draws a player become 1 (the plane's +z is its face; matrixWorld is last frame's, a frame late at worst) */
+    for(const m of e.nums){ const w=m.matrixWorld.elements, dx=cp.x-w[12], dy=cp.y-w[13], dz=cp.z-w[14], dot=w[8]*dx+w[9]*dy+w[10]*dz;
+      const v = dot > -.2*Math.hypot(w[8],w[9],w[10])*Math.hypot(dx,dy,dz); if(m.visible!==v) m.visible=v; } } }
 new ResizeObserver(resize).observe(stage);
 
 // ---------- Outcome logic (mirrors liveCoachEngine odds) ----------
