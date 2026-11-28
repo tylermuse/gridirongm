@@ -195,7 +195,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22i'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22j'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1112,8 +1112,9 @@ function planTackle(keys, fixedIdx, cands, depth=0, maxZ=52){
 function lineAt(b, t, tEndCap=99){ const pr=b.pr, tt=Math.min(t, tEndCap);
   const e=Math.max(0, Math.min(tt-pr.start, pr.dur)); const j=tt*1.0; const late=Math.max(0, tt-pr.start-pr.dur);   // after the first push: keep collapsing, work the edges
   const px = pr.bx + .4*Math.sin(j*4.2+pr.seed) + .14*Math.sin(j*9.1+pr.seed*3) + b.dx + (pr.dv<0? Math.sign(pr.bx||1)*Math.min(1.4, late*.9) : 0)
+           - (pr.sq? Math.sign(pr.bx||1)*Math.min(1.3, e*pr.sq) : 0)   /* an edge rusher bends the corner: his fight drifts in toward the quarterback as it goes back */
            + (b.slide? b.slide.dx*smooth01((tt-b.slide.t0)/b.slide.dur) : 0),
-        pz = pr.bz + pr.dv*e + (pr.dv<0? -Math.min(1.6, late*.55) : 0) + .26*Math.sin(j*5.3+pr.seed*2) + (pr.dv>0? late*.35 : 0);
+        pz = pr.bz + pr.dv*e - (pr.arc||0)*e + (pr.dv<0? -Math.min(pr.sq!=null? 1.2 : 1.6, late*.55) : 0) + .26*Math.sin(j*5.3+pr.seed*2) + (pr.dv>0? late*.35 : 0);
   return [px + (b.side>0? .18:-.18)*Math.sin(j*6.4+pr.seed), pz + b.side*(.43 + .07*Math.sin(j*7.5+pr.seed))];
 }
 function chaseB(tgt, start, tArr, a){ const lat = Math.sign((a.x-tgt.x)*(tgt.vz||1) - (a.z-tgt.z)*(tgt.vx||0)) || 1;
@@ -1154,7 +1155,13 @@ function choreograph(res){
   pairs.forEach(([di,oi],k)=>{
     if(isSack && !res.blitz && di===0) return;              // the sacking end beats his man (scripted below); on a blitz he stays locked up
     const dl=D.dl[di], ol=O.ol[oi];
-    const pr = { bx:(dl.x+ol.x)/2, bz:z0+.05, dv: runBlock? (res.yards<=0? -.85 : 1.0) : isSack? -.8 : -1.35, dur: runBlock? 2.1 : 2.6, seed:k*1.7+R(0,3), start:snap };
+    /* REALISM 11/27 (sim-realism harness): on a dropback the line had given 3.7 yd by the throw (real: 4.4) and the nearest defender to the quarterback was 4.7 yd
+       away (real: 2.8), so every throw came from a clean pocket. The rush now drives the line back at 1.62 yd/s (was 1.35), and the two ends bend in and get
+       deeper than the tackles as they go (sq, arc): the pocket closes from the edges the way a real one does. A held ball collapses a little less late (1.2 yd,
+       was 1.6) so the blockers still stop short of the passer. Sacks and runs are unchanged. */
+    const passSet = !runBlock && !isSack, edge = di===0 || di===3;
+    const pr = { bx:(dl.x+ol.x)/2, bz:z0+.05, dv: runBlock? (res.yards<=0? -.85 : 1.0) : isSack? -.8 : -1.62, dur: runBlock? 2.1 : 2.6, seed:k*1.7+R(0,3), start:snap,
+      sq: passSet? (edge? .42 : 0) : null, arc: passSet && edge? .3 : 0 };
     ol.behav = {type:'line', pr, side:-1, x0:ol.x, z0:ol.z, dx:0}; dl.behav = {type:'line', pr, side:1, x0:dl.x, z0:dl.z, dx:0};
     ol.engage = dl; dl.engage = ol;
   });
