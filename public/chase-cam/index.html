@@ -201,7 +201,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22p'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22q'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -830,8 +830,22 @@ const ROUTE_ACC = 1.5;   /* a receiver releasing into a route builds speed for l
 /* A route (a path with acc set) rounds the breaks flagged with a 4th element on the keyframe: for a quarter to half a second either side of the break the
    receiver bends through it and slows with the sharpness of the turn (a square cut is run at about 70% speed, a hitch nearly stops) instead of
    pivoting on a dime at full speed. Real receivers made one such pivot in 64,741 routes (2023 tracking). Keyframe times are unchanged. */
+/* Every corner of a scripted path is rounded, not only the flagged route breaks (b22q): a man running a keyframed path used to turn on the spot at each key, at full speed.
+   Measured over 150 plays that was 1.5 instant cuts of 60 degrees or more per play, mostly receivers and linebackers. A corner under 20 degrees, or one with a stop on
+   either side, is left as it was, and so is any key where the man meets the ball (a catch, a handoff, a pass that falls at his feet): choreograph() marks those
+   with -1 in the key's fourth slot, because rounding there moved him up to a yard off the ball. Those corners are eased after the key instead, so he is exactly on the ball when it arrives. ?cuts=0 restores the old behaviour. */
+const ROUND_ALL = new URLSearchParams(location.search).get('cuts') !== '0';
 function pathAt(k, t, acc){
-  if(acc != null){ for(let i=1;i<k.length-1;i++){ const c=k[i]; if(!c[3]) continue; const a0=k[i-1], b0=k[i+1], turn=Math.abs(Math.atan2(Math.sin(Math.atan2(b0[1]-c[1],b0[2]-c[2])-Math.atan2(c[1]-a0[1],c[2]-a0[2])), Math.cos(Math.atan2(b0[1]-c[1],b0[2]-c[2])-Math.atan2(c[1]-a0[1],c[2]-a0[2]))));
+  if(acc != null || ROUND_ALL){ for(let i=1;i<k.length-1;i++){ const c=k[i]; if(!c[3] && !(ROUND_ALL && Math.abs(t-c[0]) < .5)) continue; const a0=k[i-1], b0=k[i+1];
+    const l0=Math.hypot(c[1]-a0[1],c[2]-a0[2]), l1=Math.hypot(b0[1]-c[1],b0[2]-c[2]); if(!c[3] && (l0 < .3 || l1 < .3)) continue;
+    const turn=Math.abs(Math.atan2(Math.sin(Math.atan2(b0[1]-c[1],b0[2]-c[2])-Math.atan2(c[1]-a0[1],c[2]-a0[2])), Math.cos(Math.atan2(b0[1]-c[1],b0[2]-c[2])-Math.atan2(c[1]-a0[1],c[2]-a0[2]))));
+    if(c[3] !== true && c[3] !== 1 && turn < .35) continue;
+    if(c[3] === -1){ /* he meets the ball at this key: be exactly on it at that instant, then carry the old heading into the turn over the next beat (a cubic from the key, old velocity in, new velocity out) */
+      const T=Math.min(2*(.24+.26*turn/Math.PI), .9*(b0[0]-c[0])), u=(t-c[0])/T; if(!ROUND_ALL || u<=0 || u>=1 || c[0]-a0[0] < .05) continue;
+      const B=pathLin(k,c[0]+T,acc), B2=pathLin(k,c[0]+T+.02,acc), vi=[(c[1]-a0[1])/(c[0]-a0[0]), (c[2]-a0[2])/(c[0]-a0[0])], vo=[(B2[0]-B[0])/.02, (B2[1]-B[1])/.02];
+      const sp=Math.hypot(vi[0],vi[1]), so=Math.hypot(vo[0],vo[1]), cap=sp>1.2*so+.5? (1.2*so+.5)/sp : 1;   /* a man who arrives much faster than he leaves has braked by the key */
+      const u2=u*u, u3=u2*u, h00=2*u3-3*u2+1, h10=u3-2*u2+u, h01=-2*u3+3*u2, h11=u3-u2;
+      return [h00*c[1]+h10*T*vi[0]*cap+h01*B[0]+h11*T*vo[0], h00*c[2]+h10*T*vi[1]*cap+h01*B[1]+h11*T*vo[1]]; }
     const d=Math.min(.24+.26*turn/Math.PI, .45*(c[0]-a0[0]), .45*(b0[0]-c[0]));   /* a sharper break takes longer to get through */
     if(t>c[0]-d && t<c[0]+d){ const A=pathLin(k,c[0]-d,acc), B=pathLin(k,c[0]+d,acc), u=(t-(c[0]-d))/(2*d), w=1-u; return [w*w*A[0]+2*u*w*c[1]+u*u*B[0], w*w*A[1]+2*u*w*c[2]+u*u*B[1]]; } } }
   return pathLin(k, t, acc);
@@ -2132,6 +2146,9 @@ function choreograph(res){
     if(tGo <= b.start + .05) return;
     const pre = P([snap,c.x,c.z],[tGo,c.x,c.z+.8*(tGo-snap)]); c.behav = pre; b.start = tGo; ev(tGo, ()=>{ if(c.behav===pre) c.behav = b; }); });
   const runFast = isRun && !scr && RUN_RATE!==1, paFast = pa && paFastUntil > 0 && RUN_RATE!==1;   /* see RUN_RATE */
+  { /* keep path corners exact where a man meets the ball (see pathAt) */
+    const keep=(a,t,x,z)=>{ if(a && a.behav && a.behav.type==='path') for(const c of a.behav.k) if(!c[3] && Math.abs(c[0]-t) < .75 && (x==null || Math.hypot(c[1]-x, c[2]-z) < 2)) c[3] = -1; };
+    for(const sg of ballPlan){ if(sg.held) keep(sg.held, sg.t0); if(sg.flight) actors.forEach(a=>keep(a, sg.t1, sg.flight.x1, sg.flight.z1)); } }
   play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, holdOn, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal,
     rate: (runFast || paFast)? RUN_RATE : 1, rateUntil: runFast? (res.yards>6 || res.oob? tHole : (tEnd ?? 3)) : paFast? paFastUntil : 0};
   if(tackler && carrier){ play.tackler = tackler; play.tackleAt = (res.lock && res.kind==='int' && res.endAt!=null)? null : tackleAtFn; }   /* a return the game already spotted (res.endAt) is tackled at the planned spot only: armed early (the intended receiver is standing right at the pick) the returner broke free and ran until the 6 s cap, ending yards short of or past where the next drive starts */
