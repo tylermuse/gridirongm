@@ -18,7 +18,7 @@ const IN_SEASON = `
 NAVIGATION
 - The sidebar has: Dashboard, Standings, Playoffs, Stats, Rankings, Player Search, News, History (League); Roster, Staff, Finances (Team); Re-signing, Draft Preview, Draft, Draft Recap, Free Agency, Trades (Players); Settings (Other). At the bottom: "Feedback & questions", the account area, "Save/Load" and "New League".
 - On a phone the sidebar is hidden: tap the three-line menu button at the top-left to open it. The buttons the help calls "the top bar" (sim, advance, draft) sit in a bar at the bottom of the screen in every phase, and many labels are shortened ("Sim Wk", "To Deadline", "Live", "Next Game", "Sim All", "To My Pick", "Auto All", "End FA Early", "Depth", "Practice").
-- "Trades" disappears from the sidebar after the trade deadline and during the playoffs. "Draft Recap" appears only after a draft. "Expansion" appears only in the offseason.
+- "Trades" disappears from the sidebar after the trade deadline and during the playoffs. "Draft Recap" appears only after a draft. "Expansion" appears only during "Re-signing" or "Free Agency", and only with "God Mode" on.
 
 CUTTING / RELEASING PLAYERS
 - To cut a player: open "Roster" in the sidebar, stay on the "Roster" tab, click "Actions ▾" at the right end of the player's row, then "Cut Player". The row then shows a red "Cut (save $XM, $YM dead)" button: click it to confirm, or "✕" to back out. On a phone the roster table scrolls sideways and "Actions ▾" is at the far right of the row.
@@ -148,7 +148,7 @@ STARTING A LEAGUE
 - Just watching (spectating): choose "Spectator (no team)" on the start screen when you start a league. A league you are already running as a GM cannot be switched to spectator, so start a new one with "New League".
 - Historic rosters (1994, 1999 and 2007 seasons): go to bs-football.com/rosters and click "Play in BS Football →".
 - Your own roster or league file: on the start screen open "Import League File" and upload a Football GM league file or paste its link.
-- Expansion teams: "Expansion" appears in the sidebar during the offseason. It only works with "God Mode" turned on.
+- Expansion teams: "Expansion" appears in the sidebar only during the "Re-signing" or "Free Agency" phase, and only with "God Mode" turned on.
 
 ACCOUNT AND PREMIUM
 - You do not need an account to play. Sign in (Google, Discord, or email and password) for Premium, cloud saves and GM Rankings.
