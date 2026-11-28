@@ -195,7 +195,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22h'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22i'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -2665,7 +2665,7 @@ function calibrateFeet(){ if(!FEET || !BOT) return; try{   /* where the ankles s
   FEETREF.y=(p.y+q.y)/2/s; FEETREF.hw=Math.abs(p.x-q.x)/2/s; FEETREF.z=(p.z+q.z)/2/s; FEETREF.qL=L.getWorldQuaternion(new THREE.Quaternion()); FEETREF.qR=R.getWorldQuaternion(new THREE.Quaternion()); FEETREF.ok=true;
   }catch(e){ console.warn('foot calibration failed', e); } }
 function footPlant(a, dt, sp, stanceW){
-  if(!FEETREF.ok || a.isRef || !a.bones.LeftUpLeg) return;
+  if(!FEETREF.ok || a.isRef || a.roleKey==='qb' || !a.bones.LeftUpLeg) return;   /* not the quarterback: his drop is the captured backpedal, and stepped feet under it read as a strange walk (Tyler 11/27) */
   const B=a.bones, fp = a.fp || (a.fp={w:0, vx:0, vz:0, clock:0, drop:0, init:false, f:[{s:1},{s:-1}]});
   const cel = a.celebrate!=null && a.celebrate!==false;
   const on = dt>0 && a.down==null && !a.mocapActive && !a.mocapThrow && !a.mocapCeleb && !cel && !a.hold && a.kickT==null && !(a.y>0) && !(stanceW>.01);
