@@ -163,6 +163,12 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 window.THREE = THREE;
 (() => {
 const LOOK2 = new URLSearchParams(location.search).get('look')==='2';
+/* ?splits=1.6 — line spacing (yards between neighbouring offensive linemen). The sim lines them up 2.55 apart; real lines are about 1.55. That one number is
+   baked into the alignment, the run gaps, the blitz lanes, the sack paths and the tight ends' releases, so every one of those goes through lx(): inside the
+   tackles a coordinate scales with the spacing; from the tackle out to 10 yds the shift fades to nothing (the slot and the wideouts stay where they are).
+   Without the parameter LK is 1 and lx() returns its argument untouched: the default sim is exactly as it was. */
+const OLS = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('splits')); return v>=1.4 && v<=2.55? v : 2.55; })(), LK = OLS/2.55;
+const lx = x => { if(LK===1) return x; const a=Math.abs(x), T=5.1, D=T*(1-LK); return Math.sign(x)*(a<=T? a*LK : a<10? a - D*(10-a)/(10-T) : a); };
 const MOTION2 = new URLSearchParams(location.search).get('motion')==='2';   /* ?motion=2 — motion pass: heads track the ball, lean into acceleration, bank through cuts, per-player stride (see motionLayer) */   /* ?look=2 — the lighting + materials pass (reflections, clear-coated helmets, ambient occlusion, sharper shadows, grass detail, longer lens); off = the shipped look, untouched */
 let modelChoice = ({mh1:'mh1', mh2:'mh2'})[new URLSearchParams(location.search).get('model')] || 'fp27';   /* ?model=mh1 — the playerlab build: MakeHuman body + generated pads and uniform on the same skeleton and clips (see player-mh1.js) */
 const MH = modelChoice==='mh1' || modelChoice==='mh2', MH2 = modelChoice==='mh2';   /* mh2: + face, draped jersey with painted trim, body-type morphs, gloves/sleeves as kit */
@@ -195,7 +201,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22j'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22k'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -945,7 +951,7 @@ function placeChain(z0){ if(!sideline.chainRods) return; const zs=[z0, z0+Math.m
    compares the two; the next line must stay one line of valid JSON). Their paths start from wherever they stand, so the play runs as before. */
 const LOOKS = {"blitz":{"lb":[[-4.3,2.2],[0,2.4],[4.3,2.2]],"cb":[[-20,6.5],[19.5,6.5]],"s":[[-3,11.5],[8,7.5]]},"stacked_box":{"lb":[[-5,3.3],[0,3.3],[5,3.3]],"cb":[[-20,6.5],[19.5,6.5]],"s":[[0,14],[8.5,4.2]]},"two_high":{"lb":[[-5,5.2],[0,5.2],[5,5.2]],"cb":[[-20,6.5],[19.5,6.5]],"s":[[-12,15],[12,15]]},"man_press":{"lb":[[-5,4.8],[0,4.8],[5,4.8]],"cb":[[-20,1.6],[19.5,1.6]],"s":[[-11.5,4.5],[1,13]]},"soft_zone":{"lb":[[-7,6.3],[0,6.3],[7,6.3]],"cb":[[-20,9.5],[19.5,9.5]],"s":[[-10,16],[10,16]]}};
 function applyLook(z0){ const L = LOOKS[G.look]; if(!L) return; const put=(a,p)=>{ a.x=p[0]; a.z=Math.min(z0+p[1], 57); };
-  D.lb.forEach((a,i)=>put(a, L.lb[i])); put(D.cbL, L.cb[0]); put(D.cbR, L.cb[1]); put(D.sL, L.s[0]); put(D.sR, L.s[1]); }
+  D.lb.forEach((a,i)=>put(a, [lx(L.lb[i][0]), L.lb[i][1]])); put(D.cbL, L.cb[0]); put(D.cbR, L.cb[1]); put(D.sL, L.s[0]); put(D.sR, L.s[1]); }
 /* Offensive formations (Tyler 11/20: "players aren't always lined up in the shotgun — sometimes there's I formation or others"). The page
    sends one with each snap (liveSim3d.ts simFormation) and the same eleven bodies line up differently. uc: the QB takes the snap under
    center; fb: the slot body is a fullback (the RB2) in front of the tailback; te2: the left receiver's body is a second tight end;
@@ -967,13 +973,13 @@ function setupFormation(kind){
     const a=makePlayer(t,n,big,o); a.x=x; a.z=z; a.face=face; a.num=n; a.skinTone=o.skin||null; a.teamId=t.id; a.roleKey=key||null; actors.push(a); return a; };
   const rbKey = (kind==='fg' || kind==='kickoff')? 'k' : kind==='punt'? 'p' : 'rb';   /* the kicker / punter stands in the back's spot on special teams */
   const rbAt = rbSpot(FM || FORMS.shotgun);
-  O = { ol:[-5.1,-2.55,0,2.55,5.1].map((x,i)=>add(to,[72,66,55,61,78][i],true,x,z0-.75,0,null,'ol',i)),
-        te: FM && FM.teOut? add(to,87,false,11,z0-1.1,0,{profile:'power'},'te') : add(to,87,false,6.2,z0-1,0,{profile:'power'},'te'),
-        wrL: FM && FM.te2? add(to,81,false,-6.2,z0-1,0,{profile:'power'},'te2') : add(to,11,false,-20,z0-.9,0,null,'wr',1),
+  O = { ol:[-5.1,-2.55,0,2.55,5.1].map(lx).map((x,i)=>add(to,[72,66,55,61,78][i],true,x,z0-.75,0,null,'ol',i)),
+        te: FM && FM.teOut? add(to,87,false,11,z0-1.1,0,{profile:'power'},'te') : add(to,87,false,lx(6.2),z0-1,0,{profile:'power'},'te'),
+        wrL: FM && FM.te2? add(to,81,false,lx(-6.2),z0-1,0,{profile:'power'},'te2') : add(to,11,false,-20,z0-.9,0,null,'wr',1),
         slot: FM && FM.fb? add(to,44,false,0,z0-4.4,0,{profile:'power'},'fb') : add(to,15,false,-11.5,z0-1.1,0,null,'wr',2),
         wrR: add(to,84,false,19.5,z0-.9,0,null,'wr',0), qb: add(to,7,false,0,z0+(FM && FM.uc? QB_UC : -5),0,{profile:'qb'},'qb'), rb: add(to,28,false,rbAt[0],z0+rbAt[1],0,{profile:'power'},rbKey) };
   const zs = Math.min(z0+13, 58), zl=Math.min(z0+4.8, 57), zc=Math.min(z0+6.5, 57);
-  D = { dl:[-6.4,-2.2,2.2,6.4].map((x,i)=>add(td,[91,97,93,99][i],true,x,z0+1.7,Math.PI,null,'dl',i)),
+  D = { dl:[-6.4,-2.2,2.2,6.4].map(lx).map((x,i)=>add(td,[91,97,93,99][i],true,x,z0+1.7,Math.PI,null,'dl',i)),
         lb:[-5,0,5].map((x,i)=>add(td,[52,54,58][i],false,x,zl,Math.PI,{profile:'power'},'lb',[1,0,2][i])),
         cbL: add(td,24,false,-20,zc,Math.PI,null,'cb',1), cbR: add(td,21,false,19.5,zc,Math.PI,null,'cb',0),
         sL: add(td,31,false,-9,zs,Math.PI,null,'s',1), sR: add(td,33,false,7.5,zs-1,Math.PI,null,'s',0) };
@@ -1111,7 +1117,7 @@ function planTackle(keys, fixedIdx, cands, depth=0, maxZ=52){
    tackle who will be in the lane when it gets there). b.slide: he works laterally off the block into the throwing lane. */
 function lineAt(b, t, tEndCap=99){ const pr=b.pr, tt=Math.min(t, tEndCap);
   const e=Math.max(0, Math.min(tt-pr.start, pr.dur)); const j=tt*1.0; const late=Math.max(0, tt-pr.start-pr.dur);   // after the first push: keep collapsing, work the edges
-  const px = pr.bx + .4*Math.sin(j*4.2+pr.seed) + .14*Math.sin(j*9.1+pr.seed*3) + b.dx + (pr.dv<0? Math.sign(pr.bx||1)*Math.min(1.4, late*.9) : 0)
+  const px = pr.bx + .4*Math.min(1,LK+.2)*Math.sin(j*4.2+pr.seed) + .14*Math.sin(j*9.1+pr.seed*3) + b.dx + (pr.dv<0? Math.sign(pr.bx||1)*Math.min(1.4, late*.9) : 0)
            - (pr.sq? Math.sign(pr.bx||1)*Math.min(1.3, e*pr.sq) : 0)   /* an edge rusher bends the corner: his fight drifts in toward the quarterback as it goes back */
            + (b.slide? b.slide.dx*smooth01((tt-b.slide.t0)/b.slide.dur) : 0),
         pz = pr.bz + pr.dv*e - (pr.arc||0)*e + (pr.dv<0? -Math.min(pr.sq!=null? 1.2 : 1.6, late*.55) : 0) + .26*Math.sin(j*5.3+pr.seed*2) + (pr.dv>0? late*.35 : 0);
@@ -1165,8 +1171,8 @@ function choreograph(res){
     ol.behav = {type:'line', pr, side:-1, x0:ol.x, z0:ol.z, dx:0}; dl.behav = {type:'line', pr, side:1, x0:dl.x, z0:dl.z, dx:0};
     ol.engage = dl; dl.engage = ol;
   });
-  { const c=O.ol[2], mate=O.ol[3]; c.behav = {type:'line', pr: mate.behav.pr, side:-1, x0:c.x, z0:c.z, dx:-.55}; c.engage = D.dl[2]; }
-  O.te.behav = runBlock? P([snap,6.2,z0-1],[snap+.6,6,z0+.9],[snap+1.4,5.2,z0+2.6]) : PR([snap,6.2,z0-1],[snap+1.5,6.8,z0+3,1],[snap+2.4,4,z0+7,1],[snap+3.9,-1,z0+15]);
+  { const c=O.ol[2], mate=O.ol[3]; c.behav = {type:'line', pr: mate.behav.pr, side:-1, x0:c.x, z0:c.z, dx:-.55*LK}; c.engage = D.dl[2]; }
+  O.te.behav = runBlock? P([snap,lx(6.2),z0-1],[snap+.6,lx(6),z0+.9],[snap+1.4,lx(5.2),z0+2.6]) : PR([snap,lx(6.2),z0-1],[snap+1.5,lx(6.8),z0+3,1],[snap+2.4,4,z0+7,1],[snap+3.9,-1,z0+15]);
   // default receiver routes
   const goRoute=(a,dx=0)=>{ const zEndR=Math.min(a.z+27, 58.5); return PR([snap,a.x,a.z],[snap+ROUTE_ACC/2+3.55*(zEndR-a.z)/27,a.x+dx,zEndR]); };   /* cruises at 7.6 yd/s */
   O.wrL.behav = runBlock? F(D.cbL, snap+.1, 6.6, [0,-.9], 1.0) : goRoute(O.wrL,1.5);
@@ -1175,7 +1181,7 @@ function choreograph(res){
   /* bodies the formation moved: the fullback stays in to protect on a pass (a run's lead block is planned with the run); the second tight
      end blocks down or runs the mirror of the tight end's route; a split tight end blocks the safety or runs a slot route */
   if(FM.fb) O.slot.behav = P([snap,O.slot.x,O.slot.z],[snap+.35,-1.3,z0-3.6],[snap+1.6,-1.7,z0-3.9]);
-  if(FM.te2) O.wrL.behav = runBlock? P([snap,-6.2,z0-1],[snap+.6,-6,z0+.9],[snap+1.4,-5.2,z0+2.6]) : PR([snap,-6.2,z0-1],[snap+1.5,-6.8,z0+3,1],[snap+2.4,-4,z0+7,1],[snap+3.9,1,z0+15]);
+  if(FM.te2) O.wrL.behav = runBlock? P([snap,lx(-6.2),z0-1],[snap+.6,lx(-6),z0+.9],[snap+1.4,lx(-5.2),z0+2.6]) : PR([snap,lx(-6.2),z0-1],[snap+1.5,lx(-6.8),z0+3,1],[snap+2.4,-4,z0+7,1],[snap+3.9,1,z0+15]);
   if(FM.teOut) O.te.behav = runBlock? F(D.sR, snap+.2, 6.4, [0,-.9], 1.0) : PR([snap,11,z0-1.1],[snap+1.5,10,z0+3,1],[snap+3.0,4.5,z0+9,1],[snap+5.3,-2,z0+20]);
   // coverage
   if(runBlock){ // corners read run: short backpedal facing the play, then come up to support
@@ -1209,11 +1215,11 @@ function choreograph(res){
     const pickSide = o.pickSide ?? 1, rbIn = !o.rbBusy, fbIn = !!FM.fb && !o.fbBusy, tRel = o.tRel ?? tArr+.4;
     const len = p => { let L=0; for(let i=1;i<p.length;i++) L += Math.hypot(p[i][0]-p[i-1][0], p[i][1]-p[i-1][1]); return L; };
     [D.lb[0], D.lb[2]].forEach(lb=>{ if(lb===o.skip) return;
-      const sd = Math.sign(lb.x)||1, gx = sd*3.9;   /* the B gap: between the guard's man and the tackle's, where the look lines him up */
+      const sd = Math.sign(lb.x)||1, gx = sd*lx(3.9);   /* the B gap: between the guard's man and the tackle's, where the look lines him up */
       const blk = sd===pickSide? (rbIn? O.rb : fbIn? O.slot : null) : (rbIn && fbIn? O.slot : null);
       lb.blitzing = true; lb.faceLock = null; lb.engage = null;
       if(blk){ /* picked up: the back meets him in the hole and they lock up until the ball is gone */
-        const mx = sd*2.7, mz = z0-3.3, tMeet = snap+1.15;
+        const mx = sd*lx(2.7), mz = z0-3.3, tMeet = snap+1.15;
         lb.behav = P([snap,lb.x,lb.z],[snap+.6,gx,z0+.1],[tMeet,mx,mz+.5]);
         blk.behav = P([snap,blk.x,blk.z],[snap+.3,blk.x,blk.z],[tMeet,mx,mz-.45]); blk.faceLock = {angle:0, until:99};
         ev(tMeet, ()=>{ const pr={bx:mx, bz:mz, dv:-.9, dur:1.5, seed:R(0,3), start:playT};
@@ -1224,7 +1230,7 @@ function choreograph(res){
         return; }
       /* the free man: the route and the head start whose running speed is closest to a real rush (about 6.4 yd/s) for the time there is */
       const off = o.off? o.off(sd) : [sd*1.15, .75], E = [at[0]+off[0], at[1]+off[1]], T = tArr-snap; let best = null;
-      for(const w of [0, 7.6, 8.4, 9.2]) for(const d of [0, .25, .5, .75, 1.0]){   /* no wider than 9.2: the slot (or a split tight end) releases at 10 to 11 */
+      for(const w of [0, 7.6, 8.4, 9.2].map(lx)) for(const d of [0, .25, .5, .75, 1.0]){   /* no wider than 9.2: the slot (or a split tight end) releases at 10 to 11 */
         const pts = w? [[lb.x,lb.z],[sd*w,z0+.4],[sd*(w+.3),z0-1.7],E] : [[lb.x,lb.z],[gx,z0+.1],E];
         const v = len(pts)/Math.max(.4, T-d-.3), cost = Math.abs(v-6.4)*(v>6.4? 2 : 1) + d*.9 + (w? .1 : 0);
         if(!best || cost<best.cost) best = {cost, pts, d}; }
@@ -1385,14 +1391,14 @@ function choreograph(res){
   } else if(isRun){
     let Y = res.yards; td = Y>=toGoal; if(td) Y = toGoal;
     /* the back reads the front: a gain goes through the gap with the most room (nearest down lineman / stacked backer), a stuff runs into the crowd */
-    const pickGap = y => { const gaps = y>=12? [-5,-3,-1,1,3,5] : [-3,-1,1,3]; const front=[...D.dl.map(d=>({x:d.x,w:1})), ...D.lb.map(d=>({x:d.x,w:.65}))];
+    const pickGap = y => { const gaps = (y>=12? [-5,-3,-1,1,3,5] : [-3,-1,1,3]).map(lx); const front=[...D.dl.map(d=>({x:d.x,w:1})), ...D.lb.map(d=>({x:d.x,w:.65}))];
       const room = g => Math.min(...front.map(d=>Math.abs(d.x-g)/d.w)); const sc = gaps.map(g=>({g, r:room(g)+R(0,.6)})).sort((a,b)=>b.r-a.r);
       return y>0? sc[Math.random()<.7? 0 : 1].g : sc[sc.length-1].g; };
     const C = scr? O.qb : O.rb;   /* the carrier */
     /* the game already decided this run ends out of bounds (it stopped the clock for it): the back bounces it outside the end man
        instead of hitting an inside gap, so he has the edge to turn up (b21d, Tyler 11/23: "ran diagonally straight out of bounds") */
     const oobCall = !scr && !td && !res.fumble && Y>=10 && res.gap==null && (res.oob ?? window.__oob)===true;
-    const gapX = scr? (res.gap ?? (Math.random()<.5?-1:1)*R(2.5,4.5)) : (res.gap ?? (oobCall? (Math.random()<.5?-1:1)*R(7,9) : pickGap(Y)));
+    const gapX = scr? lx(res.gap ?? (Math.random()<.5?-1:1)*R(2.5,4.5)) : (res.gap!=null? lx(res.gap) : (oobCall? (Math.random()<.5?-1:1)*R(7,9) : pickGap(Y)));
     /* under center the back takes it about three yards deep on the play side (the QB opens to him) instead of beside a shotgun QB */
     const tHand = snap+HAND, meshAt = UC? [(Math.sign(gapX)||1)*.55, z0-3.1] : [.7, z0-4.4];
     tHole = scr? snap+(UC? 1.35 : 2.0) : tHand + Math.max(UC? .6 : .7, Math.hypot(gapX-meshAt[0], (z0-.6)-meshAt[1])/4.2);   /* real backs reach the line about 2.5 s after the snap, at about 5 yd/s */   // mesh -> hole at a real speed (was a 12-20 yd/s burst); scramble: snap and go, at the line by ~1.45 s (a keeper from under center: ~1.05 s)
@@ -1428,7 +1434,7 @@ function choreograph(res){
     C.behav = P(...keys);
     if(scr && UC){ /* a keeper from under center: the tailback starts too deep to lead, so he fakes the dive the other way; a fullback leads the QB */
       const sg = Math.sign(gapX) || 1;
-      O.rb.behav = P([snap,rbX0,rbZ0],[snap+.7,-sg*1.2,z0-3.0],[snap+1.3,-sg*2.0,z0-1.1]);
+      O.rb.behav = P([snap,rbX0,rbZ0],[snap+.7,-sg*1.2,z0-3.0],[snap+1.3,-sg*lx(2.0),z0-1.1]);
       if(FM.fb) O.slot.behav = P([snap,O.slot.x,O.slot.z],[snap+.5,gapX*.5,z0-2.6],[tHole+.1,gapX+sg*.9,z0+.9],[tHole+.9,gapX+sg*1.6,z0+3.4]);
       O.qb.faceLock = {angle:0, until:snap+.9}; ballPlan.push({t0:qbRecv, t1:1e9, held:O.qb}); }
     else if(scr){ O.rb.behav = P([snap,rbX0,rbZ0],[snap+.6,gapX*.5,z0-3.4],[tHole+.15,gapX+Math.sign(gapX)*.9,z0+.9],[tHole+1.0,gapX+Math.sign(gapX)*1.6,z0+3.5]);   /* lead blocker through the gap */
@@ -1521,8 +1527,8 @@ function choreograph(res){
     const sacker = D.dl[0]; sacker.faceLock = null; sacker.engage = null;
     if(!pa){ O.rb.behav = P([snap,rbX0,rbZ0],[snap+.8,UC? 1.4 : 1.2,UC? rbZ0+1.4 : z0-5.6],[snap+1.8,-2.2,z0-5.2],[tSack-.1,-3.4,z0+Y+2.6]);   // RB sees the free rusher late, can't get there, pulls up short of the pile
       ev(tSack+.4, ()=>{ O.rb.dejected = playT; }); }
-    sacker.behav = P([snap,-5.3,z0+.95],[snap+1.15,-7.2,z0-1.4],[tSack-.25,-1.2,z0+Y+.6]);
-    O.ol[0].behav = P([snap,-4.1,z0-.75],[snap+1.0,-5.2,z0-2],[snap+2.3,-4,z0-3]); O.ol[0].engage = null;
+    sacker.behav = P([snap,lx(-5.3),z0+.95],[snap+1.15,lx(-7.2),z0-1.4],[tSack-.25,-1.2,z0+Y+.6]);
+    O.ol[0].behav = P([snap,lx(-4.1),z0-.75],[snap+1.0,lx(-5.2),z0-2],[snap+2.3,lx(-4),z0-3]); O.ol[0].engage = null;
     carrier = O.qb; tackler = sacker; tackleT = tEnd = tSack; endPos=[.6,z0+Y];
     }
     sendBlitz(tSack+.25, endPos, {rbBusy:true, fbBusy: pa || !!res.blitz, tRel: tSack+.6, off: sd=>[sd*1.6, 1.9]});   /* a blitz was called: the outside backers come too and get there as he goes down */
@@ -1585,7 +1591,7 @@ function choreograph(res){
     // Align before planting, so the fixed feet do not swivel during the wind-up.
     const aimAngle=Math.atan2(catchX,cz-plantZ);
     O.qb.faceLock={angle:0,until:tThrow+.9};
-    if(roll){ O.qb.behav = P(...qb0,[tSet,0,dropZ],[tSet+.35,-rSide*.35,dropZ+.15],[tThrow,hx,hz],[tThrow+.7,rSide*5.7,hz+.9],[tThrow+1.7,rSide*6.2,hz+1.8]);   /* set, hitch away from the pressure, then out and throw on the move */
+    if(roll){ O.qb.behav = P(...qb0,[tSet,0,dropZ],[tSet+.35,-rSide*.35,dropZ+.15],[tThrow,hx,hz],[tThrow+.7,rSide*lx(5.7),hz+.9],[tThrow+1.7,rSide*lx(6.2),hz+1.8]);   /* set, hitch away from the pressure, then out and throw on the move */
       O.qb.faceLock={angle:0,until:tSet+.3};
       ev(tThrow-.3, ()=>{ O.qb.faceLock={angle:Math.atan2(catchX-hx, cz-hz), until:tThrow+.35}; }); }
     else ev(tThrow-loadTime-.12,()=>{O.qb.faceLock={angle:aimAngle,until:tThrow+.9};});
