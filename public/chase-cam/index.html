@@ -201,7 +201,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22n'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22o'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -279,6 +279,33 @@ const LODS = new Set(); window.__lods = LODS;   /* console/QA access */
    buffers (meshoptimizer, built once at load) over the SAME vertices, so skin weights, UVs and the body morphs all carry over and no vertex data is duplicated.
    lodSweep() picks a level per player from his size on screen; LOD_BIAS (set by the quality tier) pulls the switch distances in on slower devices.
    ?lod=0 turns it off; ?lod=1 / ?lod=2 pin a level (QA). */
+/* BUILDS 11/28: the sculpted player (fp27) is one body, so with it as the default every man on the field was the same build, and with the kit's random
+   size a tackle could come out smaller than a wideout. The MakeHuman player carries "line" and "power" body morphs; fp27 gets the same two here, made
+   at load from its own mesh: each vertex is pushed straight out from the bones it is skinned to (hips, spine, shoulders, arms, thighs, calves), by a
+   share per bone, so a lineman is thicker through the middle, chest, arms and legs with the same skeleton, helmet, hands and feet. These are morph
+   targets in the bind pose, the same mechanism as the baked ones: nothing is scaled at run time (see the note in makePlayer). */
+const BUILD_GIRTH = window.__girth || {
+  line:  {Hips:1.20, Spine:1.24, Spine1:1.20, Spine2:1.14, Neck:1.06, Shoulder:1.10, Arm:1.16, ForeArm:1.10, UpLeg:1.18, Leg:1.12},
+  power: {Hips:1.07, Spine:1.07, Spine1:1.08, Spine2:1.08, Neck:1.03, Shoulder:1.05, Arm:1.10, ForeArm:1.06, UpLeg:1.09, Leg:1.05} };
+function addBuildMorphs(root){ let has=false, any=false; root.traverse(o=>{ if(o.isSkinnedMesh){ any=true; if(o.geometry.morphAttributes.position) has=true; } }); if(has || !any) return false;
+  const NEXT={Hips:'Spine', Spine:'Spine1', Spine1:'Spine2', Spine2:'Neck', Neck:'Head', Shoulder:'Arm', Arm:'ForeArm', ForeArm:'Hand', UpLeg:'Leg', Leg:'Foot'};
+  const short=b=>b.name.replace('mixamorig',''), part=n=>n.replace(/^(Left|Right)/,''), sideOf=n=>(/^(Left|Right)/.exec(n)||[''])[0];
+  const push={line:[0,0], power:[0,0]};   /* how far the chest (front) and back move out where the numbers sit, so the numbers can ride out with them */
+  root.traverse(o=>{ if(!o.isSkinnedMesh) return; const g=o.geometry, pos=g.attributes.position, ji=g.attributes.skinIndex, jw=g.attributes.skinWeight, B=o.skeleton.bones; if(!ji || !jw) return;
+    const head=B.map((b,i)=>new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(o.skeleton.boneInverses[i]).invert())), at=new Map(B.map((b,i)=>[short(b),i]));
+    const axis=B.map((b,i)=>{ const n=short(b), nx=NEXT[part(n)], c=nx? at.get(sideOf(n)+nx) ?? at.get(nx) : null; return c!=null? head[c].clone().sub(head[i]).normalize() : null; });
+    const back=new THREE.Matrix3().setFromMatrix4(o.bindMatrixInverse), p=new THREE.Vector3(), r=new THREE.Vector3(), d=new THREE.Vector3(), s2=at.get('Spine2');
+    const u = s2!=null? new THREE.Vector3().setFromMatrixColumn(new THREE.Matrix4().copy(o.skeleton.boneInverses[s2]).invert(), 0).length() || 1 : 1;   /* one bone-space unit (a centimetre on this rig) in mesh units: the number offsets are in bone space */
+    const comp=(at2,v,c)=> c===0? at2.getX(v) : c===1? at2.getY(v) : c===2? at2.getZ(v) : at2.getW(v);
+    g.morphAttributes.position = ['line','power'].map(name=>{ const k=B.map(b=>(BUILD_GIRTH[name][part(short(b))]||1)-1), out=new Float32Array(pos.count*3);
+      for(let v=0;v<pos.count;v++){ p.fromBufferAttribute(pos,v).applyMatrix4(o.bindMatrix); d.set(0,0,0);
+        for(let c=0;c<4;c++){ const w=comp(jw,v,c), bi=comp(ji,v,c); if(!w || !k[bi] || !axis[bi]) continue;
+          r.copy(p).sub(head[bi]); r.addScaledVector(axis[bi], -r.dot(axis[bi])); d.addScaledVector(r, w*k[bi]); }   /* straight out from that bone, none along it */
+        if(s2!=null && Math.abs(p.x-head[s2].x)<8*u){ const dy=(p.y-head[s2].y)/u; if(p.z>head[s2].z && dy>-19 && dy<1) push[name][1]=Math.max(push[name][1], d.z/u); if(p.z<head[s2].z && dy>-23 && dy<-3) push[name][0]=Math.max(push[name][0], -d.z/u); }
+        d.applyMatrix3(back); out[v*3]=d.x; out[v*3+1]=d.y; out[v*3+2]=d.z; }
+      return new THREE.Float32BufferAttribute(out,3); });
+    g.morphTargetsRelative=true; o.updateMorphTargets(); });
+  return push; }
 const GEO_LODS = new WeakMap(); let LOD_BIAS = 1;
 const LOD_PIN = (()=>{ const v=new URLSearchParams(location.search).get('lod'); return v==null||v===''? null : +v; })();
 const LOD_RATIO = window.__lodRatio || [.4, .14], LOD_KEEP = /FACEMASK|CHINSTRAP|EYES|BROWS|LASHES/;   /* wire-thin parts collapse into nothing: they keep their triangles until lodSweep hides them */
@@ -758,7 +785,8 @@ function makePlayer(t, number, big, opts={}){
   const nums=[];
   if(!opts.ref){
   const NO = MH2? (()=>{ const o=BOT.userData.numOff||{}, k=build.morph, mix=(side)=>{ const s=o.skill?.[side]??0; return s + k[0]*((o.line?.[side]??s)-s) + k[1]*((o.power?.[side]??s)-s); };
-      return window.__numOff||{back:[0,-13,mix('back')-.9], front:[0,-9,mix('front')+1.0], sb:1.0, sf:.85, tilt:-.1}; })() : MH? (window.__numOff||{back:[0,-13,-6.2], front:[0,-9,24.6], sb:1.0, sf:.85, tilt:-.1}) : modelChoice==='fp27'? (window.__numOff||{back:[0,-13,-13.5], front:[0,-9,14.5], sb:1.0, sf:.85, tilt:-.12}) : {back:[0,-8.5,-16.3], front:[0,-11.5,16.6], sb:1.05, sf:.85, tilt:-.18};
+      return window.__numOff||{back:[0,-13,mix('back')-.9], front:[0,-9,mix('front')+1.0], sb:1.0, sf:.85, tilt:-.1}; })() : MH? (window.__numOff||{back:[0,-13,-6.2], front:[0,-9,24.6], sb:1.0, sf:.85, tilt:-.1}) : modelChoice==='fp27'? (()=>{ const gp=BOT.userData.genMorphs, m=build.morph, pb = gp? m[0]*gp.line[0]+m[1]*gp.power[0] : 0, pf = gp? m[0]*gp.line[1]+m[1]*gp.power[1] : 0;   /* a thicker chest and back: the numbers ride out with them */
+      return window.__numOff||{back:[0,-13,-13.5-pb], front:[0,-9,14.5+pf], sb:1.0, sf:.85, tilt:-.12}; })() : {back:[0,-8.5,-16.3], front:[0,-11.5,16.6], sb:1.05, sf:.85, tilt:-.18};
   const numBack = new THREE.Mesh(GEO.num, numMat(number,t)); nums.push(numBack); numBack.scale.set(NO.sb,NO.sb,1); attach(bones.Spine2, numBack, new THREE.Vector3(...NO.back), sc).rotation.y = Math.PI;
   const numFront = new THREE.Mesh(GEO.num, numMat(number,t)); nums.push(numFront); numFront.scale.set(NO.sf,NO.sf,1); const nf = attach(bones.Spine2, numFront, new THREE.Vector3(...NO.front), sc); nf.rotation.x = NO.tilt; }
   if(kit.visor && modelChoice!=='fp27' && !MH){ const vis=new THREE.Mesh(new THREE.CylinderGeometry(.104,.104,.052,24,1,true,Math.PI*.62,Math.PI*.76), new THREE.MeshStandardMaterial({color:'#0d1218', transparent:true, opacity:.82, roughness:.08, metalness:.55, side:THREE.DoubleSide})); vis.rotation.y=Math.PI; attach(bones.Head, vis, new THREE.Vector3(0,9.5,-.5), sc); }
@@ -2141,6 +2169,7 @@ const STANCE = {
   uc:   [22, .6, .7, 1.1, 0, .45, .1, 1, 1],    // QB under center: knees bent, chest over the center's hips
   db:   [20, .4, .6, 1.05, 0, .3, 0, 1, 1],
 };
+const BLOCK_POSE = [10, .30, .33, .57, 0, .24, .06];   // engaged in a block: hip drop (cm), waist lean, thigh, knee, -, neck back up, upper-spine lean
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const smooth01=v=>{const x=clamp(v,0,1);return x*x*(3-2*x);};
 // ---------- Arm posing: aim bones at directions in the player's own frame (fwd / right / up) ----------
@@ -2580,6 +2609,15 @@ function stepActor(a, t, dt){
     if(st[4]) B.RightArm.rotation.x -= st[4]*w;
     if(st[5]) B.Neck.rotation.x -= st[5]*w; if(st[6]) B.Spine1.rotation.x += st[6]*w;
   }
+  /* BLOCKING 11/28: a man locked up in a block stood bolt upright with his hands on the other man, like two people pushing a car. While he is engaged he
+     now sinks into it: hips down about 4 in, knees bent, chest leaning into the block, head up. Same parameters as the pre-snap stances (about 60% of
+     the two-point stance, with more lean), eased in over a quarter second after the stance lets go and out when the block ends. */
+  { const on = a.engage && running && t > .5 && a.down==null && !a.mocapActive && !a.carrying && !(w>0);
+    a._blk = (a._blk||0) + ((on? 1 : 0) - (a._blk||0))*Math.min(1, dt*(on? 4 : 6)); const wb=a._blk;
+    if(wb > .01){ const st2 = window.__blockPose || BLOCK_POSE;
+      B.Hips.position.y -= st2[0]*wb; B.Spine.rotation.x += st2[1]*wb; B.Spine1.rotation.x += st2[6]*wb; B.Neck.rotation.x -= st2[5]*wb;
+      B.LeftUpLeg.rotation.x -= st2[2]*wb; B.RightUpLeg.rotation.x -= st2[2]*wb; B.LeftLeg.rotation.x += st2[3]*wb; B.RightLeg.rotation.x += st2[3]*wb;
+      B.LeftFoot.rotation.x -= (st2[3]-st2[2])*wb; B.RightFoot.rotation.x -= (st2[3]-st2[2])*wb; } }
   if(sp>2 && back>0) B.Spine.rotation.x += Math.min(.22, sp*.025);
   if(a.truckT!=null){ const k=(t-(a.truckT-.15))/.55; if(k>0 && k<1) B.Spine.rotation.x += .4*Math.sin(Math.PI*k); }
   if(MOTION2) motionLean(a, sp, back, dt, w);
@@ -3194,7 +3232,8 @@ const botReady = new Promise((res,rej)=>{
     // textures are decoded from bytes (no image fetches, which the hosted page's policy may block) and attached by material name
     const TEX = {}; for(const [n,b] of Object.entries(window.PLAYER_TEX)){ const bmp = await createImageBitmap(new Blob([b64(b)],{type:'image/jpeg'})); const t=new THREE.CanvasTexture(bmp); t.flipY=false; t.colorSpace = /Normal|Roughness|ao_met/.test(n) ? THREE.NoColorSpace : THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; t.needsUpdate=true; TEX[n]=t; } window.__PLAYER_TEXMAP = TEX;
     await MeshoptSimplifier.ready.catch(()=>{});
-    new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', g=>{ BOT=g; BOT.userData=window.PLAYER_INFO||{}; try{ buildPlayerLods(g.scene); }catch(e){ console.warn('player LOD build failed', e); }
+    new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', g=>{ BOT=g; BOT.userData=window.PLAYER_INFO||{}; try{ if(new URLSearchParams(location.search).get('builds')!=='0') BOT.userData.genMorphs = addBuildMorphs(g.scene); }catch(e){ console.warn('build morphs failed', e); }
+      try{ buildPlayerLods(g.scene); }catch(e){ console.warn('player LOD build failed', e); }
       g.scene.traverse(o=>{ if(o.isMesh){ const e=window.PLAYER_MAT[o.material.name]||{}; const m=o.material; if(e.map) m.map=TEX[e.map]; if(e.normal) m.normalMap=TEX[e.normal]; if(e.rough){ m.roughnessMap=TEX[e.rough]; m.metalnessMap=TEX[e.rough]; } m.needsUpdate=true; } });
       /* a player file without the captured locomotion set (fp27) borrows it: same skeleton and rest rotations, so the keyframes apply as they are (clips-extra.js, from scripts/playerlab/extract_clips.py) */
       if(g.animations.some(a=>a.name==='cc_jog')) return res();
