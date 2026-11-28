@@ -201,7 +201,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22l'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22m'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -2004,16 +2004,40 @@ function choreograph(res){
       const fret = !kept && !selfKeep && !selfRec && res.fumbleRet ? res.fumbleRet : null;   /* the defense picks it up and runs (the engine's "Returned N yards", or a scoop-and-score) */
       if(fret){
         /* scoop on the run, then up the field the other way: the offense's own end zone is at -z; a TD finishes 2 yd deep in it */
-        const zEnd = fret.td? -52.5 : Math.max(-49.5, p3[1] - Math.max(1, fret.yards)), xEnd = cx(p3[0]*.55 + R(-3,3)), runT = Math.hypot(xEnd-p3[0], zEnd-p3[1]) / Math.min(8.4, MAX_SPRINT*.98);   /* within the sim's sprint cap, so he really gets there */
+        const zEnd = fret.td? -52.5 : Math.max(-49.5, p3[1] - Math.max(1, fret.yards)), xEnd = cx(p3[0]*.55 + R(-3,3)), runD = Math.hypot(xEnd-p3[0], zEnd-p3[1]);
+        let runT = runD / Math.min(8.4, MAX_SPRINT*.98);   /* within the sim's sprint cap, so he really gets there */
+        /* Tyler 11/28: "picked up the fumble and started running completely wide open, and then just tripped after 10 yards". A return that is not a
+           touchdown ended with the returner falling over by himself: the chasers only trail him. Someone has to bring him down. The offensive man who
+           can get to the end of the return soonest is sent there to make the tackle, and the return takes as long as he needs to arrive (a lineman
+           lumbering with the ball is not at a sprint anyway), so the play ends in a real tackle from behind. */
+        let chaser = null, chaseT = 0, chaseTo = null;
+        if(!fret.td){ const ux=(xEnd-p3[0])/(runD||1), uz=(zEnd-p3[1])/(runD||1), tGo=Math.max(tLand+.2, playT+.2);
+          const spd = a => O.ol.includes(a)? 6.4 : (a===O.wrL || a===O.wrR || a===O.slot)? 8.3 : 7.7;
+          if(D.dl.includes(rc)) runT = Math.max(runT, runD/6.8);   /* a defensive lineman with the ball */
+          for(let pass=0; pass<3; pass++){ const vR=runD/runT, to=[xEnd-ux*(vR*.42+1.5), zEnd-uz*(vR*.42+1.5)]; let best=null, bt=1e9;
+            for(const a of O.all){ if(a===carrier || a.down!=null) continue; const t=tGo + Math.hypot(a.x-to[0], a.z-to[1])/spd(a); if(t<bt){ bt=t; best=a; } }
+            if(!best) break; chaser=best; chaseT=bt; chaseTo=to;
+            const need = bt + .42 - tLand; if(need <= runT + .02) break; runT = Math.min(need, runD/4.6); }   /* he waits for no one below a jog */
+          if(chaser && chaseT + .42 - tLand > runT + .3) chaser = null; }   /* nobody can get there: the old ending */
         rc.engage=null; rc.wrap=null; rc.faceLock=null; rc.truck=null; rc.whiff=true;
         rc.behav = P([playT, rc.x, rc.z], [tLand-.05, p3[0]+R(-.3,.3), p3[1]+.4], [tLand+runT, xEnd, zEnd]);
         ev(tLand-.05, ()=>{ ballPlan.forEach(sg=>{ if(sg.t1>1e8) sg.t1 = playT; }); ballPlan.push({t0:playT, t1:1e9, held:rc}); });   /* scooped, no dive */
         const escort = D.all.filter(a=>a!==rc && a.down==null && !bigD.includes(a)).sort(byDist(p3)).slice(0,2);
         escort.forEach((a,i)=>{ a.engage=null; a.wrap=null; a.faceLock=null; a.behav={type:'follow', target:rc, off:[i? 2.2 : -2.2, 1.2], speed:8.6, start:tLand}; });
-        O.all.filter(a=>a!==carrier && a.down==null).sort(byDist(p3)).slice(0,3).forEach(a=>{ a.engage=null; a.wrap=null; a.faceLock=null; a.behav={type:'follow', target:rc, off:[0,0], speed:7.6, start:tLand+.25}; });   /* the offense chases and loses ground */
+        O.all.filter(a=>a!==carrier && a!==chaser && a.down==null).sort(byDist(p3)).slice(0,3).forEach(a=>{ a.engage=null; a.wrap=null; a.faceLock=null; a.behav={type:'follow', target:rc, off:[0,0], speed:7.6, start:tLand+.25}; });   /* the offense chases and loses ground */
         const tStop = tLand + runT;
+        if(chaser){ const tk=chaser, tGo=Math.max(tLand+.2, playT+.2); tk.engage=null; tk.wrap=null; tk.faceLock=null; tk.truck=null;
+          ev(tGo, ()=>{ if(tk.down==null) tk.behav = P([playT, tk.x, tk.z], [Math.max(playT+.1, tStop-.42), chaseTo[0], chaseTo[1]]); });
+          ev(tStop-.42, ()=>{ if(tk.down!=null || rc.down!=null) return; tk.wrap=rc; tk.wrapT=playT; tk.behav={type:'lunge', x0:tk.x, z0:tk.z, t0:playT, t1:playT+.42, tgt:rc}; }); }
         if(fret.td) ev(tStop, ()=>{ rc.behav=null; rc.celebrate=playT; rc.celebStyle = window.__tdStyle || pickTdStyle(); sndRoar(.9,.4,2.5,4,'roar'); });
-        else ev(tStop, ()=>{ if(rc.down==null){ rc.down=playT; rc.fallDir=1; rc.behav=null; sndThump(.6,.3); } });
+        else ev(tStop, ()=>{ if(rc.down!=null) return; const tk=chaser, near = tk && tk.down==null && Math.hypot(tk.x-rc.x, tk.z-rc.z) < 2.6;
+          const cs=Math.hypot(rc.vx||0,rc.vz||0)||1, ux=(rc.vx||0)/cs, uz=(rc.vz||0)/cs;
+          rc.down=playT; rc.fallDir=1; rc.behav=null; sndThump(near? 1 : .6, near? .5 : .3);
+          if(near){ const MX = window.__mxPair ?? true;   /* dragged down from behind: the same captured pair as any tackle from behind (see hit()) */
+            tk.down=playT; tk.behind=null; tk.x=rc.x-ux*(window.__behindD??1.06); tk.z=rc.z-uz*(window.__behindD??1.06); tk.face=rc.face;
+            rc.mocapFall = MX? {clip:'mx_fall_flat', t0:playT, start:(window.__mxCarrierStart ?? .45), pair:true, mx:true, hold:(window.__mxCarrierHold ?? .55)} : {clip:'football_fall', t0:playT, start:(window.__pairStart ?? .2), pair:true};
+            tk.mocapFall = MX? {clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true, hold:(window.__mxTacklerHold ?? .40), glue:{to:rc, bone:'Hips', along:-.32}} : {clip:'football_tackle', t0:playT, start:(window.__pairStart ?? .2), pair:true};
+            play.tEnd = Math.max(play.tEnd, playT+1.6); play.whistleT = Math.max(play.whistleT ?? 0, playT+.5); } });
         res.fumbleZ = zEnd; play.fumbleRec = rc; play.fumbleTd = !!fret.td;
         play.tEnd = Math.max(play.tEnd, tStop + (fret.td? 2.4 : 1.2)); play.whistleT = Math.max(play.whistleT ?? 0, tStop + (fret.td? .3 : .2));
         return; }
