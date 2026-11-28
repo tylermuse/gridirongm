@@ -436,11 +436,12 @@ export function generateDraftClass(count: number, options?: { chaosDraft?: boole
 
   for (let i = 0; i < count; i++) {
     const position = pickPosition();
-    // Talent curve: top picks ~82, mid-round ~63, late-round ~44
+    // Talent curve: top picks ~76, mid-round ~57, late-round ~38 (tightened
+    // Nov-27 so round 1-2 stops landing 67+ OVR and year 2+ stays competitive)
     const progress = i / count;
-    let talent = gaussian(82 - progress * 38, 7);
+    let talent = gaussian(76 - progress * 38, 5);
     // Ensure top 6 picks are truly elite (blue-chip prospects every class)
-    if (i < 6) talent = Math.max(talent, 72 + Math.random() * 8);
+    if (i < 6) talent = Math.max(talent, 66 + Math.random() * 8);
     // K/P should be lower rated — they don't need elite OVR
     if (position === 'K' || position === 'P') {
       talent = Math.min(talent, 35 + Math.random() * 30); // 35-65 OVR range
