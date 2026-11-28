@@ -225,7 +225,7 @@ describe('a fresh league', () => {
     await flushToStorage();
     const onDisk = (await getItem(AUTOSAVE_KEY))!;
     const written = JSON.parse(onDisk) as Envelope;
-    expect(written.version).toBe(37);
+    expect(written.version).toBe(38);
     // No zero-valued stat field is on disk, and nothing but those is missing.
     expect(statLines(written.state).some(line => STAT_KEYS.some(k => line[k] === 0))).toBe(false);
     expectSameLeague(parseSave<Envelope>(onDisk).state, before);
@@ -274,7 +274,7 @@ describe('a save written before this change', () => {
     // league; that write is the compact form.
     await flushPendingWrites();
     const rewritten = (await getItem(AUTOSAVE_KEY))!;
-    expect(JSON.parse(rewritten).version).toBe(37);
+    expect(JSON.parse(rewritten).version).toBe(38);
     expect(rewritten.length).toBeLessThan(old.length * 0.6);
     expectSameLeague(parseSave<Envelope>(rewritten).state, before);
   }, 60_000);
