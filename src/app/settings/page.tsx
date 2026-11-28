@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -545,7 +545,7 @@ function SaveBackupCard() {
 }
 
 export default function SettingsPage() {
-  const { leagueSettings, updateLeagueSettings, teams, userTeamId, switchTeam } = useGameStore();
+  const { leagueSettings, updateLeagueSettings, teams, userTeamId, switchTeam, resetLeague } = useGameStore();
   const router = useRouter();
   const settings = leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
 
@@ -556,6 +556,12 @@ export default function SettingsPage() {
   // the toggle doing nothing), so we gate the first enable behind an inline
   // modal instead of the native dialog.
   const [showGodModeConfirm, setShowGodModeConfirm] = useState(false);
+  // "Start New Game" escape hatch — three in-game "how do I restart/change
+  // team" questions during week-18 playoffs (Nov 26). Mirrors the in-game
+  // sidebar's "New League" reset. Inline modal, not window.confirm (swallowed
+  // on some mobile browsers / PWAs).
+  const [showNewGameConfirm, setShowNewGameConfirm] = useState(false);
+  const [startingNewGame, setStartingNewGame] = useState(false);
 
   // Sync when store changes externally
   useEffect(() => {
@@ -585,6 +591,23 @@ export default function SettingsPage() {
 
   function handleReset() {
     setDraft({ ...DEFAULT_LEAGUE_SETTINGS });
+  }
+
+  // Explicit new-game reset: in-memory wipe, flush, clear the persist
+  // middleware's own record, then a hard navigation so the homepage mounts
+  // fresh on the team picker and can't rehydrate the old league. Same flow as
+  // the sidebar's "New League" button.
+  async function handleStartNewGame() {
+    setStartingNewGame(true);
+    resetLeague();
+    try {
+      await flushToStorage();
+      await (useGameStore as unknown as { persist?: { clearStorage?: () => Promise<void> | void } })
+        .persist?.clearStorage?.();
+    } catch (err) {
+      console.error('[Start New Game] storage clear failed', err);
+    }
+    window.location.href = '/';
   }
 
   const isDirty = JSON.stringify(draft) !== JSON.stringify(settings);
@@ -1066,6 +1089,31 @@ export default function SettingsPage() {
           <CardHeader><CardTitle>Import League File</CardTitle></CardHeader>
           <ImportLeagueCard />
         </Card>
+
+        {/* Start New Game — danger zone escape hatch */}
+        <Card>
+          <CardHeader><CardTitle>Start New Game</CardTitle></CardHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-sec)]">
+              Wipe your current league and head back to team selection to start fresh
+              with any team. This does not touch your saved slots — load an earlier
+              save from Save/Load if you want your current franchise back.
+            </p>
+            <div className="rounded-lg border border-red-600/40 bg-red-600/10 p-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowNewGameConfirm(true)}
+                className="!bg-red-600/20 !text-red-600 hover:!bg-red-600/30"
+              >
+                Start New Game
+              </Button>
+              <p className="text-[10px] text-[var(--text-sec)] mt-2">
+                ⚠️ Ends your current league in progress. Save it first from Save/Load if you want to keep it.
+              </p>
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* God Mode first-enable confirmation — inline modal replaces the native
@@ -1094,6 +1142,39 @@ export default function SettingsPage() {
               }}
             >
               Enable God Mode
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Start New Game confirmation — inline modal (window.confirm is swallowed
+          on some mobile browsers / PWAs). */}
+      <Modal
+        isOpen={showNewGameConfirm}
+        onClose={() => setShowNewGameConfirm(false)}
+        title="Start a new game?"
+        maxWidth="sm"
+      >
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-[var(--text-sec)]">
+            This ends your current league in progress and returns you to team
+            selection. Your saved slots are untouched — you can reload an earlier
+            save from Save/Load. Continue?
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setShowNewGameConfirm(false)}
+              disabled={startingNewGame}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleStartNewGame}
+              disabled={startingNewGame}
+              className="!bg-red-600 hover:!bg-red-700"
+            >
+              {startingNewGame ? 'Starting…' : 'Start New Game'}
             </Button>
           </div>
         </div>
