@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/indexnow", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/rebuild-predictions", "schedule": "0 12 * * 2" }
+    { "path": "/api/cron/rebuild-predictions", "schedule": "0 12 * * 2" },
+    { "path": "/api/cron/email", "schedule": "17 16 * * *" }
   ]
 }
