@@ -39,7 +39,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b22l';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b22n';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 /** The sim as the game embeds it: the MakeHuman-based player (mh2) with the motion pass. Used by the scoring-play replay too.
  *  `speed` is the playback rate. The sim's clock is in real seconds (b21a), so 1 is real time: a play then averages 7.5 s on screen against 4.6 s
  *  before b21a, and a whole game drags (Tyler: "crazy slow"). 1.5, the rate the game ran at before b21a, averages 5.2 s; 1.75 matches the old 4.6 s.
@@ -49,14 +49,13 @@ const SIM_BUILD = 'b22l';   // bump with public/chase-cam/index.html so browsers
  *  the fake is a handoff's timing plus the drop, so at 1.5x it crawled next to the runs (Tyler: "play action is super slow"). It is 1 (off) when left out. */
 export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&speed=1.5&run=1.33&v=${SIM_BUILD}`;
 /** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.
- *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=fp27` (the sculpted player), `?simMotion=0`, `?simFeet=1` (foot planting for slow movement), `?simSplits=1.6` (yards between offensive linemen; the sim's own is 2.55, real is about 1.55), `?simSpeed=1` (playback rate; 1 is real time), `?simRun=1.5` (extra rate for handoff runs; 1 is off). */
+ *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=fp27` (the sculpted player), `?simMotion=0`, `?simSplits=1.6` (yards between offensive linemen; the sim's own is 2.55, real is about 1.55), `?simSpeed=1` (playback rate; 1 is real time), `?simRun=1.5` (extra rate for handoff runs; 1 is off). */
 function simSrc(): string {
   if (typeof window === 'undefined') return SIM_URL;
   const q = new URLSearchParams(window.location.search);
   let src = SIM_URL;
   if (q.get('simModel') === 'fp27') src = src.replace('model=mh2', 'model=fp27');
   if (q.get('simMotion') === '0') src = src.replace('&motion=2', '');
-  if (q.get('simFeet') === '1') src += '&feet=1';
   const splits = q.get('simSplits');
   if (splits && /^[12](\.\d+)?$/.test(splits)) src += `&splits=${splits}`;
   const speed = q.get('simSpeed');
