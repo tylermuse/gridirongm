@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&display=swap">
+<style>
+  html, body { margin: 0; background: #f7f5f1; }
+  #stage { position: relative; overflow: hidden; background: #f7f5f1;
+           font-family: "Inter Display", "Inter", system-ui, sans-serif; color: #0f172a; }
+  .wide #stage { width: 1280px; height: 720px; }
+  .square #stage { width: 720px; height: 720px; }
+  .glow { position: absolute; border-radius: 50%; filter: blur(70px); will-change: transform; }
+  .grid { position: absolute; inset: -40px;
+          background-image: linear-gradient(90deg, rgba(230,107,0,.07) 1px, transparent 1px);
+          background-size: 64px 64px; }
+  .el { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; will-change: transform, opacity; opacity: 0; }
+  .card { border-radius: 14px; overflow: hidden;
+          box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 12px 32px -8px rgba(15,23,42,.18), 0 32px 64px -24px rgba(230,107,0,.20); }
+  .card img { display: block; width: 100%; height: 100%; }
+  .h { font-family: "Barlow Condensed", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; line-height: .92; }
+  .wide .h { font-size: 84px; }
+  .square .h { font-size: 64px; text-align: center; }
+  .h .w { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: .08em; margin-bottom: -.08em; }
+  .h .w > span { display: inline-block; will-change: transform; }
+  .h .blue { color: #E66B00; }
+  .kicker { font-family: "Inter", sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .14em;
+            text-transform: uppercase; color: #E66B00; }
+  .square .kicker { text-align: center; }
+  .brand { font-family: "Barlow Condensed", sans-serif; font-weight: 900; letter-spacing: -0.01em; text-transform: uppercase; }
+  .brand b { color: #E66B00; font-weight: 900; }
+  .pill { font-family: "Inter", sans-serif; font-weight: 600; font-size: 18px; color: #475569;
+          background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; padding: 10px 20px;
+          box-shadow: 0 6px 20px -8px rgba(15,23,42,.18); white-space: nowrap; }
+  .ring { border-radius: 16px; border: 3px solid #E66B00; box-shadow: 0 0 0 6px rgba(230,107,0,.16); }
+  .tap { width: 44px; height: 44px; border-radius: 50%; background: rgba(230,107,0,.30); border: 2px solid rgba(230,107,0,.65); }
+</style></head>
+<body>
+<script src="assets/sizes.js"></script>
+<script src="shots.js"></script>
+<div id="stage">
+  <div class="grid" id="grid"></div>
+  <div class="glow" id="g1" style="width:620px;height:620px;background:#ffd7b0;opacity:.75"></div>
+  <div class="glow" id="g2" style="width:520px;height:520px;background:#ffe8d2;opacity:.9"></div>
+</div>
+<script>
+const MODE = new URLSearchParams(location.search).get('mode') || 'wide';
+document.documentElement.className = MODE;
+const W = MODE === 'wide' ? 1280 : 720, H = 720;
+const stage = document.getElementById('stage');
+const A = 'assets/';
+// native sizes in CSS px (assets are 3x)
+const SZ = window.SIZES;
+
+function mk(html, cls='el') { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; stage.appendChild(d); return d; }
+function card(name, scale, radius, cropW, boxH) {
+  const [w, h] = SZ[name];
+  const d = mk(`<img src="${A}${name}.png">`, 'el card');
+  d.style.width = (cropW || w) * scale + 'px'; d.style.height = (boxH || h) * scale + 'px';
+  const img = d.querySelector('img');
+  if (cropW && !boxH) { img.style.width = w * scale + 'px'; img.style.maxWidth = 'none'; }
+  if (boxH) { img.style.objectFit = 'cover'; img.style.objectPosition = '58% 62%'; }
+  if (radius != null) d.style.borderRadius = radius + 'px';
+  return d;
+}
+function headline(lines, x, y, width, align) {
+  // lines: array of strings; words wrapped for per-word reveal; *word* = blue
+  const html = lines.map(l => l.split(' ').map(w => {
+    const blue = w.startsWith('*'); w = w.replace(/\*/g, '');
+    return `<span class="w"><span class="${blue ? 'blue' : ''}">${w}</span></span>`;
+  }).join(' ')).join('<br>');
+  const d = mk(html, 'el h'); d.style.width = width + 'px';
+  d.style.left = x + 'px'; d.style.top = y + 'px';
+  return d;
+}
+
+// ---------- easing / tween helpers ----------
+const clamp = (v, a=0, b=1) => Math.min(b, Math.max(a, v));
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const easeInOut = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+const back = t => { const c = 1.5; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+const prog = (t, a, d) => clamp((t - a) / d);
+function place(el, x, y, o=1, s=1, extra='') {
+  el.style.opacity = o; el.style.transform = `translate(${x}px, ${y}px) scale(${s}) ${extra}`;
+}
+// standard enter/exit for an element living from t0 to t1
+function life(t, t0, t1, dIn=.55, dOut=.35) {
+  const i = easeOut(prog(t, t0, dIn)), o = easeInOut(prog(t, t1 - dOut, dOut));
+  return { i, o, vis: t >= t0 && t <= t1, a: i * (1 - o) };
+}
+function words(el, t, t0, t1) {
+  const ws = el.querySelectorAll('.w > span');
+  const L = life(t, t0, t1);
+  el.style.opacity = L.vis ? 1 : 0;
+  el.style.transform = `translateY(${-24 * L.o}px)`;
+  ws.forEach((w, k) => {
+    const p = easeOut(prog(t, t0 + k * .07, .5));
+    w.style.transform = `translateY(${(1 - p) * 105}%)`;
+    w.style.opacity = 1 - L.o;
+  });
+}
+
+// ---------- scenes (BS Hoops) ----------
+const S = MODE === 'wide' ? { hx: 84, hw: 470 } : { hx: 30, hw: 660, hy: 58 };
+const wide = MODE === 'wide';
+const T = [ [0, 3.2], [3.2, 9.5], [9.5, 12.3], [12.3, 16.8], [16.8, 19.8] ];
+const KY = wide ? 214 : 30;   // kicker y
+const HY = wide ? 246 : 58;   // headline y
+
+// S1: front office
+const h1 = wide ? headline(['Run the', '*franchise.*'], S.hx, HY, S.hw) : headline(['Run the *franchise.*'], S.hx, HY, S.hw);
+const k1 = mk('Front office', 'el kicker');
+const NGS = wide ? 0.74 : 0.68, OBS = wide ? 1.0 : 0.9;
+const ng = card('nextgame', NGS);
+const ob = card('objectives', OBS);
+const tap1 = mk('', 'el tap');
+// S2: Court Cam
+const h2 = wide ? headline(['Every possession. *Live* *in* *3D.*'], 0, 40, W) : headline(['Every possession.', '*Live* *in* *3D.*'], S.hx, 40, S.hw);
+if (wide) h2.style.textAlign = 'center';
+const d3 = mk('<img style="display:block;width:100%;height:100%;object-fit:cover">', 'el card'); d3.style.borderRadius = '18px';
+const VW3 = wide ? 1000 : 660, VH3 = wide ? 562 : 440; d3.style.width = VW3 + 'px'; d3.style.height = VH3 + 'px';
+const SHOTS = window.SHOTS || [];
+// S3: trades
+const h3 = wide ? headline(['Work the', '*trade* *market.*'], S.hx, HY, S.hw) : headline(['Work the *trade* *market.*'], S.hx, HY, S.hw);
+const k3 = mk('Trade finder', 'el kicker');
+const TRW = 560, TS = wide ? 1.12 : 1.12;
+const tr = ['trade0', 'trade1', 'trade2'].map(n => card(n, TS, 14, TRW));
+const ring3 = mk('', 'el ring');
+const tap3 = mk('', 'el tap');
+// S4: draft board
+const h4 = wide ? headline(['Scout every', '*prospect.*'], S.hx, HY, S.hw) : headline(['Scout every *prospect.*'], S.hx, HY, S.hw);
+const k4 = mk('2027 draft board', 'el kicker');
+const RS = wide ? 1.3 : 1.3, PW = 497 * RS, RH = 55 * RS, OPEN_H = 349 * RS, BOARD_H = wide ? 500 : 470;
+const board = mk('', 'el card'); board.style.background = '#fff';
+board.style.width = PW + 'px'; board.style.height = BOARD_H + 'px';
+const open = document.createElement('div'); open.style.cssText = 'position:absolute;left:0;top:0;width:' + PW + 'px;overflow:hidden;background:#fff';
+open.innerHTML = `<img src="${A}row0_open.png" style="display:block;width:${PW}px">`; board.appendChild(open);
+const rows = [0, 1, 2, 3, 4, 5, 6].map(i => { const r = document.createElement('div');
+  r.style.cssText = 'position:absolute;left:0;width:' + PW + 'px;height:' + RH + 'px;will-change:transform,opacity;background:#fff';
+  r.innerHTML = `<img src="${A}row${i}.png" style="display:block;width:100%">`; board.appendChild(r); return r; });
+const tap4 = mk('', 'el tap');
+// S5: end card
+const brand = mk('<b>BS</b> Hoops', 'el brand'); brand.style.fontSize = wide ? '40px' : '38px';
+const h5 = headline(['Build your', '*dynasty.*'], 0, wide ? 236 : 222, W); h5.style.textAlign = 'center';
+h5.style.fontSize = wide ? '112px' : '92px';
+const sub5 = mk('30 cities. 60 prospects. One banner.', 'el pill'); sub5.style.cssText += ';background:transparent;border:0;box-shadow:none;font-size:22px;color:#475569';
+const pills = ['Free', 'In your browser', 'No download'].map(s => mk(s, 'el pill'));
+for (const k of [k1, k3, k4]) if (!wide) k.style.width = W + 'px';
+
+function hide(...els) { els.forEach(e => e.style.opacity = 0); }
+function kick(k, t, a, b) { const L = life(t, a, b); place(k, wide ? S.hx : 0, KY + 10 * (1 - L.i), L.a); }
+
+const pending = [];
+function setSrc(img, src) { if (img.getAttribute('src') !== src) { img.setAttribute('src', src); pending.push(img.decode().catch(() => {})); } }
+function draw(t) {
+  pending.length = 0;
+  const g1 = document.getElementById('g1'), g2 = document.getElementById('g2');
+  g1.style.transform = `translate(${W*0.55 + 60*Math.sin(t*0.5)}px, ${-180 + 40*Math.cos(t*0.4)}px)`;
+  g2.style.transform = `translate(${-160 + 50*Math.cos(t*0.45)}px, ${H*0.45 + 40*Math.sin(t*0.35)}px)`;
+  document.getElementById('grid').style.transform = `translateX(${-(t*12)%64}px)`;
+  hide(...stage.querySelectorAll('.el'));
+  let a, b;
+
+  // ---- S1: front office ----
+  [a, b] = T[0];
+  if (t >= a && t <= b) {
+    words(h1, t, a + .05, b); kick(k1, t, a, b);
+    const s1 = NGS, s2 = OBS;
+    const nw = SZ.nextgame[0] * s1, nh = SZ.nextgame[1] * s1, ow = SZ.objectives[0] * s2;
+    const x = wide ? W - Math.max(nw, ow) - 56 : (W - nw) / 2, y = wide ? (H - (nh + 18 + SZ.objectives[1] * s2)) / 2 + 6 : 196;
+    const nL = life(t, a + .15, b, .6), oL = life(t, a + .3, b, .65);
+    place(ng, x + 40 * (1 - nL.i), y - 30 * nL.o, nL.a);
+    place(ob, (wide ? x : (W - ow) / 2) + 40 * (1 - oL.i), y + nh + 18 + 40 * (1 - oL.i) * 0 - 30 * oL.o, oL.a);
+    const tp = prog(t, a + 2.15, .5);   // tap "Watch Live"
+    if (tp > 0 && tp < 1) place(tap1, x + 878 * s1 - 22, y + 53 * s1 - 22, 1 - tp, .6 + 1.2 * tp);
+  }
+  // ---- S2: Court Cam ----
+  [a, b] = T[1];
+  if (t >= a && t <= b) {
+    words(h2, t, a + .05, b);
+    const L = life(t, a + .1, b, .6);
+    const x = (W - VW3) / 2, y = wide ? 128 : 200;
+    place(d3, x, y + 50 * (1 - L.i) - 30 * L.o, L.a, 0.95 + 0.05 * L.i);
+    let f = Math.floor((t - a) * 30), k = 0;
+    while (k < SHOTS.length - 1 && f >= SHOTS[k].n) { f -= SHOTS[k].n; k++; }
+    if (SHOTS.length) { const sh = SHOTS[k]; f = Math.min(f, sh.n - 1); setSrc(d3.querySelector('img'), `${sh.dir}/${String(sh.from + f).padStart(5, '0')}.jpg`); }
+  }
+  // ---- S3: trades ----
+  [a, b] = T[2];
+  if (t >= a && t <= b) {
+    words(h3, t, a + .05, b); kick(k3, t, a, b);
+    const cw = TRW * TS, ch = 108 * TS, gap = 16;
+    const x0 = wide ? W - cw - 70 : (W - cw) / 2, y0 = wide ? (H - 3 * ch - 2 * gap) / 2 + 10 : 214;
+    tr.forEach((c, i) => { const cl = life(t, a + .2 + i * .14, b - (2 - i) * .05, .6); place(c, x0 + 80 * (1 - cl.i), y0 + i * (ch + gap) - 30 * cl.o, cl.a); });
+    const rp = easeOut(prog(t, a + 1.45, .3)), ro = easeInOut(prog(t, b - .35, .35));
+    ring3.style.width = cw + 6 + 'px'; ring3.style.height = ch + 6 + 'px';
+    if (rp > 0) place(ring3, x0 - 6, y0 - 6 - 4 * rp, rp * (1 - ro), 1);
+    const tp = prog(t, a + 1.3, .45);
+    if (tp > 0 && tp < 1) place(tap3, x0 + 130 * TS - 22, y0 + 50 * TS - 22, 1 - tp, .6 + 1.2 * tp);
+    if (rp > 0) { tr[0].style.transform += ` translateY(${-4 * rp}px)`; tr[1].style.opacity *= 1 - .4 * rp; tr[2].style.opacity *= 1 - .4 * rp; }
+  }
+  // ---- S4: draft board + Scout dropdown ----
+  [a, b] = T[3];
+  if (t >= a && t <= b) {
+    words(h4, t, a + .05, b); kick(k4, t, a, b);
+    const bl = life(t, a + .1, b, .6);
+    const bx = wide ? W - PW - 60 : (W - PW) / 2, by = wide ? (H - BOARD_H) / 2 + 10 : 200;
+    place(board, bx, by + 50 * (1 - bl.i) - 30 * bl.o, bl.a);
+    const tOpen = a + 1.4;
+    const op = easeInOut(prog(t, tOpen, .6));
+    const openH = RH + (OPEN_H - RH) * op;
+    const scroll = easeInOut(prog(t, tOpen + 1.0, b - tOpen - 1.6)) * Math.max(0, OPEN_H - BOARD_H + 10);
+    rows.forEach((r, i) => {
+      const rl = easeOut(prog(t, a + .25 + i * .07, .45));
+      const y = i === 0 ? 0 : i * RH + (openH - RH) - scroll;
+      r.style.transform = `translate(${40 * (1 - rl)}px, ${y}px)`;
+      r.style.opacity = i === 0 ? rl * (op > 0 ? 0 : 1) : rl;
+    });
+    open.style.height = openH + 'px'; open.style.opacity = op > 0 ? 1 : 0; open.style.transform = `translateY(${-scroll}px)`;
+    board.style.height = Math.min(BOARD_H, 7 * RH + (openH - RH)) + 'px';
+    const tp = prog(t, tOpen - .2, .45);   // tap "Scout" on the first row
+    if (tp > 0 && tp < 1) place(tap4, bx + 398 * RS - 22, by + 27 * RS - 22, 1 - tp, .6 + 1.2 * tp);
+  }
+  // ---- S5: end card ----
+  [a, b] = T[4];
+  if (t >= a && t <= b) {
+    words(h5, t, a + .15, b + 1);
+    const fadeAll = easeInOut(prog(t, b - .45, .45));
+    h5.style.opacity = 1 - fadeAll;
+    const bl = easeOut(prog(t, a, .5));
+    place(brand, (W - brand.offsetWidth) / 2, (wide ? 176 : 160) + 10 * (1 - bl), bl * (1 - fadeAll));
+    const sl = easeOut(prog(t, a + .55, .5));
+    place(sub5, (W - sub5.offsetWidth) / 2, (wide ? 448 : 412) + 12 * (1 - sl), sl * (1 - fadeAll));
+    const pw = pills.map(p => p.offsetWidth), total = pw.reduce((x, y) => x + y) + 2 * 12;
+    let x = (W - total) / 2;
+    pills.forEach((p, i) => { const pl = back(prog(t, a + .8 + i * .1, .45));
+      place(p, x, (wide ? 510 : 476) + 16 * (1 - pl), clamp(pl * 1.4) * (1 - fadeAll), .9 + .1 * pl); x += pw[i] + 12; });
+  }
+}
+window.render = t => { draw(t); return Promise.all(pending); };
+window.DURATION = T[T.length - 1][1];
+window.READY = Promise.all([...document.images].map(i => i.decode().catch(() => {}))).then(() => document.fonts.ready);
+draw(0);
+</script>
+</body></html>
