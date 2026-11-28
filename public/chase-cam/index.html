@@ -153,6 +153,7 @@ select{font:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import { MeshoptSimplifier } from './vendor160/meshopt_simplifier.module.js';   /* MIT (meshoptimizer 0.22): builds the players' distance levels at load */
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -193,7 +194,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22b'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22c'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -266,6 +267,24 @@ const scene = new THREE.Scene(); window.__scene = scene;
    player is small on screen (LODS, swept every frame in frame()). */
 const SHADOW_PARTS = /^(MH_SKIN|MH_JERSEY|MH_PANTS|Mat3|plain)$/;
 const LODS = new Set(); window.__lods = LODS;   /* console/QA access */
+/* PERF 11/27: geometry levels for the players. Every player was drawn at full detail (~47k triangles on mh2) however small he was on screen: at the 'min'
+   tier the crowd had fallen 81% and the players 47%, two-thirds of what a weak phone drew. Each skinned mesh of the model now gets two simplified index
+   buffers (meshoptimizer, built once at load) over the SAME vertices, so skin weights, UVs and the body morphs all carry over and no vertex data is duplicated.
+   lodSweep() picks a level per player from his size on screen; LOD_BIAS (set by the quality tier) pulls the switch distances in on slower devices.
+   ?lod=0 turns it off; ?lod=1 / ?lod=2 pin a level (QA). */
+const GEO_LODS = new WeakMap(); let LOD_BIAS = 1;
+const LOD_PIN = (()=>{ const v=new URLSearchParams(location.search).get('lod'); return v==null||v===''? null : +v; })();
+const LOD_RATIO = window.__lodRatio || [.4, .14], LOD_KEEP = /FACEMASK|CHINSTRAP|EYES|BROWS|LASHES/;   /* wire-thin parts collapse into nothing: they keep their triangles until lodSweep hides them */
+function buildPlayerLods(root){ if(LOD_PIN===0 || !MeshoptSimplifier.supported) return;
+  root.traverse(o=>{ if(!o.isSkinnedMesh) return; const g=o.geometry; if(GEO_LODS.has(g) || !g.index || g.groups.length || LOD_KEEP.test(o.name)) return;
+    const pos=g.attributes.position, P=new Float32Array(pos.count*3); for(let i=0;i<pos.count;i++){ P[i*3]=pos.getX(i); P[i*3+1]=pos.getY(i); P[i*3+2]=pos.getZ(i); }
+    const idx=new Uint32Array(g.index.array), levels=[g];
+    if(idx.length>=900) for(const r of LOD_RATIO){ let out; try{ out=MeshoptSimplifier.simplify(idx, P, 3, Math.max(60, Math.floor(idx.length*r/3)*3), .05)[0]; }catch(e){ break; }
+      if(!out.length || out.length>=idx.length*.9) { levels.push(levels[levels.length-1]); continue; }
+      const lg=new THREE.BufferGeometry(); for(const k in g.attributes) lg.setAttribute(k, g.attributes[k]); for(const k in g.morphAttributes) lg.morphAttributes[k]=g.morphAttributes[k];
+      lg.morphTargetsRelative=g.morphTargetsRelative; lg.setIndex(new THREE.BufferAttribute(pos.count>65535? out : new Uint16Array(out), 1));
+      lg.boundingSphere=g.boundingSphere; lg.boundingBox=g.boundingBox; levels.push(lg); }
+    if(levels.length===3) GEO_LODS.set(g, levels); }); }
 scene.background = new THREE.Color('#9cc3e6');
 scene.fog = new THREE.Fog(new THREE.Color('#c7d6e4'), 120, 300);
 // sky: a gradient dome (deep blue overhead, pale haze at the horizon) instead of a flat colour
@@ -736,8 +755,9 @@ function makePlayer(t, number, big, opts={}){
   const numFront = new THREE.Mesh(GEO.num, numMat(number,t)); numFront.scale.set(NO.sf,NO.sf,1); const nf = attach(bones.Spine2, numFront, new THREE.Vector3(...NO.front), sc); nf.rotation.x = NO.tilt; }
   if(kit.visor && modelChoice!=='fp27' && !MH){ const vis=new THREE.Mesh(new THREE.CylinderGeometry(.104,.104,.052,24,1,true,Math.PI*.62,Math.PI*.76), new THREE.MeshStandardMaterial({color:'#0d1218', transparent:true, opacity:.82, roughness:.08, metalness:.55, side:THREE.DoubleSide})); vis.rotation.y=Math.PI; attach(bones.Head, vis, new THREE.Vector3(0,9.5,-.5), sc); }
   if(kit.towel){ const tw=new THREE.Mesh(new THREE.PlaneGeometry(.085,.23), new THREE.MeshLambertMaterial({color:'#ececec', side:THREE.DoubleSide})); attach(bones.Hips, tw, new THREE.Vector3(-11,-15,8.5), sc).rotation.set(.1,.25,.1); }
-  { const face=[], far=[]; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; if(/^MH_(EYES|BROWS|LASHES)$/.test(o.name)) face.push(o); else if(/^(frosted_glass|trim|MH_ARMSLEEVE)$/.test(o.name)) far.push(o); });
-    if(face.length || far.length) LODS.add({root, face, far}); }
+  { const face=[], far=[], geo=[]; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; const lv=GEO_LODS.get(o.geometry); if(lv) geo.push({m:o, lv});
+      if(/^MH_(EYES|BROWS|LASHES)$/.test(o.name)) face.push(o); else if(/^(frosted_glass|trim|MH_ARMSLEEVE)$/.test(o.name)) far.push(o); });
+    if(face.length || far.length || geo.length) LODS.add({root, face, far, geo, lvl:0}); }
   const mixer = new THREE.AnimationMixer(model);
   const clip = n => BOT.animations.find(a=>a.name===n);
   const act = { idle: mixer.clipAction(clip('idle')), walk: mixer.clipAction(clip('walk')), run: mixer.clipAction(clip('run')) };
@@ -2779,11 +2799,11 @@ document.getElementById('postBtn')?.addEventListener('click',()=>{ POST.on=!POST
    ?q=0..4 pins a tier (QA); window.__q exposes it. Each game reports its frame rate to the page (bsgm:perf) for the sim3d_perf analytics event. */
 const QUALITY = (()=>{
   const L = [
-    {name:'high',  dpr:2,    ao:true,  post:true,  crowd:1,   bench:true,  shadow:SHADOW_RES, shadowEvery:1},
-    {name:'med',   dpr:1.5,  ao:false, post:true,  crowd:.7,  bench:true,  shadow:2048, shadowEvery:1},
-    {name:'low',   dpr:1.25, ao:false, post:false, crowd:.45, bench:false, shadow:2048, shadowEvery:1},
-    {name:'lower', dpr:1,    ao:false, post:false, crowd:.3,  bench:false, shadow:1024, shadowEvery:2},
-    {name:'min',   dpr:.75,  ao:false, post:false, crowd:.15, bench:false, shadow:1024, shadowEvery:3}];
+    {name:'high',  dpr:2,    ao:true,  post:true,  crowd:1,   bench:true,  shadow:SHADOW_RES, shadowEvery:1, lod:1},
+    {name:'med',   dpr:1.5,  ao:false, post:true,  crowd:.7,  bench:true,  shadow:2048, shadowEvery:1, lod:1},
+    {name:'low',   dpr:1.25, ao:false, post:false, crowd:.45, bench:false, shadow:2048, shadowEvery:1, lod:.8},
+    {name:'lower', dpr:1,    ao:false, post:false, crowd:.3,  bench:false, shadow:1024, shadowEvery:2, lod:.65},
+    {name:'min',   dpr:.75,  ao:false, post:false, crowd:.15, bench:false, shadow:1024, shadowEvery:3, lod:.5}];
   const KEY='bsgm.sim3dQ', qp=new URLSearchParams(location.search).get('q'), pinned = qp!=null && qp!=='' && L[+qp] ? +qp : null, POST_OK = POST.on;
   const coarse = matchMedia('(pointer:coarse)').matches;
   let saved=null; try{ const v=localStorage.getItem(KEY); if(v!=null && L[+v]) saved=+v; }catch(e){}
@@ -2793,7 +2813,7 @@ const QUALITY = (()=>{
   function apply(i){ cur=i; const q=L[i];
     const pr=Math.min(window.devicePixelRatio||1, q.dpr); if(Math.abs(renderer.getPixelRatio()-pr)>.01){ renderer.setPixelRatio(pr); resize(); }
     POST.on = POST_OK && q.post; if(POST.ao) POST.ao.enabled = q.ao;
-    crowd.setDensity(q.crowd);
+    crowd.setDensity(q.crowd); LOD_BIAS = q.lod;
     if(sun.shadow.mapSize.x!==q.shadow){ sun.shadow.mapSize.set(q.shadow,q.shadow); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; } }
     renderer.shadowMap.autoUpdate = q.shadowEvery===1; renderer.shadowMap.needsUpdate = true;
     sideline.players.forEach(a=>{ a.root.visible=q.bench; });
@@ -2818,9 +2838,12 @@ const QUALITY = (()=>{
     resetStats:()=>{ sumAll=0; nAll=0; } };
   window.__q = api; return api; })();
 function lodSweep(){ const cp=camera.position, h=renderer.domElement.clientHeight||700, k=Math.tan(camera.fov*Math.PI/360)*700/h;
-  for(const e of LODS){ if(!e.root.parent){ e.face.forEach(m=>m.visible=true); e.far.forEach(m=>m.visible=true); LODS.delete(e); continue; }
+  for(const e of LODS){ if(!e.root.parent){ e.face.forEach(m=>m.visible=true); e.far.forEach(m=>m.visible=true); e.geo.forEach(x=>{ x.m.geometry=x.lv[0]; }); LODS.delete(e); continue; }
     const d=cp.distanceTo(e.root.position)*k/.445;   /* metres at the stock 48° lens on a 700 px tall view: a telephoto or a big screen shows the detail further out */
-    const f=d<16, r=d<45; for(const m of e.face) if(m.visible!==f) m.visible=f; for(const m of e.far) if(m.visible!==r) m.visible=r; } }
+    const f=d<16, r=d<45; for(const m of e.face) if(m.visible!==f) m.visible=f; for(const m of e.far) if(m.visible!==r) m.visible=r;
+    /* geometry level: full inside ~20 m, 40% to ~42 m, 14% beyond (a little hysteresis so a man on the line between two levels does not flicker) */
+    const dl=d/LOD_BIAS, h0=e.lvl>0? 18:20, h1=e.lvl>1? 39:42, lvl = LOD_PIN!=null? LOD_PIN : dl<h0? 0 : dl<h1? 1 : 2;
+    if(lvl!==e.lvl){ e.lvl=lvl; for(const x of e.geo) x.m.geometry=x.lv[lvl]; } } }
 new ResizeObserver(resize).observe(stage);
 
 // ---------- Outcome logic (mirrors liveCoachEngine odds) ----------
@@ -3080,7 +3103,8 @@ const botReady = new Promise((res,rej)=>{
   sc.onload=async()=>{ try {
     // textures are decoded from bytes (no image fetches, which the hosted page's policy may block) and attached by material name
     const TEX = {}; for(const [n,b] of Object.entries(window.PLAYER_TEX)){ const bmp = await createImageBitmap(new Blob([b64(b)],{type:'image/jpeg'})); const t=new THREE.CanvasTexture(bmp); t.flipY=false; t.colorSpace = /Normal|Roughness|ao_met/.test(n) ? THREE.NoColorSpace : THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; t.needsUpdate=true; TEX[n]=t; } window.__PLAYER_TEXMAP = TEX;
-    new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', g=>{ BOT=g; BOT.userData=window.PLAYER_INFO||{};
+    await MeshoptSimplifier.ready.catch(()=>{});
+    new GLTFLoader().parse(b64(window.PLAYER_GLB_B64).buffer, '', g=>{ BOT=g; BOT.userData=window.PLAYER_INFO||{}; try{ buildPlayerLods(g.scene); }catch(e){ console.warn('player LOD build failed', e); }
       g.scene.traverse(o=>{ if(o.isMesh){ const e=window.PLAYER_MAT[o.material.name]||{}; const m=o.material; if(e.map) m.map=TEX[e.map]; if(e.normal) m.normalMap=TEX[e.normal]; if(e.rough){ m.roughnessMap=TEX[e.rough]; m.metalnessMap=TEX[e.rough]; } m.needsUpdate=true; } });
       res(); }, rej);
   } catch(e){ rej(e); } }; });
