@@ -406,10 +406,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           if (section.label === 'League' && leagueSettings?.bsMode) {
             visibleItems.push({ href: '/qb-pyramid', label: 'QB Pyramid', icon: '🔺' });
           }
-          // Inject Expansion link into Other section during offseason
+          // Inject Expansion link into Other section. Gate it on the same
+          // conditions the engine enforces — God Mode on AND the re-signing or
+          // free agency phase — so the link never leads to a silent no-op.
           if (section.label === 'Other') {
-            const isOffseason = ['resigning', 'freeAgency', 'offseason', 'draft'].includes(phase);
-            if (isOffseason || expansionDraft) {
+            const canExpand = (leagueSettings?.godMode ?? false)
+              && (phase === 'freeAgency' || phase === 'resigning');
+            if (canExpand || expansionDraft) {
               visibleItems.unshift({ href: '/expansion', label: 'Expansion', icon: '🏗️' });
             }
           }

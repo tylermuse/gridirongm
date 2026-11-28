@@ -14,7 +14,7 @@ const DIVISIONS = ['North', 'South', 'East', 'West'] as const;
 
 export default function ExpansionPage() {
   const {
-    teams, players, season, phase, userTeamId,
+    teams, players, season, phase, userTeamId, leagueSettings,
     expansionDraft, createExpansionTeam, protectPlayers,
     runExpansionDraftAction, cancelExpansionDraft,
   } = useGameStore();
@@ -37,16 +37,22 @@ export default function ExpansionPage() {
 
   // Protection state
   const [protectedIds, setProtectedIds] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const isOffseason = ['resigning', 'freeAgency', 'offseason', 'draft'].includes(phase);
-  if (!isOffseason && !expansionDraft) {
+  // Gate must match the engine: createExpansionTeam() only succeeds when God
+  // Mode is on AND the league is in the re-signing or free agency phase.
+  // Keeping the UI in step with the engine stops the silent no-op that landed
+  // players on an empty results screen.
+  const godMode = leagueSettings?.godMode ?? false;
+  const canStartExpansion = godMode && (phase === 'freeAgency' || phase === 'resigning');
+  if (!canStartExpansion && !expansionDraft) {
     return (
       <GameShell>
         <div className="max-w-4xl mx-auto text-center py-20">
           <div className="text-5xl mb-4">🏗️</div>
           <h2 className="text-2xl font-black mb-3">Expansion Draft</h2>
           <p className="text-[var(--text-sec)]">
-            Expansion is only available during the offseason (re-signing, free agency, draft, or offseason phases).
+            Expansion drafts are only available during the re-signing or free agency phase, and require God Mode to be enabled in League Settings.
           </p>
         </div>
       </GameShell>
@@ -72,17 +78,33 @@ export default function ExpansionPage() {
       primaryColor,
       secondaryColor,
     };
-    createExpansionTeam(config);
+    const created = createExpansionTeam(config);
+    if (!created) {
+      setActionError('Could not start the expansion draft. It requires God Mode enabled during the re-signing or free agency phase.');
+      return;
+    }
+    setActionError(null);
     setStep('protect');
   }
 
   function handleConfirmProtections() {
-    protectPlayers(userTeamId!, Array.from(protectedIds));
+    const ok = protectPlayers(userTeamId!, Array.from(protectedIds));
+    if (!ok) {
+      setActionError('Could not confirm protections. Please restart the expansion draft.');
+      return;
+    }
+    setActionError(null);
     setStep('draft');
   }
 
   function handleRunDraft() {
     runExpansionDraftAction();
+    const ed = useGameStore.getState().expansionDraft;
+    if (!ed || ed.phase !== 'complete') {
+      setActionError('The expansion draft could not be run. Please restart the expansion draft.');
+      return;
+    }
+    setActionError(null);
     setStep('results');
   }
 
@@ -205,6 +227,12 @@ export default function ExpansionPage() {
             </React.Fragment>
           ))}
         </div>
+
+        {actionError && (
+          <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {actionError}
+          </div>
+        )}
 
         {/* Step 1: Create Team */}
         {step === 'create' && (
