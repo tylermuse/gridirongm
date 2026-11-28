@@ -195,7 +195,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22e'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22f'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -2397,7 +2397,7 @@ function motionBlend(a, sp, vx, vz, hold, fz){
   W.walk = move*wf*wWalk*keep; W.jog = move*wf*wJog*keep; W[g.style && A.run2? 'run2' : 'run'] = move*wf*wRun*keep;
   if(!g.style && A.run2 && STRIDE.run2){ const k=clamp((sp-5.4)/1.2, 0, 1), w=W.run; W.run=w*(1-k); W.run2=w*k; }   /* the short-striding run tops out near 6.5 yd/s before its feet blur: at a sprint everyone opens up into the longer stride */
   W.back = move*wb*keep;
-  const right = a._ll>0; W[right? (def&&A.dsr? 'dsr':'sr') : (def&&A.dsl? 'dsl':'sl')] = move*ws*keep;
+  const right = a._ll<0; W[right? (def&&A.dsr? 'dsr':'sr') : (def&&A.dsl? 'dsl':'sl')] = move*ws*keep;   /* a man facing +z has his right hand at -x: _ll > 0 is a move to his LEFT (this read > 0 as right, so every sidestep played the other side's clip) */
   for(const key in A) A[key].setEffectiveWeight(W[key]||0);
   /* stride rate matched to ground speed: no skating. The clip's own speed is the measured one (STRIDE, see calibrateStride) x this man's scale; the table / old constants are the fallback.
      The floors are lower than they were (.7 / .55): a man easing along at 1 yd/s on a 2 yd/s walk has to take slow steps, not walk on the spot. */
