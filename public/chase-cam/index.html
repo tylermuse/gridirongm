@@ -195,7 +195,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22f'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22g'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -233,7 +233,7 @@ function planWho(m){
   return out;
 }   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
-window.__qa = { ball: () => ball.position.toArray(), playT: () => playT, team: () => ({O, D, play}), hand: (a, side='Right') => { a.model.updateMatrixWorld(true); return a.bones[side+'Hand'].getWorldPosition(new THREE.Vector3()).toArray(); } };   /* QA: sample the ball and a man's hands mid-play (e.g. the batted ball meets the tackle's hands) */
+window.__qa = { feetRef: () => (typeof FEETREF!=="undefined"? FEETREF : null), ball: () => ball.position.toArray(), playT: () => playT, team: () => ({O, D, play}), hand: (a, side='Right') => { a.model.updateMatrixWorld(true); return a.bones[side+'Hand'].getWorldPosition(new THREE.Vector3()).toArray(); } };   /* QA: sample the ball and a man's hands mid-play (e.g. the batted ball meets the tackle's hands) */
 window.__onField = () => ({ o: (O.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), d: (D.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), car: play && play.carrier ? [play.carrier.teamId, play.carrier.num, play.carrier.skinTone] : null, tk: play && play.tackler ? [play.tackler.teamId, play.tackler.num] : null, kind: play && play.res ? play.res.kind : null, running, bug: {q:G.quarter, clock:G.clock, down:G.down, toGo:G.toGo, fp:G.fieldPos, off:G.off, score:G.score} });   /* QA: who the sim put on the field */
 window.__setTeams = (h,a) => { EMB_TEAMS[0]=h; EMB_TEAMS[1]=a; if(!G.busy) setupFormation(); };   /* QA: what bsgm:setup does */
 
@@ -2634,6 +2634,7 @@ function stepActor(a, t, dt){
   if(a.isRef) refPose(a, t);
   if(MOTION2) motionLook(a, t, dt, sp);
   place(a);
+  if(FEET) footPlant(a, dt, sp, w);
   if(a.mocapThrow || (a.mocapCeleb && a.celebStyle!=='mocapLoop') || (a.mocapActive && a.mocapAct) || a.down!=null || (a.celebrate!==false && a.celebStyle==='nap')){
     a.root.updateMatrixWorld(true); let low=Infinity;
     for(const p of a.contact){_v.copy(p.pos);p.mesh.applyBoneTransform(p.index,_v);_v.applyMatrix4(p.mesh.matrixWorld);low=Math.min(low,_v.y);}
@@ -2644,6 +2645,63 @@ function stepActor(a, t, dt){
     a._lift = (a._lift==null || dt<=0)? lift : a._lift + (lift - a._lift)*Math.min(1, dt*14);
     a.body.position.y += a._lift;
   } else a._lift = null;
+}
+
+
+/* ---------- foot planting (?feet=1, off by default) ----------
+   The locomotion clips cannot cover how linemen (and anyone easing sideways or backwards) actually move: the "strafe" clips are diagonal walks and
+   the slide clips barely travel, so at low speed the feet slid at more than the body's own speed. Below ~3 yd/s the legs are taken off the clip:
+   each foot is pinned to a spot on the turf, and when the body has moved (or turned) far enough from it, that foot steps to where it will be needed
+   next, in whatever direction the man is going. The legs follow by two-bone IK (hip -> knee -> ankle, knee kept pointing the way he faces); the
+   hips sink a little so a planted foot is always in reach. Above ~3.3 yd/s the clip's own stride takes over again. */
+const FEET = new URLSearchParams(location.search).get('feet')==='1';
+const FEETREF = {};
+const _fH=new THREE.Vector3(), _fK=new THREE.Vector3(), _fA=new THREE.Vector3(), _fT=new THREE.Vector3(), _fD=new THREE.Vector3(), _fP=new THREE.Vector3(), _fN=new THREE.Vector3(), _fU=new THREE.Vector3(), _fV=new THREE.Vector3(), _fq=new THREE.Quaternion(), _fq2=new THREE.Quaternion(), _fq3=new THREE.Quaternion(), _fUp=new THREE.Vector3(0,1,0);
+function calibrateFeet(){ if(!FEET || !BOT) return; try{   /* where the ankles sit, and how the feet lie flat, in the idle pose */
+  const a=makePlayer(team(0), 1, false, {bench:true}); for(const e of LODS) if(e.root===a.root) LODS.delete(e);
+  for(const k in a.act) a.act[k].setEffectiveWeight(k==='idle'? 1 : 0); a.act.idle.time=0; a.mixer.update(0); a.root.updateMatrixWorld(true);
+  const s=a.model.scale.x, L=a.bones.LeftFoot, R=a.bones.RightFoot, p=new THREE.Vector3(), q=new THREE.Vector3(); if(!L || !R || !a.bones.LeftUpLeg || !a.bones.LeftLeg) return;
+  L.getWorldPosition(p); R.getWorldPosition(q);
+  FEETREF.y=(p.y+q.y)/2/s; FEETREF.hw=Math.abs(p.x-q.x)/2/s; FEETREF.z=(p.z+q.z)/2/s; FEETREF.qL=L.getWorldQuaternion(new THREE.Quaternion()); FEETREF.qR=R.getWorldQuaternion(new THREE.Quaternion()); FEETREF.ok=true;
+  }catch(e){ console.warn('foot calibration failed', e); } }
+function footPlant(a, dt, sp, stanceW){
+  if(!FEETREF.ok || a.isRef || !a.bones.LeftUpLeg) return;
+  const B=a.bones, fp = a.fp || (a.fp={w:0, vx:0, vz:0, clock:0, drop:0, init:false, f:[{s:1},{s:-1}]});
+  const cel = a.celebrate!=null && a.celebrate!==false;
+  const on = dt>0 && a.down==null && !a.mocapActive && !a.mocapThrow && !a.mocapCeleb && !cel && !a.hold && a.kickT==null && !(a.y>0) && !(stanceW>.01);
+  const want = on? clamp((3.3-sp)/.9, 0, 1) : 0; fp.w = dt>0? fp.w + (want-fp.w)*Math.min(1, dt*9) : (on? fp.w : 0);
+  if(fp.w<.02 || !on && fp.w<.2){ fp.w=0; fp.init=false; fp.drop=0; if(a.model.position.y) a.model.position.y=0; return; }
+  const sc=a.model.scale.x, f=a.face, Fx=Math.sin(f), Fz=Math.cos(f), Lx=Math.cos(f), Lz=-Math.sin(f);   /* F: the way he faces; L: his left */
+  const line = a.roleKey==='ol' || a.roleKey==='dl', hw=FEETREF.hw*sc*(line? 1.3 : 1.1), z0=FEETREF.z*sc, ay=FEETREF.y*sc;
+  fp.vx += ((a.vx||0)-fp.vx)*Math.min(1,dt*10); fp.vz += ((a.vz||0)-fp.vz)*Math.min(1,dt*10); const v=Math.hypot(fp.vx,fp.vz); fp.clock += dt;
+  a.model.position.y = -fp.drop*fp.w; a.root.updateMatrixWorld(true);
+  const T=clamp(.24-.02*v, .16, .24), sh=clamp(v*T, .07, .26), lift=(.05+.03*Math.min(v,2))*sc;   /* step time, half a stride, how high the foot comes off the turf */
+  if(!fp.init){ fp.init=true; for(const ft of fp.f){ (ft.s>0? B.LeftFoot : B.RightFoot).getWorldPosition(_fA); ft.x=_fA.x; ft.z=_fA.z; ft.yaw=f; ft.step=null; } }   /* taking over from the clip: the feet start where the clip had them */
+  let worst=null, we=0, stepping=false;
+  for(const ft of fp.f){ ft.hx=a.x+Lx*hw*ft.s+Fx*z0; ft.hz=a.z+Lz*hw*ft.s+Fz*z0; if(ft.step){ stepping=true; continue; }
+    let dy=f-ft.yaw; dy=Math.atan2(Math.sin(dy),Math.cos(dy)); const e=Math.hypot(ft.x-ft.hx, ft.z-ft.hz)+Math.abs(dy)*hw*1.2;
+    if(e>1.4){ ft.x=ft.hx; ft.z=ft.hz; ft.yaw=f; continue; }   /* he was moved (new formation): no step could cover it */
+    if(e>we){ we=e; worst=ft; } }
+  if(!stepping && worst && we>Math.max(.06, sh*.75)) worst.step={t0:fp.clock, T, x0:worst.x, z0:worst.z, yaw0:worst.yaw};   /* one foot at a time: the other is the one he is standing on */
+  let need=0;
+  for(const ft of fp.f){ let ty=ay;
+    if(ft.step){ const st=ft.step, u=(fp.clock-st.t0)/st.T, rem=Math.max(0,1-u)*st.T, k=v>.05? sh/v : 0;
+      const tx=ft.hx+fp.vx*(rem+k), tz=ft.hz+fp.vz*(rem+k);   /* lands half a stride ahead of where the hip will be */
+      if(u>=1){ ft.x=tx; ft.z=tz; ft.yaw=f; ft.step=null; }
+      else { const e=u*u*(3-2*u); ft.x=st.x0+(tx-st.x0)*e; ft.z=st.z0+(tz-st.z0)*e; let dy=f-st.yaw0; dy=Math.atan2(Math.sin(dy),Math.cos(dy)); ft.yaw=st.yaw0+dy*e; ty=ay+lift*Math.sin(Math.PI*u); } }
+    const U=ft.s>0? B.LeftUpLeg : B.RightUpLeg, K=ft.s>0? B.LeftLeg : B.RightLeg, F=ft.s>0? B.LeftFoot : B.RightFoot;
+    U.getWorldPosition(_fH); K.getWorldPosition(_fK); F.getWorldPosition(_fA); const l1=_fH.distanceTo(_fK), l2=_fK.distanceTo(_fA), reach=(l1+l2)*.985;
+    _fT.set(ft.x, ty, ft.z).sub(_fA).multiplyScalar(fp.w).add(_fA);   /* eased in and out against the clip's own foot */
+    { const hz2=(_fT.x-_fH.x)**2+(_fT.z-_fH.z)**2, top=Math.sqrt(Math.max(.0004, reach*reach-hz2)); need=Math.max(need, (_fH.y-_fT.y)-top); }   /* how much lower the hips must be for this foot to reach */
+    _fD.subVectors(_fT,_fH); const d=clamp(_fD.length(), Math.abs(l1-l2)+.01, (l1+l2)*.999); _fD.normalize();
+    _fP.set(Fx+Lx*.25*ft.s, 0, Fz+Lz*.25*ft.s); _fP.addScaledVector(_fD, -_fP.dot(_fD)); if(_fP.lengthSq()<1e-6) _fP.set(Fx,0,Fz); _fP.normalize();   /* the knee bends the way he faces, a little outward */
+    const aa=(l1*l1-l2*l2+d*d)/(2*d), hh=Math.sqrt(Math.max(0, l1*l1-aa*aa)); _fN.copy(_fH).addScaledVector(_fD,aa).addScaledVector(_fP,hh);
+    _fU.subVectors(_fK,_fH).normalize(); _fV.subVectors(_fN,_fH).normalize(); _fq.setFromUnitVectors(_fU,_fV);
+    U.getWorldQuaternion(_fq2).premultiply(_fq); U.parent.getWorldQuaternion(_fq3); U.quaternion.copy(_fq3.invert().multiply(_fq2)); U.updateMatrixWorld(true);
+    K.getWorldPosition(_fK); F.getWorldPosition(_fA); _fU.subVectors(_fA,_fK).normalize(); _fV.copy(_fH).addScaledVector(_fD,d).sub(_fK).normalize(); _fq.setFromUnitVectors(_fU,_fV);
+    K.getWorldQuaternion(_fq2).premultiply(_fq); U.getWorldQuaternion(_fq3); K.quaternion.copy(_fq3.invert().multiply(_fq2)); K.updateMatrixWorld(true);
+    _fq.setFromAxisAngle(_fUp, ft.yaw).multiply(ft.s>0? FEETREF.qL : FEETREF.qR); F.getWorldQuaternion(_fq2).slerp(_fq, fp.w); K.getWorldQuaternion(_fq3); F.quaternion.copy(_fq3.invert().multiply(_fq2)); F.updateMatrixWorld(true); }   /* sole flat, toe where it was planted */
+  { const base=(line? .07 : .03)*sc, tgt=clamp(Math.max(base, fp.drop+need), 0, .3); fp.drop += (tgt-fp.drop)*Math.min(1, dt*(tgt>fp.drop? 20 : 5)); }   /* sink fast when a foot is out of reach, rise slowly: knees stay bent, linemen lower */
 }
 
 const PERF = window.__perf = { fps:0, sim:0, render:0, frame:0, n:0 };   /* rolling per-frame cost in ms (EMA) — read window.__perf in the console, or add ?perf=1 to the URL for an on-screen readout */
@@ -3152,7 +3210,7 @@ const botReady = new Promise((res,rej)=>{
   } catch(e){ rej(e); } }; });
 Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
   fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true;
-  calibrateStride(); resize(); setupFormation(); renderBug(); $('hint').textContent= EMBED? 'Pre-snap · '+SIM_BUILD : 'Pre-snap'; log('Kickoff. HAR ball at their 25.');
+  calibrateStride(); calibrateFeet(); resize(); setupFormation(); renderBug(); $('hint').textContent= EMBED? 'Pre-snap · '+SIM_BUILD : 'Pre-snap'; log('Kickoff. HAR ball at their 25.');
   requestAnimationFrame(t=>{ last=t; frame(t); });
   if(EMBED) embedStart();
 }).catch(e=>{ $('hint').textContent='Player model failed to load: '+(e&&e.message||e); console.error(e); if(EMBED && window.parent) window.parent.postMessage({type:'bsgm:error', message:String(e&&e.message||e)}, '*'); });
