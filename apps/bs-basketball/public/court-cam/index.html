@@ -88,7 +88,7 @@ import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadClipLibrary, pathAt } from './clips.js';
 window.THREE = THREE;
 (() => {
-const SIM_BUILD = 'h2j'; window.__SIM_BUILD = SIM_BUILD;
+const SIM_BUILD = 'h2k'; window.__SIM_BUILD = SIM_BUILD;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const EMBED = Q.get('embed') === '1'; if (EMBED) document.body.classList.add('embed');
@@ -345,6 +345,24 @@ const HAIR = ['#0e0c0b', '#1a1410', '#241a12', '#101010', '#2b1d12', '#141414'];
 function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h | 0; }
 let BOT = null, LIB = null; const TEX = {};
 const HAS = n => !!(LIB && LIB.clips[n]);
+/* MOTION 11/28: how fast a locomotion clip's feet really cover ground on this rig, measured at load: one spare skeleton, never put in the scene, is
+   posed through the clip, and its speed is the body speed at which the slower foot stays most nearly still through the cycle (per unit of model scale).
+   Used for one thing: how fast a backpedal or a defensive slide can really go before a man has to turn and run (tooFast in stepActor). For reference the
+   travel recorded with each capture (clips.json, the actor's own) runs 6-18% above what this skeleton covers: jog 8.8 ft/s recorded, 7.8 here. */
+const GAIT = {}; window.__gait = GAIT;
+function calibrateGaits() { if (!LIB || !BOT) return;
+  const model = skeletonClone(BOT.scene), mixer = new THREE.AnimationMixer(model); let L = null, R = null, H = null;
+  model.traverse(o => { if (!o.isBone) return; const n = o.name.replace('mixamorig', ''); if (n === 'LeftToeBase') L = o; else if (n === 'RightToeBase') R = o; else if (n === 'Hips') H = o; });
+  if (!L || !R || !H) return; const p = V3(), q = V3(), h = V3(), pl = V3(), pr = V3();
+  const measure = clip => { const ac = mixer.clipAction(clip); ac.play(); ac.setEffectiveWeight(1); const dur = clip.duration, N = Math.max(48, Math.round(dur * 90)), V = [];
+    for (let i = 0; i <= N; i++) { ac.time = dur * i / N; mixer.update(0); model.updateMatrixWorld(true); H.getWorldPosition(h); L.getWorldPosition(p).sub(h); R.getWorldPosition(q).sub(h);   // feet against the hips: any drift the capture's root carries drops out
+      if (i) { const k = N / dur; V.push((p.x - pl.x) * k, (p.z - pl.z) * k, (q.x - pr.x) * k, (q.z - pr.z) * k); } pl.copy(p); pr.copy(q); }
+    ac.stop(); mixer.uncacheAction(clip);
+    const cost = (vx, vz) => { let e = 0; for (let i = 0; i < V.length; i += 4) e += Math.min(Math.hypot(V[i] + vx, V[i + 1] + vz), Math.hypot(V[i + 2] + vx, V[i + 3] + vz)); return e / (V.length / 4); };
+    let bx = 0, bz = 0, be = Infinity; for (let x = -6; x <= 6; x += .25) for (let z = -6; z <= 6; z += .25) { const e = cost(x, z); if (e < be) { be = e; bx = x; bz = z; } }
+    const cx = bx, cz = bz; for (let x = cx - .25; x <= cx + .25; x += .05) for (let z = cz - .25; z <= cz + .25; z += .05) { const e = cost(x, z); if (e < be) { be = e; bx = x; bz = z; } }
+    const v = Math.hypot(bx, bz); return v > .15 && be < .5 * v ? v : 0; };   // a clip whose feet never settle fits no speed (the slow defensive slides): it keeps its recorded one
+  for (const n of ['mx_jog_back', 'def_quick_l']) { const c = LIB.clips[n]; if (!c) continue; const v = measure(c); if (v) GAIT[n] = v; } }
 const META = n => (LIB && LIB.meta[n]) || null;
 const numCache = {};
 function numMat(n, t) { const k = n + t.num + t.jersey; if (numCache[k]) return numCache[k]; const c = document.createElement('canvas'); c.width = c.height = 160; const g = c.getContext('2d'); g.fillStyle = t.num; g.font = '800 118px "Saira Condensed", Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 8; g.strokeStyle = t.trim || t.num; g.strokeText(String(n), 80, 86); g.fillText(String(n), 80, 86);
@@ -938,7 +956,12 @@ function stepActor(a, t, dt) {
   // facing: movement direction when moving quickly (not backpedal/shuffle), else the face target
   let faceTarget = null; const ft = faceAt(a, t);
   if (ft === 'ball') { if (!a.carrying) faceTarget = Math.atan2(ball.position.x - a.x, ball.position.z - a.z); else if (GS.busy) { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); } }   // a carrier squares up to the basket (never chases the ball in his own hand) else if (ft === 'rim') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z); } else if (Array.isArray(ft)) faceTarget = Math.atan2(ft[0] - a.x, ft[1] - a.z);
-  const mv = P.mv; const fastMove = P.moving && a.speed > 6 && mv && !mv.backpedal && !mv.shuffle;
+  const mv = P.mv;
+  /* a backpedal or a defensive slide only goes so fast (about 12 and 10 ft/s here, 1.6x the clip's own speed): asked for more, a real player turns his
+     hips and runs. Defenders were backpedalling and sliding at sprint speed (14+ ft/s) with their feet doing half of it. */
+  const backMax = (GAIT.mx_jog_back || 0) * a.sc * 1.6, slideMax = (GAIT.def_quick_l || 0) * a.sc * 1.6;
+  const tooFast = !!(P.moving && mv && ((mv.backpedal && backMax && a.speed > backMax) || (mv.shuffle && slideMax && a.speed > slideMax)));
+  const fastMove = P.moving && mv && ((a.speed > 6 && !mv.backpedal && !mv.shuffle) || tooFast);
   if (fastMove) faceTarget = P.dir; else if (P.moving && mv && mv.backpedal) faceTarget = faceTarget ?? P.dir + Math.PI;
   if (kind === 'backdown') { const r = RIM(); faceTarget = Math.atan2(r[0] - a.x, r[2] - a.z) + Math.PI; }
   const clipFace = cur && cur.clip && META(cur.clip) ? (META(cur.clip).faceRel || 0) : 0;   // the capture's own facing at the key moment
@@ -948,7 +971,7 @@ function stepActor(a, t, dt) {
   let snapFace = false;
   if (P.root) { faceTarget = P.root.root.yaw; snapFace = t - P.root.t0 < .1; }   // a root-motion clip owns the facing; the clip turns the body itself
   if (faceTarget != null) { let d = faceTarget - a.face; d = Math.atan2(Math.sin(d), Math.cos(d)); a.face += snapFace ? d : d * (1 - Math.exp(-dt * (fastMove ? 12 : 7))); }
-  const shuffle = P.moving && mv && (mv.shuffle || mv.backpedal);
+  const shuffle = P.moving && mv && (mv.shuffle || mv.backpedal) && !tooFast;
   // ---- clip layer: which mocap clip should drive the body right now ----
   let want = null, wantLoop = false, wantT0 = 0, wantRate = 1;
   if (LIB && !a.ref) {
@@ -1388,6 +1411,7 @@ const botReady = (async () => {
   g.scene.traverse(o => { if (o.isMesh) { const e = window.PLAYER_MAT[o.material.name] || {}; const m = o.material; if (e.map) m.map = TEX[e.map]; if (e.normal) m.normalMap = TEX[e.normal]; if (e.rough) { m.roughnessMap = TEX[e.rough]; m.metalnessMap = TEX[e.rough]; } m.needsUpdate = true; } });
   BOT = g;
   try { LIB = await loadClipLibrary('./'); } catch (e) { console.warn('clip library unavailable, procedural animation only', e); LIB = null; }
+  try { calibrateGaits(); } catch (e) { console.warn('gait calibration failed', e); }
 })();
 Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(() => {
   resize(); paintShotClock(24);
