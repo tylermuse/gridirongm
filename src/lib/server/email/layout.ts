@@ -35,6 +35,12 @@ export function button(label: string, href: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;margin-bottom:24px;"><tr><td bgcolor="#2563eb" style="background-color:#2563eb;border-radius:8px;"><a href="${escapeHtml(href)}" style="display:inline-block;padding-top:12px;padding-right:22px;padding-bottom:12px;padding-left:22px;font-family:${FONT};font-size:16px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
+/** A full-width image inside the card, linked to `href`. `src` must be an absolute URL. */
+export function image(opts: { src: string; alt: string; href: string; width: number; height: number }): string {
+  const { src, alt, href, width, height } = opts;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;"><tr><td><a href="${escapeHtml(href)}" style="text-decoration:none;"><img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" width="${width}" height="${height}" border="0" style="display:block;width:100%;max-width:${width}px;height:auto;border-radius:8px;"></a></td></tr></table>`;
+}
+
 export function renderLayout(opts: { preheader: string; bodyHtml: string; unsubscribeUrl: string }): string {
   const { preheader, bodyHtml, unsubscribeUrl } = opts;
   return `<!DOCTYPE html>
