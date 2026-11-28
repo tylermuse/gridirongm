@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import HomeApp from '@/components/home/HomeApp';
 import HomeIntro from '@/components/home/HomeIntro';
 import { JsonLd } from '@/components/content/ContentBits';
+import { getLeague2026, ROSTER_FILE } from '@/lib/content/rosters2026';
+import type { RealPickerTeam } from '@/components/home/HomeApp';
 
 const SITE = 'https://www.bs-basketball.com';
 const DESCRIPTION =
@@ -21,7 +23,26 @@ export const metadata: Metadata = {
  * the client HomeApp; the crawlable HomeIntro is server-rendered and handed in
  * as a slot that HomeApp shows only in the pre-league splash state.
  */
+/** Real 2026-27 NBA teams for the start screen's default "Real" league choice. */
+function realPickerTeams(): RealPickerTeam[] {
+  try {
+    return getLeague2026().teams.map(t => ({
+      abbreviation: t.abbrev,
+      city: t.city,
+      name: t.name,
+      primaryColor: t.color,
+      secondaryColor: t.secondaryColor,
+      logoUrl: t.logoUrl,
+      record: t.record ? `${t.record.won}–${t.record.lost}` : null,
+    }));
+  } catch (err) {
+    console.error('[bs-hoops] real teams for the picker failed:', err);
+    return [];
+  }
+}
+
 export default function Page() {
+  const realTeams = realPickerTeams();
   return (
     <>
       <JsonLd
@@ -41,7 +62,7 @@ export default function Page() {
           publisher: { '@type': 'Organization', name: 'BS Sports GM LLC' },
         }}
       />
-      <HomeApp intro={<HomeIntro />} />
+      <HomeApp intro={<HomeIntro />} realTeams={realTeams} realFile={`/rosters/${ROSTER_FILE}`} />
     </>
   );
 }
