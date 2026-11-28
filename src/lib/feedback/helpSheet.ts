@@ -51,6 +51,7 @@ DURING A LIVE GAME
 - Calling plays: "🎯 Live Coach" in the controls (on by default in your own games). Before each of your offensive snaps you choose "Run", "Short Pass", "Deep Shot", "QB Scramble", "Screen" or "Play Action"; on 4th down "Field Goal", "Punt" or "Go For It"; after a touchdown "Extra Point" or "Go for 2"; on kickoffs "Regular Kickoff" or "Onside Kick". "Turn off" in that panel stops play calling, and "Auto-sim to End ⏭" sims the rest.
 - Calling defense is off by default: with Live Coach on, turn on "🛡️ Call Defense" to pick "Blitz", "Stacked Box", "Two-High", "Man Press" or "Soft Zone" before opponent snaps.
 - "📋 Game Plan" in the live game controls sets run/pass tendency, risk, red zone strategy, blitz rate, coverage and tempo.
+- "🎥 3D Sim" in the live game controls plays every snap in 3D. Some free players get 3 free 3D games a week; for them the button shows how many are left. A game counts once you have watched a full quarter of it in 3D, your first-ever 3D game and exhibitions never count, and the count resets every Monday. Once they are used up the game plays in 2D. Premium has unlimited 3D.
 
 SIMMING AND ADVANCING
 - "Sim Week N" in the top bar sims every unplayed game that week, including yours. If you watched your game live first, it sims the rest.
