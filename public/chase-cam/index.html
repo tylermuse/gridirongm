@@ -167,7 +167,7 @@ const LOOK2 = new URLSearchParams(location.search).get('look')==='2';
    baked into the alignment, the run gaps, the blitz lanes, the sack paths and the tight ends' releases, so every one of those goes through lx(): inside the
    tackles a coordinate scales with the spacing; from the tackle out to 10 yds the shift fades to nothing (the slot and the wideouts stay where they are).
    Without the parameter LK is 1 and lx() returns its argument untouched: the default sim is exactly as it was. */
-const OLS = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('splits')); return v>=1.4 && v<=2.55? v : 2.55; })(), LK = OLS/2.55;
+const OLS = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('splits')); return v>=1.4 && v<=2.55? v : 1.6; })(), LK = OLS/2.55;   /* default 1.6 (was 2.55, the spacing every coordinate below was written for); ?splits=2.55 is the old line */
 const lx = x => { if(LK===1) return x; const a=Math.abs(x), T=5.1, D=T*(1-LK); return Math.sign(x)*(a<=T? a*LK : a<10? a - D*(10-a)/(10-T) : a); };
 const MOTION2 = new URLSearchParams(location.search).get('motion')==='2';   /* ?motion=2 — motion pass: heads track the ball, lean into acceleration, bank through cuts, per-player stride (see motionLayer) */   /* ?look=2 — the lighting + materials pass (reflections, clear-coated helmets, ambient occlusion, sharper shadows, grass detail, longer lens); off = the shipped look, untouched */
 let modelChoice = ({mh1:'mh1', mh2:'mh2'})[new URLSearchParams(location.search).get('model')] || 'fp27';   /* ?model=mh1 — the playerlab build: MakeHuman body + generated pads and uniform on the same skeleton and clips (see player-mh1.js) */
@@ -201,7 +201,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22l'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22m'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
