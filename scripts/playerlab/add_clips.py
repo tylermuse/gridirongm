@@ -1,6 +1,6 @@
 """Add captured football clips to the packaged player (public/chase-cam/player-mh2.js).
 
-Sources are the raw retarget files written by the private retarget step (FBX capture -> this rig, 30 fps):
+Sources are the raw retarget files written by fbx_to_raw.py (FBX capture -> this rig, 30 fps):
 `$PLAYERLAB_DIR/mocaplab/raw/<capture>.json` with per-bone local quaternions (`tracks`), the hips' local position per
 frame (`frames[i].hip`, cm) and every bone's world matrix (`frames[i].bones`). They are licensed captures and are not committed.
 
@@ -8,7 +8,12 @@ What it bakes (see CLIPS):
 - football_throw_b..e: four more throws, cut and turned to match football_throw exactly: 1.6 s long, the hand at top speed
   0.70 s in, the ball leaving along the model's forward axis. The step into the throw is shortened to about what
   football_throw travels, because the sim plays a throw on a fixed root.
-- A clip with 't0'/'t1' in place of 'release' is copied as it is, root travel kept.
+- A clip with 't0'/'t1' in place of 'release' is copied as it is, root travel kept, turned by 'turn' degrees if given.
+- football_kick_b, _c: the pack's other two place kicks, cut like football_kick (which is "Kick Goal" from 8.90 s): the kicking
+  toe at top speed 1.17 s in, and turned so the approach runs the way football_kick's does. _b is 2.03 s long (the take ends).
+- football_holder_b, _c: the other two holder takes, cut like football_holder ("Holder 001" from 2.40 s) so the hand comes off
+  the ball 2.8 s in. In _c that is 0.4 s earlier in the take, and he throws both arms out afterwards (the sim uses it on makes only).
+The raw files come from fbx_to_raw.py.
 
 Tried and left out (Nov 2026): the same pack's quarterback dropback (a straight backpedal; it slid the feet as much as the
 sim's own backpedal and held the ball away from the body) and its "zig zag run" (a rounded turn at constant speed, not a cut).
@@ -32,6 +37,10 @@ CLIPS = [
     {'name': 'football_throw_c', 'src': 'qb-practice-throwing', 'release': 19.37},
     {'name': 'football_throw_d', 'src': 'qb-practice-throwing-2', 'release': 8.50},
     {'name': 'football_throw_e', 'src': 'throw-001', 'release': 8.83},
+    {'name': 'football_kick_b', 'src': 'kick-1-short-distance', 't0': 9.93, 't1': 11.97, 'turn': -31.6},
+    {'name': 'football_kick_c', 'src': 'kick-2-med-distance', 't0': 11.87, 't1': 13.97, 'turn': -45.7},
+    {'name': 'football_holder_b', 'src': 'holder-002', 't0': 2.40, 't1': 6.60},
+    {'name': 'football_holder_c', 'src': 'holder-003', 't0': 2.00, 't1': 6.20},
 ]
 
 
@@ -50,7 +59,7 @@ def build(spec):
         yaw = -math.atan2(x1 - x0, z1 - z0)                       # turn the capture so the hand's path at release runs along +z
         i0 = r - round(THROW_LEAD * FPS); i1 = i0 + round(THROW_LEN * FPS)
     else:
-        i0, i1 = round(spec['t0'] * FPS), round(spec['t1'] * FPS)
+        i0, i1 = round(spec['t0'] * FPS), round(spec['t1'] * FPS); yaw = math.radians(spec.get('turn', 0))
     if i0 < 0 or i1 >= len(F): raise SystemExit(f"{spec['name']}: window {i0}-{i1} is outside the capture ({len(F)} frames)")
     qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]; c, s = math.cos(yaw), math.sin(yaw)
     times = [round((i - i0) / FPS, 6) for i in range(i0, i1 + 1)]

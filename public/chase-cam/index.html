@@ -201,7 +201,7 @@ selA.value = 0; selB.value = 1;
 const BASE_SPEED = Math.min(3, Math.max(.5, +new URLSearchParams(location.search).get('speed') || 1));
 const RUN_RATE = Math.min(2, Math.max(.5, +new URLSearchParams(location.search).get('run') || 1));
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:BASE_SPEED };
-const SIM_BUILD='b22o'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b22p'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -1025,7 +1025,7 @@ function setupFormation(kind){
     if(kind==='fg'){
       O.slot.x=-8.3; O.slot.z=z0-1.5; O.wrR.x=8.3; O.wrR.z=z0-1.5; [O.slot,O.wrR].forEach(a=>{ a.face=0; a.stance='two'; });
       O.qb.x=-.6; O.qb.z=z0-6.85; O.qb.face=Math.PI/2; O.qb.stance='hold'; O.qb.hold=true;            // holder: kneels on the plant-foot side of the spot (the captured kick is right-footed, the approach comes from the left), square to the sideline
-      { const d0=clipHips('football_kick',0), d1=clipHips('football_kick',1.1), f=FG_APPROACH, k=FG_STRIDE*(O.rb.model.scale.x/1.158)/86;   /* kicker: his mark is where the captured approach starts, so the plant lands at the spot */
+      { const kc=kickClip(O.rb), d0=clipHips(kc,0), d1=clipHips(kc,1.1), f=FG_APPROACH, k=FG_STRIDE*(O.rb.model.scale.x/1.158)/86;   /* kicker: his mark is where the captured approach starts, so the plant lands at the spot */
         /* soccer-style set-up: lined up on the ball, three steps back and two over (a right-footer sets up to his left, the side away from the holder), so the approach comes in on an angle — not straight down the line of the kick */
         if(d0&&d1){ const fz=(d1[2]-d0[2])*k, fx=(d1[0]-d0[0])*k; O.rb.x = .35 - (Math.sin(f)*fz+Math.cos(f)*fx); O.rb.z = (z0-6.8) - (Math.cos(f)*fz-Math.sin(f)*fx);
           O.rb.face = Math.atan2(.35-O.rb.x, (z0-6.8)-O.rb.z); } else { O.rb.x=1.8; O.rb.z=z0-8.6; O.rb.face=f; } O.rb.stance=''; }
@@ -1046,7 +1046,7 @@ function setupFormation(kind){
     const zc = z0+25, zr = Math.min(z0+31, 40);
     const cov = [O.wrL, O.ol[0], O.ol[1], O.slot, O.qb, O.te, O.ol[2], O.ol[3], O.ol[4], O.wrR], xs = [-22,-17.5,-13,-8.5,-4,4,8.5,13,17.5,22];
     cov.forEach((a,i)=>{ a.x=xs[i]; a.z=zc; a.face=0; a.stance='two'; });
-    { const d0=clipHips('football_kick',0), d1=clipHips('football_kick',1.1); const sc=O.rb.model.scale.x*.01;   /* his mark: the captured approach plants at the tee */
+    { const kc=kickClip(O.rb), d0=clipHips(kc,0), d1=clipHips(kc,1.1); const sc=O.rb.model.scale.x*.01;   /* his mark: the captured approach plants at the tee */
       if(d0&&d1){ O.rb.x = .35 - (d1[0]-d0[0])*sc; O.rb.z = z0 - (d1[2]-d0[2])*sc; } else { O.rb.x=-2.8; O.rb.z=z0-4; } O.rb.face=0; O.rb.stance='';
       O.rb.koMark=[O.rb.x, O.rb.z]; O.rb.x -= 2.4; O.rb.z -= 6.5; }   /* a kickoff man starts 7-8 yds back and off to the side (Tyler's SNF clip), not on a place-kicker's two-step mark */
     [...D.dl, ...D.lb, D.cbL, D.cbR].forEach((a,i)=>{ a.x=-20+i*5; a.z=zr+(i%2? 3.2 : 0); a.face=Math.PI; a.stance='two'; });
@@ -1308,7 +1308,7 @@ function choreograph(res){
     const K=O.rb, tKick=snap+2.35, tee=[.35, z0], mk=K.koMark||[K.x,K.z];
     ballPlan = [{t0:-1, t1:tKick, rest:tee}];
     /* run-up: raise the hand, then a ~7 m build-up to his mark that hands over to the captured two-step + swing */
-    K.behav = P([0,K.x,K.z],[snap+.35,K.x,K.z],[tKick-1.05,mk[0],mk[1]],[tKick+1.2,mk[0],mk[1]]); res.koT = tKick; K.faceLock={angle:0, until:99}; K.kickT=tKick; K.mocapAct={clip:'football_kick', t0:tKick-1.05, start:0, end:2.1}; ev(tKick, ()=>sndThump(.8,.9));
+    K.behav = P([0,K.x,K.z],[snap+.35,K.x,K.z],[tKick-1.05,mk[0],mk[1]],[tKick+1.2,mk[0],mk[1]]); res.koT = tKick; K.faceLock={angle:0, until:99}; K.kickT=tKick; K.mocapAct={clip:kickClip(K), t0:tKick-1.05, start:0, end:kickEnd(K)}; ev(tKick, ()=>sndThump(.8,.9));
     const ret = Math.random()<.5? D.sL : D.sR, mate = ret===D.sL? D.sR : D.sL, tb = !!res.touchback;
     const xr = clamp(ret.x + R(-3,3), -12, 12), zr = tb? 54 : clamp(ret.z + R(-2,1.5), 38, 48), tCatch = tKick + 3.9; res.koCatch = tCatch; res.koLand = [xr, zr];
     ballPlan.push({t0:tKick, t1:tCatch, flight:{x0:tee[0],y0:.25,z0:tee[1], x1:xr,y1: tb? .16 : 1.45, z1:zr, h:20}});
@@ -1356,9 +1356,9 @@ function choreograph(res){
       // kicker: two-step approach timed to meet the ball as the holder sets it, then watch it
       K.behav = null; K.faceLock={angle:K.face, until:tKick};   /* the captured approach carries him from his mark to the ball, on the angle he set up on */
       K.kickT = tKick; res.fgKickT = tKick; ev(tKick, ()=>{ sndThump(.8,.9); K.faceLock={angle:0, until:99}; });
-      K.mocapAct = {clip:'football_kick', t0:tKick-1.05, start:0, end:2.1, moveRoot:true, travelYaw:FG_APPROACH, travelScale:FG_STRIDE,
+      K.mocapAct = {clip:kickClip(K), t0:tKick-1.05, start:0, end:kickEnd(K), moveRoot:true, travelYaw:FG_APPROACH, travelScale:FG_STRIDE,
         bodyYaw: ct=>FG_APPROACH*(1-smooth01((ct-.7)/.35))};   /* runs in on the angle, hips open to the uprights at the plant */
-      H.mocapAct = {clip:'football_holder', t0:snap+.5, start:1.9, end:4.2};   /* measured: the capture holds the ball on the turf from 1.0 to 2.7 s and the hand comes up at 2.8 (the kick). Entering at 1.9 when the ball is spotted puts the kick at 2.75 = tKick, so the hand never lifts before contact */
+      H.mocapAct = {clip:holdClip(H, !!res.good), t0:snap+.5, start:1.9, end:4.2};   /* measured: the capture holds the ball on the turf from 1.0 to 2.7 s and the hand comes up at 2.8 (the kick). Entering at 1.9 when the ball is spotted puts the kick at 2.75 = tKick, so the hand never lifts before contact */
       // the ball: through the uprights (y≈5.5 at the posts) or wide of them
       const zPost=60.5, zLand=74, good=!!res.good, xEnd = good? R(-1.6,1.6) : (Math.random()<.5?-1:1)*(3.08+R(1.0,2.6));
       const uPost=(zPost-spot[1])/(zLand-spot[1]); const h = 5.6/(4*uPost*(1-uPost));
@@ -2365,6 +2365,12 @@ function torsoFrame(a){ const q=a.bones.Spine1.getWorldQuaternion(new THREE.Quat
 function torsoPose(fr,p,m){ const v=x=>new THREE.Vector3().addScaledVector(fr.F,x[0]).addScaledVector(fr.R,x[1]*m).addScaledVector(fr.U,x[2]).normalize(); return {du:v(p[0]),df:v(p[1]),0:p[0],1:p[1]}; }
 const THROWS=['football_throw','football_throw_b','football_throw_c','football_throw_d','football_throw_e'];   /* five captured throws, all cut to the same length, release time and aim (scripts/playerlab/add_clips.py) */
 const hasClip=n=>!!(BOT && BOT.animations.some(c=>c.name===n));
+/* Place kicks and holds: three captured takes of each, cut to the same timing as the first (toe at top speed 1.17 s in; the holder's hand off the ball 2.8 s in), so every
+   measured constant above holds for all three. A kicker or holder keeps one take, picked from his number. Punts stay on football_kick. ?kick=a|b|c and ?hold=a|b|c force one. */
+const KICKS=['football_kick','football_kick_b','football_kick_c'], HOLDS=['football_holder','football_holder_b','football_holder_c'];
+const ownClip=(list,a,force)=>{ const f=list['abc'.indexOf(force)]; if(f && hasClip(f)) return f; const have=list.filter(hasClip); return have.length? have[((a.num||0)*7+String(a.teamId||'').length*3)%have.length] : list[0]; };
+const kickClip=a=>ownClip(KICKS,a,window.__kickClip||new URLSearchParams(location.search).get('kick')), holdClip=(a,good)=>ownClip(good? HOLDS : HOLDS.slice(0,2),a,window.__holdClip||new URLSearchParams(location.search).get('hold'));   /* in the third take he throws his arms out after the kick: only on a make */
+const kickEnd=a=>{ const c=BOT.animations.find(c=>c.name===kickClip(a)); return Math.min(2.1, c? c.duration : 2.1); };   /* football_kick_b is 2.03 s: the take ends there */
 // Which throw this is: each quarterback has his own motion and uses it on most throws, so the two QBs in a game do not throw alike and neither repeats one clip all day.
 function throwClip(a){
   if(window.__throwClip) return window.__throwClip;

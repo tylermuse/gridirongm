@@ -1,0 +1,20 @@
+<!doctype html><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three'; import {FBXLoader} from 'three/addons/loaders/FBXLoader.js'; import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';   /* served from $PLAYERLAB_DIR/mocaplab by fbx_to_raw.py */
+const BONES=['Hips','Spine','Spine1','Spine2','Neck','Head','HeadTop_End','LeftEye','RightEye','LeftShoulder','LeftArm','LeftForeArm','LeftHand','RightShoulder','RightArm','RightForeArm','RightHand','LeftUpLeg','LeftLeg','LeftFoot','LeftToeBase','LeftToe_End','RightUpLeg','RightLeg','RightFoot','RightToeBase','RightToe_End'];
+const key=n=>n.replace(/^mixamorig[:_]?/,'').replace(/_\d+$/,'');
+const bonesOf=root=>{ const m={}; root.traverse(o=>{ if(/^mixamorig/.test(o.name)){ const k=key(o.name); if(!m[k]) m[k]=o; } }); return m; };
+const q=o=>o.quaternion.toArray().map(v=>+v.toFixed(6)), wq=o=>o.getWorldQuaternion(new THREE.Quaternion());
+window.tgt=async()=>{ const g=await new GLTFLoader().loadAsync('./fp27.glb'); window.G=g; g.scene.updateMatrixWorld(true); const B=bonesOf(g.scene); const rest={}; for(const b of BONES){ rest[b]={l:q(B[b]), w:wq(B[b]).toArray(), p:B[b].position.toArray(), wp:B[b].getWorldPosition(new THREE.Vector3()).toArray()}; }
+  return {rest, clips:g.animations.map(a=>[a.name,+a.duration.toFixed(2)]), missing:BONES.filter(b=>!B[b])}; };
+window.tgtClip=(name,fps=30)=>{ const g=window.G, clip=g.animations.find(a=>a.name===name), mx=new THREE.AnimationMixer(g.scene), act=mx.clipAction(clip); act.play(); const B=bonesOf(g.scene), n=Math.floor(clip.duration*fps)+1, tracks={}, hip=[]; for(const b of BONES) tracks[b]=[];
+  for(let i=0;i<n;i++){ mx.setTime(Math.min(i/fps, clip.duration-1e-4)); for(const b of BONES) tracks[b].push(...q(B[b])); hip.push(B.Hips.position.toArray().map(v=>+v.toFixed(3))); } mx.stopAllAction(); mx.uncacheRoot(g.scene); return {n,tracks,hip}; };
+window.src=async(file,fps=30)=>{ const f=await new FBXLoader().loadAsync('./pack/'+encodeURIComponent(file)); const B=bonesOf(f); const clip=f.animations.sort((a,b)=>b.duration-a.duration)[0];
+  f.updateMatrixWorld(true); const rest={}; for(const b of BONES) if(B[b]) rest[b]={l:q(B[b]), w:wq(B[b]).toArray(), p:B[b].position.toArray(), wp:B[b].getWorldPosition(new THREE.Vector3()).toArray()};
+  const mx=new THREE.AnimationMixer(f), act=mx.clipAction(clip); act.play(); const n=Math.floor(clip.duration*fps)+1, tracks={}, world={}, hip=[], pts={}; for(const b of BONES){ tracks[b]=[]; world[b]=[]; }
+  const P=['RightHand','LeftHand','RightFoot','LeftFoot','RightToeBase','LeftToeBase','Head','Hips']; for(const p of P) pts[p]=[];
+  for(let i=0;i<n;i++){ mx.setTime(Math.min(i/fps, clip.duration-1e-4)); f.updateMatrixWorld(true); for(const b of BONES){ if(!B[b]) continue; tracks[b].push(...q(B[b])); world[b].push(...wq(B[b]).toArray().map(v=>+v.toFixed(6))); }
+    hip.push(B.Hips.position.toArray().map(v=>+v.toFixed(3))); for(const p of P) pts[p].push(...B[p].getWorldPosition(new THREE.Vector3()).toArray().map(v=>+v.toFixed(2))); }
+  return {file, dur:clip.duration, n, clips:f.animations.map(a=>[a.name,+a.duration.toFixed(2),a.tracks.length]), rest, tracks, world, hip, pts, missing:BONES.filter(b=>!B[b]), scale:f.scale.toArray(), kids:f.children.map(c=>c.name+':'+c.type)}; };
+window.ready=1;
+</script>

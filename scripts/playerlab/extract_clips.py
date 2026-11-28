@@ -1,4 +1,4 @@
-"""Writes public/chase-cam/clips-extra.js: the captured locomotion clips (cc_*) and the extra throws (football_throw_b..e) that
+"""Writes public/chase-cam/clips-extra.js: the captured locomotion clips (cc_*) and the extra captures (football_throw_b..e, football_kick_b/c, football_holder_b/c) that
 player-mh2.js carries and player-fp27.js does not, as plain keyframe data. The sim loads it for any player file without cc_jog
 (the two models share one skeleton and rest rotations, so the tracks apply as they are; the hips' travel is scaled to the
 other model's hip height at load). Run again after rebuilding player-mh2.js:  python3 scripts/playerlab/extract_clips.py"""
@@ -14,7 +14,7 @@ b64=lambda a: base64.b64encode(np.ascontiguousarray(a,dtype='<f4').tobytes()).de
 hips=next(n for n in j['nodes'] if n.get('name')=='mixamorig:Hips')
 out={'from':'player-mh2.js','hipsY':hips['translation'][1],'clipSpeed':info.get('clipSpeed',{}),'clips':[]}
 for an in j['animations']:
-    if not (an['name'].startswith('cc_') or re.match(r'football_throw_[b-e]$',an['name'])): continue
+    if not (an['name'].startswith('cc_') or re.match(r'football_(throw_[b-e]|kick_[bc]|holder_[bc])$',an['name'])): continue
     times=[]; tix={}; tracks=[]
     for ch in an['channels']:
         sm=an['samplers'][ch['sampler']]; path=ch['target']['path']
