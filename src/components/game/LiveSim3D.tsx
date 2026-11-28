@@ -47,14 +47,14 @@ const SIM_BUILD = 'b22n';   // bump with public/chase-cam/index.html so browsers
  *  `run` fast-forwards handoff runs by that much more (1.33 on top of 1.5 is 2x) up to the line, and to the tackle on a short gain: at 1.5x passes read fine
  *  but runs still looked slow (Tyler), because a real back takes 2.5 s to reach the line. Play action gets the same rate through the fake and the drop (b21e):
  *  the fake is a handoff's timing plus the drop, so at 1.5x it crawled next to the runs (Tyler: "play action is super slow"). It is 1 (off) when left out. */
-export const SIM_URL = `/chase-cam/index.html?embed=1&model=mh2&motion=2&speed=1.5&run=1.33&v=${SIM_BUILD}`;
+export const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&motion=2&speed=1.5&run=1.33&v=${SIM_BUILD}`;
 /** The live sim adds the lighting pass (reflections, ambient occlusion, depth of field) on desktop-class screens only: on phones it costs too much frame time.
- *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=fp27` (the sculpted player), `?simMotion=0`, `?simSplits=1.6` (yards between offensive linemen; the sim's own is 2.55, real is about 1.55), `?simSpeed=1` (playback rate; 1 is real time), `?simRun=1.5` (extra rate for handoff runs; 1 is off). */
+ *  Overrides from the game page's own URL: `?simLook=0|2`, `?simModel=mh2` (the previous player, with body types and faces; the default is the sculpted fp27), `?simMotion=0`, `?simSplits=1.6` (yards between offensive linemen; the sim's own is 2.55, real is about 1.55), `?simSpeed=1` (playback rate; 1 is real time), `?simRun=1.5` (extra rate for handoff runs; 1 is off). */
 function simSrc(): string {
   if (typeof window === 'undefined') return SIM_URL;
   const q = new URLSearchParams(window.location.search);
   let src = SIM_URL;
-  if (q.get('simModel') === 'fp27') src = src.replace('model=mh2', 'model=fp27');
+  if (q.get('simModel') === 'mh2') src = src.replace('model=fp27', 'model=mh2');
   if (q.get('simMotion') === '0') src = src.replace('&motion=2', '');
   const splits = q.get('simSplits');
   if (splits && /^[12](\.\d+)?$/.test(splits)) src += `&splits=${splits}`;
