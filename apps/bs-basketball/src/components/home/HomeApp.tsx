@@ -35,6 +35,7 @@ import { isGodMode } from '@/lib/godMode/godMode';
 import { capRoom } from '@/lib/freeAgency';
 import { getTeamPicks } from '@/lib/trade';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+import HeroVideo from './HeroVideo';
 
 /**
  * BS Hoops home — port of bs-football's TeamPicker pattern.
@@ -504,6 +505,9 @@ export default function HomeApp({ intro, realTeams = [], realFile }: { intro?: R
             )}
           </div>
           <p className="text-white/45 text-xs mt-4">Play free as a guest — no download. Create a free account to save across devices.</p>
+          <div className="mt-8 w-full max-w-3xl rounded-xl overflow-hidden ring-1 ring-white/15 shadow-2xl shadow-black/40">
+            <HeroVideo />
+          </div>
         </div>
       </div>
 
