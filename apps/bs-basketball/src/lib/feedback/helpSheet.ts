@@ -159,8 +159,8 @@ SAVES
 
 STARTING A LEAGUE
 - To start a new league: press "↔ Switch / New League" at the bottom of the sidebar to get back to the start screen (your current league stays saved), then choose how to start.
-- On the start screen, clicking any team in the grid starts a fictional league right away (made-up teams and players). "Spectator (no team)" lets you watch an all-AI league.
-- Yes, you can play with the real NBA rosters: "Import a real roster" on the start screen (or "Rosters" in the sidebar), then "Start a league with this roster →" on the NBA 2026-27 roster, and pick your team. It starts at the current point of the real season.
+- The start screen has two league choices above the team grid: "Real 2026-27 NBA season" (the default: real teams, rosters and records, starting at the current point of the real season) and "Fictional league" (parody teams and made-up players, a fresh season from opening night). Pick one, then click a team to start. "Spectator (no team)" lets you watch an all-AI league of the chosen kind.
+- To start from opening night with the real rosters, or from your own BBGM/ZenGM file: "Import a league file" on the start screen (or "Rosters" in the sidebar), then "Start a league with this roster →", and pick your team.
 - Your own file: on the Rosters page, "Use your own file": paste a link and press "Load URL", or "Upload file". It takes Basketball GM / ZenGM league files.
 - Not in the game: historic or past-season rosters (only the current NBA roster is offered), and a setup screen with options before the league starts (use "League Rules" in Settings afterwards).
 - Expansion: "Expansion" in the sidebar during the offseason after the draft, or Settings, "League Expansion", "Open expansion →". Up to 2 new teams per offseason, 32 teams at most. It does not need God Mode and cannot be undone.

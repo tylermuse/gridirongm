@@ -55,8 +55,23 @@ import HeroVideo from './HeroVideo';
  * intro is in the SSR HTML, but it never clutters the in-league dashboard.
  */
 
-export default function HomeApp({ intro }: { intro?: ReactNode }) {
-  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason } = useLeagueStore();
+/** A real NBA team on the start screen (built server-side from the bundled 2026-27 roster file). */
+export interface RealPickerTeam {
+  abbreviation: string;
+  city: string;
+  name: string;
+  primaryColor: string;
+  secondaryColor: string;
+  logoUrl?: string;
+  record: string | null;
+}
+
+export default function HomeApp({ intro, realTeams = [], realFile }: { intro?: ReactNode; realTeams?: RealPickerTeam[]; realFile?: string }) {
+  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason, importLeagueFromUrl } = useLeagueStore();
+  // Start-screen league choice, like BS Football's: the real 2026-27 NBA season
+  // by default, or a fictional league of parody teams.
+  const [leagueChoice, setLeagueChoice] = useState<'real' | 'fictional'>(realTeams.length && realFile ? 'real' : 'fictional');
+  const playingReal = leagueChoice === 'real' && realTeams.length > 0 && !!realFile;
   const router = useRouter();
   // The live viewer lives in the shell (WatchLiveProvider) so the top bar can
   // offer Watch Live on every page.
@@ -109,6 +124,19 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
   async function handlePick(abbreviation: string, spectator = false) {
     setPickingAbbr(abbreviation);
     try {
+      if (playingReal && realFile) {
+        // Real season: import the bundled roster file (mid-season, real records),
+        // then take the team. Same path as "Start a league with this roster" on /rosters.
+        const ok = await importLeagueFromUrl(realFile);
+        if (!ok) return;
+        const imported = useLeagueStore.getState().league;
+        const picked = spectator ? null : imported?.teams.find(t => t.abbreviation === abbreviation);
+        if (picked) await pickUserTeam(picked.id);
+        const sd = useLeagueStore.getState().league?.sportData as { draft?: unknown; postDraftImport?: boolean } | undefined;
+        if (picked && sd?.draft) router.push('/draft');
+        else if (picked && sd?.postDraftImport) router.push('/re-sign');
+        return;
+      }
       await newLeague();
       if (!spectator) {
         // After newLeague, the store's league has the freshly generated
@@ -423,7 +451,9 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
   }
 
   // ---------------- Splash ----------------
-  const filtered = HOOPS_LEAGUE_TEAMS
+  const pickerTeams: Array<{ abbreviation: string; city: string; name: string; primaryColor: string; secondaryColor: string; logoUrl?: string; record?: string | null }> =
+    playingReal ? realTeams : HOOPS_LEAGUE_TEAMS;
+  const filtered = pickerTeams
     .filter(t =>
       !search ||
       t.city.toLowerCase().includes(search.toLowerCase()) ||
@@ -556,6 +586,32 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
       )}
 
       {/* Search */}
+      {/* League choice (BS Football's pattern): real season by default, or fictional. */}
+      {realTeams.length > 0 && realFile && (
+        <div className="w-full max-w-4xl mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Which league to play">
+          {([
+            { key: 'real', title: 'Real 2026-27 NBA season', sub: 'Real rosters and records. Pick up the season where it is right now.' },
+            { key: 'fictional', title: 'Fictional league', sub: 'Parody teams and made-up players. A fresh season from opening night.' },
+          ] as const).map(opt => (
+            <button
+              key={opt.key}
+              role="radio"
+              aria-checked={leagueChoice === opt.key}
+              onClick={() => setLeagueChoice(opt.key)}
+              disabled={!!pickingAbbr || loading}
+              className={`p-4 rounded-xl border-2 text-left transition-all disabled:opacity-60 ${
+                leagueChoice === opt.key
+                  ? 'border-[var(--accent)] bg-[var(--accent)]/5 shadow-md shadow-[var(--accent-glow)]'
+                  : 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]'
+              }`}
+            >
+              <div className={`text-base font-bold ${leagueChoice === opt.key ? 'text-[var(--accent)]' : ''}`}>{opt.title}</div>
+              <div className="text-xs text-[var(--text-sec)] mt-0.5">{opt.sub}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
       <input
         id="team-picker"
         type="text"
@@ -582,7 +638,7 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
         <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
       </button>
 
-      {/* Import a real roster (BBGM/ZenGM) */}
+      {/* Import a league file (opening-night NBA, BBGM/ZenGM) */}
       <Link
         href="/rosters"
         className="w-full max-w-4xl mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)]
@@ -592,8 +648,8 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
           📥
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold">Import a real roster</div>
-          <div className="text-xs text-[var(--text-sec)]">Start from the real NBA roster — or your own BBGM/ZenGM league file.</div>
+          <div className="text-sm font-bold">Import a league file</div>
+          <div className="text-xs text-[var(--text-sec)]">Opening-night NBA rosters, or your own BBGM/ZenGM league file.</div>
         </div>
         <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
       </Link>
@@ -631,12 +687,13 @@ export default function HomeApp({ intro }: { intro?: ReactNode }) {
                 abbreviation={team.abbreviation}
                 primaryColor={team.primaryColor}
                 secondaryColor={team.secondaryColor}
+                logoUrl={team.logoUrl}
                 size="lg"
               />
               <div className="min-w-0">
                 <div className="text-sm font-bold truncate">{team.city}</div>
                 <div className="text-xs text-[var(--text-sec)] truncate">
-                  {isPicking ? 'Starting…' : team.name}
+                  {isPicking ? 'Starting…' : `${team.name}${team.record ? ` · ${team.record}` : ''}`}
                 </div>
               </div>
             </button>

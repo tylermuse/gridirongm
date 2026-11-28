@@ -61,6 +61,8 @@ export interface RosterTeam {
   conference: string;
   division: string;
   color: string;
+  secondaryColor: string;
+  logoUrl?: string;
   /** 2025-26 final record. */
   lastRecord: { won: number; lost: number } | null;
   /** 2026-27 record so far (the file is refreshed weekly in-season). */
@@ -207,6 +209,8 @@ export function getLeague2026(): LeagueSummary {
       conference: t.sportData.conference,
       division: t.sportData.division,
       color: t.primaryColor,
+      secondaryColor: t.secondaryColor,
+      logoUrl: t.logoUrl,
       lastRecord: recordByAbbrev.get(t.abbreviation) ?? null,
       record: currentByAbbrev.get(t.abbreviation) ?? null,
       players: rows,
