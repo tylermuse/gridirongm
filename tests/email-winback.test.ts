@@ -24,6 +24,13 @@ describe('buildWinbackEmail', () => {
     expect(buildWinbackEmail(base).html).toContain('utm_campaign=winback_v1');
   });
 
+  it('shows one 3D sim screenshot with an absolute URL and alt text', () => {
+    const { html } = buildWinbackEmail(base);
+    expect(html.match(/<img /g)).toHaveLength(1);
+    expect(html).toContain('src="https://bs-football.com/email/winback-3d-sim.jpg"');
+    expect(html).toContain('alt="A pass play developing in the BS Football live 3D sim"');
+  });
+
   it('escapes a custom team name', () => {
     const email = buildWinbackEmail({ ...base, team_name: '<b>Hackers</b>' });
     expect(email.html).not.toContain('<b>Hackers</b>');

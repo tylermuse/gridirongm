@@ -1,5 +1,5 @@
-import { trackedUrl, unsubscribePageUrl } from '../config';
-import { bulletList, button, escapeHtml, paragraph, renderLayout, textFooter } from '../layout';
+import { SITE_URL, trackedUrl, unsubscribePageUrl } from '../config';
+import { bulletList, button, escapeHtml, image, paragraph, renderLayout, textFooter } from '../layout';
 
 export const WINBACK_CAMPAIGN = 'winback_v1';
 
@@ -43,6 +43,13 @@ export function buildWinbackEmail(r: WinbackRecipient): BuiltEmail {
     paragraph(escapeHtml(opener)),
     paragraph('A few things changed while you were gone:'),
     bulletList(WHATS_NEW.map(escapeHtml)),
+    image({
+      src: `${SITE_URL}/email/winback-3d-sim.jpg`,
+      alt: 'A pass play developing in the BS Football live 3D sim',
+      href: playUrl,
+      width: 502,
+      height: 283,
+    }),
     button('Pick up where you left off', playUrl),
     paragraph('Tyler<br>BS Football'),
   ].join('\n');
