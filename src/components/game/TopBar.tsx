@@ -7,8 +7,28 @@ import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { isDraftOver } from '@/lib/engine/draftStatus';
 import { Button } from '@/components/ui/Button';
 import { useBusyAction, afterPaint } from '@/components/ui/useBusyAction';
-import { MobileActionBar, type BarAction } from './MobileActionBar';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { ActionBar, type BarAction } from '@/components/mobile/m2';
 // TradeProposalPopup disabled — user prefers checking trades inline
+
+/** Phone header title per route (longest prefix wins). */
+const PAGE_TITLES: [string, string][] = ([
+  ['/standings', 'Standings'], ['/playoffs', 'Playoffs'], ['/stats', 'Stats'],
+  ['/gm-rankings', 'Rankings'], ['/players', 'Player Search'], ['/player', 'Player'],
+  ['/news', 'News'], ['/history', 'History'], ['/roster', 'Roster'], ['/staff', 'Staff'],
+  ['/finances', 'Finances'], ['/re-sign', 'Re-signing'], ['/draft-preview', 'Draft Preview'],
+  ['/draft-recap', 'Draft Recap'], ['/draft', 'Draft'], ['/free-agency', 'Free Agency'],
+  ['/trades', 'Trades'], ['/settings', 'Settings'], ['/qb-pyramid', 'QB Pyramid'],
+  ['/expansion', 'Expansion'], ['/awards', 'Awards'], ['/schedule', 'Schedule'],
+  ['/team', 'Team'], ['/coach-contracts', 'Coach Contracts'], ['/coach', 'Coach'],
+  ['/power-rankings', 'Power Rankings'], ['/recap', 'Recap'], ['/post-draft-cuts', 'Roster Cuts'],
+  ['/mock-draft', 'Mock Draft'], ['/gm', 'GM'],
+] as [string, string][]).sort((a, b) => b[0].length - a[0].length);
+
+function pageTitleFor(pathname: string): string {
+  if (pathname === '/') return 'Dashboard';
+  return PAGE_TITLES.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? 'BS Football';
+}
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const router = useRouter();
@@ -41,6 +61,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     simToEndDraft,
     startNewSeason,
     currentDraftYear,
+    advanceFADay,
+    advanceFAWeek,
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
@@ -294,7 +316,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   // Phase banner context
   let bannerText = '';
-  let phoneStatus: string | null = null;
+  // Phones: the one fact that matters this phase, shown under the page title.
+  let phoneFacts = '';
   if (phase === 'regular') {
     const wins = userTeam?.record.wins ?? 0;
     const losses = userTeam?.record.losses ?? 0;
@@ -309,7 +332,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     const isBye = userWeekGames.length === 0;
     const recordStr = ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
     bannerText = `Week ${week} of ${maxWeek}${isBye ? ' — BYE WEEK' : ''} · Record: ${recordStr} · ${gamesLeft} game${gamesLeft !== 1 ? 's' : ''} remaining${tradeDeadlineNote}`;
-    phoneStatus = `Wk ${week}/${maxWeek}${isBye ? ' · BYE' : ''}\n${recordStr}`;
+    phoneFacts = `Week ${week}${isBye ? ' · Bye' : ''}`;
   } else if (phase === 'playoffs') {
     if (playoffSeeds && userTeamId) {
       const acSeed = playoffSeeds.AC.indexOf(userTeamId);
@@ -318,6 +341,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
       const conf = acSeed >= 0 ? 'AC' : ncSeed >= 0 ? 'NC' : null;
       if (seed && conf) {
         bannerText = `${conf} Seed #${seed}`;
+        phoneFacts = `${conf} Seed #${seed}`;
         if (nextPlayoffGame) {
           const opp = nextPlayoffGame.homeTeamId === userTeamId ? nextPlayoffGame.awayTeamId : nextPlayoffGame.homeTeamId;
           const oppTeam = teams.find(t => t.id === opp);
@@ -333,79 +357,99 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     const remaining = resigningPlayers.length;
     const capSpace = userTeam ? (userTeam.salaryCap - userTeam.totalPayroll) : 0;
     bannerText = `${remaining} player${remaining !== 1 ? 's' : ''} to re-sign · $${Math.round(capSpace * 10) / 10}M cap space`;
-    phoneStatus = `${remaining} to re-sign\n$${Math.round(capSpace * 10) / 10}M cap`;
+    phoneFacts = `${remaining} to re-sign · $${Math.round(capSpace * 10) / 10}M cap`;
   } else if (phase === 'draft' && draftOver) {
     // Was "Round 8 · Pick #225" after the last pick of a 224-pick draft.
     bannerText = 'Draft complete · Start the new season when you are ready';
-    phoneStatus = 'Draft\ncomplete';
+    phoneFacts = 'Complete';
   } else if (phase === 'draft') {
     const currentPickTeam = teams.find(t => t.id === draftOrder[0]);
     const totalPicks = teams.length * 7;
     const pickNum = totalPicks - draftOrder.length + 1;
     const round = Math.ceil(pickNum / teams.length);
     bannerText = `Round ${round} · Pick #${pickNum}${currentPickTeam ? ` · ${currentPickTeam.abbreviation} on the clock` : ''}`;
-    phoneStatus = `Rd ${round} · #${pickNum}${currentPickTeam ? `\n${currentPickTeam.abbreviation} up` : ''}`;
+    phoneFacts = `Rd ${round} · Pick ${pickNum}`;
   } else if (phase === 'freeAgency') {
     const remaining = freeAgents.length;
     const capSpace = userTeam ? (userTeam.salaryCap - userTeam.totalPayroll) : 0;
     bannerText = `Day ${faDay} of 30 · ${remaining} free agent${remaining !== 1 ? 's' : ''} available · $${Math.round(capSpace * 10) / 10}M cap space`;
-    phoneStatus = `Day ${faDay}/30\n$${Math.round(capSpace * 10) / 10}M cap`;
+    phoneFacts = `Day ${faDay} · $${Math.round(capSpace * 10) / 10}M cap`;
   }
 
+  const phaseLabel = ({
+    preseason: 'Preseason', regular: 'Regular Season', playoffs: 'Playoffs', resigning: 'Re-signing',
+    draft: 'Draft', freeAgency: 'Free Agency', offseason: 'Offseason',
+  } as Record<string, string>)[phase] ?? '';
+  if (phase === 'preseason') phoneFacts = `Game ${useGameStore.getState().preseasonWeek ?? 1}`;
+
   // ── Phone action bar ──────────────────────────────────────────────────
-  // The same buttons as the desktop row above for each phase, with the main
-  // action last (blue, under the thumb). Full desktop labels when the row has
-  // room; the short phone labels when three or more share it.
+  // One sticky bar at the bottom carries the phase's actions. The dashboard
+  // gets the roomy two-row version with a hint under each button; inner pages
+  // get one tight row so the bar costs as little of the screen as possible.
+  const isHome = pathname === '/';
   const onGame = pathname.startsWith('/game/');
   const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
   const barActions: BarAction[] = [];
   let barNotice: React.ReactNode = null;
-  const liveLabel = (
-    <>
-      <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse mr-1.5 align-middle" />
-      Live
-    </>
-  );
 
   if (onGame) {
     // The live game owns the whole screen.
   } else if (phase === 'preseason') {
     barActions.push(
-      { key: 'skip-pre', label: 'Skip to Regular Season', variant: 'soft', onClick: handleSkipPreseason },
-      { key: 'sim-pre', label: 'Sim Preseason Game', variant: 'primary', onClick: handleSimPreseason },
+      { key: 'skip-pre', label: isHome ? 'Skip to Regular Season' : 'Skip →', variant: 'soft', onClick: handleSkipPreseason },
+      { key: 'sim-pre', label: isHome ? 'Sim Preseason Game' : 'Sim Game', variant: 'primary', onClick: handleSimPreseason, grow: 1.2 },
     );
   } else if (phase === 'regular') {
-    const userGame = !isSpectator ? schedule.find(g =>
-      g.week === week && !g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId)) : undefined;
-    if (userGame) {
-      barActions.push({ key: 'live', label: liveLabel, variant: 'live', onClick: () => router.push(`/game/${userGame.id}`), grow: 0.7 });
-    }
-    if (week <= deadlineWeek + 1) {
+    const userGame = schedule.find(g =>
+      g.week === week && !g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+    const opp = userGame
+      ? teams.find(t => t.id === (userGame.homeTeamId === userTeamId ? userGame.awayTeamId : userGame.homeTeamId))
+      : undefined;
+    if (userGame && !isSpectator) {
       barActions.push({
-        key: 'sim-deadline', label: 'To Deadline', variant: 'outline',
-        onClick: () => runSim('sim-deadline', handleSimToDeadline),
-        busy: simBusy === 'sim-deadline', disabled: !!simBusy || !!simProgress,
+        key: 'watch-live',
+        label: <><span aria-hidden="true" className="mr-1">▶</span>{isHome ? 'Watch Live' : 'Live'}</>,
+        variant: 'soft',
+        onClick: () => router.push(`/game/${userGame.id}`),
+        grow: isHome ? 0.8 : 0.7,
       });
     }
-    barActions.push(
-      {
-        key: 'sim-season',
-        label: simProgress ? `${simProgress.week}/${simProgress.total}…` : 'Sim Season',
+    barActions.push({
+      key: 'sim-week',
+      label: simProgress
+        ? `Wk ${simProgress.week}/${simProgress.total}`
+        : isHome ? `Sim Week ${week}` : `Sim Wk ${week}`,
+      sub: userGame && opp
+        ? `${userGame.homeTeamId === userTeamId ? 'vs' : '@'} ${opp.abbreviation}`
+        : weekAllPlayed ? 'Week complete' : 'Bye week',
+      variant: 'primary',
+      onClick: () => runSim('sim-week', handleSimWeek),
+      busy: simBusy === 'sim-week',
+      disabled: weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress,
+      grow: isHome ? 1.2 : 1,
+    });
+    if (week <= deadlineWeek + 1) {
+      barActions.push({
+        key: 'sim-deadline',
+        label: isHome ? 'Sim to Deadline' : 'To Deadline',
+        sub: `Through Wk ${deadlineWeek}`,
         variant: 'outline',
-        onClick: () => runSim('sim-season', handleSimSeason),
-        busy: simBusy === 'sim-season',
-        disabled: !!simProgress || rosterOverBy > 0 || !!simBusy,
-      },
-      {
-        key: 'sim-week',
-        label: simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Wk ${week}`,
-        variant: 'primary',
-        onClick: () => runSim('sim-week', handleSimWeek),
-        busy: simBusy === 'sim-week',
-        disabled: weekAllPlayed || rosterOverBy > 0 || !!simBusy || !!simProgress,
-      },
-    );
-    const showTrades = !isSpectator && pendingTradeCount > 0 && !pathname.startsWith('/trades');
+        onClick: () => runSim('sim-deadline', handleSimToDeadline),
+        busy: simBusy === 'sim-deadline',
+        disabled: !!simBusy || !!simProgress,
+      });
+    }
+    barActions.push({
+      key: 'sim-season',
+      label: simProgress ? `Week ${simProgress.week}/${simProgress.total}…` : 'Sim Season',
+      sub: 'To playoffs',
+      variant: 'outline',
+      onClick: () => runSim('sim-season', handleSimSeason),
+      busy: simBusy === 'sim-season',
+      disabled: !!simProgress || rosterOverBy > 0 || !!simBusy,
+    });
+    // The dashboard lists pending offers under Needs attention already.
+    const showTrades = !isSpectator && pendingTradeCount > 0 && !isHome && !pathname.startsWith('/trades');
     if (rosterOverBy > 0 || showTrades) {
       barNotice = (
         <div className="flex items-center justify-between gap-3">
@@ -414,7 +458,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           )}
           {showTrades && (
             <Link href="/trades" className="ml-auto text-blue-600">
-              Trades ({pendingTradeCount}) →
+              {pendingTradeCount} trade offer{pendingTradeCount !== 1 ? 's' : ''} →
             </Link>
           )}
         </div>
@@ -428,93 +472,106 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
       });
     } else {
       if (!isSpectator && userPlayoffGame) {
-        barActions.push({ key: 'live', label: liveLabel, variant: 'live', onClick: () => router.push(`/game/${userPlayoffGame.id}`), grow: 0.7 });
+        barActions.push({
+          key: 'watch-live',
+          label: <><span aria-hidden="true" className="mr-1">▶</span>{isHome ? 'Watch Live' : 'Live'}</>,
+          variant: 'soft',
+          onClick: () => router.push(`/game/${userPlayoffGame.id}`),
+          grow: isHome ? 0.8 : 0.7,
+        });
       }
       barActions.push(
         {
-          key: 'playoff-all', label: 'Sim All', variant: 'outline',
-          onClick: () => runSim('playoff-all', simAllPlayoffGames),
-          busy: simBusy === 'playoff-all', disabled: !nextPlayoffGame || !!simBusy,
+          key: 'playoff-next', label: isHome ? 'Sim Next Game' : 'Next Game', variant: 'primary',
+          onClick: () => runSim('playoff-next', simNextPlayoffGame),
+          busy: simBusy === 'playoff-next', disabled: !nextPlayoffGame || !!simBusy, grow: isHome ? 1.2 : 1,
         },
         {
-          key: 'playoff-round', label: onlyUserGameLeftInRound ? 'Sim My Game' : 'Sim Round', variant: 'soft',
+          key: 'playoff-round', label: onlyUserGameLeftInRound ? 'Sim My Game' : 'Sim Round', variant: 'outline',
           onClick: () => runSim('playoff-round', onlyUserGameLeftInRound ? simNextPlayoffGame : simPlayoffRound),
           busy: simBusy === 'playoff-round', disabled: !nextPlayoffGame || !!simBusy,
         },
         {
-          key: 'playoff-next', label: 'Next Game', variant: 'primary',
-          onClick: () => runSim('playoff-next', simNextPlayoffGame),
-          busy: simBusy === 'playoff-next', disabled: !nextPlayoffGame || !!simBusy,
+          key: 'playoff-all', label: isHome ? 'Sim Remaining' : 'Sim All', sub: 'To the title game', variant: 'outline',
+          onClick: () => runSim('playoff-all', simAllPlayoffGames),
+          busy: simBusy === 'playoff-all', disabled: !nextPlayoffGame || !!simBusy,
         },
       );
     }
   } else if (phase === 'resigning') {
-    const onPage = pathname.startsWith('/re-sign');
+    const done = resigningPlayers.length === 0;
+    if (!pathname.startsWith('/re-sign')) {
+      barActions.push({ key: 'go-resign', label: 'Go to Re-signing', variant: done ? 'soft' : 'primary', href: '/re-sign' });
+    }
     barActions.push({
       key: 'to-fa',
-      label: resigningPlayers.length === 0 ? 'Advance to Free Agency →' : 'Skip to Free Agency',
-      variant: onPage ? 'primary' : 'soft',
+      label: done ? 'Advance to Free Agency →' : 'Skip to Free Agency',
+      variant: done ? 'primary' : 'soft',
       onClick: handleAdvanceToFreeAgency,
+      grow: done ? 1.3 : 1,
     });
-    if (!onPage) barActions.push({ key: 'go-resign', label: 'Go to Re-signing', variant: 'primary', href: '/re-sign' });
   } else if (phase === 'freeAgency') {
-    const onPage = pathname.startsWith('/free-agency');
+    const onFA = pathname.startsWith('/free-agency');
     if (faDay >= 30) {
-      if (!onPage) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'soft', href: '/free-agency' });
-      barActions.push({ key: 'to-draft', label: 'Advance to Draft →', variant: 'primary', onClick: handleAdvanceToDraft });
-    } else if (onPage && !isSpectator) {
+      if (!onFA) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'soft', href: '/free-agency' });
+      barActions.push({ key: 'to-draft', label: 'Advance to Draft →', variant: 'primary', onClick: handleAdvanceToDraft, grow: 1.3 });
+    } else if (onFA && !isSpectator) {
       // The page's "Skip Day →" / "Skip Week ⏩" live down here on phones,
       // with Skip Day as the main action under the thumb.
       barActions.push(
         { key: 'end-fa', label: 'End FA Early', variant: 'soft', onClick: handleEndFAEarly, disabled: !!simBusy },
         {
           key: 'fa-week', label: 'Skip Week ⏩', variant: 'outline',
-          onClick: () => runSim('fa-week', () => useGameStore.getState().advanceFAWeek()),
+          onClick: () => runSim('fa-week', advanceFAWeek),
           busy: simBusy === 'fa-week', disabled: !!simBusy,
         },
         {
           key: 'fa-day', label: 'Skip Day →', variant: 'primary',
-          onClick: () => runSim('fa-day', () => useGameStore.getState().advanceFADay()),
-          busy: simBusy === 'fa-day', disabled: !!simBusy,
+          onClick: () => runSim('fa-day', advanceFADay),
+          busy: simBusy === 'fa-day', disabled: !!simBusy, grow: 1.2,
         },
       );
     } else {
-      barActions.push({ key: 'end-fa', label: 'End Free Agency Early', variant: onPage ? 'soft' : 'outline', onClick: handleEndFAEarly });
-      if (!onPage) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'primary', href: '/free-agency' });
+      barActions.push({ key: 'end-fa', label: 'End FA Early', variant: 'outline', onClick: handleEndFAEarly });
+      if (!onFA) barActions.push({ key: 'go-fa', label: 'Go to Free Agency', variant: 'primary', href: '/free-agency', grow: 1.3 });
     }
   } else if (phase === 'draft') {
-    const onPage = pathname === '/draft';
+    const onDraft = pathname === '/draft';
     const userOnClock = draftOrder[0] === userTeamId;
     if (draftOver) {
       barActions.push(
         { key: 'recap', label: 'Draft Recap', variant: 'soft', href: '/draft-recap' },
-        { key: 'new-season', label: 'Start New Season →', variant: 'primary', onClick: handleStartNewSeason, busy: isStartingSeason },
+        { key: 'new-season', label: 'Start New Season →', variant: 'primary', onClick: handleStartNewSeason, busy: isStartingSeason, grow: 1.4 },
       );
+    } else if (userOnClock && onDraft && !isSpectator) {
+      // The draft page draws its own bar here: Trade pick / Draft <player>.
+    } else if (userOnClock) {
+      barActions.push({ key: 'go-draft', label: "You're on the clock — Go to Draft", variant: 'primary', href: '/draft' });
     } else {
-      barActions.push({
-        key: 'draft-all', label: 'Auto All', variant: 'outline',
-        onClick: () => runSim('draft-all', handleAutoDraftAll), busy: simBusy === 'draft-all', disabled: !!simBusy,
-      });
-      if (!userOnClock) {
-        barActions.push(
-          {
-            key: 'draft-to-mine', label: 'To My Pick', variant: 'soft',
-            onClick: () => runSim('draft-to-mine', simToUserDraftPick), busy: simBusy === 'draft-to-mine', disabled: !!simBusy,
-          },
-          {
-            key: 'draft-pick', label: 'Sim Pick', variant: 'primary',
-            onClick: () => runSim('draft-pick', simDraftPick), busy: simBusy === 'draft-pick', disabled: !!simBusy,
-          },
-        );
-      }
-      if (!onPage) {
+      if (onDraft) {
         barActions.push({
-          key: 'go-draft', label: userOnClock ? "You're up — Go to Draft" : 'Go to Draft',
-          variant: userOnClock ? 'primary' : 'soft', href: '/draft',
+          key: 'draft-all', label: 'Auto All', variant: 'outline',
+          onClick: () => runSim('draft-all', handleAutoDraftAll), busy: simBusy === 'draft-all', disabled: !!simBusy,
         });
+      } else {
+        barActions.push({ key: 'go-draft', label: 'Go to Draft', variant: 'soft', href: '/draft' });
       }
+      barActions.push(
+        {
+          key: 'draft-to-mine', label: 'To My Pick', variant: 'soft',
+          onClick: () => runSim('draft-to-mine', simToUserDraftPick), busy: simBusy === 'draft-to-mine', disabled: !!simBusy,
+        },
+        {
+          key: 'draft-pick', label: 'Sim Pick', variant: 'primary',
+          onClick: () => runSim('draft-pick', simDraftPick), busy: simBusy === 'draft-pick', disabled: !!simBusy, grow: 1.2,
+        },
+      );
     }
   }
+
+  const barRows: BarAction[][] = isHome && barActions.length >= 4
+    ? [barActions.slice(0, 2), barActions.slice(2)]
+    : [barActions];
 
   return (
     <>
@@ -523,15 +580,30 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           free that vertical space — hide the header on mobile only when the
           user is inside a game, so phone screens don't waste 56px. */}
       <header className={`${pathname.startsWith('/game/') ? 'hidden md:block' : ''} border-b border-[var(--border)] bg-[var(--surface)]`}>
-        <div className="h-9 sm:h-14 flex items-center justify-between gap-2 px-3 md:px-6">
-          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)] min-w-0 sm:shrink-0">
-            {/* Phones: one line of where the league is. The phase's buttons
-                sit in the action bar at the bottom of the screen. */}
-            <span className="sm:hidden text-xs font-semibold truncate">
-              {phase === 'preseason'
-                ? `Preseason Game ${useGameStore.getState().preseasonWeek ?? 1}`
-                : (phoneStatus ?? bannerText).replace(/\n/g, ' · ')}
-            </span>
+        {/* Phones: page header — title, where the league is, your team. The
+            phase actions live in the sticky bar at the bottom of the screen. */}
+        <div className="sm:hidden flex items-center justify-between gap-3 px-4 py-2.5">
+          <div className="min-w-0">
+            <div className="font-display text-[22px] leading-none truncate">{pageTitleFor(pathname)}</div>
+            <div className="mt-1 text-xs text-[var(--text-sec)] truncate">
+              Season {phase === 'draft' ? (currentDraftYear ?? season) : season}
+              {phoneFacts && <> · {phoneFacts}</>}
+              {phaseLabel && <> · <span className="font-semibold text-blue-600">{phaseLabel}</span></>}
+            </div>
+          </div>
+          {userTeam && !isSpectator && (
+            <TeamLogo
+              abbreviation={userTeam.abbreviation}
+              primaryColor={userTeam.primaryColor}
+              secondaryColor={userTeam.secondaryColor}
+              logoUrl={userTeam.logoUrl}
+              size="lg"
+              className="shrink-0 rounded-lg"
+            />
+          )}
+        </div>
+        <div className="hidden sm:flex h-14 items-center justify-between gap-2 px-3 md:px-6">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)] shrink-0">
             <span className="hidden sm:inline">
               {phase === 'preseason' && `Preseason Game ${(useGameStore.getState().preseasonWeek ?? 1)}`}
               {phase === 'regular' && `Week ${week} · Regular Season`}
@@ -545,7 +617,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
           {/* One row on phones, always: extra actions scroll sideways rather than
               wrapping and pushing the page further down. */}
-          <div className="hidden sm:flex items-center gap-1 md:gap-2 flex-wrap justify-end min-w-0 [&_button]:whitespace-nowrap [&>*]:shrink-0">
+          <div className="flex items-center gap-1 md:gap-2 flex-nowrap sm:flex-wrap sm:justify-end min-w-0 overflow-x-auto sm:overflow-visible no-scrollbar [&_button]:whitespace-nowrap [&>*]:shrink-0">
             {phase === 'preseason' && (
               <>
                 <Button onClick={handleSimPreseason} size="sm" className="active:scale-95 transition-transform">
@@ -804,8 +876,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
         )}
       </header>
 
-      {/* Phones: this phase's actions, pinned to the bottom of the screen. */}
-      <MobileActionBar actions={barActions} notice={barNotice} />
+      {/* Phones: the sticky action bar owns this phase's actions. */}
+      <ActionBar rows={barRows} notice={barNotice} compact={!isHome} />
 
       {/* Trade proposal popup — disabled, user prefers inline notifications */}
 

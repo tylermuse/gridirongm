@@ -139,7 +139,7 @@ export default function HistoryPage() {
   return (
     <GameShell>
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-2xl font-black mb-2">Season History</h2>
+        <h2 className="sr-only sm:not-sr-only text-2xl font-black mb-2">Season History</h2>
         <p className="text-[var(--text-sec)] text-sm mb-4">
           Currently in Season {season}. {seasonHistory.length} season{seasonHistory.length !== 1 ? 's' : ''} completed.
         </p>

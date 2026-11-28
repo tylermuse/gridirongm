@@ -103,7 +103,7 @@ export default function PowerRankingsPage() {
     <GameShell>
       <div className="max-w-5xl mx-auto">
         <RankingsTabs />
-        <h2 className="text-2xl font-black mb-2 font-display uppercase tracking-tight">
+        <h2 className="sr-only sm:not-sr-only text-2xl font-black mb-2 font-display uppercase tracking-tight">
           Position Group Power Rankings
         </h2>
         <p className="text-sm text-[var(--text-sec)] mb-6">

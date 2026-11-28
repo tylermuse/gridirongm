@@ -40,6 +40,7 @@ import { formatRecord, findRivalry } from '@/types';
 import OwnerMeter from '@/components/OwnerMeter';
 import { ProgressRing } from '@/components/shared/ProgressRing';
 import { AdSlot } from '@/components/AdSlot';
+import { MobileHomeSummary } from '@/components/home/MobileHomeSummary';
 
 /** The real 2026 NFL file the picker's default "real season" choice plays. */
 const REAL_SEASON_ROSTER_URL = '/rosters/FBGM_NFL_Roster_2026_Updated.json';
@@ -1421,9 +1422,9 @@ function Dashboard() {
             </div>
           </div>
         ) : (
-          /* Team header */
+          /* Team header — sm and up. Phones get the v2 summary below instead. */
           <div
-            className="order-first sm:order-none flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl px-4 sm:px-5 py-4"
+            className="hidden sm:flex flex-row items-center gap-4 rounded-xl px-5 py-4"
             style={{ background: `linear-gradient(135deg, var(--team-primary) 0%, ${userTeam.secondaryColor} 100%)` }}
           >
             <div className="flex items-center gap-3 sm:block shrink-0">
@@ -1468,6 +1469,9 @@ function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Phones: matchup, headline numbers, needs attention (mobile v2). */}
+        {!isSpectator && <MobileHomeSummary onPlayerClick={setSelectedPlayerId} />}
 
         {/* Discord Banner */}
         <DiscordBanner />
@@ -1633,7 +1637,7 @@ function Dashboard() {
           const oppTeam = nextGame ? teams.find(t => t.id === (nextGame.homeTeamId === userTeamId ? nextGame.awayTeamId : nextGame.homeTeamId)) : null;
           const nextGameRivalry = nextGame && oppTeam ? findRivalry(rivalries, userTeamId, oppTeam.id) : undefined;
           return (nextGame || injuredPlayers.length > 0) ? (
-            <div className={`-order-1 sm:order-none grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
+            <div className={`hidden sm:grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
               {nextGame && oppTeam && (
                 <div className={`rounded-xl bg-gradient-to-r overflow-hidden ${nextGameRivalry ? 'from-[var(--surface)] to-red-50 border border-red-300' : 'from-[var(--surface)] to-blue-50 border border-blue-200'}`}>
                   <div className="p-3 sm:p-5 flex items-center justify-between gap-3">

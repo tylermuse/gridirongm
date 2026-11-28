@@ -191,8 +191,8 @@ export function GlobalBooth() {
     ? { moment: MOMENT_LABEL[narrative], topics: episode, fresh, onWatch: watch }
     : null;
 
-  // Phones: sit just above the bottom action bar (it publishes its height as
-  // --action-bar-h; unset when no bar is showing).
+  // Phones: sit just above the sticky action bar, whatever its height (it
+  // publishes --action-bar-h; absent when no bar is showing).
 
   return (
     <>

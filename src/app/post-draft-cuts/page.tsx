@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { afterPaint } from '@/components/ui/useBusyAction';
@@ -50,10 +50,7 @@ export default function PostDraftCutsPage() {
   const psSlotsLeft = PRACTICE_SQUAD_LIMIT - psPlayers.length;
 
   // Lowest-OVR first — these are the default cut candidates.
-  const sorted = useMemo(
-    () => [...active].sort((a, b) => a.ratings.overall - b.ratings.overall),
-    [active],
-  );
+  const sorted = [...active].sort((a, b) => a.ratings.overall - b.ratings.overall);
 
   async function finish() {
     if (isStartingSeason) return;
@@ -90,7 +87,7 @@ export default function PostDraftCutsPage() {
     <GameShell>
       <div className="max-w-5xl mx-auto space-y-4 p-3">
         <div>
-          <h1 className="text-2xl font-black">Post-Draft Cuts</h1>
+          <h1 className="sr-only sm:not-sr-only text-2xl font-black">Post-Draft Cuts</h1>
           <p className="text-sm text-[var(--text-sec)] mt-1">
             Your active roster is at <span className="font-bold text-[var(--text)]">{active.length}</span> —{' '}
             {overCount > 0 ? (

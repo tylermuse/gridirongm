@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useBusyAction } from '@/components/ui/useBusyAction';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
-import { formatRecord, type Player, type DraftPick, type Position } from '@/types';
+import { formatRecord, type Player, type DraftPick, type Position, type Team } from '@/types';
 import { POSITIONS, getUnamortizedBonus } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
@@ -302,7 +302,7 @@ interface TradeablePlayer {
 
 function findTradeablePlayers(
   players: Player[],
-  teams: { id: string; abbreviation: string }[],
+  teams: { id: string; abbreviation: string; record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number }[],
   userTeamId: string | null,
 ): TradeablePlayer[] {
   const all: TradeablePlayer[] = [];
@@ -328,7 +328,7 @@ function findTradeablePlayers(
     }
 
     // Team strategy for "why available" tags
-    const fullTeam = teams.find(t => t.id === team.id) as any;
+    const fullTeam = teams.find(t => t.id === team.id);
     const strategy = fullTeam?.record ? getTeamStrategy(fullTeam, roster) : 'Developing';
 
     for (const p of roster) {
@@ -364,7 +364,7 @@ function findTradeablePlayers(
       if (isDepthSurplus) whyAvailable.push('Depth surplus');
       if (strategy === 'Rebuilding') whyAvailable.push('Rebuilding');
       if (p.contract.yearsLeft <= 1) whyAvailable.push('Expiring');
-      if (p.contract.salary > 15 && fullTeam?.totalPayroll > fullTeam?.salaryCap * 0.9) whyAvailable.push('Cap dump');
+      if (p.contract.salary > 15 && fullTeam && fullTeam.totalPayroll > fullTeam.salaryCap * 0.9) whyAvailable.push('Cap dump');
 
       all.push({ player: p, teamId: team.id, tradeValue: tv, estimatedCost, whyAvailable });
     }
@@ -392,7 +392,7 @@ interface TradeRecommendation {
 function generateRecommendedTrades(
   allTradeable: TradeablePlayer[],
   userRoster: Player[],
-  userTeam: any, // full team object
+  userTeam: Team | undefined, // full team object
   weakPositions: string[],
   players: Player[],
 ): TradeRecommendation[] {
@@ -426,7 +426,6 @@ function generateRecommendedTrades(
     else if (tp.player.contract.yearsLeft <= 1) reasons.push('expiring deal');
 
     const targetTeamRoster = players.filter(p => p.teamId === tp.teamId && !p.retired);
-    const targetFullTeam = { record: (userTeam as any), ...tp } as any;
     // Check if selling team is rebuilding
     const sellerTeam = useGameStore.getState().teams.find(t => t.id === tp.teamId);
     if (sellerTeam) {
@@ -441,12 +440,12 @@ function generateRecommendedTrades(
 
     // Map estimated cost to user's actual picks
     const availablePicks = userTeam.draftPicks
-      .filter((pk: any) => isPickTradeable(pk))
-      .sort((a: any, b: any) => a.round - b.round);
+      .filter(isPickTradeable)
+      .sort((a, b) => a.round - b.round);
 
     if (tv >= 120 && availablePicks.length > 0) {
       // 1st + player: find a low-OVR bench player at a surplus position
-      const firstRound = availablePicks.find((pk: any) => pk.round === 1);
+      const firstRound = availablePicks.find(pk => pk.round === 1);
       if (firstRound) suggestedSendPickIds.push(firstRound.id);
       // Find a low-value bench player to sweeten
       const surplusPlayer = userRoster
@@ -454,18 +453,18 @@ function generateRecommendedTrades(
         .sort((a, b) => a.ratings.overall - b.ratings.overall)[0];
       if (surplusPlayer) suggestedSendPlayerIds.push(surplusPlayer.id);
     } else if (tv >= 90) {
-      const firstRound = availablePicks.find((pk: any) => pk.round === 1);
+      const firstRound = availablePicks.find(pk => pk.round === 1);
       if (firstRound) suggestedSendPickIds.push(firstRound.id);
     } else if (tv >= 55) {
-      const secondRound = availablePicks.find((pk: any) => pk.round === 2);
+      const secondRound = availablePicks.find(pk => pk.round === 2);
       if (secondRound) suggestedSendPickIds.push(secondRound.id);
       else if (availablePicks.length > 0) suggestedSendPickIds.push(availablePicks[0].id);
     } else if (tv >= 35) {
-      const midRound = availablePicks.find((pk: any) => pk.round >= 3 && pk.round <= 4);
+      const midRound = availablePicks.find(pk => pk.round >= 3 && pk.round <= 4);
       if (midRound) suggestedSendPickIds.push(midRound.id);
       else if (availablePicks.length > 0) suggestedSendPickIds.push(availablePicks[availablePicks.length - 1].id);
     } else {
-      const lateRound = availablePicks.find((pk: any) => pk.round >= 5);
+      const lateRound = availablePicks.find(pk => pk.round >= 5);
       if (lateRound) suggestedSendPickIds.push(lateRound.id);
       else if (availablePicks.length > 0) suggestedSendPickIds.push(availablePicks[availablePicks.length - 1].id);
     }
@@ -561,7 +560,7 @@ function TradeFinderContent({
     : [];
 
   // Filter & sort for browse
-  let browsePlayers = posFilter
+  const browsePlayers = posFilter
     ? allTradeable.filter(t => t.player.position === posFilter)
     : [...allTradeable];
 
@@ -1350,7 +1349,7 @@ function TradesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <div>
             <TeamQuickNav currentPage="trades" />
-            <h2 className="text-2xl font-black font-display uppercase tracking-tight">Trade Center</h2>
+            <h2 className="sr-only sm:not-sr-only text-2xl font-black font-display uppercase tracking-tight">Trade Center</h2>
           </div>
           <div className="text-sm text-[var(--text-sec)]">
             {isTradeOpen

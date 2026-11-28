@@ -20,6 +20,7 @@ import { getActiveRoster } from '@/lib/engine/roster';
 import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engine/negotiation';
 import { generateFAEvaluation, type FAEvaluation } from '@/lib/engine/personnelReport';
 import { POSITIONS, ROSTER_LIMITS, type Position, type Player } from '@/types';
+import { M2Card, M2Label, OvrBadge } from '@/components/mobile/m2';
 
 /**
  * Determines if a free agent will accept a veteran minimum deal.
@@ -603,6 +604,11 @@ export default function FreeAgencyPage() {
     </>
   );
 
+  const marketSalaryOf = (p: Player) =>
+    Math.round(estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci, p.subPosition) * decay * 10) / 10;
+  // Free accounts see a rating band, not the number (same bands as the draft).
+  const ovrBand = (ovr: number) => (ovr >= 75 ? '75+' : ovr >= 65 ? '65–74' : ovr >= 55 ? '55–64' : '<55');
+
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto flex flex-col sm:block">
@@ -618,7 +624,7 @@ export default function FreeAgencyPage() {
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black">{phase === 'regular' ? 'Sign Free Agents' : 'Free Agency'}</h2>
+            <h2 className="hidden sm:block text-2xl font-black">{phase === 'regular' ? 'Sign Free Agents' : 'Free Agency'}</h2>
             <div className="text-sm text-[var(--text-sec)]">
               {phase === 'freeAgency' && (
                 <span className="font-semibold text-blue-600 mr-2">Day {faDay} of 30</span>
@@ -1015,8 +1021,85 @@ export default function FreeAgencyPage() {
 
             {faView === 'available' && (
             <>
-            {/* Free agent table */}
-            <Card>
+            {/* ── Phones: free agent list (mobile v2, screen 3c). Tap a player
+                to open the offer sheet. ── */}
+            <div className="sm:hidden flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3 px-0.5">
+                <M2Label>{agents.length} player{agents.length !== 1 ? 's' : ''}</M2Label>
+                <label className="flex items-center gap-1.5 text-xs text-[var(--text-sec)]">
+                  Sort
+                  <select
+                    value={sortKey}
+                    onChange={e => {
+                      const key = e.target.value as typeof sortKey;
+                      setSortKey(key);
+                      setSortDir(key === 'name' || key === 'pos' ? 'asc' : 'desc');
+                    }}
+                    className="h-8 px-2 text-xs font-semibold rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)]"
+                  >
+                    <option value="ovr">OVR</option>
+                    {hasScouting && <option value="salary">Asking</option>}
+                    <option value="age">Age</option>
+                    <option value="pos">Position</option>
+                    <option value="name">Name</option>
+                  </select>
+                </label>
+              </div>
+              {agents.map(p => {
+                const salary = marketSalaryOf(p);
+                const isRefused = faRefusals.includes(p.id);
+                const report = effectivePursuitState?.intelReports[p.id];
+                return (
+                  <M2Card
+                    key={p.id}
+                    className={`px-3.5 py-2.5 flex items-center gap-3 min-h-[60px] ${isRefused ? 'opacity-60' : ''}`}
+                    onClick={isRefused ? undefined : () => startNegotiation(p)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-semibold leading-tight truncate">
+                        {p.firstName[0]}. {p.lastName}
+                        {report && (
+                          <span className="ml-1 text-xs">
+                            {({ money: '💰', winning: '🏆', role: '🎯', loyalty: '🏠' } as Record<string, string>)[report.priority]}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[var(--text-sec)] truncate">
+                        {p.position} · {p.age}
+                        {hasScouting && <> · market ${salary}M{decay < 1.0 && <span className="text-amber-600"> ↓</span>}</>}
+                      </div>
+                    </div>
+                    {isRefused ? (
+                      <span className="shrink-0 text-right">
+                        <span className="block px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded">Refuses</span>
+                        <span className="block mt-0.5 text-[10px] text-[var(--text-sec)]">
+                          {(p.mood ?? 70) < 40 ? 'Unhappy with you' : 'Contenders only'}
+                        </span>
+                      </span>
+                    ) : hasScouting ? (
+                      <OvrBadge ovr={p.ratings.overall} className="shrink-0" />
+                    ) : (
+                      <OvrBadge ovr={p.ratings.overall} text={ovrBand(p.ratings.overall)} className="shrink-0" />
+                    )}
+                  </M2Card>
+                );
+              })}
+              {agents.length === 0 && (
+                <div className="py-8 text-center text-sm text-[var(--text-sec)]">
+                  {affordableOnly && capSpace < LEAGUE_MINIMUM_SALARY * 2 ? (
+                    <div className="space-y-2">
+                      <div>No cheap FAs match your filters.</div>
+                      <button onClick={() => setAffordableOnly(false)} className="text-xs font-bold text-blue-600">
+                        Show all free agents
+                      </button>
+                    </div>
+                  ) : 'No free agents match your filters.'}
+                </div>
+              )}
+            </div>
+
+            {/* Free agent table — sm and up */}
+            <Card className="hidden sm:block">
               <div className="overflow-x-auto">
               <table className="w-full text-sm sticky-col sticky-action">
                 <thead>

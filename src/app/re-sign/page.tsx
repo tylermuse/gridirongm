@@ -233,7 +233,7 @@ export default function ReSignPage() {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-6">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black">Re-signing Window</h2>
+            <h2 className="sr-only sm:not-sr-only text-xl sm:text-2xl font-black">Re-signing Window</h2>
             <p className="text-xs sm:text-sm text-[var(--text-sec)] mt-1">
               Extend or restructure your expiring contracts before they hit free agency.
             </p>

@@ -87,7 +87,7 @@ export default function GmRankingsPage() {
       <div className="max-w-5xl mx-auto space-y-4">
         <RankingsTabs />
         <div>
-          <h2 className="text-2xl font-black">🏆 GM Rankings</h2>
+          <h2 className="sr-only sm:not-sr-only text-2xl font-black">🏆 GM Rankings</h2>
           <p className="text-sm text-[var(--text-sec)] mt-1">
             Leaderboard of every GM in BS Football. Compete for championships, draft grades, and bragging rights.
           </p>

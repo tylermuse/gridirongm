@@ -429,7 +429,7 @@ export default function PlayoffsPage() {
         {/* ---- Header ---- */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-black">Season {season} Playoffs</h2>
+            <h2 className="sr-only sm:not-sr-only text-2xl font-black">Season {season} Playoffs</h2>
             <p className="text-sm text-[var(--text-sec)] mt-0.5">
               {sbDone
                 ? `${champion?.city} ${champion?.name} are Season ${season} Champions`

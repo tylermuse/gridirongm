@@ -123,7 +123,7 @@ export default function StatsPage() {
     <GameShell>
       <div className="max-w-5xl mx-auto">
         <TeamQuickNav currentPage="stats" />
-        <h2 className="text-2xl font-black mb-6 font-display uppercase tracking-tight">League Stats</h2>
+        <h2 className="sr-only sm:not-sr-only text-2xl font-black mb-6 font-display uppercase tracking-tight">League Stats</h2>
 
         {!hasStats ? (
           <EmptyState
