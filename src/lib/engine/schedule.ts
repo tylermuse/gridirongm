@@ -2,6 +2,7 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 import type { Team, GameResult } from '@/types';
+import { placeMatchupsIntoWeeks, spreadWeeks } from './scheduleWeeks';
 
 /**
  * Generates an 18-week NFL-style regular season schedule:
@@ -11,7 +12,8 @@ import type { Team, GameResult } from '@/types';
  * - 4 games vs a rotating out-of-conference division (2 home, 2 away)
  * - 3 games vs remaining in-conference teams (based on prior finish position)
  *
- * No back-to-back opponents. Bye weeks are weeks 5-14.
+ * No back-to-back opponents. Bye weeks are weeks 5-14. Division games are
+ * spread over the season and fill the final week.
  */
 export function generateSchedule(teams: Team[], season: number): GameResult[] {
   if (teams.length !== 32) {
@@ -224,87 +226,37 @@ function tryGenerateNFLSchedule(teams: Team[], season: number): GameResult[] | n
     if (count !== 17) return null;
   }
 
-  // Assign bye weeks (weeks 5-14, 2 teams per week on bye)
-  const byeWeeks = assignByeWeeksNFL(teams);
-
-  // Slot matchups into weeks with constraints:
-  // - No team plays more than once per week
-  // - Respect bye weeks
-  // - No back-to-back opponents
-  const schedule = slotMatchupsIntoWeeks(uniqueMatchups, teams, byeWeeks, season);
-  return schedule;
+  // Put the matchups into weeks: first any placement where nobody plays twice
+  // in a week (17 games in 18 weeks leaves each team one open week, its bye),
+  // then reorder it so byes fall in weeks 5-14, rematches are kept apart and
+  // division games are spread over the season. See scheduleWeeks.ts.
+  const placed = placeMatchupsIntoWeeks(uniqueMatchups, 18);
+  if (!placed) return null;
+  const weeks = spreadWeeks(uniqueMatchups, placed, 18, { sameDivision: sameDivisionLookup(teams) });
+  return uniqueMatchups
+    .map((m, i) => makeGame(m.homeTeamId, m.awayTeamId, weeks[i] + 1, season))
+    .sort((a, b) => a.week - b.week);
 }
 
-function assignByeWeeksNFL(teams: Team[]): Map<string, number> {
-  const byeMap = new Map<string, number>();
-  const shuffled = shuffle(teams);
-  // Bye weeks 5-14 (10 weeks), ~3 teams per bye week
-  for (let i = 0; i < shuffled.length; i++) {
-    const byeWeek = 5 + (i % 10);
-    byeMap.set(shuffled[i].id, byeWeek);
-  }
-  return byeMap;
+/** (teamA, teamB) => are they in the same division. */
+function sameDivisionLookup(teams: Team[]): (a: string, b: string) => boolean {
+  const divisionOf = new Map(teams.map(t => [t.id, `${t.conference}-${t.division}`]));
+  return (a, b) => divisionOf.get(a) !== undefined && divisionOf.get(a) === divisionOf.get(b);
 }
 
-function slotMatchupsIntoWeeks(
-  matchups: Matchup[],
-  teams: Team[],
-  byeWeeks: Map<string, number>,
-  season: number,
-): GameResult[] | null {
-  const schedule: GameResult[] = [];
-  const remaining = shuffle([...matchups]);
-  const weekAssignments: Matchup[][] = Array.from({ length: 18 }, () => []);
-  const lastOpponent = new Map<string, string>(); // team → last week's opponent
-
-  for (let week = 1; week <= 18; week++) {
-    const busyThisWeek = new Set<string>();
-    // Mark bye teams as busy
-    for (const [teamId, byeWk] of byeWeeks) {
-      if (byeWk === week) busyThisWeek.add(teamId);
-    }
-
-    // Find matchups that fit this week
-    const toRemove: number[] = [];
-    for (let i = 0; i < remaining.length; i++) {
-      const m = remaining[i];
-      if (busyThisWeek.has(m.homeTeamId) || busyThisWeek.has(m.awayTeamId)) continue;
-
-      // No back-to-back opponents
-      if (lastOpponent.get(m.homeTeamId) === m.awayTeamId ||
-          lastOpponent.get(m.awayTeamId) === m.homeTeamId) continue;
-
-      weekAssignments[week - 1].push(m);
-      busyThisWeek.add(m.homeTeamId);
-      busyThisWeek.add(m.awayTeamId);
-      toRemove.push(i);
-
-      if (weekAssignments[week - 1].length >= 16) break; // max 16 games per week
-    }
-
-    // Remove assigned matchups (reverse order to preserve indices)
-    for (const idx of toRemove.reverse()) {
-      remaining.splice(idx, 1);
-    }
-
-    // Update last opponents
-    for (const m of weekAssignments[week - 1]) {
-      lastOpponent.set(m.homeTeamId, m.awayTeamId);
-      lastOpponent.set(m.awayTeamId, m.homeTeamId);
-    }
-  }
-
-  // If we couldn't place all matchups, fail
-  if (remaining.length > 0) return null;
-
-  // Convert to GameResult
-  for (let week = 0; week < 18; week++) {
-    for (const m of weekAssignments[week]) {
-      schedule.push(makeGame(m.homeTeamId, m.awayTeamId, week + 1, season));
-    }
-  }
-
-  return schedule;
+/**
+ * Reorder the weeks of a finished schedule so division games are spread out
+ * and rematches kept apart. Who plays whom, and where, does not change.
+ */
+function spreadScheduleWeeks(schedule: GameResult[], teams: Team[]): GameResult[] {
+  if (schedule.length === 0) return schedule;
+  const lastWeek = Math.max(...schedule.map(g => g.week));
+  const weeks = spreadWeeks(schedule, schedule.map(g => g.week - 1), lastWeek, {
+    sameDivision: sameDivisionLookup(teams),
+  });
+  return schedule
+    .map((g, i) => ({ ...g, week: weeks[i] + 1 }))
+    .sort((a, b) => a.week - b.week);
 }
 
 // ---------------------------------------------------------------------------
@@ -358,9 +310,10 @@ function slotMatchupsIntoWeeks(
  * ("Dallas Wranglers" / "Minnesota Frost") reported by yo46363.
  */
 function generateScheduleFallback(teams: Team[], season: number): GameResult[] {
-  const greedy = tryGreedyScheduleFallback(teams, season);
-  if (greedy) return greedy;
-  return circleRoundRobinSchedule(teams, season);
+  // Both builders place division games first, which bunches them into the
+  // opening weeks, so the weeks are reordered afterwards.
+  const built = tryGreedyScheduleFallback(teams, season) ?? circleRoundRobinSchedule(teams, season);
+  return spreadScheduleWeeks(built, teams);
 }
 
 /** Number of teams in a team's (conference, division) group. */

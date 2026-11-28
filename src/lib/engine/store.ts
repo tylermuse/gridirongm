@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { rankProspects, teamContextFromRoster, mockFollowChance } from './draftAI';
 import { hasDraftableProspect } from './draftStatus';
 import { lineupDepthChart } from './lineup';
+import { returnInjuredReserveToRoster } from './roster';
 import { getItem as idbGetItem, setItem as idbSetItem, removeItem as idbRemoveItem, queueWrite, flushPendingWrites, getWriteFailure, onWriteResult, type WriteFailure } from '@bs/core/storage';
 import { isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { scheduleCloudAutosavePush } from '@/lib/data/cloudAutosave';
@@ -52,7 +53,7 @@ import { isDraftPickSpent, resolvePickOnClock } from './draftPicks';
 import { makeRookieTest } from './rookies';
 import { settleRosterTiers, describeRosterSettle, type SettleRosterResult } from './rosterTiers';
 
-const SAVE_VERSION = 37;
+const SAVE_VERSION = 38;
 const AUTOSAVE_KEY = 'gridiron-gm-autosave';
 
 // ---------------------------------------------------------------------------
@@ -9991,14 +9992,34 @@ export const useGameStore = create<GameStore>()(
           // For user team: freeze payroll so cap space stays consistent from end of FA
           // through the regular season. advanceToResigning will recalculate next offseason.
           // For AI teams: recalculate normally since they don't show cap to the user.
-          const totalPayroll = t.id === state.userTeamId
+          const frozenPayroll = t.id === state.userTeamId
             ? t.totalPayroll
             : recalculateTeamPayroll(updatedTeam, afterVoidPlayers);
 
+          // IR ends with the season. The aging pass above cleared every
+          // player's onIR flag and injury, so bring the team's IR players back
+          // onto the active roster, depth chart and payroll here. Without this
+          // they stayed on the team by teamId but in no roster list: the Roster
+          // page showed them as healthy active players while Free Agency's
+          // position breakdown, the roster count and payroll left them out
+          // (Tyler 11/28: 3 TEs on the roster, sidebar said 2/3).
+          const irReturn = returnInjuredReserveToRoster(
+            {
+              ...updatedTeam,
+              totalPayroll: frozenPayroll,
+              depthChart: newDepthChart,
+              injuredReserve: (t.injuredReserve ?? []).filter(pid => !removedIds.has(pid)),
+            },
+            afterVoidPlayers,
+          ).team;
+          const totalPayroll = irReturn.totalPayroll;
+
           return {
             ...updatedTeam,
+            roster: irReturn.roster,
+            injuredReserve: irReturn.injuredReserve,
             totalPayroll,
-            depthChart: newDepthChart,
+            depthChart: irReturn.depthChart,
             franchiseTagUsed: false,
             revenue: { tickets, merchandise, tvDeal, total: totalRevenue },
             // Add picks for new season + next year (ensure 2 future years always exist).
@@ -12067,6 +12088,22 @@ export const useGameStore = create<GameStore>()(
           // it gets here, whatever version wrote it, so the state is already
           // full. The bump marks saves that code from before v37 cannot read
           // correctly (it would see the omitted fields as undefined).
+        }
+        if (version < 38) {
+          // Repair players stranded on IR. Season rollover used to clear the
+          // onIR flag without moving the player from team.injuredReserve back
+          // to team.roster, so he stayed on the team by teamId but counted
+          // nowhere (roster count, position breakdown, depth chart, payroll).
+          // Put every such player back on the active roster and drop IR ids
+          // of players who have since left the team. Players whose onIR flag
+          // is still set are really on IR and stay there.
+          const s38 = state as { teams?: Team[]; players?: Player[] };
+          if (Array.isArray(s38.teams) && Array.isArray(s38.players)) {
+            const players38 = s38.players;
+            s38.teams = s38.teams.map(t =>
+              returnInjuredReserveToRoster(t, players38, { onlyCleared: true }).team,
+            );
+          }
         }
         return state;
       },

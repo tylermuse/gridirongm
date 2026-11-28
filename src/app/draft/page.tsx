@@ -1423,14 +1423,34 @@ export default function DraftPage() {
     const overallPickNum = currentOverallPick + i;
     const round = Math.ceil(overallPickNum / picksPerRound);
     const ownerId = draftOrder[i];
-    // Find the pick owned by this team for this round (not yet assigned to a slot)
+    // draftPickOrder names the exact pick in each slot. Use it first: a team
+    // holding two picks in one round (its own + one it traded for) would
+    // otherwise get them matched to its slots in whatever order they sit in
+    // team.draftPicks. Fall back to owner + round for saves without it.
+    const slotPickId = draftPickOrder?.[overallPickNum - 1];
     const pick = allCurrentYearPicks.find(
+      pk => pk.id === slotPickId && pk.ownerTeamId === ownerId && !usedPickIds.has(pk.id),
+    ) ?? allCurrentYearPicks.find(
       pk => pk.ownerTeamId === ownerId && pk.round === round && !usedPickIds.has(pk.id),
     );
     if (pick) {
       pickBySlot.set(overallPickNum, pick);
       usedPickIds.add(pick.id);
     }
+  }
+
+  // "via BUF" tag for a slot whose pick was acquired in a trade: the team the
+  // pick originally belonged to, when that is not the team now picking there.
+  // Covers picks already made (draftPickOrder keeps their ids) and picks to come.
+  const draftYearPickById = new Map(
+    teams.flatMap(t => t.draftPicks).filter(pk => pk.year === draftYear).map(pk => [pk.id, pk] as const),
+  );
+  function pickAcquiredFrom(overallPick: number, pickingTeamId: string | undefined) {
+    if (!pickingTeamId) return null;
+    const slotPickId = draftPickOrder?.[overallPick - 1];
+    const pick = (slotPickId ? draftYearPickById.get(slotPickId) : undefined) ?? pickBySlot.get(overallPick);
+    if (!pick || pick.ownerTeamId !== pickingTeamId || pick.originalTeamId === pickingTeamId) return null;
+    return teams.find(t => t.id === pick.originalTeamId) ?? null;
   }
 
   const roundStart = (selectedRound - 1) * picksPerRound;
@@ -2199,6 +2219,17 @@ export default function DraftPage() {
                             {row.team.abbreviation}
                           </Link>
                         ) : '--'}
+                        {(() => {
+                          const from = pickAcquiredFrom(row.overallPick, row.team?.id);
+                          return from ? (
+                            <span
+                              className="ml-1.5 text-[10px] font-normal text-[var(--text-sec)] whitespace-nowrap"
+                              title={`Pick acquired in a trade with ${from.city} ${from.name}`}
+                            >
+                              via {from.abbreviation}
+                            </span>
+                          ) : null;
+                        })()}
                       </td>
                       <td className="py-2">
                         {row.player
